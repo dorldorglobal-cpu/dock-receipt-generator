@@ -239,6 +239,29 @@ if (vin && vin.length !== 17) {
     <div style={{ padding: "30px", fontFamily: "Arial" }}>
       <h1>Dock Receipt Generator</h1>
 
+      <div style={{ marginBottom: "25px", padding: "15px", border: "1px solid #ccc" }}>
+  <h2>Search Saved Shipments</h2>
+
+  <input
+    placeholder="Search VIN or Reference #"
+    value={search}
+    onChange={(e) => setSearch(e.target.value)}
+    style={{ padding: "8px", width: "280px", marginRight: "10px" }}
+  />
+
+  <button onClick={handleSearch} style={{ padding: "8px 15px" }}>
+    Search
+  </button>
+
+  <ul>
+    {results.map((r, i) => (
+      <li key={i}>
+        {r.referenceNumber} - {r.vin}
+      </li>
+    ))}
+  </ul>
+</div>
+
       <h2>Saved Vessel Schedule</h2>
 
       <p>
