@@ -15,6 +15,7 @@ app.use(express.json({ limit: "10mb" }));
 
 const schedulesDir = path.join(__dirname, "saved-schedules");
 const masterSchedulePath = path.join(schedulesDir, "master-schedule.xlsx");
+const DATA_FILE = path.join(__dirname, "shipments.json");
 
 if (!fs.existsSync(schedulesDir)) fs.mkdirSync(schedulesDir);
 
@@ -142,6 +143,34 @@ function extractVehicleDataFromAes(text) {
   return { vin, weightKgs, value };
 }
 
+function saveShipment(data) {
+  let existing = [];
+
+  if (fs.existsSync(DATA_FILE)) {
+    try {
+      existing = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+    } catch {
+      existing = [];
+    }
+  }
+
+  const referenceNumber = clean(data.referenceNumber);
+  const vin = cleanUpper(data.vin);
+
+  existing = existing.filter((item) => {
+    const sameRef = referenceNumber && clean(item.referenceNumber) === referenceNumber;
+    const sameVin = vin && cleanUpper(item.vin) === vin;
+    return !(sameRef || sameVin);
+  });
+
+  existing.unshift({
+    ...data,
+    createdAt: new Date().toISOString(),
+  });
+
+  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2));
+}
+
 // ================= AES PARSER =================
 
 function parseAes(text) {
@@ -158,36 +187,33 @@ function parseAes(text) {
   const exporter = parseAddressParts(exporterAddressLine);
 
   const consigneeName = lineAfter(lines, "4a. ULTIMATE CONSIGNEE");
+
   const consigneeIndex = lines.findIndex(
-  (l) => cleanUpper(l) === cleanUpper(consigneeName)
-);
+    (l) => cleanUpper(l) === cleanUpper(consigneeName)
+  );
 
-const consigneeLine1 = lines[consigneeIndex + 1] || "";
-const consigneeLine2 = lines[consigneeIndex + 2] || "";
+  const consigneeLine1 = consigneeIndex !== -1 ? lines[consigneeIndex + 1] || "" : "";
+  const consigneeLine2 = consigneeIndex !== -1 ? lines[consigneeIndex + 2] || "" : "";
+  const combined = `${consigneeLine1} ${consigneeLine2}`.trim();
 
-// combine safely (handles 1-line OR 2-line formats)
-const combined = `${consigneeLine1} ${consigneeLine2}`.trim();
+  const consigneeParts = combined.split(",").map(clean).filter(Boolean);
 
-// split by commas
-const consigneeParts = combined.split(",").map(clean).filter(Boolean);
+  let consigneeAddress = "";
+  let consigneeCity = "";
 
-let consigneeAddress = "";
-let consigneeCity = "";
+  if (consigneeParts.length >= 2) {
+    const lastPart = consigneeParts[consigneeParts.length - 1];
 
-if (consigneeParts.length >= 2) {
-  const lastPart = consigneeParts[consigneeParts.length - 1];
-
-  // if last part is country code like GH / NG
-  if (/^[A-Z]{2}$/.test(lastPart)) {
-    consigneeCity = consigneeParts[consigneeParts.length - 2];
-    consigneeAddress = consigneeParts.slice(0, -2).join(", ");
+    if (/^[A-Z]{2}$/.test(lastPart)) {
+      consigneeCity = consigneeParts[consigneeParts.length - 2];
+      consigneeAddress = consigneeParts.slice(0, -2).join(", ");
+    } else {
+      consigneeCity = consigneeParts[consigneeParts.length - 1];
+      consigneeAddress = consigneeParts.slice(0, -1).join(", ");
+    }
   } else {
-    consigneeCity = consigneeParts[consigneeParts.length - 1];
-    consigneeAddress = consigneeParts.slice(0, -1).join(", ");
+    consigneeAddress = combined;
   }
-} else {
-  consigneeAddress = combined;
-}
 
   const vessel = lineAfter(lines, "9. EXPORTING CARRIER");
 
@@ -225,8 +251,8 @@ if (consigneeParts.length >= 2) {
     vehicleYearMakeModel,
     vin: vehicleData.vin,
     value:
-  vehicleData.value ||
-  clean(text.match(/\/\s*[A-Z]{2}\s+(\d{3,8})\s*(?:Sensitive Information|Do not submit|$)/i)?.[1] || ""),
+      vehicleData.value ||
+      clean(text.match(/\/\s*[A-Z]{2}\s+(\d{3,8})\s*(?:Sensitive Information|Do not submit|$)/i)?.[1] || ""),
 
     aesItn: clean(text.match(/X\d{14}/i)?.[0] || ""),
     portOfLoading: pol,
@@ -329,6 +355,7 @@ function parseDispatch(text) {
     dispatchWeightKgs,
   };
 }
+
 // ================= SCHEDULE =================
 
 function readScheduleExcel(buffer) {
@@ -417,24 +444,55 @@ app.post("/upload", upload.any(), async (req, res) => {
       aesData.portOfDischarge
     );
 
-    res.json({
-  ...aesData,
-  ...dispatchData,
-  vin: aesData.vin || dispatchData.dispatchVin || "",
-  weightKgs: aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
+    const output = {
+      ...aesData,
+      ...dispatchData,
+      vin: aesData.vin || dispatchData.dispatchVin || "",
+      weightKgs: aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
       voyage: match ? clean(getCell(match, ["Voyage", "Voyage Number"])) : "",
-      cutoffDate: match
-  ? formatExcelDate(getCell(match, ["Port Cutoff", "Cutoff Date", "Cutoff", "Cargo Cutoff", "Port cutoff"]))
-  : "",
+      cutoffDate: match ? formatExcelDate(getCell(match, ["Port Cutoff", "Cutoff Date", "Cutoff", "Cargo Cutoff", "Port cutoff"])) : "",
       sailDate: match ? formatExcelDate(getCell(match, ["Sail Date", "ETD", "Sail"])) : "",
       arrivalDate: match ? formatExcelDate(getCell(match, ["Arrival Date", "ETA", "Arrival"])) : "",
       scheduleRowsRead: scheduleRows.length,
       scheduleMatchFound: match ? "YES" : "NO",
-    });
+    };
+
+    saveShipment(output);
+
+    res.json(output);
   } catch (err) {
     console.error("UPLOAD ERROR:", err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ================= SEARCH SHIPMENTS =================
+
+app.get("/search", (req, res) => {
+  const q = cleanUpper(req.query.q || "");
+
+  if (!q) return res.json([]);
+
+  if (!fs.existsSync(DATA_FILE)) {
+    return res.json([]);
+  }
+
+  let data = [];
+
+  try {
+    data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
+  } catch {
+    data = [];
+  }
+
+  const results = data.filter((item) => {
+    return (
+      cleanUpper(item.vin).includes(q) ||
+      cleanUpper(item.referenceNumber).includes(q)
+    );
+  });
+
+  res.json(results.slice(0, 20));
 });
 
 // ================= PDF GENERATOR =================
@@ -485,7 +543,7 @@ app.post("/generate-pdf", async (req, res) => {
     text(d.exporterCountry, 25, 92);
 
     text(d.bookingNumber, 305, 69);
-    text(d.referenceNumber, 510, 68);
+    text(d.referenceNumber, 510, 69);
     text(d.cutoffDate, 510, 92);
 
     text(d.consigneeName, 25, 132);
@@ -493,8 +551,8 @@ app.post("/generate-pdf", async (req, res) => {
     text(d.consigneeCity, 25, 152);
     text(d.consigneeCountry, 25, 162);
 
-    text(d.sailDate, 510, 112);
-    text(d.arrivalDate, 510, 142);
+    text(d.sailDate, 490, 166);
+    text(d.arrivalDate, 490, 202);
 
     text(d.pickupName, 310, 202);
     text(d.pickupAddress, 310, 212);
@@ -509,7 +567,7 @@ app.post("/generate-pdf", async (req, res) => {
     text(d.portOfLoading, 180, 297);
     text(d.portOfDischarge, 30, 317);
 
-    text("1 X RORO", 340, 347, 11);
+    text("1 X RORO", 340, 347, 12);
     text(`${d.vehicleYearMakeModel} VIN: ${d.vin}`, 270, 362, 8.5);
 
     text(String(kg || ""), 503, 362, 8);
@@ -599,61 +657,7 @@ app.get("/grid-template", async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-app.get("/grid-template", async (req, res) => {
-  try {
-    const templatePath = path.join(__dirname, "template.pdf");
-    const templateBytes = fs.readFileSync(templatePath);
 
-    const pdfDoc = await PDFLibDocument.load(templateBytes);
-    const page = pdfDoc.getPages()[0];
-
-    const { width, height } = page.getSize();
-
-    // draw grid every 25px
-    for (let x = 0; x < width; x += 25) {
-      page.drawLine({
-        start: { x, y: 0 },
-        end: { x, y: height },
-        thickness: x % 100 === 0 ? 1 : 0.3,
-        color: x % 100 === 0
-          ? rgb(1, 0, 0)   // red major lines
-          : rgb(0, 0, 1),  // blue minor lines
-      });
-
-      page.drawText(String(x), {
-        x: x + 2,
-        y: height - 12,
-        size: 6,
-      });
-    }
-
-    for (let y = 0; y < height; y += 25) {
-      page.drawLine({
-        start: { x: 0, y },
-        end: { x: width, y },
-        thickness: y % 100 === 0 ? 1 : 0.3,
-        color: y % 100 === 0
-          ? rgb(1, 0, 0)
-          : rgb(0, 0, 1),
-      });
-
-      page.drawText(String(y), {
-        x: 2,
-        y: y + 2,
-        size: 6,
-      });
-    }
-
-    const pdfBytes = await pdfDoc.save();
-
-    res.setHeader("Content-Type", "application/pdf");
-    res.send(Buffer.from(pdfBytes));
-
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ error: err.message });
-  }
-});
 // ================= START =================
 
 app.listen(4000, () => console.log("Server running on port 4000"));
