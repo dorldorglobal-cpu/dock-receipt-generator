@@ -242,10 +242,15 @@ if (vin && vin.length !== 17) {
 
   const res = await fetch(`${import.meta.env.VITE_API_URL}/search?q=${search}`);
   const data = await res.json();
+
   setResults(data);
 };
 
-  return (
+const loadShipment = (data) => {
+  setResult(data);
+};
+
+return (
   <div style={{ padding: "30px", fontFamily: "Arial" }}>
     <h1>Dock Receipt Generator</h1>
 
@@ -265,10 +270,18 @@ if (vin && vin.length !== 17) {
 
       <ul>
         {results?.map((r, i) => (
-          <li key={i}>
-            {r.referenceNumber} - {r.vin}
-          </li>
-        ))}
+  <li
+    key={i}
+    onClick={() => loadShipment(r)}
+    style={{
+      cursor: "pointer",
+      padding: "6px",
+      borderBottom: "1px solid #ddd",
+    }}
+  >
+    {r.referenceNumber} - {r.vin}
+  </li>
+))}
       </ul>
     </div>
 
