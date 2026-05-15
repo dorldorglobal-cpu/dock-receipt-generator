@@ -24,7 +24,7 @@ function App() {
 
   const checkScheduleStatus = async () => {
     try {
-      const response = await fetch("http://localhost:4000/schedule-status");
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/schedule-status`);
       const data = await response.json();
       setScheduleSaved(data.saved);
     } catch {
@@ -53,7 +53,7 @@ function App() {
     formData.append("schedule", scheduleFile);
 
     try {
-      const response = await fetch("http://localhost:4000/save-schedule", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/save-schedule`, {
         method: "POST",
         body: formData,
       });
@@ -83,7 +83,7 @@ function App() {
     if (dispatchFile) formData.append("dispatch", dispatchFile);
 
     try {
-      const response = await fetch("http://localhost:4000/upload", {
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/upload`, {
         method: "POST",
         body: formData,
       });
@@ -164,7 +164,7 @@ if (vin && vin.length !== 17) {
     }
   }
 
-  const response = await fetch("http://localhost:4000/generate-pdf", {
+  const response = await fetch(`${import.meta.env.VITE_API_URL}/generate-pdf`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
