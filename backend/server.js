@@ -551,8 +551,8 @@ app.post("/generate-pdf", async (req, res) => {
     text(d.consigneeCity, 25, 152);
     text(d.consigneeCountry, 25, 162);
 
-    text(d.sailDate, 510, 112);
-    text(d.arrivalDate, 510, 142);
+    text(d.sailDate, 490, 166);
+    text(d.arrivalDate, 490, 202);
 
     text(d.pickupName, 310, 202);
     text(d.pickupAddress, 310, 212);
