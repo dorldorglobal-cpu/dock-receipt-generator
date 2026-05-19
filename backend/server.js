@@ -196,27 +196,33 @@ function parseAes(text) {
   );
 
   const consigneeLine1 = consigneeIndex !== -1 ? lines[consigneeIndex + 1] || "" : "";
-  const consigneeLine2 = consigneeIndex !== -1 ? lines[consigneeIndex + 2] || "" : "";
-  const combined = `${consigneeLine1} ${consigneeLine2}`.trim();
+const consigneeLine2 = consigneeIndex !== -1 ? lines[consigneeIndex + 2] || "" : "";
+
+let combined = `${consigneeLine1} ${consigneeLine2}`.trim();
+
+combined = combined
+  .replace(/ULTIMATE CONSIGNEE TYPE:.*$/i, "")
+  .replace(/\s+[A-Z]{2}\s*$/i, ", $&")
+  .trim();
 
   const consigneeParts = combined.split(",").map(clean).filter(Boolean);
 
-  let consigneeAddress = "";
-  let consigneeCity = "";
+let consigneeAddress = "";
+let consigneeCity = "";
 
-  if (consigneeParts.length >= 2) {
-    const lastPart = consigneeParts[consigneeParts.length - 1];
+if (consigneeParts.length >= 2) {
+  const lastPart = consigneeParts[consigneeParts.length - 1];
 
-    if (/^[A-Z]{2}$/.test(lastPart)) {
-      consigneeCity = consigneeParts[consigneeParts.length - 2];
-      consigneeAddress = consigneeParts.slice(0, -2).join(", ");
-    } else {
-      consigneeCity = consigneeParts[consigneeParts.length - 1];
-      consigneeAddress = consigneeParts.slice(0, -1).join(", ");
-    }
+  if (/^[A-Z]{2}$/.test(lastPart)) {
+    consigneeCity = consigneeParts[consigneeParts.length - 2];
+    consigneeAddress = consigneeParts.slice(0, -2).join(", ");
   } else {
-    consigneeAddress = combined;
+    consigneeCity = lastPart;
+    consigneeAddress = consigneeParts.slice(0, -1).join(", ");
   }
+} else {
+  consigneeAddress = combined;
+}
 
   const vessel = lineAfter(lines, "9. EXPORTING CARRIER");
 
