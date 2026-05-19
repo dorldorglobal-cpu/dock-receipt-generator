@@ -1,4 +1,5 @@
 const express = require("express");
+const mongoose = require("mongoose");
 const multer = require("multer");
 const cors = require("cors");
 const pdfParse = require("pdf-parse");
@@ -8,6 +9,9 @@ const path = require("path");
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require("pdf-lib");
 
 const app = express();
+mongoose.connect(process.env.MONGODB_URI)
+  .then(() => console.log("MongoDB Connected"))
+  .catch((err) => console.error("MongoDB Error:", err));
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
