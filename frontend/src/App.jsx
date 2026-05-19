@@ -12,6 +12,12 @@ function App() {
   const [search, setSearch] = useState("");
 const [results, setResults] = useState([]);
 
+const [authenticated, setAuthenticated] = useState(
+  localStorage.getItem("auth") === "yes"
+);
+
+const [password, setPassword] = useState("");
+
   const boxStyle = {
     border: "2px dashed #888",
     padding: "25px",
@@ -250,7 +256,41 @@ const loadShipment = (data) => {
   setResult(data);
 };
 
+const login = () => {
+  if (password === "dor123") {
+    localStorage.setItem("auth", "yes");
+    setAuthenticated(true);
+  } else {
+    alert("Wrong password");
+  }
+};
+
+if (!authenticated) {
+  return (
+    <div style={{ padding: "40px", fontFamily: "Arial" }}>
+      <h1>Dor L'Dor Global Operations</h1>
+
+      <input
+        type="password"
+        placeholder="Enter Password"
+        value={password}
+        onChange={(e) => setPassword(e.target.value)}
+        style={{
+          padding: "10px",
+          width: "250px",
+          marginRight: "10px",
+        }}
+      />
+
+      <button onClick={login} style={{ padding: "10px 15px" }}>
+        Login
+      </button>
+    </div>
+  );
+}
+
 return (
+  
   <div style={{ padding: "30px", fontFamily: "Arial" }}>
     <h1>Dock Receipt Generator</h1>
 
