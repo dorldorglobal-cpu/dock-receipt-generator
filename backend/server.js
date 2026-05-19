@@ -509,6 +509,18 @@ app.get("/search", (req, res) => {
   res.json(results.slice(0, 20));
 });
 
+app.get("/db-test", async (req, res) => {
+  res.json({
+    mongoState: mongoose.connection.readyState,
+    states: {
+      0: "disconnected",
+      1: "connected",
+      2: "connecting",
+      3: "disconnecting",
+    },
+  });
+});
+
 // ================= PDF GENERATOR =================
 
 app.post("/generate-pdf", async (req, res) => {
