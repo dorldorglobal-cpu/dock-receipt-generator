@@ -152,24 +152,28 @@ async function saveShipment(data) {
   const referenceNumber = clean(data.referenceNumber);
   const vin = cleanUpper(data.vin);
 
+  if (!referenceNumber && !vin) return;
+
   const filter = referenceNumber
-    ? { referenceNumber }
-    : vin
-    ? { vin }
-    : { _id: new mongoose.Types.ObjectId() };
+    ? { referenceNumber: referenceNumber }
+    : { vin: vin };
 
   await Shipment.findOneAndUpdate(
     filter,
     {
-      ...data,
-      referenceNumber,
-      vin,
-      updatedAt: new Date(),
+      $set: {
+        ...data,
+        referenceNumber,
+        vin,
+        updatedAt: new Date(),
+      },
+      $setOnInsert: {
+        createdAt: new Date(),
+      },
     },
     {
       upsert: true,
       new: true,
-      setDefaultsOnInsert: true,
     }
   );
 }
@@ -497,7 +501,7 @@ app.get("/search", async (req, res) => {
         { referenceNumber: { $regex: q, $options: "i" } },
       ],
     })
-      .sort({ updatedAt: -1 })
+      .sort({ updatedAt: -1, createdAt: -1 })
       .limit(20);
 
     res.json(results);
