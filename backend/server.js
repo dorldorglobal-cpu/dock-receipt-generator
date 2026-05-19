@@ -444,8 +444,19 @@ app.post("/upload", upload.any(), async (req, res) => {
       aesData.portOfDischarge
     );
 
+let polDisplay = aesData.portOfLoading;
+
+if (
+  aesData.bookingNumber.startsWith("SLSE") &&
+  normalizePort(aesData.portOfLoading) === "PROVIDENCE"
+) {
+  polDisplay = "DAVISVILLE";
+}
+
     const output = {
-      ...aesData,
+      const output = {
+  ...aesData,
+  portOfLoading: polDisplay,
       ...dispatchData,
       vin: aesData.vin || dispatchData.dispatchVin || "",
       weightKgs: aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
