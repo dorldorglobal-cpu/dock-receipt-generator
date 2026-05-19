@@ -454,7 +454,6 @@ if (
 }
 
     const output = {
-      const output = {
   ...aesData,
   portOfLoading: polDisplay,
       ...dispatchData,
