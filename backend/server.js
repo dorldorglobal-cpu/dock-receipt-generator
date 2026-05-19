@@ -19,7 +19,8 @@ app.use(express.json({ limit: "10mb" }));
 
 const schedulesDir = path.join(__dirname, "saved-schedules");
 const masterSchedulePath = path.join(schedulesDir, "master-schedule.xlsx");
-const DATA_FILE = path.join(__dirname, "shipments.json");
+const shipmentSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
+const Shipment = mongoose.model("Shipment", shipmentSchema);
 
 if (!fs.existsSync(schedulesDir)) fs.mkdirSync(schedulesDir);
 
@@ -147,32 +148,30 @@ function extractVehicleDataFromAes(text) {
   return { vin, weightKgs, value };
 }
 
-function saveShipment(data) {
-  let existing = [];
-
-  if (fs.existsSync(DATA_FILE)) {
-    try {
-      existing = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-    } catch {
-      existing = [];
-    }
-  }
-
+async function saveShipment(data) {
   const referenceNumber = clean(data.referenceNumber);
   const vin = cleanUpper(data.vin);
 
-  existing = existing.filter((item) => {
-    const sameRef = referenceNumber && clean(item.referenceNumber) === referenceNumber;
-    const sameVin = vin && cleanUpper(item.vin) === vin;
-    return !(sameRef || sameVin);
-  });
+  const filter = referenceNumber
+    ? { referenceNumber }
+    : vin
+    ? { vin }
+    : { _id: new mongoose.Types.ObjectId() };
 
-  existing.unshift({
-    ...data,
-    createdAt: new Date().toISOString(),
-  });
-
-  fs.writeFileSync(DATA_FILE, JSON.stringify(existing, null, 2));
+  await Shipment.findOneAndUpdate(
+    filter,
+    {
+      ...data,
+      referenceNumber,
+      vin,
+      updatedAt: new Date(),
+    },
+    {
+      upsert: true,
+      new: true,
+      setDefaultsOnInsert: true,
+    }
+  );
 }
 
 // ================= AES PARSER =================
@@ -471,7 +470,7 @@ if (
       scheduleMatchFound: match ? "YES" : "NO",
     };
 
-    saveShipment(output);
+    await saveShipment(output);
 
     res.json(output);
   } catch (err) {
@@ -482,31 +481,24 @@ if (
 
 // ================= SEARCH SHIPMENTS =================
 
-app.get("/search", (req, res) => {
-  const q = cleanUpper(req.query.q || "");
-
-  if (!q) return res.json([]);
-
-  if (!fs.existsSync(DATA_FILE)) {
-    return res.json([]);
-  }
-
-  let data = [];
-
+app.get("/search", async (req, res) => {
   try {
-    data = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
-  } catch {
-    data = [];
+    const q = cleanUpper(req.query.q || "");
+
+    const results = await Shipment.find({
+      $or: [
+        { vin: { $regex: q, $options: "i" } },
+        { referenceNumber: { $regex: q, $options: "i" } },
+      ],
+    })
+      .sort({ updatedAt: -1 })
+      .limit(20);
+
+    res.json(results);
+  } catch (err) {
+    console.error("SEARCH ERROR:", err);
+    res.status(500).json({ error: err.message });
   }
-
-  const results = data.filter((item) => {
-    return (
-      cleanUpper(item.vin).includes(q) ||
-      cleanUpper(item.referenceNumber).includes(q)
-    );
-  });
-
-  res.json(results.slice(0, 20));
 });
 
 app.get("/db-test", async (req, res) => {
