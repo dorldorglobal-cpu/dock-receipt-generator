@@ -119,18 +119,30 @@ function findVin(text) {
 }
 
 function extractVehicleDataFromAes(text) {
-  const compact = text.toUpperCase().replace(/\s+/g, " ");
+  const raw = text.toUpperCase();
+  const compact = raw.replace(/\s+/g, " ");
 
   const vin = findVin(compact);
   let weightKgs = "";
   let value = "";
 
-  const weightMatch = compact.match(
-    /SHIPPING\s+WEIGHT\s+\(KG\)[\s\S]*?\b(\d{3,6})\b\s+VERIFY:/i
-  );
+  // Handles AES pattern:
+  // 1 NO 1700 VERIFY:606:VIN CONTAINS INVALID CHARACTERS
+  const verifyWeight = compact.match(/\b1\s+NO\s+(\d{3,6})\s+VERIFY:/i);
+  if (verifyWeight) {
+    weightKgs = verifyWeight[1];
+  }
 
-  if (weightMatch) {
-    weightKgs = weightMatch[1];
+  // Fallback: find weight in the commodity block before VERIFY
+  if (!weightKgs) {
+    const commodityStart = compact.indexOf("20. SCH B/HTS DESCRIPTION");
+    const verifyIndex = compact.indexOf("VERIFY:");
+
+    if (commodityStart !== -1 && verifyIndex !== -1 && verifyIndex > commodityStart) {
+      const beforeVerify = compact.slice(commodityStart, verifyIndex);
+      const nums = beforeVerify.match(/\b\d{3,6}\b/g) || [];
+      if (nums.length) weightKgs = nums[nums.length - 1];
+    }
   }
 
   if (vin) {
@@ -150,6 +162,7 @@ function extractVehicleDataFromAes(text) {
   }
 
   return { vin, weightKgs, value };
+}
 }
 async function saveShipment(data) {
   const referenceNumber = clean(data.referenceNumber);
