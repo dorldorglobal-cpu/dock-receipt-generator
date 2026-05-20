@@ -465,6 +465,12 @@ app.post("/upload", upload.any(), async (req, res) => {
 
     const aesData = parseAes(aesText);
     const dispatchData = dispatchText ? parseDispatch(dispatchText) : {};
+const forcedAesWeightMatch = aesText
+  .toUpperCase()
+  .replace(/\s+/g, " ")
+  .match(/\b1\s+NO\s+(\d{3,6})\s+VERIFY:/);
+
+const forcedAesWeightKgs = forcedAesWeightMatch ? forcedAesWeightMatch[1] : "";
 
     const scheduleRows = getSavedScheduleRows();
 
@@ -489,7 +495,7 @@ if (
   portOfLoading: polDisplay,
       ...dispatchData,
       vin: aesData.vin || dispatchData.dispatchVin || "",
-      weightKgs: aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
+      weightKgs: forcedAesWeightKgs || aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
       voyage: match ? clean(getCell(match, ["Voyage", "Voyage Number"])) : "",
       cutoffDate: match ? formatExcelDate(getCell(match, ["Port Cutoff", "Cutoff Date", "Cutoff", "Cargo Cutoff", "Port cutoff"])) : "",
       sailDate: match ? formatExcelDate(getCell(match, ["Sail Date", "ETD", "Sail"])) : "",
