@@ -258,6 +258,8 @@ if (consigneeParts.length >= 2) {
   const vehicleYearMakeModel = cleanUpper((vehicleMatch?.[0] || "").replace("EXPORT INFO CODE", ""));
 
   const vehicleData = extractVehicleDataFromAes(text);
+const aesWeightMatch = text.toUpperCase().match(/1\s+NO\s+(\d{3,6})\s+VERIFY:/);
+const aesWeightKgs = aesWeightMatch ? aesWeightMatch[1] : "";
 
   return {
     bookingNumber: clean(bookingNumber),
@@ -276,7 +278,7 @@ if (consigneeParts.length >= 2) {
     consigneeCountry: countryFromPod(pod),
 
     vehicleType: "RORO",
-    weightKgs: vehicleData.weightKgs,
+    weightKgs: aesWeightKgs || vehicleData.weightKgs,
     vehicleYearMakeModel,
     vin: vehicleData.vin,
     value:
