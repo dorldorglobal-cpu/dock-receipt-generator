@@ -163,7 +163,7 @@ function extractVehicleDataFromAes(text) {
 
   return { vin, weightKgs, value };
 }
-}
+
 async function saveShipment(data) {
   const referenceNumber = clean(data.referenceNumber);
   const vin = cleanUpper(data.vin);
