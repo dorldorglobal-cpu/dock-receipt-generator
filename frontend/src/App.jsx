@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import "./App.css";
 
 function App() {
   const [aesFile, setAesFile] = useState(null);
@@ -290,11 +291,15 @@ if (!authenticated) {
 }
 
 return (
-  
-  <div style={{ padding: "30px", fontFamily: "Arial" }}>
+  <>
+    <div className="topbar">
+      Dor L'Dor Global Operations Platform
+    </div>
+
+    <div className="app-container">
     <h1>Dock Receipt Generator</h1>
 
-    <div style={{ marginBottom: "25px", padding: "15px", border: "1px solid #ccc" }}>
+    <div className="card">
       <h2>Search Saved Shipments</h2>
 
       <input
@@ -333,7 +338,7 @@ return (
       </p>
 
       <div
-        style={boxStyle}
+        className="dropbox"
         onDragOver={(e) => e.preventDefault()}
         onDrop={(e) => handleDrop(e, "schedule")}
       >
@@ -481,7 +486,12 @@ return (
           <h3>Edit Fields</h3>
 
           <div style={{ display: "grid", gridTemplateColumns: "220px 1fr", gap: "8px", maxWidth: "850px" }}>
-            {Object.keys(result).map((key) => (
+            {Object.keys(result)
+  .filter(
+    (key) =>
+      !["_id", "__v", "createdAt", "updatedAt"].includes(key)
+  )
+  .map((key) => (
               <div key={key} style={{ display: "contents" }}>
                 <label style={{ fontWeight: "bold" }}>{key}</label>
                 <input
@@ -498,8 +508,9 @@ return (
           </button>
         </div>
       )}
-    </div>
-  );
+        </div>
+  </>
+);
 }
 
 export default App;
