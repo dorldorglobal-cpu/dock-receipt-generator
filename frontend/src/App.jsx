@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import "./App.css";
+import logo from "./logo.png";
 
 function App() {
   const [aesFile, setAesFile] = useState(null);
@@ -293,8 +294,31 @@ if (!authenticated) {
 return (
   <>
     <div className="topbar">
+  <div
+    style={{
+      display: "flex",
+      alignItems: "center",
+      gap: "15px",
+    }}
+  >
+    <img
+      src={logo}
+      alt="Dor L'Dor Global"
+      style={{
+        height: "42px",
+        width: "42px",
+        objectFit: "contain",
+        borderRadius: "8px",
+        background: "white",
+        padding: "3px",
+      }}
+    />
+
+    <div>
       Dor L'Dor Global Operations Platform
     </div>
+  </div>
+</div>
 
     <div className="app-container">
     <h1>Dock Receipt Generator</h1>
