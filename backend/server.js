@@ -125,14 +125,18 @@ function extractVehicleDataFromAes(text) {
   let weightKgs = "";
   let value = "";
 
+  const weightMatch = compact.match(
+    /SHIPPING\s+WEIGHT\s+\(KG\)[\s\S]*?\b(\d{3,6})\b\s+VERIFY:/i
+  );
+
+  if (weightMatch) {
+    weightKgs = weightMatch[1];
+  }
+
   if (vin) {
     const vinIndex = compact.indexOf(vin);
 
     if (vinIndex !== -1) {
-      const beforeVin = compact.slice(Math.max(0, vinIndex - 80), vinIndex);
-      const weightNums = beforeVin.match(/\b\d{3,5}\b/g) || [];
-      weightKgs = weightNums.length ? weightNums[weightNums.length - 1] : "";
-
       const afterVin = compact.slice(vinIndex + vin.length, vinIndex + vin.length + 200);
 
       const stateValueMatch = afterVin.match(/\/\s*[A-Z]{2}\s+(\d{3,8})\b/);
@@ -147,7 +151,6 @@ function extractVehicleDataFromAes(text) {
 
   return { vin, weightKgs, value };
 }
-
 async function saveShipment(data) {
   const referenceNumber = clean(data.referenceNumber);
   const vin = cleanUpper(data.vin);
