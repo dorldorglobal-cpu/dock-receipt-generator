@@ -471,28 +471,7 @@ app.get("/schedule-status", (req, res) => {
       saved: false,
     });
   }
-});
-
-    const stats = fs.statSync(masterSchedulePath);
-
-    const workbook = XLSX.readFile(masterSchedulePath);
-    const sheet = workbook.Sheets[workbook.SheetNames[0]];
-    const rows = XLSX.utils.sheet_to_json(sheet);
-
-    res.json({
-      saved: true,
-      fileName: path.basename(masterSchedulePath),
-      updatedAt: stats.mtime,
-      rows: rows.length,
-    });
-  } catch (err) {
-    console.error(err);
-
-    res.json({
-      saved: false,
-    });
-  }
-});
+});   
 
 app.post("/save-schedule", upload.single("schedule"), (req, res) => {
   try {
