@@ -7,18 +7,38 @@ const XLSX = require("xlsx");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require("pdf-lib");
+const pricingRoutes = require("./routes/pricing");
+
+require("dotenv").config();
+
+const orderRoutes = require("./routes/orders");
+const addressBookRoutes = require("./routes/addressBook");
 
 const app = express();
-mongoose.connect(process.env.MONGODB_URI)
-  .then(() => console.log("MongoDB Connected"))
-  .catch((err) => console.error("MongoDB Error:", err));
 const upload = multer({ storage: multer.memoryStorage() });
 
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({ limit: "50mb" }));
+app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+app.use("/api/pricing", pricingRoutes);
+
+// API ROUTES
+app.use("/api/orders", orderRoutes);
+app.use("/api/address-book", addressBookRoutes);
+
+app.get("/api/address-book-test", (req, res) => {
+  res.json({ success: true, message: "Address book test works" });
+});
+
+app.get("/", (req, res) => {
+  res.send("DDG OPS Backend Running");
+});
+
+// ================= EXISTING DR GENERATOR / SCHEDULE SETUP =================
 
 const schedulesDir = path.join(__dirname, "saved-schedules");
 const masterSchedulePath = path.join(schedulesDir, "master-schedule.xlsx");
+
 const shipmentSchema = new mongoose.Schema({}, { strict: false, timestamps: true });
 const Shipment = mongoose.model("Shipment", shipmentSchema);
 
@@ -126,14 +146,11 @@ function extractVehicleDataFromAes(text) {
   let weightKgs = "";
   let value = "";
 
-  // Handles AES pattern:
-  // 1 NO 1700 VERIFY:606:VIN CONTAINS INVALID CHARACTERS
   const verifyWeight = compact.match(/\b1\s+NO\s+(\d{3,6})\s+VERIFY:/i);
   if (verifyWeight) {
     weightKgs = verifyWeight[1];
   }
 
-  // Fallback: find weight in the commodity block before VERIFY
   if (!weightKgs) {
     const commodityStart = compact.indexOf("20. SCH B/HTS DESCRIPTION");
     const verifyIndex = compact.indexOf("VERIFY:");
@@ -170,9 +187,7 @@ async function saveShipment(data) {
 
   if (!referenceNumber && !vin) return;
 
-  const filter = referenceNumber
-    ? { referenceNumber: referenceNumber }
-    : { vin: vin };
+  const filter = referenceNumber ? { referenceNumber } : { vin };
 
   await Shipment.findOneAndUpdate(
     filter,
@@ -216,33 +231,33 @@ function parseAes(text) {
   );
 
   const consigneeLine1 = consigneeIndex !== -1 ? lines[consigneeIndex + 1] || "" : "";
-const consigneeLine2 = consigneeIndex !== -1 ? lines[consigneeIndex + 2] || "" : "";
+  const consigneeLine2 = consigneeIndex !== -1 ? lines[consigneeIndex + 2] || "" : "";
 
-let combined = `${consigneeLine1} ${consigneeLine2}`.trim();
+  let combined = `${consigneeLine1} ${consigneeLine2}`.trim();
 
-combined = combined
-  .replace(/ULTIMATE CONSIGNEE TYPE:.*$/i, "")
-  .replace(/\s+[A-Z]{2}\s*$/i, ", $&")
-  .trim();
+  combined = combined
+    .replace(/ULTIMATE CONSIGNEE TYPE:.*$/i, "")
+    .replace(/\s+[A-Z]{2}\s*$/i, ", $&")
+    .trim();
 
   const consigneeParts = combined.split(",").map(clean).filter(Boolean);
 
-let consigneeAddress = "";
-let consigneeCity = "";
+  let consigneeAddress = "";
+  let consigneeCity = "";
 
-if (consigneeParts.length >= 2) {
-  const lastPart = consigneeParts[consigneeParts.length - 1];
+  if (consigneeParts.length >= 2) {
+    const lastPart = consigneeParts[consigneeParts.length - 1];
 
-  if (/^[A-Z]{2}$/.test(lastPart)) {
-    consigneeCity = consigneeParts[consigneeParts.length - 2];
-    consigneeAddress = consigneeParts.slice(0, -2).join(", ");
+    if (/^[A-Z]{2}$/.test(lastPart)) {
+      consigneeCity = consigneeParts[consigneeParts.length - 2];
+      consigneeAddress = consigneeParts.slice(0, -2).join(", ");
+    } else {
+      consigneeCity = lastPart;
+      consigneeAddress = consigneeParts.slice(0, -1).join(", ");
+    }
   } else {
-    consigneeCity = lastPart;
-    consigneeAddress = consigneeParts.slice(0, -1).join(", ");
+    consigneeAddress = combined;
   }
-} else {
-  consigneeAddress = combined;
-}
 
   const vessel = lineAfter(lines, "9. EXPORTING CARRIER");
 
@@ -258,8 +273,9 @@ if (consigneeParts.length >= 2) {
   const vehicleYearMakeModel = cleanUpper((vehicleMatch?.[0] || "").replace("EXPORT INFO CODE", ""));
 
   const vehicleData = extractVehicleDataFromAes(text);
-const aesWeightMatch = text.toUpperCase().match(/1\s+NO\s+(\d{3,6})\s+VERIFY:/);
-const aesWeightKgs = aesWeightMatch ? aesWeightMatch[1] : "";
+
+  const aesWeightMatch = text.toUpperCase().match(/1\s+NO\s+(\d{3,6})\s+VERIFY:/);
+  const aesWeightKgs = aesWeightMatch ? aesWeightMatch[1] : "";
 
   return {
     bookingNumber: clean(bookingNumber),
@@ -429,11 +445,53 @@ function findScheduleMatch(rows, vessel, pol, pod) {
 // ================= ROUTES =================
 
 app.get("/schedule-status", (req, res) => {
-  const exists = fs.existsSync(masterSchedulePath);
-  res.json({
-    saved: exists,
-    filename: exists ? "master-schedule.xlsx" : "",
-  });
+  try {
+    if (!fs.existsSync(masterSchedulePath)) {
+      return res.json({
+        saved: false,
+      });
+    }
+
+    const stats = fs.statSync(masterSchedulePath);
+
+    const workbook = XLSX.readFile(masterSchedulePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    res.json({
+      saved: true,
+      fileName: path.basename(masterSchedulePath),
+      updatedAt: stats.mtime,
+      rows: rows.length,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.json({
+      saved: false,
+    });
+  }
+});
+
+    const stats = fs.statSync(masterSchedulePath);
+
+    const workbook = XLSX.readFile(masterSchedulePath);
+    const sheet = workbook.Sheets[workbook.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(sheet);
+
+    res.json({
+      saved: true,
+      fileName: path.basename(masterSchedulePath),
+      updatedAt: stats.mtime,
+      rows: rows.length,
+    });
+  } catch (err) {
+    console.error(err);
+
+    res.json({
+      saved: false,
+    });
+  }
 });
 
 app.post("/save-schedule", upload.single("schedule"), (req, res) => {
@@ -465,12 +523,13 @@ app.post("/upload", upload.any(), async (req, res) => {
 
     const aesData = parseAes(aesText);
     const dispatchData = dispatchText ? parseDispatch(dispatchText) : {};
-const forcedAesWeightMatch = aesText
-  .toUpperCase()
-  .replace(/\s+/g, " ")
-  .match(/\b1\s+NO\s+(\d{3,6})\s+VERIFY:/);
 
-const forcedAesWeightKgs = forcedAesWeightMatch ? forcedAesWeightMatch[1] : "";
+    const forcedAesWeightMatch = aesText
+      .toUpperCase()
+      .replace(/\s+/g, " ")
+      .match(/\b1\s+NO\s+(\d{3,6})\s+VERIFY:/);
+
+    const forcedAesWeightKgs = forcedAesWeightMatch ? forcedAesWeightMatch[1] : "";
 
     const scheduleRows = getSavedScheduleRows();
 
@@ -481,18 +540,18 @@ const forcedAesWeightKgs = forcedAesWeightMatch ? forcedAesWeightMatch[1] : "";
       aesData.portOfDischarge
     );
 
-let polDisplay = aesData.portOfLoading;
+    let polDisplay = aesData.portOfLoading;
 
-if (
-  aesData.bookingNumber.startsWith("SLSE") &&
-  normalizePort(aesData.portOfLoading) === "PROVIDENCE"
-) {
-  polDisplay = "DAVISVILLE";
-}
+    if (
+      aesData.bookingNumber.startsWith("SLSE") &&
+      normalizePort(aesData.portOfLoading) === "PROVIDENCE"
+    ) {
+      polDisplay = "DAVISVILLE";
+    }
 
     const output = {
-  ...aesData,
-  portOfLoading: polDisplay,
+      ...aesData,
+      portOfLoading: polDisplay,
       ...dispatchData,
       vin: aesData.vin || dispatchData.dispatchVin || "",
       weightKgs: forcedAesWeightKgs || aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
@@ -645,7 +704,10 @@ app.post("/generate-pdf", async (req, res) => {
     const pdfBytes = await pdfDoc.save();
 
     res.setHeader("Content-Type", "application/pdf");
-    res.setHeader("Content-Disposition", `attachment; filename="${d.referenceNumber || "DR"}.pdf"`);
+    res.setHeader(
+      "Content-Disposition",
+      `attachment; filename="${d.referenceNumber || "DR"}.pdf"`
+    );
 
     res.send(Buffer.from(pdfBytes));
   } catch (err) {
@@ -712,4 +774,15 @@ app.get("/grid-template", async (req, res) => {
 
 // ================= START =================
 
-app.listen(4000, () => console.log("Server running on port 4000"));
+mongoose
+  .connect(process.env.MONGODB_URI || process.env.MONGO_URI)
+  .then(() => {
+    console.log("MongoDB Connected");
+
+    app.listen(4000, () => {
+      console.log("Server running on port 4000");
+    });
+  })
+  .catch((err) => {
+    console.error("MongoDB Error:", err);
+  });
