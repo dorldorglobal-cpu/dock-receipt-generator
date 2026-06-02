@@ -203,6 +203,38 @@ export default function CreateOrder() {
     }
   };
 
+  // ── POD → default shipping line ──────────────────────────────────────────
+  const podToShippingLine = (pod) => {
+    if (!pod) return "";
+    const p = pod.toUpperCase();
+    if (["LAGOS", "COTONOU", "LOME"].includes(p)) return "SALLAUM";
+    if (p === "TEMA") return "ACL";
+    return "";
+  };
+
+  // ── Country → default POD mapping ────────────────────────────────────────
+  const countryToPod = (country) => {
+    if (!country) return "";
+    const c = country.toUpperCase().trim();
+    if (/NIGERIA|^NG$/.test(c))                               return "LAGOS";
+    if (/GHANA|^GH$/.test(c))                                 return "TEMA";
+    if (/TOGO|^TG$/.test(c))                                  return "LOME";
+    if (/BENIN|^BJ$/.test(c))                                 return "COTONOU";
+    if (/SENEGAL|^SN$/.test(c))                               return "DAKAR";
+    if (/IVORY\s*COAST|C[OÔ]TE.D.IVOIRE|^CI$/.test(c))      return "ABIDJAN";
+    if (/SOUTH\s*AFRICA|^ZA$/.test(c))                        return "DURBAN";
+    if (/CAMEROON|CAMEROUN|^CM$/.test(c))                     return "DOUALA";
+    if (/LIBERIA|^LR$/.test(c))                               return "MONROVIA";
+    if (/SIERRA\s*LEONE|^SL$/.test(c))                        return "FREETOWN";
+    if (/GUINEA|^GN$/.test(c))                                return "CONAKRY";
+    if (/GAMBIA|^GM$/.test(c))                                return "BANJUL";
+    if (/ANGOLA|^AO$/.test(c))                                return "LUANDA";
+    if (/MALI|^ML$/.test(c))                                  return "DAKAR";
+    if (/BURKINA|^BF$/.test(c))                               return "TEMA";
+    if (/NIGER|^NE$/.test(c))                                 return "COTONOU";
+    return "";
+  };
+
   const selectCustomer = (item) => {
     // Prefer stored defaultPod, fall back to country-derived pod
     const suggestedPod  = item.defaultPod || countryToPod(item.country);
@@ -298,38 +330,6 @@ export default function CreateOrder() {
     let best = null, bestD = Infinity;
     for (const p of PORT_LIST) { const d = hav(coords[0],coords[1],p.lat,p.lng); if (d < bestD) { bestD = d; best = p; } }
     return best ? { ...best, miles: Math.round(bestD) } : null;
-  };
-
-  // ── POD → default shipping line ──────────────────────────────────────────
-  const podToShippingLine = (pod) => {
-    if (!pod) return "";
-    const p = pod.toUpperCase();
-    if (["LAGOS", "COTONOU", "LOME"].includes(p)) return "SALLAUM";
-    if (p === "TEMA") return "ACL";
-    return "";
-  };
-
-  // ── Country → default POD mapping ────────────────────────────────────────
-  const countryToPod = (country) => {
-    if (!country) return "";
-    const c = country.toUpperCase().trim();
-    if (/NIGERIA|^NG$/.test(c))                               return "LAGOS";
-    if (/GHANA|^GH$/.test(c))                                 return "TEMA";
-    if (/TOGO|^TG$/.test(c))                                  return "LOME";
-    if (/BENIN|^BJ$/.test(c))                                 return "COTONOU";
-    if (/SENEGAL|^SN$/.test(c))                               return "DAKAR";
-    if (/IVORY\s*COAST|C[OÔ]TE.D.IVOIRE|^CI$/.test(c))      return "ABIDJAN";
-    if (/SOUTH\s*AFRICA|^ZA$/.test(c))                        return "DURBAN";
-    if (/CAMEROON|CAMEROUN|^CM$/.test(c))                     return "DOUALA";
-    if (/LIBERIA|^LR$/.test(c))                               return "MONROVIA";
-    if (/SIERRA\s*LEONE|^SL$/.test(c))                        return "FREETOWN";
-    if (/GUINEA|^GN$/.test(c))                                return "CONAKRY";
-    if (/GAMBIA|^GM$/.test(c))                                return "BANJUL";
-    if (/ANGOLA|^AO$/.test(c))                                return "LUANDA";
-    if (/MALI|^ML$/.test(c))                                  return "DAKAR";   // landlocked → Dakar
-    if (/BURKINA|^BF$/.test(c))                               return "TEMA";    // landlocked → Tema
-    if (/NIGER|^NE$/.test(c))                                 return "COTONOU"; // landlocked → Cotonou
-    return "";
   };
 
   // Normalize city string for matching — strips punctuation + expands abbreviations
