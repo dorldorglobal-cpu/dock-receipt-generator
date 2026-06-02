@@ -230,11 +230,11 @@ router.post("/", async (req, res) => {
     }
 
     // ── Drive folder name: REF - YEAR MAKE LAST6VIN: CUSTOMER ───────
-    const lastSix    = vinInput.slice(-6) || req.body.vin?.slice(-6) || "";
-    const yearMake   = [req.body.year, req.body.make].filter(Boolean).join(" ");
-    const folderName = [
+    const lastSix       = vinInput.slice(-6) || req.body.vin?.slice(-6) || "";
+    const yearMakeModel = [req.body.year, req.body.make, req.body.model].filter(Boolean).join(" ");
+    const folderName    = [
       `${refNumber} -`,
-      yearMake,
+      yearMakeModel,
       lastSix,
       req.body.customerName ? `: ${req.body.customerName}` : "",
     ].filter(Boolean).join(" ").trim();
