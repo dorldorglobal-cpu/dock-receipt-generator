@@ -85,6 +85,7 @@ export default function CreateOrder() {
   const [dupOrderId, setDupOrderId] = useState(null);
   const [nextRef, setNextRef] = useState("");
   const [manualRef, setManualRef] = useState("");
+  const [custSuggestion, setCustSuggestion] = useState(null); // { _id, companyName, phone, email, defaultPod }
 
   const [scheduleVessels, setScheduleVessels] = useState([]);
   const [scheduleMatches, setScheduleMatches] = useState([]);
@@ -149,6 +150,29 @@ export default function CreateOrder() {
       } catch {}
     }
   }, []);
+
+  // ── Fuzzy customer match warning ─────────────────────────────────────────
+  useEffect(() => {
+    if (!form.customerName || form.customerName.length < 3) { setCustSuggestion(null); return; }
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`${API}/api/address-book?search=${encodeURIComponent(form.customerName)}&type=customer`);
+        const data = await res.json();
+        if (!data.length) return setCustSuggestion(null);
+        const needle = form.customerName.toLowerCase().replace(/[^a-z0-9]/g, "");
+        for (const c of data) {
+          const hay = (c.companyName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+          const exact = hay === needle;
+          const contains = hay.includes(needle) || needle.includes(hay);
+          if (!exact && contains && Math.abs(hay.length - needle.length) <= 5) {
+            setCustSuggestion(c); return;
+          }
+        }
+        setCustSuggestion(null);
+      } catch {}
+    }, 500);
+    return () => clearTimeout(timer);
+  }, [form.customerName]);
 
   const lookupSchedule = async (vessel, pol, pod) => {
     if (!vessel || !pol || !pod) return;
@@ -752,8 +776,33 @@ export default function CreateOrder() {
             label="Customer"
             type="customer"
             value={form.customerName}
-            onSelect={selectCustomer}
+            onSelect={(item) => { selectCustomer(item); setCustSuggestion(null); }}
           />
+
+          {/* ── Close match warning ──────────────────────────────────── */}
+          {custSuggestion && (
+            <div style={{
+              background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.35)",
+              borderRadius: 8, padding: "10px 14px", fontSize: 13, color: "#fbbf24",
+              marginTop: -10, marginBottom: 12, display: "flex", alignItems: "center",
+              justifyContent: "space-between", gap: 12,
+            }}>
+              <span>⚠️ Close match found: <strong>{custSuggestion.companyName}</strong> — use existing instead of creating a duplicate?</span>
+              <div style={{ display: "flex", gap: 8, flexShrink: 0 }}>
+                <button type="button"
+                  onClick={() => { selectCustomer(custSuggestion); setCustSuggestion(null); }}
+                  style={{ background: "#fbbf24", border: "none", borderRadius: 6, color: "#000",
+                    padding: "4px 12px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                  Use Existing
+                </button>
+                <button type="button" onClick={() => setCustSuggestion(null)}
+                  style={{ background: "none", border: "1px solid rgba(251,191,36,0.4)", borderRadius: 6,
+                    color: "#fbbf24", padding: "4px 10px", cursor: "pointer", fontSize: 12 }}>
+                  Ignore
+                </button>
+              </div>
+            </div>
+          )}
 
           <AddressSearch
             label="Buyer / Consignee"

@@ -261,25 +261,48 @@ router.post("/", async (req, res) => {
       ],
     });
 
-    // ── Auto-add customer to address book if not found ───────────────
+    // ── Auto-add or update customer in address book ──────────────────
     if (req.body.customerName) {
       const nameClean = req.body.customerName.trim();
-      const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-      // Only check for existing CUSTOMER entries — USPPI/auction entries don't count
-      const customerExists = await AddressBook.findOne({
-        companyName: { $regex: esc(nameClean), $options: "i" },
-        type: "customer",
-      });
-      if (!customerExists) {
+      const needle = nameClean.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+      // Fuzzy match: load all customers and find best overlap
+      const allCustomers = await AddressBook.find({ type: "customer" })
+        .select("_id companyName phone email defaultPod").lean();
+
+      let bestMatch = null, bestScore = 0;
+      for (const c of allCustomers) {
+        const hay = (c.companyName || "").toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (!hay || !needle) continue;
+        // Score: longest common prefix length / max length
+        let common = 0;
+        const minLen = Math.min(needle.length, hay.length);
+        for (let i = 0; i < minLen; i++) {
+          if (needle[i] === hay[i]) common++; else break;
+        }
+        // Also check if one contains the other
+        const overlap = hay.includes(needle) || needle.includes(hay) ? 0.95 : common / Math.max(needle.length, hay.length);
+        if (overlap > bestScore) { bestScore = overlap; bestMatch = c; }
+      }
+
+      if (bestMatch && bestScore >= 0.75) {
+        // Good match — update missing fields on existing record
+        const updates = {};
+        if (req.body.customerPhone && !bestMatch.phone) updates.phone = req.body.customerPhone;
+        if (req.body.customerEmail && !bestMatch.email) updates.email = req.body.customerEmail;
+        if (req.body.pod && !bestMatch.defaultPod)      updates.defaultPod = req.body.pod;
+        if (Object.keys(updates).length > 0) {
+          await AddressBook.findByIdAndUpdate(bestMatch._id, updates);
+        }
+      } else {
+        // No close match — create new customer
         await AddressBook.create({
           companyName: nameClean,
-          phone:      req.body.customerPhone  || "",
-          email:      req.body.customerEmail  || "",
-          defaultPod: req.body.pod            || "",
+          phone:      req.body.customerPhone || "",
+          email:      req.body.customerEmail || "",
+          defaultPod: req.body.pod           || "",
           type:       "customer",
         });
-      } else if (req.body.pod && !customerExists.defaultPod) {
-        await AddressBook.findByIdAndUpdate(customerExists._id, { defaultPod: req.body.pod });
       }
     }
 
