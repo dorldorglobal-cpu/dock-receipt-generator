@@ -83,14 +83,20 @@ export default function CreateOrder() {
 
   const [message, setMessage] = useState("");
   const [dupOrderId, setDupOrderId] = useState(null);
+  const [nextRef, setNextRef] = useState("");
+  const [manualRef, setManualRef] = useState("");
 
   const [scheduleVessels, setScheduleVessels] = useState([]);
-  const [scheduleMatches, setScheduleMatches] = useState([]); // voyage options for chosen vessel+pol+pod
+  const [scheduleMatches, setScheduleMatches] = useState([]);
   const [scheduleLooking, setScheduleLooking] = useState(false);
 
   useEffect(() => {
     fetch(`${API}/api/schedule/vessels`)
       .then(r => r.json()).then(setScheduleVessels).catch(() => {});
+
+    // Fetch next order number
+    fetch(`${API}/api/orders/next-ref`)
+      .then(r => r.json()).then(d => { setNextRef(d.nextRef); setManualRef(d.nextRef); }).catch(() => {});
 
     // Pre-fill from AI Assistant
     const aiFields = sessionStorage.getItem("ai_prefill");
@@ -526,7 +532,7 @@ export default function CreateOrder() {
     const res = await fetch(`${API}/api/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(form),
+      body: JSON.stringify({ ...form, refNumber: manualRef || undefined }),
     });
 
     const data = await res.json();
@@ -601,6 +607,37 @@ export default function CreateOrder() {
 
       <form onSubmit={submitOrder} className="order-form-pro">
 
+        {/* ── Order Number ─────────────────────────────────────────────── */}
+        <section className="form-section" style={{ paddingBottom: 12 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+            <div>
+              <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>
+                Order Number
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                <input
+                  type="text"
+                  value={manualRef}
+                  onChange={e => setManualRef(e.target.value)}
+                  style={{
+                    width: 130, padding: "8px 12px", borderRadius: 8, fontSize: 20, fontWeight: 700,
+                    background: "var(--bg-input)", border: "2px solid #1a6ef7",
+                    color: "#60a5fa", outline: "none", textAlign: "center",
+                  }}
+                />
+                {manualRef !== nextRef && (
+                  <button type="button" onClick={() => setManualRef(nextRef)}
+                    style={{ fontSize: 11, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                    Reset to {nextRef}
+                  </button>
+                )}
+              </div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4 }}>
+                Auto-generated · editable if needed
+              </div>
+            </div>
+          </div>
+        </section>
 
         {/* ── Buyer Receipt Drop Zone ───────────────────────────────────── */}
         <section className="form-section" style={{ paddingBottom: 0 }}>

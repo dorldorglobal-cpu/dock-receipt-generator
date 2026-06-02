@@ -2,6 +2,7 @@ const express = require("express");
 const Order = require("../models/Order");
 const Expense = require("../models/Expense");
 const Pricing = require("../models/Pricing");
+const Counter = require("../models/Counter");
 const multer = require("multer");
 const { parseAES, parseDispatch, parseBuyerReceipt } = require("../utils/parseOrderDocs");
 const AddressBook = require("../models/AddressBook");
@@ -104,9 +105,25 @@ const FOLDERS = {
   SALLAUM: "1Q_dcGLipM5X5l_3k4tLBiqwcoYcPabe8",
 };
 
-function generateRefNumber() {
-  return Math.floor(10000 + Math.random() * 90000).toString();
+async function generateRefNumber() {
+  const counter = await Counter.findByIdAndUpdate(
+    "orderRef",
+    { $inc: { seq: 1 } },
+    { new: true, upsert: true }
+  );
+  return counter.seq.toString();
 }
+
+// ── GET /api/orders/next-ref — peek at next order number without reserving it ──
+router.get("/next-ref", async (req, res) => {
+  try {
+    const counter = await Counter.findById("orderRef");
+    const next = counter ? counter.seq + 1 : 13782;
+    res.json({ nextRef: next.toString() });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 function folderForStatus(status) {
   if (status === "Waiting to Sail") return FOLDERS.WAITING_TO_SAIL;
@@ -187,11 +204,29 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // Use manually provided ref number, or generate the next sequential one
     let refNumber;
-    let exists = true;
-    while (exists) {
-      refNumber = generateRefNumber();
-      exists = await Order.findOne({ refNumber });
+    if (req.body.refNumber && req.body.refNumber.trim()) {
+      refNumber = req.body.refNumber.trim();
+      const exists = await Order.findOne({ refNumber });
+      if (exists) {
+        return res.status(409).json({ error: `Order #${refNumber} already exists.` });
+      }
+      // Keep counter in sync if manual number is higher
+      const num = parseInt(refNumber);
+      if (!isNaN(num)) {
+        await Counter.findByIdAndUpdate("orderRef",
+          [{ $set: { seq: { $max: ["$seq", num] } } }],
+          { upsert: true }
+        );
+      }
+    } else {
+      refNumber = await generateRefNumber();
+      let exists = await Order.findOne({ refNumber });
+      while (exists) {
+        refNumber = await generateRefNumber();
+        exists = await Order.findOne({ refNumber });
+      }
     }
 
     // ── Drive folder name: REF - YEAR MAKE LAST6VIN: CUSTOMER ───────
