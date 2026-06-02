@@ -254,10 +254,8 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
               }
             }
           }
-          // Pickup name — yard/seller name before "SOLD THROUGH COPART"
-          const yardMatch = text.match(/([A-Z][A-Z'\s&.]{3,40}(?:AUTO SALES|AUTO|MOTORS|SALVAGE|DEALERS))\s*[\r\n]\s*SOLD THROUGH/i)
-                         || text.match(/([A-Z][A-Z'\s&.]{3,40}(?:AUTO SALES|AUTO|MOTORS|SALVAGE|DEALERS))\s*[\r\n]/i);
-          if (yardMatch) pickupName = yardMatch[1].trim();
+          // For Copart, pickup name is always "Copart" — Danny's Auto Sales is the seller, not the yard
+          pickupName = "Copart";
 
           parsed = {
             customerName: memberMatch?.[1]?.trim() || "",
