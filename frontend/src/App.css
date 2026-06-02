@@ -1,93 +1,519 @@
-body {
+/* ─── DDG OPS — Component Styles ─────────────────────────────────────── */
+
+/* Layout */
+html, body, #root {
+  width: 100%;
+  min-height: 100vh;
   margin: 0;
-  background: #f4f6f9;
-  font-family: Arial, sans-serif;
+  padding: 0;
 }
 
-.app-container {
-  max-width: 1300px;
-  margin: auto;
-  padding: 30px;
+/* ─── Page Shell ─────────────────────────────────── */
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+  flex-wrap: wrap;
 }
+
+.page-header h1 {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+.page-header p {
+  margin-top: 3px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.page-header .header-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+/* ─── Stat Cards (Dashboard) ─────────────────────── */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.dashboard-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-lg);
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+
+.dashboard-card:hover {
+  border-color: var(--accent);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+}
+
+.dashboard-card span {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dashboard-card strong {
+  font-size: 32px;
+  font-weight: 700;
+  color: var(--text-primary);
+  line-height: 1;
+  display: block;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Smaller text variant for long values (VIN, dates, long strings) */
+.dashboard-card strong.small {
+  font-size: 14px;
+  letter-spacing: 0.01em;
+}
+
+.dashboard-card .card-icon {
+  font-size: 18px;
+  opacity: 0.6;
+  margin-bottom: 4px;
+}
+
+/* ─── Panels / Sections ──────────────────────────── */
+
+.panel {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+}
+
+.panel h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+/* keep backward compat */
+.form-section {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-lg);
+  padding: 20px 24px;
+  margin-bottom: 20px;
+  box-sizing: border-box;
+}
+
+.form-section h2 {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin-top: 0;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 18px;
+  width: 100%;
+}
+
+/* ─── Tables ─────────────────────────────────────── */
+
+.orders-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 4px;
+}
+
+.orders-table th {
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 10px 14px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.orders-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border-muted);
+  color: var(--text-primary);
+  font-size: 13px;
+}
+
+.orders-table tbody tr {
+  transition: background 0.1s;
+}
+
+.orders-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+
+.orders-table tbody tr:last-child td {
+  border-bottom: none;
+}
+
+/* Towing table (compact) */
+.towing-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.towing-table th {
+  background: var(--bg-panel);
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 7px 10px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+.towing-table td {
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-muted);
+  color: var(--text-primary);
+  white-space: nowrap;
+  line-height: 1.3;
+}
+
+.towing-table tbody tr:hover { background: var(--bg-hover); }
+
+/* ─── Status Badges ──────────────────────────────── */
+
+.status-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.badge-new      { background: var(--accent-dim);   color: var(--accent-hover); }
+.badge-pickup   { background: var(--warning-dim);  color: var(--warning); }
+.badge-sail     { background: var(--purple-dim);   color: var(--purple); }
+.badge-sailed   { background: var(--success-dim);  color: var(--success); }
+.badge-complete { background: rgba(34,197,94,0.08); color: #4ade80; }
+.badge-problem  { background: var(--danger-dim);   color: var(--danger); }
+.badge-default  { background: var(--bg-panel);     color: var(--text-secondary); }
+
+/* ─── Form Fields ────────────────────────────────── */
+
+.field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  margin-bottom: 14px;
+}
+
+.field-group label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+
+.field-group input,
+.field-group select,
+.field-group textarea {
+  width: 100%;
+}
+
+/* ─── Timeline ───────────────────────────────────── */
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-item {
+  position: relative;
+  padding: 11px 14px;
+  border-radius: var(--radius-md);
+  border-left: 3px solid var(--border);
+  background: var(--bg-panel);
+  border-top: 1px solid var(--border-muted);
+  border-right: 1px solid var(--border-muted);
+  border-bottom: 1px solid var(--border-muted);
+}
+
+.timeline-item p {
+  margin: 0;
+  padding-right: 160px;
+  font-size: 13px;
+  color: var(--text-primary);
+  line-height: 1.4;
+}
+
+.timeline-item small {
+  position: absolute;
+  bottom: 10px;
+  right: 12px;
+  font-size: 10px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.timeline-created { border-left-color: var(--accent); }
+.timeline-status  { border-left-color: var(--warning); }
+.timeline-upload  { border-left-color: var(--success); }
+.timeline-voyage  { border-left-color: var(--purple); }
+
+/* ─── Modal ──────────────────────────────────────── */
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.7);
+  backdrop-filter: blur(2px);
+  z-index: 9999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+
+.modal-card {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: 24px;
+  max-height: 90vh;
+  overflow: auto;
+  box-shadow: var(--shadow-lg);
+  min-width: 360px;
+}
+
+.modal-card h2 {
+  margin-bottom: 20px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border-muted);
+}
+
+/* ─── Drop Zones ─────────────────────────────────── */
+
+.dropzone {
+  border: 2px dashed var(--border);
+  border-radius: var(--radius-md);
+  padding: 28px 20px;
+  text-align: center;
+  background: var(--bg-panel);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: border-color 0.15s, background 0.15s;
+}
+
+.dropzone:hover,
+.dropzone.active {
+  border-color: var(--accent);
+  background: var(--accent-dim);
+  color: var(--accent-hover);
+}
+
+.dropzone .dropzone-icon {
+  font-size: 28px;
+  margin-bottom: 8px;
+  opacity: 0.6;
+}
+
+.dropzone .dropzone-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.dropzone .dropzone-sub {
+  font-size: 11px;
+  margin-top: 4px;
+  color: var(--text-muted);
+}
+
+.dropzone.has-file {
+  border-color: var(--success);
+  background: var(--success-dim);
+  color: var(--success);
+}
+
+/* ─── Towing section ─────────────────────────────── */
+
+.towing-section {
+  padding: 0;
+}
+
+.towing-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.towing-toolbar input,
+.towing-toolbar select {
+  font-size: 12px;
+  padding: 6px 10px;
+}
+
+.towing-popup-form {
+  display: grid;
+  gap: 12px;
+}
+
+.towing-popup-form label {
+  font-size: 12px;
+  color: var(--text-secondary);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.towing-popup-form input {
+  width: 100%;
+  font-size: 13px;
+  padding: 8px 10px;
+}
+
+/* ─── Schedule Status Badges ─────────────────────── */
+
+.schedule-status-row {
+  display: flex;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-bottom: 16px;
+}
+
+.schedule-card {
+  flex: 1;
+  min-width: 200px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border-muted);
+  border-radius: var(--radius-md);
+  padding: 14px 16px;
+}
+
+.schedule-card .sc-carrier {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  color: var(--text-muted);
+  margin-bottom: 6px;
+}
+
+.schedule-card .sc-status {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.schedule-card .sc-meta {
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 3px;
+}
+
+.schedule-card.loaded { border-left: 3px solid var(--success); }
+.schedule-card.empty  { border-left: 3px solid var(--border); }
+
+/* ─── Radio / Checkbox groups ─────────────────────── */
+
+.radio-group {
+  display: flex;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.radio-option {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.radio-option input[type="radio"] {
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  margin: 0;
+  accent-color: var(--accent);
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  cursor: pointer;
+}
+
+/* ─── Topbar (dock receipt page legacy) ─────────── */
 
 .topbar {
-  background: #0d1b2a;
-  color: white;
-  padding: 18px 30px;
-  font-size: 24px;
-  font-weight: bold;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+  display: none; /* Hidden — using main layout header instead */
 }
 
-.card {
-  background: white;
-  border-radius: 12px;
-  padding: 22px;
-  margin-bottom: 25px;
-  box-shadow: 0 2px 10px rgba(0,0,0,0.08);
+/* ─── App container (dock receipt) ──────────────── */
+
+.app-container {
+  width: 100%;
 }
 
-.dropbox {
-  border: 2px dashed #b0b7c3;
-  border-radius: 10px;
-  padding: 30px;
+/* ─── Misc ───────────────────────────────────────── */
+
+.divider {
+  height: 1px;
+  background: var(--border-muted);
+  margin: 20px 0;
+}
+
+.text-muted  { color: var(--text-muted); }
+.text-success { color: var(--success); }
+.text-warning { color: var(--warning); }
+.text-danger  { color: var(--danger); }
+.text-accent  { color: var(--accent); }
+
+.flex { display: flex; }
+.gap-2 { gap: 8px; }
+.gap-3 { gap: 12px; }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.w-full { width: 100%; }
+.mt-4 { margin-top: 16px; }
+.mb-4 { margin-bottom: 16px; }
+
+.empty-state {
   text-align: center;
-  background: #fafbfc;
-  transition: 0.2s;
-}
-
-.dropbox:hover {
-  border-color: #2563eb;
-  background: #f0f6ff;
-}
-
-button {
-  background: #2563eb;
-  color: white;
-  border: none;
-  padding: 10px 18px;
-  border-radius: 8px;
-  cursor: pointer;
-  font-weight: bold;
-}
-
-button:hover {
-  background: #1d4ed8;
-}
-
-input,
-textarea {
-  border: 1px solid #d1d5db;
-  border-radius: 6px;
-  padding: 8px;
-}
-
-.edit-grid {
-  display: grid;
-  grid-template-columns: 220px 1fr;
-  gap: 10px;
-}
-
-.edit-label {
-  font-weight: bold;
-}
-
-.search-result {
-  cursor: pointer;
-  padding: 8px;
-  border-bottom: 1px solid #eee;
-}
-
-.search-result:hover {
-  background: #f5f7fa;
-}
-
-.status-good {
-  color: green;
-  font-weight: bold;
-}
-
-.status-bad {
-  color: red;
-  font-weight: bold;
+  padding: 48px 20px;
+  color: var(--text-muted);
+  font-size: 14px;
 }

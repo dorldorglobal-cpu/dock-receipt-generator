@@ -1,0 +1,28 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment variables — NEVER commit these
+.env
+**/.env
+*.env
+
+# Google credentials — NEVER commit
+google-service-account.json
+ddg-operations-platform-*.json
+*-service-account.json
+
+# Uploads (user files, not code)
+backend/uploads/
+backend/temp/
+backend/__pycache__/
+
+# Build output
+frontend/dist/
+frontend/.vite/
+
+# Misc
+*.log
+.DS_Store
+desktop.ini
+Thumbs.db

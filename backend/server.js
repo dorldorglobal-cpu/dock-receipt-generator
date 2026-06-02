@@ -7,7 +7,10 @@ const XLSX = require("xlsx");
 const fs = require("fs");
 const path = require("path");
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require("pdf-lib");
+const nodemailer = require("nodemailer");
 const pricingRoutes = require("./routes/pricing");
+const scheduleRoutes = require("./routes/scheduleRoutes");
+const ScheduleRow = require("./models/Schedule");
 
 require("dotenv").config();
 
@@ -21,10 +24,223 @@ app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 app.use("/api/pricing", pricingRoutes);
+app.use("/api/schedule", scheduleRoutes);
 
 // API ROUTES
 app.use("/api/orders", orderRoutes);
 app.use("/api/address-book", addressBookRoutes);
+app.use("/api/customers", require("./routes/customers"));
+app.use("/api/reports",   require("./routes/reports"));
+// ── Parse dispatch PDF from order docs (must be before the expenses router) ──
+app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
+  try {
+    const { url, filename, orderRef, orderId } = req.body;
+    if (!url) return res.status(400).json({ error: "url required" });
+
+    let buffer;
+    const parsedUrl = new URL(url);
+    if (parsedUrl.hostname === "localhost" || parsedUrl.hostname === "127.0.0.1") {
+      // Local file
+      const baseUploads = path.join(__dirname, "uploads");
+      const parts = parsedUrl.pathname.replace(/^\/uploads\//, "").split("/").map(decodeURIComponent);
+      const filePath = path.join(baseUploads, ...parts);
+      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found: " + filePath });
+      buffer = fs.readFileSync(filePath);
+    } else {
+      // Google Drive file — extract fileId from URL
+      const driveMatch = url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+      if (!driveMatch) return res.status(400).json({ error: "Could not parse Drive file ID from URL" });
+      const fileId = driveMatch[1];
+      const { downloadDriveFile } = require("./googleDrive");
+      const tmpPath = path.join(__dirname, "uploads/receipts", `tmp-${Date.now()}.pdf`);
+      if (!fs.existsSync(path.join(__dirname, "uploads/receipts"))) fs.mkdirSync(path.join(__dirname, "uploads/receipts"), { recursive: true });
+      await downloadDriveFile(fileId, tmpPath);
+      buffer = fs.readFileSync(tmpPath);
+      fs.unlinkSync(tmpPath);
+    }
+    const data = await pdfParse(buffer);
+    const text = data.text;
+
+    // Use Groq/Llama for reliable field extraction instead of brittle regex
+    const Groq = require("groq-sdk");
+    const groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
+    const aiResp = await groqClient.chat.completions.create({
+      model: "llama-3.3-70b-versatile",
+      messages: [
+        { role: "system", content: "You are a logistics document parser. Return ONLY a JSON object with these keys (empty string if not found, 0 for total): vin, ymm, total, loadId, dispatchDate, origin, carrier" },
+        { role: "user", content: `Extract from this dispatch document:\n\n${text.slice(0, 6000)}` },
+      ],
+      response_format: { type: "json_object" },
+      temperature: 0.1,
+    });
+    const aiResult = JSON.parse(aiResp.choices[0].message.content);
+    const vin = aiResult.vin || "";
+    const ymm = aiResult.ymm || "";
+    const total = parseFloat(aiResult.total) || 0;
+    const loadId = aiResult.loadId || "";
+    const dispatchDate = aiResult.dispatchDate || "";
+    const origin = aiResult.origin || "";
+    const carrier = aiResult.carrier || "";
+    const savedName = `${Date.now()}-${Math.round(Math.random()*1e9)}.pdf`;
+    const receiptsDir = path.join(__dirname, "uploads/receipts");
+    if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir, { recursive: true });
+    fs.writeFileSync(path.join(receiptsDir, savedName), buffer);
+    const Order = require("./models/Order");
+    let matchedOrder = null;
+    if (orderId) matchedOrder = await Order.findById(orderId).select("refNumber _id").lean().catch(() => null);
+    const row = { vin, ymm, total, loadId, dispatchDate, origin, carrier,
+      vendor: carrier,
+      billFileName: savedName, billMime: "application/pdf",
+      orderId: matchedOrder?._id || orderId || null,
+      orderRef: matchedOrder?.refNumber || orderRef || "",
+      matched: !!(matchedOrder || orderId),
+      notes: loadId ? `Load ID: ${loadId}` : "" };
+    res.json([row]);
+  } catch (err) {
+    console.error("parse-dispatch-url error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+app.use("/api/expenses", require("./routes/expenses"));
+app.use("/api/vendors",  require("./routes/vendors"));
+app.use("/api/invoices", require("./routes/invoices"));
+app.use("/api/claude",   require("./routes/claude"));
+
+// ── POST /api/customer-statement  — generate a customer statement PDF ─────────
+app.post("/api/customer-statement", async (req, res) => {
+  try {
+    const { customerName } = req.body;
+    if (!customerName) return res.status(400).json({ error: "customerName required" });
+
+    const Order = require("./models/Order");
+    const orders = await Order.find({
+      customerName: { $regex: `^${customerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }
+    }).sort({ createdAt: -1 }).lean();
+
+    const { PDFDocument: PDFLib, StandardFonts, rgb } = require("pdf-lib");
+    const pdfDoc = await PDFLib.create();
+    const fontB  = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+    const fontR  = await pdfDoc.embedFont(StandardFonts.Helvetica);
+
+    const W = 612, H = 792;
+    const margin = 48;
+    let page = pdfDoc.addPage([W, H]);
+    let y = H - margin;
+
+    // pdf-lib standard fonts only support WinAnsi — strip anything outside that range
+    const safe  = (txt) => String(txt).replace(/[^\x00-\xFF]/g, "?");
+    const line  = (txt, x, yy, size, font, color) =>
+      page.drawText(safe(txt), { x, y: yy, size, font: font || fontR, color: color || rgb(0.1,0.1,0.1) });
+    const rule  = (yy, thick) =>
+      page.drawLine({ start:{x:margin,y:yy}, end:{x:W-margin,y:yy}, thickness: thick||0.5, color: rgb(0.7,0.7,0.7) });
+    const newPageIfNeeded = (needed) => {
+      if (y - needed < margin) {
+        page = pdfDoc.addPage([W, H]);
+        y = H - margin;
+        return true;
+      }
+      return false;
+    };
+
+    // ── Header ────────────────────────────────────────────────────────────────
+    line("DDG GLOBAL LOGISTICS", margin, y, 18, fontB, rgb(0.08,0.38,0.72));
+    y -= 22;
+    line("CUSTOMER STATEMENT", margin, y, 13, fontR, rgb(0.4,0.4,0.4));
+    y -= 14;
+    line(`Generated: ${new Date().toLocaleDateString("en-US",{month:"long",day:"numeric",year:"numeric"})}`, margin, y, 10, fontR, rgb(0.5,0.5,0.5));
+    y -= 24;
+    rule(y, 1.5);
+    y -= 18;
+
+    // ── Customer ──────────────────────────────────────────────────────────────
+    line("CUSTOMER", margin, y, 9, fontB, rgb(0.4,0.4,0.4));
+    y -= 14;
+    line(customerName, margin, y, 14, fontB);
+    y -= 30;
+
+    // ── Summary totals ────────────────────────────────────────────────────────
+    const fmt = (n) => `$${Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+    const orderTotal = (o) => Object.values(o.charges || {}).reduce((s, v) => s + Number(v || 0), 0);
+
+    const totalBilled = orders.reduce((s, o) => s + orderTotal(o), 0);
+    const totalPaid   = orders.filter(o => o.status === "Completed").reduce((s, o) => s + orderTotal(o), 0);
+    const stillOwed   = totalBilled - totalPaid;
+
+    // Four summary boxes across the page
+    const boxW = 120, boxH = 36, boxY = y - boxH;
+    const boxes = [
+      { label: "Total Orders",  value: String(orders.length),  col: margin },
+      { label: "Total Billed",  value: fmt(totalBilled),        col: margin + 130 },
+      { label: "Total Paid",    value: fmt(totalPaid),          col: margin + 280 },
+      { label: "Still Owed",    value: fmt(stillOwed),          col: margin + 420 },
+    ];
+    boxes.forEach(b => {
+      page.drawRectangle({ x: b.col, y: boxY, width: boxW, height: boxH,
+        borderColor: rgb(0.8,0.8,0.8), borderWidth: 0.5, color: rgb(0.96,0.97,0.99) });
+      line(b.label, b.col + 6, boxY + boxH - 11, 7, fontR, rgb(0.45,0.45,0.45));
+      const valColor = b.label === "Still Owed" && stillOwed > 0 ? rgb(0.85,0.2,0.2)
+                     : b.label === "Total Paid"  && totalPaid > 0 ? rgb(0.1,0.6,0.3)
+                     : rgb(0.08,0.15,0.35);
+      line(b.value, b.col + 6, boxY + 7, 10, fontB, valColor);
+    });
+    y = boxY - 18;
+    rule(y);
+    y -= 16;
+
+    // ── Column headers ────────────────────────────────────────────────────────
+    // cols: Ref | Vehicle + VIN | Route | Status | Age | Total
+    const cols = [48, 100, 255, 355, 450, 495];
+    const hdr  = ["Ref", "Vehicle / VIN", "Route", "Status", "Age", "Total"];
+    hdr.forEach((h, i) => line(h, cols[i], y, 9, fontB, rgb(0.4,0.4,0.4)));
+    y -= 6;
+    rule(y, 0.5);
+    y -= 16;
+
+    // ── Rows ──────────────────────────────────────────────────────────────────
+    for (const o of orders) {
+      newPageIfNeeded(18);
+      const ymm      = [o.year, o.make, o.model].filter(Boolean).join(" ").slice(0, 18) || "-";
+      const vin6     = o.vin ? `  ...${o.vin.slice(-6).toUpperCase()}` : "";
+      const vehicle  = safe(`${ymm}${vin6}`).slice(0, 28);
+      const pol      = safe((o.pol || "?").slice(0, 9));
+      const pod      = safe((o.pod || "?").slice(0, 9));
+      const route    = `${pol} > ${pod}`;
+      const rowAmt   = orderTotal(o);
+      const ageDays  = Math.floor((Date.now() - new Date(o.createdAt)) / 86400000);
+      const ageLabel = ageDays === 0 ? "Today" : `${ageDays}d`;
+      const ageClr   = ageDays <= 30 ? rgb(0.15,0.7,0.4) : ageDays <= 60 ? rgb(0.9,0.55,0.1) : rgb(0.85,0.2,0.2);
+
+      line(safe(o.refNumber || "-"),   cols[0], y, 10, fontR, rgb(0.08,0.38,0.72));
+      line(vehicle,                    cols[1], y, 8.5, fontR);
+      line(route,                      cols[2], y, 9,  fontR);
+      line(safe(o.status || "-"),      cols[3], y, 9,  fontR, rgb(0.3,0.3,0.3));
+      line(ageLabel,                   cols[4], y, 9,  fontR, ageClr);
+      line(rowAmt ? fmt(rowAmt) : "-", cols[5], y, 9,  fontB);
+
+      y -= 18;
+      if (y < margin + 30) {
+        page = pdfDoc.addPage([W, H]);
+        y = H - margin;
+      }
+    }
+
+    y -= 8;
+    rule(y);
+    y -= 14;
+    line("DDG Global Logistics  |  This statement is for reference only.",
+      margin, y, 8, fontR, rgb(0.55,0.55,0.55));
+
+    const pdfBytes = await pdfDoc.save();
+    const safeName = customerName.replace(/[^a-zA-Z0-9\s]/g, "").trim().replace(/\s+/g, "-");
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Statement-${safeName}.pdf"`);
+    res.send(Buffer.from(pdfBytes));
+  } catch (err) {
+    console.error("Statement error:", err);
+    res.status(500).json({ error: "Failed to generate statement" });
+  }
+});
 
 app.get("/api/address-book-test", (req, res) => {
   res.json({ success: true, message: "Address book test works" });
@@ -43,6 +259,11 @@ const shipmentSchema = new mongoose.Schema({}, { strict: false, timestamps: true
 const Shipment = mongoose.model("Shipment", shipmentSchema);
 
 if (!fs.existsSync(schedulesDir)) fs.mkdirSync(schedulesDir);
+
+// ── Local uploads directory (replaces Google Drive file storage) ──────────────
+const uploadsDir = path.join(__dirname, "uploads");
+if (!fs.existsSync(uploadsDir)) fs.mkdirSync(uploadsDir);
+app.use("/uploads", express.static(uploadsDir));
 
 // ================= HELPERS =================
 
@@ -510,14 +731,39 @@ app.post("/upload", upload.any(), async (req, res) => {
 
     const forcedAesWeightKgs = forcedAesWeightMatch ? forcedAesWeightMatch[1] : "";
 
-    const scheduleRows = getSavedScheduleRows();
+    // Look up schedule from master-schedule.xlsx (single source of truth)
+    let match = null;
+    let scheduleRows = getSavedScheduleRows();
+    const excelMatch = findScheduleMatch(scheduleRows, aesData.vessel, aesData.portOfLoading, aesData.portOfDischarge);
+    if (excelMatch) match = excelMatch;
 
-    const match = findScheduleMatch(
-      scheduleRows,
-      aesData.vessel,
-      aesData.portOfLoading,
-      aesData.portOfDischarge
-    );
+    // Fall back to DB schedule rows if not found in Excel
+    if (!match) {
+      const vUpper = cleanUpper(aesData.vessel).split(" V:")[0].trim();
+      const polNorm = normalizePort(aesData.portOfLoading);
+      const podNorm = normalizePort(aesData.portOfDischarge);
+      const vClean = vUpper.replace(/^(M\/V|MV|SS|MS)\s+/i, "").split(" V:")[0].trim();
+      const vesselWords = vClean.split(/\s+/).filter(w => w.length > 3);
+      const vesselSearchWord = vesselWords[vesselWords.length - 1] || vClean;
+      let dbMatch = await ScheduleRow.findOne({
+        vessel: { $regex: `^${vClean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+        pol: polNorm, pod: podNorm,
+      });
+      if (!dbMatch) {
+        dbMatch = await ScheduleRow.findOne({
+          vessel: { $regex: vesselSearchWord, $options: "i" },
+          pol: polNorm, pod: podNorm,
+        });
+      }
+      if (dbMatch) {
+        match = {
+          Voyage: dbMatch.voyage,
+          "Port Cutoff": dbMatch.cutoffDate,
+          "Sail Date": dbMatch.sailDate,
+          "Arrival Date": dbMatch.arrivalDate,
+        };
+      }
+    }
 
     let polDisplay = aesData.portOfLoading;
 
@@ -528,6 +774,15 @@ app.post("/upload", upload.any(), async (req, res) => {
       polDisplay = "DAVISVILLE";
     }
 
+    // Determine shipping line from booking number prefix
+    const bookingUpper = cleanUpper(aesData.bookingNumber);
+    let shippingLine = "";
+    if (bookingUpper.startsWith("SLSE") || bookingUpper.startsWith("SLS")) {
+      shippingLine = "SALLAUM LINES";
+    } else if (bookingUpper.startsWith("ACL") || bookingUpper.startsWith("GLL")) {
+      shippingLine = "ACL";
+    }
+
     const output = {
       ...aesData,
       portOfLoading: polDisplay,
@@ -535,9 +790,10 @@ app.post("/upload", upload.any(), async (req, res) => {
       vin: aesData.vin || dispatchData.dispatchVin || "",
       weightKgs: forcedAesWeightKgs || aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
       voyage: match ? clean(getCell(match, ["Voyage", "Voyage Number"])) : "",
-      cutoffDate: match ? formatExcelDate(getCell(match, ["Port Cutoff", "Cutoff Date", "Cutoff", "Cargo Cutoff", "Port cutoff"])) : "",
-      sailDate: match ? formatExcelDate(getCell(match, ["Sail Date", "ETD", "Sail"])) : "",
-      arrivalDate: match ? formatExcelDate(getCell(match, ["Arrival Date", "ETA", "Arrival"])) : "",
+      cutoffDate: match ? (match.cutoffDate || formatExcelDate(getCell(match, ["Port Cutoff", "Cutoff Date", "Cutoff", "Cargo Cutoff", "Port cutoff"]))) : "",
+      sailDate: match ? (match.sailDate || formatExcelDate(getCell(match, ["Sail Date", "ETD", "Sail"]))) : "",
+      arrivalDate: match ? (match.arrivalDate || formatExcelDate(getCell(match, ["Arrival Date", "ETA", "Arrival"]))) : "",
+      shippingLine,
       scheduleRowsRead: scheduleRows.length,
       scheduleMatchFound: match ? "YES" : "NO",
     };
@@ -627,41 +883,69 @@ app.post("/generate-pdf", async (req, res) => {
         maximumFractionDigits: 2,
       });
 
-    text(d.exporterName, 25, 62);
-    text(d.exporterAddress, 25, 72);
-    text(`${d.exporterCity}, ${d.exporterState} ${d.exporterZip}`, 25, 82);
-    text(d.exporterCountry, 25, 92);
+    // Helper: only join parts that are non-empty / non-"undefined"
+    function safeVal(v) {
+      if (v === undefined || v === null || v === "undefined" || v === "null") return "";
+      return String(v).trim();
+    }
+    function safeLine(...parts) {
+      return parts.map(safeVal).filter(Boolean).join(", ");
+    }
+    function safePair(a, b) {
+      const A = safeVal(a), B = safeVal(b);
+      if (!A && !B) return "";
+      if (!A) return B;
+      if (!B) return A;
+      return `${A} ${B}`;
+    }
 
-    text(d.bookingNumber, 305, 69);
-    text(d.referenceNumber, 510, 69);
-    text(d.cutoffDate, 510, 92);
+    text(safeVal(d.exporterName), 25, 62);
+    text(safeVal(d.exporterAddress), 25, 72);
+    text(safeLine(d.exporterCity, safePair(d.exporterState, d.exporterZip)), 25, 82);
+    text(safeVal(d.exporterCountry), 25, 92);
 
-    text(d.consigneeName, 25, 132);
-    text(d.consigneeAddress, 25, 142);
-    text(d.consigneeCity, 25, 152);
-    text(d.consigneeCountry, 25, 162);
+    text(safeVal(d.bookingNumber), 305, 69);
+    text(safeVal(d.referenceNumber), 510, 69);
+    text(safeVal(d.cutoffDate), 510, 92);
 
-    text(d.sailDate, 510, 112);
-    text(d.arrivalDate, 510, 142);
+    text(safeVal(d.consigneeName), 25, 132);
+    text(safeVal(d.consigneeAddress), 25, 142);
+    text(safeVal(d.consigneeCity), 25, 152);
+    text(safeVal(d.consigneeCountry), 25, 162);
 
-    text(d.pickupName, 310, 202);
-    text(d.pickupAddress, 310, 212);
-    text(`${d.pickupCity}, ${d.pickupState} ${d.pickupZip}`, 310, 222);
+    text(safeVal(d.sailDate), 510, 112);
+    text(safeVal(d.arrivalDate), 510, 142);
 
-    text(d.deliveryName, 310, 247);
-    text(d.deliveryAddress, 310, 257);
-    text(`${d.deliveryCity}, ${d.deliveryState} ${d.deliveryZip}`, 310, 267);
+    text(safeVal(d.pickupName || d.pickupLocation), 310, 200);
+    text(safeVal(d.pickupAddress), 310, 210);
+    text(safeLine(d.pickupCity, safePair(d.pickupState, d.pickupZip)), 310, 220);
 
-    text(d.sailDate, 30, 277);
-    text(`${d.vessel} V: ${d.voyage}`, 30, 297);
-    text(d.portOfLoading, 180, 297);
-    text(d.portOfDischarge, 30, 317);
+    text(safeVal(d.deliveryName || d.deliveryLocation), 310, 247);
+    text(safeVal(d.deliveryAddress), 310, 257);
+    text(safeLine(d.deliveryCity, safePair(d.deliveryState, d.deliveryZip)), 310, 267);
 
-    text("1 X RORO", 340, 347, 12);
-    text(`${d.vehicleYearMakeModel} VIN: ${d.vin}`, 270, 362, 8.5);
+    text(safeVal(d.sailDate), 30, 270);
+    const vesselLine = safeVal(d.vessel) && safeVal(d.voyage)
+      ? `${safeVal(d.vessel)} V: ${safeVal(d.voyage)}`
+      : safeVal(d.vessel) || "";
+    text(vesselLine, 30, 292);
+    text(safeVal(d.portOfLoading || d.pol), 180, 292);
+    text(safeVal(d.portOfDischarge || d.pod), 30, 313);
 
-    text(String(kg || ""), 503, 362, 8);
-    text("KGS", 525, 362, 7);
+    const ymm = safeVal(d.vehicleYearMakeModel) ||
+      [safeVal(d.year), safeVal(d.make), safeVal(d.model)].filter(Boolean).join(" ");
+    const ymmVin = `${ymm}  VIN: ${safeVal(d.vin)}`;
+
+    // Auto-shrink YMM+VIN if too long for the delivery order column
+    const COL_X = 200, COL_MAX = 499, COL_W = COL_MAX - COL_X;
+    let ymmSize = 8.5;
+    while (ymmSize > 5.5 && font.widthOfTextAtSize(ymmVin, ymmSize) > COL_W) ymmSize -= 0.25;
+
+    text("1 X RORO", 250, 347, 12);
+    text(ymmVin, COL_X, 370, ymmSize);
+
+    text(String(kg || ""), 503, 370, 8);
+    text("KGS", 525, 370, 7);
     text(String(lbs || ""), 503, 380, 8);
     text("LBS", 525, 380, 7);
 
@@ -677,8 +961,9 @@ app.post("/generate-pdf", async (req, res) => {
       cargoY += 18;
     }
 
-    text(valueText, 300, 512);
-    text(`AES ITN: ${d.aesItn}`, 300, 532);
+    text(valueText, 250, 512);
+    const itn = safeVal(d.aesItn);
+    if (itn) text(`AES ITN: ${itn}`, 250, 532);
 
     const pdfBytes = await pdfDoc.save();
 
@@ -753,6 +1038,111 @@ app.get("/grid-template", async (req, res) => {
 
 // ================= START =================
 
+// Auto-refresh Sallaum schedule daily at startup and every 24h
+async function autoRefreshSallaumSchedule() {
+  try {
+    const scheduleRoutes = require("./routes/scheduleRoutes");
+    const res = await fetch("http://localhost:4000/api/schedule/refresh-sallaum", {
+      method: "POST",
+    });
+    if (res.ok) {
+      const data = await res.json();
+      console.log(`[Auto-Refresh] Sallaum schedule updated: ${data.rows} rows`);
+    }
+  } catch (err) {
+    console.warn("[Auto-Refresh] Sallaum schedule update skipped:", err.message);
+  }
+}
+
+// ================= PARSE DISPATCH FROM URL =================
+app.post("/api/expenses/parse-dispatch-url", express.json(), async (req, res) => {
+  try {
+    const { url, filename, orderRef, orderId } = req.body;
+    if (!url) return res.status(400).json({ error: "url required" });
+    const urlPath = new URL(url).pathname;
+    const baseUploads = path.join(__dirname, "uploads");
+    const filePath = path.join(baseUploads, ...urlPath.replace(/^\/uploads\//, "").split("/").map(decodeURIComponent));
+    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found: " + filePath });
+    const buffer = fs.readFileSync(filePath);
+    const data = await pdfParse(buffer);
+    const text = data.text;
+
+    const vinMatch = text.match(/\bVIN\b[\s\S]{0,30}?([A-HJ-NPR-Z0-9]{17})/i) || text.match(/([A-HJ-NPR-Z0-9]{17})/);
+    const vin = vinMatch?.[1] || "";
+    const priceMatch = text.match(/Total Price[\s\S]{0,20}?\$\s*([\d,]+(?:\.\d{2})?)/i) || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
+    const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : 0;
+    const loadMatch = text.match(/Load ID\s*\n\s*(\d+)/i) || text.match(/Load\s+(\d{4,})\//i);
+    const loadId = loadMatch?.[1] || "";
+    const ymmMatch = text.match(/(\d{4})\s+([A-Z][a-zA-Z]+)\s+([A-Z][a-zA-Z0-9 ]+?)(?:\n|VIN|$)/m);
+    const ymm = ymmMatch ? `${ymmMatch[1]} ${ymmMatch[2]} ${ymmMatch[3].trim()}` : "";
+    const dispatchDateMatch = text.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
+    const dispatchDate = dispatchDateMatch?.[0] || "";
+    const originMatch = text.match(/Origin[\s\S]{0,5}?\n([^\n]+)/i);
+    const origin = originMatch?.[1]?.trim() || "";
+
+    // Save a copy to receipts dir
+    const savedName = `${Date.now()}-${Math.round(Math.random()*1e9)}.pdf`;
+    const receiptsDir = path.join(__dirname, "uploads/receipts");
+    if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir, { recursive: true });
+    fs.copyFileSync(filePath, path.join(receiptsDir, savedName));
+
+    const Order = require("./models/Order");
+    let matchedOrder = null;
+    if (orderId) {
+      matchedOrder = await Order.findById(orderId).select("refNumber _id").lean().catch(() => null);
+    }
+
+    const row = {
+      vin, ymm, total, loadId, dispatchDate, origin,
+      billFileName: savedName, billMime: "application/pdf",
+      orderId: matchedOrder?._id || orderId || null,
+      orderRef: matchedOrder?.refNumber || orderRef || "",
+      matched: !!(matchedOrder || orderId),
+      notes: loadId ? `Load ID: ${loadId}` : "",
+    };
+    res.json([row]);
+  } catch (err) {
+    console.error("parse-dispatch-url error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ================= EMAIL =================
+
+const mailer = nodemailer.createTransport({
+  service: "gmail",
+  auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
+  pool: true,          // keep connection alive
+  maxConnections: 3,   // allow parallel sends
+  rateLimit: 10,       // max 10 msgs/sec
+});
+mailer.verify(err => {
+  if (err) console.warn("[Email] SMTP verify failed:", err.message);
+  else console.log("[Email] SMTP ready");
+});
+
+// POST /api/send-email  { to, subject, body, pdfBase64, pdfName }
+app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) => {
+  try {
+    const { to, subject, body, pdfBase64, pdfName } = req.body;
+    if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
+
+    const mailOpts = {
+      from: `DDG OPS <${process.env.GMAIL_USER}>`,
+      to,
+      subject,
+      text: body || "",
+      attachments: pdfBase64 ? [{ filename: pdfName || "document.pdf", content: pdfBase64, encoding: "base64" }] : [],
+    };
+
+    await mailer.sendMail(mailOpts);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Email error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 mongoose
   .connect(process.env.MONGODB_URI || process.env.MONGO_URI)
   .then(() => {
@@ -760,6 +1150,12 @@ mongoose
 
     app.listen(4000, () => {
       console.log("Server running on port 4000");
+
+      // Auto-refresh Sallaum schedule after short delay (let server fully start)
+      setTimeout(autoRefreshSallaumSchedule, 5000);
+
+      // Then refresh every 24 hours
+      setInterval(autoRefreshSallaumSchedule, 24 * 60 * 60 * 1000);
     });
   })
   .catch((err) => {

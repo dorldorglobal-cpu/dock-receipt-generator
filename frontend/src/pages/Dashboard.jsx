@@ -1,0 +1,237 @@
+import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
+const STATUS_CONFIG = {
+  "New Order":       { cls: "badge-new",      emoji: "🆕" },
+  "Awaiting Pickup": { cls: "badge-pickup",   emoji: "🚗" },
+  "Waiting to Sail": { cls: "badge-sail",     emoji: "⚓" },
+  "Sailed":          { cls: "badge-sailed",   emoji: "🚢" },
+  "Completed":       { cls: "badge-complete", emoji: "✅" },
+  "Problem / Hold":  { cls: "badge-problem",  emoji: "⚠️" },
+};
+
+function StatusBadge({ status }) {
+  const cfg = STATUS_CONFIG[status] || { cls: "badge-default", emoji: "" };
+  return <span className={`status-badge ${cfg.cls}`}>{status}</span>;
+}
+
+function fmt$(n) {
+  if (!n && n !== 0) return "—";
+  return "$" + Number(n).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+export default function Dashboard() {
+  const [orders, setOrders]   = useState([]);
+  const [summary, setSummary] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  useEffect(() => {
+    Promise.all([
+      fetch(`${API}/api/orders`).then(r => r.json()).catch(() => []),
+      fetch(`${API}/api/expenses/summary`).then(r => r.json()).catch(() => null),
+    ]).then(([ords, sum]) => {
+      setOrders(Array.isArray(ords) ? ords : []);
+      setSummary(sum);
+      setLoading(false);
+    });
+  }, []);
+
+  const countStatus = (status) => orders.filter(o => o.status === status).length;
+
+  // Revenue estimate from order charges
+  const totalRevenue = orders.reduce((s, o) => {
+    const c = o.charges || {};
+    return s + [c.towingCharge, c.oceanFreight].reduce((cs, v) => cs + Number(v || 0), 0);
+  }, 0);
+
+  const orderCards = [
+    { label: "Total Orders",    value: orders.length,                    color: "var(--accent)",  status: "ALL" },
+    { label: "New Orders",      value: countStatus("New Order"),         color: "var(--accent)",  status: "New Order" },
+    { label: "Awaiting Pickup", value: countStatus("Awaiting Pickup"),   color: "var(--warning)", status: "Awaiting Pickup" },
+    { label: "Waiting to Sail", value: countStatus("Waiting to Sail"),   color: "var(--purple)",  status: "Waiting to Sail" },
+    { label: "Sailed",          value: countStatus("Sailed"),            color: "var(--success)", status: "Sailed" },
+    { label: "Completed",       value: countStatus("Completed"),         color: "#4ade80",         status: "Completed" },
+    { label: "Problem / Hold",  value: countStatus("Problem / Hold"),    color: "var(--danger)",  status: "Problem / Hold" },
+  ];
+
+  const recent = orders.slice(0, 10);
+
+  const openOrders = (status) => {
+    navigate(status === "ALL" ? "/orders" : `/orders?status=${encodeURIComponent(status)}`);
+  };
+
+  // Top expense categories
+  const topCats = summary?.byCategory
+    ? Object.entries(summary.byCategory).sort((a,b) => b[1]-a[1]).slice(0, 5)
+    : [];
+
+  const CAT_COLORS = {
+    "Towing / Transport":   "#60a5fa",
+    "Ocean Freight":        "#34d399",
+    "Port / Terminal Fees": "#a78bfa",
+    "Loaders & Warehouses": "#fb923c",
+    "Software":             "#38bdf8",
+    "Legal Fees":           "#f472b6",
+    "Office & Admin":       "#fbbf24",
+    "General Overhead":     "#9ca3af",
+  };
+
+  return (
+    <div>
+      <div className="page-header">
+        <div>
+          <h1>Dashboard</h1>
+          <p>DDG Global Operations overview</p>
+        </div>
+        <div className="header-actions">
+          <button onClick={() => navigate("/orders/new")}>+ New Order</button>
+        </div>
+      </div>
+
+      {/* ── Order stat cards ─────────────────────────────────────────────────── */}
+      <div className="dashboard-grid">
+        {orderCards.map(card => (
+          <div key={card.label} className="dashboard-card" onClick={() => openOrders(card.status)}>
+            <span>{card.label}</span>
+            <strong style={{ color: card.color }}>{loading ? "—" : card.value}</strong>
+          </div>
+        ))}
+      </div>
+
+      {/* ── Financial summary ─────────────────────────────────────────────────── */}
+      {!loading && (
+        <div className="form-section" style={{ marginBottom: 24 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, paddingBottom:12, borderBottom:"1px solid var(--border-muted)" }}>
+            <h2 style={{ margin:0, border:"none", padding:0 }}>Financials</h2>
+            <div style={{ display:"flex", gap:10 }}>
+              <button className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }} onClick={() => navigate("/expenses")}>
+                All Expenses →
+              </button>
+            </div>
+          </div>
+
+          <div style={{ display:"grid", gridTemplateColumns:"repeat(4, 1fr)", gap:14 }}>
+            {/* Revenue estimate */}
+            <div style={{ background:"var(--bg-panel)", borderRadius:10, padding:"16px 18px", border:"1px solid var(--border)" }}>
+              <div style={{ fontSize:11, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Est. Revenue</div>
+              <div style={{ fontSize:22, fontWeight:800, color:"var(--accent)" }}>{fmt$(totalRevenue)}</div>
+              <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:4 }}>from towing + ocean charges</div>
+            </div>
+
+            {/* Total expenses */}
+            <div style={{ background:"var(--bg-panel)", borderRadius:10, padding:"16px 18px", border:"1px solid var(--border)" }}>
+              <div style={{ fontSize:11, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Total Expenses</div>
+              <div style={{ fontSize:22, fontWeight:800, color:"#f87171" }}>{fmt$(summary?.totalAllTime)}</div>
+              <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:4 }}>{summary?.count || 0} records</div>
+            </div>
+
+            {/* Unpaid */}
+            <div style={{ background:"var(--bg-panel)", borderRadius:10, padding:"16px 18px", border:"1px solid rgba(248,113,113,0.3)" }}>
+              <div style={{ fontSize:11, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Outstanding / Unpaid</div>
+              <div style={{ fontSize:22, fontWeight:800, color: summary?.totalUnpaid > 0 ? "#f87171" : "#34d399" }}>
+                {fmt$(summary?.totalUnpaid)}
+              </div>
+              <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:4 }}>needs payment</div>
+            </div>
+
+            {/* Paid this month */}
+            <div style={{ background:"var(--bg-panel)", borderRadius:10, padding:"16px 18px", border:"1px solid rgba(52,211,153,0.25)" }}>
+              <div style={{ fontSize:11, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:6 }}>Paid This Month</div>
+              <div style={{ fontSize:22, fontWeight:800, color:"#34d399" }}>{fmt$(summary?.totalPaidMonth)}</div>
+              <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:4 }}>
+                {new Date().toLocaleString("default", { month:"long", year:"numeric" })}
+              </div>
+            </div>
+          </div>
+
+          {/* Net margin bar */}
+          {totalRevenue > 0 && summary?.totalAllTime > 0 && (
+            <div style={{ marginTop:16 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>
+                <span>Gross margin estimate</span>
+                <span style={{ color: totalRevenue > summary.totalAllTime ? "#34d399" : "#f87171", fontWeight:700 }}>
+                  {fmt$(totalRevenue - summary.totalAllTime)}
+                  {" "}
+                  ({totalRevenue > 0 ? Math.round(((totalRevenue - summary.totalAllTime) / totalRevenue) * 100) : 0}%)
+                </span>
+              </div>
+              <div style={{ height:8, background:"var(--bg-panel)", borderRadius:4, overflow:"hidden", border:"1px solid var(--border)" }}>
+                <div style={{
+                  height:"100%", borderRadius:4,
+                  width: `${Math.min(100, Math.max(0, (summary.totalAllTime / totalRevenue) * 100))}%`,
+                  background: totalRevenue > summary.totalAllTime ? "#f87171" : "#f87171",
+                  transition:"width 0.5s",
+                }} />
+              </div>
+              <div style={{ display:"flex", gap:16, marginTop:6, fontSize:11, color:"var(--text-muted)" }}>
+                <span style={{ color:"#f87171" }}>■ Expenses</span>
+                <span style={{ color:"var(--accent)" }}>■ Revenue</span>
+              </div>
+            </div>
+          )}
+
+          {/* Category breakdown */}
+          {topCats.length > 0 && (
+            <div style={{ marginTop:16, display:"flex", flexWrap:"wrap", gap:10 }}>
+              {topCats.map(([cat, amt]) => (
+                <div key={cat} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 12px",
+                  background:"var(--bg-panel)", borderRadius:20, border:"1px solid var(--border)" }}>
+                  <span style={{ width:8, height:8, borderRadius:"50%", background: CAT_COLORS[cat] || "#9ca3af", flexShrink:0 }} />
+                  <span style={{ fontSize:12, color:"var(--text-secondary)" }}>{cat}</span>
+                  <span style={{ fontSize:12, color:"var(--text-primary)", fontWeight:600 }}>{fmt$(amt)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── Recent orders ────────────────────────────────────────────────────── */}
+      <div className="form-section">
+        <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16, paddingBottom:12, borderBottom:"1px solid var(--border-muted)" }}>
+          <h2 style={{ margin:0, border:"none", padding:0 }}>Recent Orders</h2>
+          <button className="btn-ghost" style={{ fontSize:12, padding:"6px 14px" }} onClick={() => navigate("/orders")}>
+            View all
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="empty-state">Loading orders…</div>
+        ) : recent.length === 0 ? (
+          <div className="empty-state">
+            No orders yet.{" "}
+            <span style={{ color:"var(--accent)", cursor:"pointer" }} onClick={() => navigate("/orders/new")}>
+              Create your first order →
+            </span>
+          </div>
+        ) : (
+          <table className="orders-table">
+            <thead>
+              <tr>
+                <th>Ref #</th>
+                <th>Customer</th>
+                <th>Vehicle</th>
+                <th>VIN</th>
+                <th>Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {recent.map(o => (
+                <tr key={o._id} style={{ cursor:"pointer" }} onClick={() => navigate(`/orders/${o._id}`)}>
+                  <td style={{ color:"var(--accent)", fontWeight:500 }}>{o.refNumber || "—"}</td>
+                  <td>{o.customerName || "—"}</td>
+                  <td style={{ color:"var(--text-secondary)" }}>{[o.year, o.make, o.model].filter(Boolean).join(" ") || "—"}</td>
+                  <td style={{ fontFamily:"monospace", fontSize:12, color:"var(--text-muted)" }}>{o.vin || "—"}</td>
+                  <td><StatusBadge status={o.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+    </div>
+  );
+}
