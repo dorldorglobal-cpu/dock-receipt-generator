@@ -91,6 +91,7 @@ const orderSchema = new mongoose.Schema(
     voyageFolderName: String,
 
     notes: String,
+    emailNote: { type: String, default: "" }, // copy of buyer receipt email
     source: { type: String, default: "" }, // e.g. "GHANA OFFICE", "DIRECT"
 
     charges: {

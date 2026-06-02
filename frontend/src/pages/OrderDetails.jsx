@@ -186,6 +186,22 @@ export default function OrderDetails() {
   const [showCosts, setShowCosts] = useState(false);
   const [charges, setCharges] = useState(defaultCharges);
 
+  const [emailNote, setEmailNote]           = useState("");
+  const [emailNoteSaving, setEmailNoteSaving] = useState(false);
+  const [emailNoteSaved,  setEmailNoteSaved]  = useState(false);
+
+  const saveEmailNote = async () => {
+    setEmailNoteSaving(true);
+    await fetch(`${API}/api/orders/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ emailNote }),
+    });
+    setEmailNoteSaving(false);
+    setEmailNoteSaved(true);
+    setTimeout(() => setEmailNoteSaved(false), 2000);
+  };
+
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({});
 
@@ -317,6 +333,7 @@ export default function OrderDetails() {
     setOrder(data);
     fetchBills(data.refNumber);
     setNoteText(data.notes || "");
+    setEmailNote(data.emailNote || "");
     const currentCharges = { ...defaultCharges, ...(data.charges || {}) };
     setCharges(currentCharges);
 
@@ -1620,6 +1637,31 @@ export default function OrderDetails() {
       {/* ── Documents ───────────────────────────────── */}
       <section className="form-section">
         <h2>Documents</h2>
+
+        {/* ── Gmail / Email Note Card ── */}
+        <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:16, marginBottom:16 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:10 }}>
+            <span style={{ fontSize:18 }}>📧</span>
+            <span style={{ fontWeight:600, fontSize:14 }}>Buyer Receipt Email</span>
+            <span style={{ fontSize:11, color:"var(--text-secondary)", marginLeft:4 }}>Paste the email you received here</span>
+          </div>
+          <textarea
+            value={emailNote}
+            onChange={e => setEmailNote(e.target.value)}
+            placeholder="Paste email content here…"
+            rows={5}
+            style={{ width:"100%", background:"var(--bg-input)", border:"1px solid var(--border)",
+              borderRadius:8, padding:"10px 12px", color:"var(--text-primary)", fontSize:13,
+              resize:"vertical", outline:"none", boxSizing:"border-box", fontFamily:"inherit" }}
+          />
+          <div style={{ display:"flex", justifyContent:"flex-end", marginTop:8 }}>
+            <button onClick={saveEmailNote} disabled={emailNoteSaving}
+              style={{ padding:"6px 16px", borderRadius:8, border:"none", fontSize:13, fontWeight:600,
+                background: emailNoteSaved ? "#166534" : "var(--accent)", color:"#fff", cursor:"pointer" }}>
+              {emailNoteSaving ? "Saving…" : emailNoteSaved ? "✓ Saved" : "Save"}
+            </button>
+          </div>
+        </div>
 
         <div style={{ display:"flex", gap:12, alignItems:"center", flexWrap:"wrap", marginBottom:16 }}>
           {order.driveFolderLink && (
