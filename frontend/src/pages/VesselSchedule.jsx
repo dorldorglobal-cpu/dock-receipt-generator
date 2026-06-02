@@ -1,4 +1,6 @@
-﻿import { useEffect, useRef, useState } from "react";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
+import { useEffect, useRef, useState } from "react";
 
 const CARRIER_COLORS = {
   SALLAUM: { bg: "rgba(99,102,241,0.15)", color: "#a78bfa", border: "rgba(167,139,250,0.3)" },
@@ -111,7 +113,7 @@ export default function VesselSchedule() {
   const fetchSchedule = async () => {
     setLoading(true);
     try {
-      const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/schedule/all");
+      const res = await fetch(`${API}/api/schedule/all`);
       setRows(await res.json());
     } catch { setRows([]); }
     setLoading(false);
@@ -124,7 +126,7 @@ export default function VesselSchedule() {
     if (sallaumFile) fd.append("sallaum", sallaumFile);
     if (aclFile)     fd.append("acl",     aclFile);
     try {
-      const res  = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/schedule/update-from-pdfs", { method:"POST", body:fd });
+      const res  = await fetch("${API}/api/schedule/update-from-pdfs", { method:"POST", body:fd });
       const data = await res.json();
       setResult(data);
       if (data.success) { fetchSchedule(); setSallaumFile(null); setAclFile(null); }
@@ -327,5 +329,3 @@ export default function VesselSchedule() {
     </div>
   );
 }
-
-

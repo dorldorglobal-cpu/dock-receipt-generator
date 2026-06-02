@@ -1,7 +1,7 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API = import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 const STATUS_CONFIG = {
   "New Order":       { cls: "badge-new",      emoji: "🆕" },
@@ -235,4 +235,3 @@ export default function Dashboard() {
     </div>
   );
 }
-

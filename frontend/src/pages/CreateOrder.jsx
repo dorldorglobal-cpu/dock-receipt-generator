@@ -1,6 +1,8 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AddressSearch from "../components/AddressSearch";
+
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function CreateOrder() {
   const navigate = useNavigate();
@@ -87,7 +89,7 @@ export default function CreateOrder() {
   const [scheduleLooking, setScheduleLooking] = useState(false);
 
   useEffect(() => {
-    fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/schedule/vessels")
+    fetch(`${API}/api/schedule/vessels`)
       .then(r => r.json()).then(setScheduleVessels).catch(() => {});
 
     // Pre-fill from AI Assistant
@@ -147,7 +149,7 @@ export default function CreateOrder() {
     setScheduleLooking(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/schedule/lookup?vessel=${encodeURIComponent(vessel)}&pol=${encodeURIComponent(pol)}&pod=${encodeURIComponent(pod)}`
+        `${API}/api/schedule/lookup?vessel=${encodeURIComponent(vessel)}&pol=${encodeURIComponent(pol)}&pod=${encodeURIComponent(pod)}`
       );
       const data = await res.json();
       if (data.found) {
@@ -346,7 +348,7 @@ export default function CreateOrder() {
   const suggestDeliveryFromPickupCity = async (city, shippingLineHint, state) => {
     if (!city && !state) return;
     try {
-      const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing?type=towing");
+      const res = await fetch(`${API}/api/pricing?type=towing`);
       const rates = await res.json();
       const cityNorm = normCity(city || "");
       const match =
@@ -380,7 +382,6 @@ export default function CreateOrder() {
   const handlePolChange = async (polValue, shippingLineHint) => {
     update("pol", polValue);
     if (!polValue) return;
-    const API = import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}";
     try {
       let picked = null;
       const line = (shippingLineHint || form.shippingLine || "").trim();
@@ -449,7 +450,7 @@ export default function CreateOrder() {
     try {
       const fd = new FormData();
       fd.append("file", file);
-      const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/parse-buyer-receipt", {
+      const res = await fetch(`${API}/api/orders/parse-buyer-receipt`, {
         method: "POST",
         body: fd,
       });
@@ -522,7 +523,7 @@ export default function CreateOrder() {
     setMessage("Saving order...");
     setDupOrderId(null);
 
-    const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders", {
+    const res = await fetch("${API}/api/orders", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),
@@ -548,7 +549,7 @@ export default function CreateOrder() {
         const fd = new FormData();
         fd.append("file",  brFile);
         fd.append("label", "Buyer Receipt");
-        const upRes = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${data._id}/upload-drive`, {
+        const upRes = await fetch(`${API}/api/orders/${data._id}/upload-drive`, {
           method: "POST",
           body:   fd,
         });
@@ -1229,13 +1230,13 @@ export default function CreateOrder() {
               <button onClick={async () => {
                 // Save or update address book record with defaultPod
                 if (newCustPopup.isExisting && newCustPopup.recordId) {
-                  await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/address-book/${newCustPopup.recordId}`, {
+                  await fetch(`${API}/api/address-book/${newCustPopup.recordId}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ defaultPod: newCustPopup.defaultPod }),
                   }).catch(() => {});
                 } else {
-                  await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/address-book", {
+                  await fetch(`${API}/api/address-book`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({
@@ -1260,7 +1261,7 @@ export default function CreateOrder() {
                 // Look up delivery port directly from pricing — bypass stale closure issue
                 if (pod) {
                   try {
-                    const rates = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing?type=towing").then(r => r.json());
+                    const rates = await fetch(`${API}/api/pricing?type=towing`).then(r => r.json());
                     const cityN = normCity(form.pickupCity || "");
                     const match = rates.find(r => r.port && normCity(r.city) === cityN) ||
                       rates.find(r => r.port && r.name && cityN && normCity(r.name).includes(cityN));
@@ -1283,5 +1284,3 @@ export default function CreateOrder() {
     </div>
   );
 }
-
-

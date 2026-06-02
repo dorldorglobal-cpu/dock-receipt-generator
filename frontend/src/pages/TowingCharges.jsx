@@ -1,4 +1,6 @@
-﻿import { useEffect, useState } from "react";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+
+import { useEffect, useState } from "react";
 
 function fmt(n) {
   const num = Number(n || 0);
@@ -73,14 +75,14 @@ export default function TowingCharges() {
   useEffect(() => { fetchRows(); }, []);
 
   const fetchRows = async () => {
-    const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing?type=towing");
+    const res = await fetch(`${API}/api/pricing?type=towing`);
     setRows(await res.json());
   };
 
   const saveRow = async () => {
     if (!form.address && !form.city) { alert("Address or city is required"); return; }
     await fetch(
-      form._id ? `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing/${form._id}` : "${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing",
+      form._id ? `${API}/api/pricing/${form._id}` : `${API}/api/pricing`,
       {
         method: form._id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,7 +108,7 @@ export default function TowingCharges() {
 
   const deleteRow = async (id) => {
     if (!window.confirm("Delete this towing charge?")) return;
-    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing/${id}`, { method:"DELETE" });
+    await fetch(`${API}/api/pricing/${id}`, { method:"DELETE" });
     fetchRows();
   };
 
@@ -339,6 +341,3 @@ export default function TowingCharges() {
     </div>
   );
 }
-
-
-

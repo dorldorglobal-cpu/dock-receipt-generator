@@ -1,6 +1,7 @@
-﻿import { useEffect, useState, useRef } from "react";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-const API = import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}";
+import { useEffect, useState, useRef } from "react";
+
 
 const CATEGORIES = [
   "Towing / Transport",
@@ -701,5 +702,3 @@ export default function Vendors() {
     </div>
   );
 }
-
-

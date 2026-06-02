@@ -1,5 +1,7 @@
-﻿import React, { useEffect, useRef, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 // defaultSell = fixed sell price pre-fill; hasDesc = show description sub-input
 const feeRows = [
@@ -51,7 +53,7 @@ function TowingVerifyForm({ verify, orderId, onDone }) {
   const confirm = async () => {
     setSaving(true);
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${orderId}/confirm-towing-cost`, {
+      const res = await fetch(`${API}/api/orders/${orderId}/confirm-towing-cost`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -198,17 +200,17 @@ export default function OrderDetails() {
 
   // Load vessel list once
   useEffect(() => {
-    fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/schedule/vessels")
+    fetch("${API}/api/schedule/vessels")
       .then(r => r.json()).then(setScheduleVessels).catch(() => {});
   }, []);
 
   // Core: hit the schedule API with any combo of voyageName / vessel params
   const applyScheduleResult = async (params) => {
     const qs = new URLSearchParams(params).toString();
-    const res  = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/schedule/lookup?${qs}`);
+    const res  = await fetch(`http://localhost:4000/api/schedule/lookup?${qs}`);
     const data = await res.json();
     if (data.found) {
-      await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+      await fetch(`${API}/api/orders/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -292,7 +294,7 @@ export default function OrderDetails() {
 
   const fetchOrderInvoices = async () => {
     try {
-      const res  = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/by-order/${id}`);
+      const res  = await fetch(`${API}/api/invoices/by-order/${id}`);
       const data = await res.json();
       setOrderInvoices(Array.isArray(data) ? data : []);
     } catch {}
@@ -309,7 +311,7 @@ export default function OrderDetails() {
   }, []);
 
   const fetchOrder = async () => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`);
+    const res = await fetch(`${API}/api/orders/${id}`);
     const data = await res.json();
 
     setOrder(data);
@@ -344,10 +346,10 @@ export default function OrderDetails() {
     try {
       const [towingRates, oceanRates] = await Promise.all([
         ((needsTowing || needsTowingCost) && pickupCity && pol)
-          ? fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing?type=towing").then(r => r.json())
+          ? fetch(`${API}/api/pricing?type=towing`).then(r => r.json())
           : Promise.resolve([]),
         ((needsOcean || needsOceanCost) && pol && pod)
-          ? fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing?type=ocean").then(r => r.json())
+          ? fetch(`${API}/api/pricing?type=ocean`).then(r => r.json())
           : Promise.resolve([]),
       ]);
 
@@ -423,7 +425,7 @@ export default function OrderDetails() {
       const newCharges = { ...currentCharges, ...updates };
       setCharges(newCharges);
       // Persist silently so the values survive page refreshes
-      fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+      fetch(`${API}/api/orders/${id}`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ charges: newCharges }),
@@ -435,7 +437,7 @@ export default function OrderDetails() {
 
   const fetchDriveFiles = async () => {
     try {
-      const res  = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/drive-files`);
+      const res  = await fetch(`${API}/api/orders/${id}/drive-files`);
       const data = await res.json();
       setDriveFiles(Array.isArray(data) ? data : []);
     } catch {
@@ -444,14 +446,14 @@ export default function OrderDetails() {
   };
 
   const fetchVoyages = async () => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/voyages/all`);
+    const res = await fetch(`${API}/api/orders/voyages/all`);
     const data = await res.json();
     setVoyages(data);
   };
 
   const fetchBillVendors = async () => {
     try {
-      const res  = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/vendors");
+      const res  = await fetch(`${API}/api/vendors`);
       const data = await res.json();
       setBillVendors(Array.isArray(data) ? data : []);
     } catch {}
@@ -462,7 +464,7 @@ export default function OrderDetails() {
     if (!ref) return;
     setBillsLoading(true);
     try {
-      const res  = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses?orderRef=${encodeURIComponent(ref)}`);
+      const res  = await fetch(`${API}/api/expenses?orderRef=${encodeURIComponent(ref)}`);
       const data = await res.json();
       setBills(Array.isArray(data) ? data : []);
     } catch {}
@@ -549,7 +551,7 @@ export default function OrderDetails() {
       if (billReceiptFile) fd.append("receipt", billReceiptFile);
       if (billDocFile)     fd.append("bill",    billDocFile);
 
-      const url    = editingBill ? `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${editingBill._id}` : "${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses";
+      const url    = editingBill ? `${API}/api/expenses/${editingBill._id}` : `${API}/api/expenses`;
       const method = editingBill ? "PUT" : "POST";
       const res    = await fetch(url, { method, body: fd });
       const data   = await res.json();
@@ -568,12 +570,12 @@ export default function OrderDetails() {
   const removeBillFile = async (type) => {
     if (!editingBill) return;
     if (!window.confirm(`Remove the ${type === "bill" ? "bill document" : "receipt"}?`)) return;
-    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${editingBill._id}/${type}`, { method: "DELETE" });
+    await fetch(`${API}/api/expenses/${editingBill._id}/${type}`, { method: "DELETE" });
     setEditingBill(b => ({ ...b, [`${type}FileName`]: "" }));
   };
 
   const markBillPaid = async (billId) => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${billId}/pay`, {
+    const res = await fetch(`${API}/api/expenses/${billId}/pay`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({ paidDate: new Date().toISOString().slice(0, 10) }),
@@ -583,14 +585,14 @@ export default function OrderDetails() {
 
   const deleteBill = async (billId) => {
     if (!window.confirm("Remove this bill from the order?")) return;
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${billId}`, { method: "DELETE" });
+    const res = await fetch(`${API}/api/expenses/${billId}`, { method: "DELETE" });
     if (res.ok) fetchBills();
   };
 
   const updateStatus = async (newStatus) => {
     setMessage("Updating status...");
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+    const res = await fetch(`${API}/api/orders/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ status: newStatus }),
@@ -617,7 +619,7 @@ export default function OrderDetails() {
   const saveCharges = async () => {
     setMessage("Saving charges...");
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+    const res = await fetch(`${API}/api/orders/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ charges }),
@@ -698,7 +700,7 @@ export default function OrderDetails() {
   const moveToVoyage = async (voyage) => {
     setMessage("Moving shipment folder to voyage...");
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/move-to-voyage`, {
+    const res = await fetch(`${API}/api/orders/${id}/move-to-voyage`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -727,7 +729,7 @@ export default function OrderDetails() {
     const vesselName  = codeMatch ? codeMatch[2].trim() : folderUpper;
 
     // Always save vessel + voyage from folder name immediately — schedule fills in dates
-    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+    await fetch(`${API}/api/orders/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ vessel: vesselName, voyage: voyageCode }),
@@ -771,7 +773,7 @@ export default function OrderDetails() {
 
     setMessage(`Creating ${shippingLine} voyage folder...`);
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/voyages/create`, {
+    const res = await fetch(`${API}/api/orders/voyages/create`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
@@ -800,7 +802,7 @@ export default function OrderDetails() {
 
     setMessage("Clearing voyage...");
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/clear-voyage`, {
+    const res = await fetch(`${API}/api/orders/${id}/clear-voyage`, {
       method: "POST",
     });
 
@@ -823,7 +825,7 @@ export default function OrderDetails() {
       const fd = new FormData();
       fd.append("file",  file);
       fd.append("label", label);
-      const res  = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/upload-drive`, {
+      const res  = await fetch(`${API}/api/orders/${id}/upload-drive`, {
         method: "POST",
         body:   fd,
       });
@@ -848,7 +850,7 @@ export default function OrderDetails() {
     if (!window.confirm(`Delete "${fileName}"?`)) return;
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/files/${driveFileId}?name=${encodeURIComponent(fileName)}`,
+        `${API}/api/orders/${id}/files/${driveFileId}?name=${encodeURIComponent(fileName)}`,
         { method: "DELETE" }
       );
       if (!res.ok) { setMessage("❌ Delete failed"); return; }
@@ -862,7 +864,7 @@ export default function OrderDetails() {
   // Save a single internal cost/sell field on blur
   const saveInternalField = async (key, value) => {
     try {
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+      const res = await fetch(`${API}/api/orders/${id}`, {
         method:  "PUT",
         headers: { "Content-Type": "application/json" },
         body:    JSON.stringify({ charges: { ...charges, [key]: value } }),
@@ -875,7 +877,7 @@ export default function OrderDetails() {
   const parseExistingDriveFiles = async () => {
     setMessage("Parsing Drive files...");
 
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/parse-drive-files`, {
+    const res = await fetch(`${API}/api/orders/${id}/parse-drive-files`, {
       method: "POST",
     });
 
@@ -922,7 +924,7 @@ export default function OrderDetails() {
 
   const saveEdit = async () => {
     setMessage("Saving changes...");
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+    const res = await fetch(`${API}/api/orders/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(editForm),
@@ -935,7 +937,7 @@ export default function OrderDetails() {
   };
 
   const saveNote = async () => {
-    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+    const res = await fetch(`${API}/api/orders/${id}`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ notes: noteText }),
@@ -954,7 +956,7 @@ export default function OrderDetails() {
     if (drPayload && !forceRefresh) return;
     setDrLoading(true);
     try {
-      const res  = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/dr-payload`);
+      const res  = await fetch(`${API}/api/orders/${id}/dr-payload`);
       const data = await res.json();
       setDrPayload(data);
       setDrWeightOverride(data.weightKgs || "");
@@ -981,7 +983,7 @@ export default function OrderDetails() {
       weightKgs: drWeightOverride || base.weightKgs || "",
     };
 
-    const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/generate-pdf", {
+    const res = await fetch("${API}/generate-pdf", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1041,7 +1043,7 @@ export default function OrderDetails() {
     try {
       const b64 = drSendModal.pdfBase64;
       await Promise.all(recipients.map(to =>
-        fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/send-email", {
+        fetch("${API}/api/send-email", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ to, subject: drSendSubject, body: drSendBody, pdfBase64: b64, pdfName: drSendModal.pdfName }),
@@ -1050,7 +1052,7 @@ export default function OrderDetails() {
       // Log to timeline
       const sentTo = [drSendTo.trim(), drSendTrucker.trim()].filter(Boolean);
       const details = sentTo.map((e, i) => i === 0 ? `Customer: ${e}` : `Driver: ${e}`).join(" | ");
-      await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/timeline`, {
+      await fetch(`${API}/api/orders/${id}/timeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "DR Sent", details }),
@@ -1079,7 +1081,7 @@ export default function OrderDetails() {
       // If an invoice already exists for this order, update it — never duplicate
       if (orderInvoices.length > 0) {
         const existingId = orderInvoices[0]._id;
-        const updateRes  = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/${existingId}`, {
+        const updateRes  = await fetch(`${API}/api/invoices/${existingId}`, {
           method:  "PUT",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify(payload),
@@ -1088,7 +1090,7 @@ export default function OrderDetails() {
         if (!updateRes.ok) { setMessage(inv.error || "Failed to update invoice"); setInvoiceSaving(false); return; }
       } else {
         // First time — create a new invoice
-        const createRes = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices", {
+        const createRes = await fetch(`${API}/api/invoices`, {
           method:  "POST",
           headers: { "Content-Type": "application/json" },
           body:    JSON.stringify({ orderId: id, ...payload }),
@@ -1099,7 +1101,7 @@ export default function OrderDetails() {
 
       // Download the PDF
       const a = document.createElement("a");
-      a.href     = `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/${inv._id}/pdf`;
+      a.href     = `${API}/api/invoices/${inv._id}/pdf`;
       a.download = `Invoice-${inv.invoiceNumber}.pdf`;
       a.target   = "_blank";
       a.click();
@@ -1110,7 +1112,7 @@ export default function OrderDetails() {
       fetchOrder();
 
       // Auto-open send modal after generation
-      const pdfRes = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/${inv._id}/pdf`);
+      const pdfRes = await fetch(`${API}/api/invoices/${inv._id}/pdf`);
       const ab = await pdfRes.arrayBuffer();
       const uint8 = new Uint8Array(ab);
       let bin = ""; uint8.forEach(b => bin += String.fromCharCode(b));
@@ -1132,7 +1134,7 @@ export default function OrderDetails() {
     setInvSending(true);
     try {
       // Uses the dedicated send endpoint — auto-attaches invoice PDF + Draft doc from order files
-      const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/${invoiceSendModal.invoiceId}/send`, {
+      const res = await fetch(`${API}/api/invoices/${invoiceSendModal.invoiceId}/send`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ to, subject: invSubject, body: invBody }),
@@ -1140,7 +1142,7 @@ export default function OrderDetails() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Send failed");
 
-      await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}/timeline`, {
+      await fetch(`${API}/api/orders/${id}/timeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action: "Invoice Sent", details: `Customer: ${to} | Invoice #${invoiceSendModal.invoiceNumber} | Attachments: ${data.attachments?.join(", ")}` }),
@@ -1345,14 +1347,14 @@ export default function OrderDetails() {
                 <span style={{ fontWeight: 700, color: statusClr, textTransform: "uppercase", fontSize: 11 }}>
                   {inv.status}
                 </span>
-                <button onClick={() => window.open(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/${inv._id}/pdf`, "_blank")}
+                <button onClick={() => window.open(`${API}/api/invoices/${inv._id}/pdf`, "_blank")}
                   style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "1px solid var(--border)",
                     background: "var(--bg-panel)", color: "var(--text-secondary)", cursor: "pointer" }}>
                   PDF
                 </button>
                 {inv.status !== "paid" && (
                   <button onClick={async () => {
-                    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/${inv._id}/status`, {
+                    await fetch(`${API}/api/invoices/${inv._id}/status`, {
                       method: "PATCH", headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ status: "paid" }),
                     });
@@ -1365,7 +1367,7 @@ export default function OrderDetails() {
                 )}
                 {inv.status === "draft" && (
                   <button onClick={async () => {
-                    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/invoices/${inv._id}/status`, {
+                    await fetch(`${API}/api/invoices/${inv._id}/status`, {
                       method: "PATCH", headers: { "Content-Type": "application/json" },
                       body: JSON.stringify({ status: "sent" }),
                     });
@@ -1471,7 +1473,7 @@ export default function OrderDetails() {
             <select
               value={order.source || ""}
               onChange={async e => {
-                await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+                await fetch(`${API}/api/orders/${id}`, {
                   method: "PUT", headers: { "Content-Type": "application/json" },
                   body: JSON.stringify({ source: e.target.value }),
                 });
@@ -1519,7 +1521,7 @@ export default function OrderDetails() {
               <select
                 value={order.vessel || ""}
                 onChange={async e => {
-                  await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+                  await fetch(`${API}/api/orders/${id}`, {
                     method:"PUT", headers:{"Content-Type":"application/json"},
                     body: JSON.stringify({ vessel: e.target.value }),
                   });
@@ -1545,7 +1547,7 @@ export default function OrderDetails() {
                   placeholder="e.g. GAB0326"
                   onBlur={async e => {
                     const val = e.target.value.trim();
-                    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+                    await fetch(`${API}/api/orders/${id}`, {
                       method:"PUT", headers:{"Content-Type":"application/json"},
                       body: JSON.stringify({ voyage: val }),
                     });
@@ -1700,7 +1702,7 @@ export default function OrderDetails() {
               const createBillFromDoc = async (docLabel) => {
                 try {
                   setMessage(`Parsing ${docLabel}...`);
-                  const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/parse-dispatch-url", {
+                  const res = await fetch("${API}/api/expenses/parse-dispatch-url", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
@@ -1868,7 +1870,7 @@ export default function OrderDetails() {
                   const lookupOceanPrice = async (categoryOverride) => {
                     setOceanLooking(true);
                     try {
-                      const rates = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing?type=ocean`).then(r => r.json());
+                      const rates = await fetch(`${API}/api/pricing?type=ocean`).then(r => r.json());
                       const pol = (oceanEditForm.pol || "").toUpperCase();
                       const pod = (oceanEditForm.pod || "").toUpperCase();
                       const sl  = (oceanEditForm.shippingLine || "").toUpperCase();
@@ -1889,7 +1891,7 @@ export default function OrderDetails() {
                   };
 
                   const saveOceanEdit = async () => {
-                    const res = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${id}`, {
+                    const res = await fetch(`${API}/api/orders/${id}`, {
                       method:  "PUT",
                       headers: { "Content-Type": "application/json" },
                       body:    JSON.stringify({
@@ -2337,11 +2339,11 @@ export default function OrderDetails() {
                   </td>
                   <td style={{ whiteSpace:"nowrap" }}>
                     {bill.billFileName
-                      ? <a href={`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${bill._id}/bill`} target="_blank" rel="noreferrer"
+                      ? <a href={`${API}/api/expenses/${bill._id}/bill`} target="_blank" rel="noreferrer"
                           title="Bill document" style={{ fontSize:16, textDecoration:"none", marginRight:6 }}>📄</a>
                       : null}
                     {bill.receiptFileName
-                      ? <a href={`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${bill._id}/receipt`} target="_blank" rel="noreferrer"
+                      ? <a href={`${API}/api/expenses/${bill._id}/receipt`} target="_blank" rel="noreferrer"
                           title="Receipt" style={{ fontSize:16, textDecoration:"none" }}>📎</a>
                       : null}
                     {!bill.billFileName && !bill.receiptFileName
@@ -3218,7 +3220,7 @@ export default function OrderDetails() {
                     onClick={async () => {
                       setBillParsing(true);
                       try {
-                        const r = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/vendors/parse-document", {
+                        const r = await fetch("${API}/api/vendors/parse-document", {
                           method:  "POST",
                           headers: { "Content-Type": "application/json" },
                           body:    JSON.stringify({ text: billDocPaste }),
@@ -3400,7 +3402,7 @@ export default function OrderDetails() {
                     hint="Drop the vendor's invoice"
                     file={billDocFile} setFile={setBillDocFile}
                     existingUrl={editingBill?.billFileName
-                      ? `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${editingBill._id}/bill` : null}
+                      ? `${API}/api/expenses/${editingBill._id}/bill` : null}
                     existingName="View bill"
                     onRemoveExisting={() => removeBillFile("bill")}
                   />
@@ -3409,7 +3411,7 @@ export default function OrderDetails() {
                     hint="Drop proof of payment"
                     file={billReceiptFile} setFile={setBillReceiptFile}
                     existingUrl={editingBill?.receiptFileName
-                      ? `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/expenses/${editingBill._id}/receipt` : null}
+                      ? `${API}/api/expenses/${editingBill._id}/receipt` : null}
                     existingName="View receipt"
                     onRemoveExisting={() => removeBillFile("receipt")}
                   />
@@ -3652,5 +3654,3 @@ function CostRow({ label, value, onChange }) {
     </div>
   );
 }
-
-

@@ -1,5 +1,7 @@
-﻿import { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 export default function Orders() {
   const [orders, setOrders] = useState([]);
@@ -18,7 +20,7 @@ export default function Orders() {
   }, []);
 
   const fetchOrders = async () => {
-    const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders");
+    const res = await fetch(`${API}/api/orders`);
     const data = await res.json();
     setOrders(data);
   };
@@ -27,7 +29,7 @@ export default function Orders() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${deleteTarget.id}`, { method: "DELETE" });
+      await fetch(`${API}/api/orders/${deleteTarget.id}`, { method: "DELETE" });
       setOrders((prev) => prev.filter((o) => o._id !== deleteTarget.id));
     } catch (err) {
       console.error("Delete failed:", err);
@@ -260,5 +262,3 @@ export default function Orders() {
     </div>
   );
 }
-
-

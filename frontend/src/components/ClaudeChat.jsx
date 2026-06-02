@@ -1,6 +1,6 @@
-﻿import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect } from "react";
 
-const API = import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}";
+const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 const SUGGESTIONS = [
   "Which orders are missing AES weight?",
@@ -152,4 +152,3 @@ export default function ClaudeChat() {
     </>
   );
 }
-
