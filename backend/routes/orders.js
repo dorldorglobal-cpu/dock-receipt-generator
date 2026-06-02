@@ -95,6 +95,27 @@ function listLocalFiles(orderId) {
     .sort((a, b) => new Date(b.modifiedTime) - new Date(a.modifiedTime));
 }
 
+// ── RORO delivery logic (shared with claude.js) ──────────────────────────────
+const DELIVERY_BY_REGION = [
+  { states:["tx","texas","la","louisiana","ms","mississippi","al","alabama","ga","georgia","fl","florida","ar","arkansas","ok","oklahoma","tn","tennessee","sc","south carolina","nc","north carolina","mo","missouri"],
+    delivery:{ deliveryName:"ACL Freeport", deliveryAddress:"1 Port Road", deliveryCity:"Freeport", deliveryState:"TX", deliveryZip:"77541" } },
+  { states:["nj","new jersey","ny","new york","ct","connecticut","ma","massachusetts","ri","rhode island","pa","pennsylvania","de","delaware","md","maryland","va","virginia","nh","new hampshire","me","maine","vt","vermont"],
+    delivery:{ deliveryName:"ACL Baltimore", deliveryAddress:"2001 E McComas St", deliveryCity:"Baltimore", deliveryState:"MD", deliveryZip:"21230" } },
+  { states:["ca","california","az","arizona","nv","nevada","nm","new mexico","ut","utah","co","colorado","or","oregon","wa","washington","id","idaho"],
+    delivery:{ deliveryName:"ACL Baltimore", deliveryAddress:"2001 E McComas St", deliveryCity:"Baltimore", deliveryState:"MD", deliveryZip:"21230" } },
+];
+const AFRICA_PODS = ["TEMA","LAGOS","COTONOU","LOME","DAKAR","ABIDJAN","DURBAN","DOUALA"];
+function applyRoroDelivery(result) {
+  if (result.deliveryName) return;
+  const pod = (result.pod || "").toUpperCase();
+  if (!AFRICA_PODS.includes(pod)) return;
+  const state = (result.pickupState || "").toLowerCase();
+  if (!state) return;
+  for (const region of DELIVERY_BY_REGION) {
+    if (region.states.some(s => state.includes(s))) { Object.assign(result, region.delivery); return; }
+  }
+}
+
 const FOLDERS = {
   OUTSTANDING: "1u0RFpsp628DzeLJEQ7yPN1hTBN1a0YDk",
   WAITING_TO_SAIL: "1J-x7kvr8fBtcn1-CtIr5GGdxQ0GzvzoF",
@@ -162,32 +183,115 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
     const fileBuffer = fs.readFileSync(req.file.path);
     fs.unlink(req.file.path, () => {});
 
-    // ── If regex parser returned little/nothing, fall back to AI ────────────
-    const hasData = parsed && (parsed.vin || parsed.customerName || parsed.pickupAddress);
-    if (!hasData) {
+    // ── If regex parser returned little/nothing (or missing pickup), fall back to AI ──
+    const pdfParse2 = require("pdf-parse");
+    const rawText   = (await pdfParse2(fileBuffer)).text;
+    const isCopartDoc = /copart/i.test(rawText);
+    // Always run enhanced parser for Copart; for others only if pickup missing
+    const needsEnhanced = isCopartDoc || !parsed?.pickupState;
+    if (needsEnhanced) {
       try {
-        const pdfParse = require("pdf-parse");
         const Groq = require("groq-sdk");
         const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const pdfData = await pdfParse(fileBuffer);
-        const aiRes = await groq.chat.completions.create({
-          model: "llama-3.3-70b-versatile",
-          messages: [
-            { role: "system", content: `You are a logistics document parser. Extract order fields from this buyer receipt/bill of sale.
-Return ONLY a JSON object with these keys (empty string if not found):
-customerName (the BUYER/MEMBER company name),
-customerPhone, customerEmail,
-year, make, model, vin, color, mileage,
-lotNumber (strip leading zeros and dashes),
-bidAmount (sale price as number),
-pickupName (seller/yard name where vehicle is located),
-pickupAddress, pickupCity, pickupState, pickupZip` },
-            { role: "user", content: `Extract from this document:\n\n${pdfData.text.slice(0, 6000)}` },
-          ],
-          response_format: { type: "json_object" },
-          temperature: 0.1,
-        });
-        parsed = JSON.parse(aiRes.choices[0].message.content);
+        const text = rawText;
+        const isCopart = isCopartDoc;
+        if (isCopart) {
+          // VIN
+          const vinMatch  = text.match(/VIN:\s*([A-HJ-NPR-Z0-9]{17})/i);
+          // Vehicle line: "VEHICLE:2020 MERCEDES-BENZ GLE 350 4MATIC BLUE Phy"
+          const vehLine   = text.match(/VEHICLE:\s*(.+?)(?:Phy Yard|Keys:|$)/im);
+          let year="", make="", model="", color="";
+          if (vehLine) {
+            const vl = vehLine[1].trim();
+            const COLORS = ["BLACK","WHITE","BLUE","RED","SILVER","GRAY","GREY","GREEN","BROWN","GOLD","ORANGE","YELLOW","PURPLE","BEIGE","MAROON","BURGUNDY","TAN","CREAM","PINK","TEAL"];
+            const colorFound = COLORS.find(c => vl.toUpperCase().includes(c));
+            const colorIdx = colorFound ? vl.toUpperCase().lastIndexOf(colorFound) : vl.length;
+            const beforeColor = vl.slice(0, colorIdx).trim();
+            const yearMatch = beforeColor.match(/^(\d{4})\s+/);
+            if (yearMatch) {
+              year = yearMatch[1];
+              const rest = beforeColor.slice(yearMatch[0].length).trim();
+              // Make = first word(s) before a number or 3+ word model
+              const makeMatch = rest.match(/^([A-Z][A-Z\-]+(?:\s[A-Z][A-Z\-]+)?)\s+(.+)$/i);
+              if (makeMatch) { make = makeMatch[1].trim(); model = makeMatch[2].trim(); }
+              else { make = rest; }
+            }
+            color = colorFound || "";
+          }
+          // Lot number
+          const lotMatch   = text.match(/LOT#:\s*(\d+)/i);
+          // Sale price
+          const priceMatch = text.match(/Sale Price\s*\$?([\d,]+\.?\d*)/i);
+          // Buyer/member name — line after "SELLER:" that has company keywords
+          const memberMatch = text.match(/SELLER:\s*[\r\n]+\s*([A-Z][^\r\n]{3,80}(?:LTD|LLC|INC|CORP|LIMITED|ENTERPRISES|INTERNATIONAL|VENTURES|GLOBAL|MOTORS|TRADING|GROUP)[^\r\n]*)/i);
+
+          // Pickup: look for US address pattern — "NNN STREET\nCITYSTATE ZIP" (merged by PDF)
+          // Copart merges city+state+zip: "NORTH BILLERICAMA01862"
+          let pickupAddress="", pickupCity="", pickupState="", pickupZip="", pickupName="Copart";
+          // Find US street addresses — number + street name containing a suffix keyword
+          const streetMatches = [...text.matchAll(/(\d+[A-Z]?\s+[^\r\n]+?(?:STREET|AVENUE|ROAD|DRIVE|BLVD|BOULEVARD|LANE|HIGHWAY|HWY)\b[^\r\n]*)/gi)];
+          if (streetMatches.length) {
+            // Use the last street address found
+            pickupAddress = streetMatches[streetMatches.length - 1][1].trim();
+            // City+state+zip — Copart merges them: "NORTH BILLERICAMA" then zip on next line
+            const afterAddr = text.slice(streetMatches[streetMatches.length - 1].index + streetMatches[streetMatches.length - 1][0].length, streetMatches[streetMatches.length - 1].index + 400);
+            // Grab first all-caps line after the street (city+state merged or separate)
+            const cityLineMatch = afterAddr.match(/[\r\n,\s]+([A-Z][A-Z\s,]+[A-Z])/);
+            if (cityLineMatch) {
+              const raw = cityLineMatch[1].trim().replace(/^,\s*/, "");
+              // Check if zip is embedded at end: "NORTH BILLERICAMA01862"
+              const zipEmbedded = raw.match(/^([A-Z][A-Z\s]+?)([A-Z]{2})(\d{5})$/);
+              if (zipEmbedded) {
+                pickupCity  = zipEmbedded[1].trim();
+                pickupState = zipEmbedded[2];
+                pickupZip   = zipEmbedded[3];
+              } else {
+                // State is last 2 chars of city line, zip is next line
+                pickupState = raw.slice(-2);
+                pickupCity  = raw.slice(0, -2).trim().replace(/[,\s]+$/, "");
+                const zipMatch = afterAddr.match(/[\r\n,\s]+(\d{5})/);
+                if (zipMatch) pickupZip = zipMatch[1];
+              }
+            }
+          }
+          // Pickup name — yard/seller name before "SOLD THROUGH COPART"
+          const yardMatch = text.match(/([A-Z][A-Z'\s&.]{3,40}(?:AUTO SALES|AUTO|MOTORS|SALVAGE|DEALERS))\s*[\r\n]\s*SOLD THROUGH/i)
+                         || text.match(/([A-Z][A-Z'\s&.]{3,40}(?:AUTO SALES|AUTO|MOTORS|SALVAGE|DEALERS))\s*[\r\n]/i);
+          if (yardMatch) pickupName = yardMatch[1].trim();
+
+          parsed = {
+            customerName: memberMatch?.[1]?.trim() || "",
+            vin:          vinMatch?.[1]             || "",
+            year, make, model, color,
+            lotNumber:    lotMatch?.[1]             || "",
+            bidAmount:    priceMatch ? parseFloat(priceMatch[1].replace(/,/g,"")) : 0,
+            pickupName, pickupAddress, pickupCity, pickupState, pickupZip,
+          };
+        }
+
+        // ── Generic AI fallback for non-Copart or if Copart regex missed key fields ──
+        if (!parsed.vin || !parsed.pickupState) {
+          const aiRes = await groq.chat.completions.create({
+            model: "llama-3.3-70b-versatile",
+            messages: [
+              { role: "system", content: `You are a logistics document parser for auto export. Extract from this buyer receipt/bill of sale.
+${isCopart ? `This is a COPART document. Key patterns:
+- VEHICLE line: "VEHICLE:YEAR MAKE MODEL COLOR" — extract year, make, model, color from this exact line
+- VIN: appears after "VIN:" label
+- LOT#: appears after "LOT#:" label
+- PHYSICAL ADDRESS OF LOT: the yard/seller address — extract as pickupAddress, pickupCity, pickupState, pickupZip
+- The BUYER/MEMBER company name appears after "SELLER:" in the first section (before the US address)
+- pickupName: the seller yard name (e.g. "Danny's Auto Sales")` : ""}
+Return ONLY JSON with: customerName, year, make, model, vin, color, mileage, lotNumber, bidAmount, pickupName, pickupAddress, pickupCity, pickupState, pickupZip` },
+              { role: "user", content: `Document:\n\n${text.slice(0, 6000)}` },
+            ],
+            response_format: { type: "json_object" },
+            temperature: 0.1,
+          });
+          const aiParsed = JSON.parse(aiRes.choices[0].message.content);
+          // Merge: AI fills any gaps left by regex
+          parsed = { ...aiParsed, ...Object.fromEntries(Object.entries(parsed).filter(([,v]) => v)) };
+        }
       } catch (aiErr) {
         console.error("AI buyer receipt fallback failed:", aiErr.message);
       }
@@ -213,7 +317,11 @@ pickupAddress, pickupCity, pickupState, pickupZip` },
       }
     }
 
-    res.json({ ...parsed, customerFound: !!customerFound, customerRecord: customerFound || null });
+    // Apply RORO delivery logic if pod is known
+    const result = { ...parsed, customerFound: !!customerFound, customerRecord: customerFound || null };
+    if (customerFound?.defaultPod) result.pod = result.pod || customerFound.defaultPod;
+    applyRoroDelivery(result);
+    res.json(result);
   } catch (err) {
     console.error("Parse buyer receipt error:", err);
     res.status(500).json({ error: "Failed to parse buyer receipt" });
