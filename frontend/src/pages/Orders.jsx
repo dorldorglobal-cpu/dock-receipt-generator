@@ -27,7 +27,7 @@ export default function Orders() {
     if (!deleteTarget) return;
     setDeleting(true);
     try {
-      await fetch(`${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/orders/${deleteTarget.id}`, { method: "DELETE" });
+      await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${deleteTarget.id}`, { method: "DELETE" });
       setOrders((prev) => prev.filter((o) => o._id !== deleteTarget.id));
     } catch (err) {
       console.error("Delete failed:", err);
@@ -260,4 +260,5 @@ export default function Orders() {
     </div>
   );
 }
+
 

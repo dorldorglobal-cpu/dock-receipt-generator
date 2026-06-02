@@ -55,7 +55,7 @@ export default function AddressSearch({
 
   const fetchResults = async () => {
     const res = await fetch(
-      `${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/address-book?search=${encodeURIComponent(
+      `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/address-book?search=${encodeURIComponent(
         search
       )}${type ? `&type=${type}` : ""}`
     );
@@ -308,4 +308,5 @@ export default function AddressSearch({
     </div>
   );
 }
+
 

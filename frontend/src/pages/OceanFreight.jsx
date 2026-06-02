@@ -33,7 +33,7 @@ export default function OceanFreight() {
   const saveRow = async () => {
     if (!form.pol || !form.pod) { alert("POL and POD are required"); return; }
     await fetch(
-      form._id ? `${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/pricing/${form._id}` : "${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing",
+      form._id ? `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing/${form._id}` : "${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing",
       {
         method: form._id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -69,7 +69,7 @@ export default function OceanFreight() {
 
   const deleteRow = async (id) => {
     if (!window.confirm("Delete this rate?")) return;
-    await fetch(`${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/pricing/${id}`, { method:"DELETE" });
+    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing/${id}`, { method:"DELETE" });
     fetchRows();
   };
 
@@ -295,5 +295,6 @@ export default function OceanFreight() {
     </div>
   );
 }
+
 
 

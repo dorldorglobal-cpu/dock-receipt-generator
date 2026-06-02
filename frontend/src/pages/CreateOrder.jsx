@@ -147,7 +147,7 @@ export default function CreateOrder() {
     setScheduleLooking(true);
     try {
       const res = await fetch(
-        `${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/schedule/lookup?vessel=${encodeURIComponent(vessel)}&pol=${encodeURIComponent(pol)}&pod=${encodeURIComponent(pod)}`
+        `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/schedule/lookup?vessel=${encodeURIComponent(vessel)}&pol=${encodeURIComponent(pol)}&pod=${encodeURIComponent(pod)}`
       );
       const data = await res.json();
       if (data.found) {
@@ -548,7 +548,7 @@ export default function CreateOrder() {
         const fd = new FormData();
         fd.append("file",  brFile);
         fd.append("label", "Buyer Receipt");
-        const upRes = await fetch(`${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/orders/${data._id}/upload-drive`, {
+        const upRes = await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/${data._id}/upload-drive`, {
           method: "POST",
           body:   fd,
         });
@@ -1229,7 +1229,7 @@ export default function CreateOrder() {
               <button onClick={async () => {
                 // Save or update address book record with defaultPod
                 if (newCustPopup.isExisting && newCustPopup.recordId) {
-                  await fetch(`${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/address-book/${newCustPopup.recordId}`, {
+                  await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/address-book/${newCustPopup.recordId}`, {
                     method: "PUT",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ defaultPod: newCustPopup.defaultPod }),
@@ -1283,4 +1283,5 @@ export default function CreateOrder() {
     </div>
   );
 }
+
 

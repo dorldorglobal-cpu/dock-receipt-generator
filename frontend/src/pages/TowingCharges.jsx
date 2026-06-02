@@ -80,7 +80,7 @@ export default function TowingCharges() {
   const saveRow = async () => {
     if (!form.address && !form.city) { alert("Address or city is required"); return; }
     await fetch(
-      form._id ? `${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/pricing/${form._id}` : "${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing",
+      form._id ? `${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing/${form._id}` : "${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing",
       {
         method: form._id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -106,7 +106,7 @@ export default function TowingCharges() {
 
   const deleteRow = async (id) => {
     if (!window.confirm("Delete this towing charge?")) return;
-    await fetch(`${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/pricing/${id}`, { method:"DELETE" });
+    await fetch(`${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing/${id}`, { method:"DELETE" });
     fetchRows();
   };
 
@@ -339,5 +339,6 @@ export default function TowingCharges() {
     </div>
   );
 }
+
 
 
