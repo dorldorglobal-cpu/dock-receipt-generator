@@ -489,6 +489,23 @@ export default function CreateOrder() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Parse failed");
 
+      // ── Buyer account → customer lookup ──────────────────────────
+      if (data.customerName) {
+        try {
+          const buyerLookup = await fetch(`${API}/api/address-book/lookup-buyer?name=${encodeURIComponent(data.customerName)}`);
+          const buyerData = await buyerLookup.json();
+          if (buyerData.customer) {
+            // Found a real customer for this buyer account
+            data.buyerName      = data.customerName; // keep receipt name as buyerName
+            data.customerName   = buyerData.customer.companyName;
+            data.customerPhone  = data.customerPhone || buyerData.customer.phone || "";
+            data.customerEmail  = data.customerEmail || buyerData.customer.email || "";
+            data.customerRecord = buyerData.customer;
+            data.customerFound  = true;
+          }
+        } catch {}
+      }
+
       setBrResult(data);
       setBrCustomerFound(data.customerFound);
 
@@ -514,8 +531,9 @@ export default function CreateOrder() {
         customerName:  rec?.companyName  || data.customerName  || prev.customerName,
         customerPhone: rec?.phone        || data.customerPhone || prev.customerPhone,
         customerEmail: rec?.email        || data.customerEmail || prev.customerEmail,
+        buyerName:     data.buyerName    || prev.buyerName,
         // Buyer / Consignee — buyer name from receipt goes here too
-        consigneeName: data.customerName  || prev.consigneeName,
+        consigneeName: data.buyerName || data.customerName || prev.consigneeName,
         // Vehicle
         vin:       data.vin       || prev.vin,
         year:      data.year      || prev.year,
