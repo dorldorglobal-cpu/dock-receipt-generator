@@ -378,10 +378,18 @@ export default function CreateOrder() {
   };
 
   // Shipping line by port — overrides POD-based hint when pickup region is known
-  const portToShippingLine = {
-    PROVIDENCE: "SALLAUM", FREEPORT: "ACL", BALTIMORE: "ACL",
-    JACKSONVILLE: "SALLAUM", NEWARK: "SALLAUM", BRUNSWICK: "SALLAUM",
-    WILMINGTON: "SALLAUM",
+  // For FREEPORT: ACL serves TEMA, SALLAUM serves LAGOS/COTONOU/LOME
+  const getShippingLineForPort = (port, pod) => {
+    const p = (port || "").toUpperCase();
+    const d = (pod  || "").toUpperCase();
+    if (p === "FREEPORT") return ["LAGOS","COTONOU","LOME","DAKAR"].includes(d) ? "SALLAUM" : "ACL";
+    if (p === "PROVIDENCE")  return "SALLAUM";
+    if (p === "JACKSONVILLE") return "SALLAUM";
+    if (p === "NEWARK")      return "SALLAUM";
+    if (p === "BRUNSWICK")   return "SALLAUM";
+    if (p === "WILMINGTON")  return "SALLAUM";
+    if (p === "BALTIMORE")   return ["LAGOS","COTONOU","LOME"].includes(d) ? "SALLAUM" : "ACL";
+    return "";
   };
 
   const suggestDeliveryFromPickupCity = async (city, shippingLineHint, state) => {
@@ -397,8 +405,7 @@ export default function CreateOrder() {
 
       const port = match?.port || (state && stateToPort[state.toUpperCase()]);
       if (port) {
-        // Port-based shipping line overrides POD-based hint (e.g. MA→PROVIDENCE→SALLAUM, not ACL)
-        const lineHint = portToShippingLine[port.toUpperCase()] || shippingLineHint;
+        const lineHint = getShippingLineForPort(port, form.pod) || shippingLineHint;
         handlePolChange(port.toUpperCase(), lineHint);
       }
     } catch (err) {
