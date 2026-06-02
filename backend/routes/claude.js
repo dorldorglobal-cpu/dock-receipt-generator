@@ -127,6 +127,28 @@ vessel, voyage, bookingNumber, pol, pod, cutoffDate, sailDate, notes${rulesText}
       `Extract from this shipping document:\n\n${text.slice(0, 8000)}`
     );
 
+    // ── Buyer account → customer lookup ──────────────────────────────
+    if (result.customerName) {
+      const buyerName = result.customerName; // what the receipt says
+      const customerLookup = await AddressBook.findOne({
+        type: "customer",
+        buyerAccounts: { $elemMatch: { $regex: buyerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+      }).lean();
+
+      if (customerLookup) {
+        // We know who the real customer is — keep buyer name separate
+        result.buyerName    = buyerName;
+        result.customerName = customerLookup.companyName;
+        result.customerPhone = result.customerPhone || customerLookup.phone || "";
+        result.customerEmail = result.customerEmail || customerLookup.email || "";
+        if (!result.pod && customerLookup.defaultPod) result.pod = customerLookup.defaultPod;
+        result._buyerAccountMatch = customerLookup.companyName;
+      } else {
+        // No mapping yet — use buyer name as customer, store as buyerName too
+        result.buyerName = buyerName;
+      }
+    }
+
     await enrichFromAddressBook(result);
     applyRoroDelivery(result);
     res.json(result);
@@ -236,6 +258,25 @@ Always include a JSON block at the END of your extraction response:
     if (fieldsMatch) {
       try {
         extractedFields = JSON.parse(fieldsMatch[1]);
+
+        // Buyer account → customer lookup
+        if (extractedFields.customerName) {
+          const buyerName = extractedFields.customerName;
+          const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const customerLookup = await AddressBook.findOne({
+            type: "customer",
+            buyerAccounts: { $elemMatch: { $regex: esc(buyerName), $options: "i" } },
+          }).lean();
+          if (customerLookup) {
+            extractedFields.buyerName    = buyerName;
+            extractedFields.customerName = customerLookup.companyName;
+            extractedFields._buyerAccountMatch = customerLookup.companyName;
+            if (!extractedFields.pod && customerLookup.defaultPod) extractedFields.pod = customerLookup.defaultPod;
+          } else {
+            extractedFields.buyerName = buyerName;
+          }
+        }
+
         await enrichFromAddressBook(extractedFields);
         applyRoroDelivery(extractedFields);
       } catch {}

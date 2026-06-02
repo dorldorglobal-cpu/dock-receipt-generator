@@ -75,4 +75,52 @@ router.post("/", async (req, res) => {
   }
 });
 
+// ── PUT /api/address-book/:id — update entry ─────────────────────────────────
+router.put("/:id", async (req, res) => {
+  try {
+    const entry = await AddressBook.findByIdAndUpdate(
+      req.params.id, req.body, { new: true, runValidators: false }
+    );
+    if (!entry) return res.status(404).json({ error: "Not found" });
+    res.json(entry);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to update address" });
+  }
+});
+
+// ── GET /api/address-book/lookup-buyer?name=GOLDEN+NOOR ──────────────────────
+// Returns the customer that owns this buyer account name
+router.get("/lookup-buyer", async (req, res) => {
+  try {
+    const { name } = req.query;
+    if (!name) return res.json({ customer: null });
+
+    const needle = name.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+    // 1. Exact buyer account match
+    const exact = await AddressBook.findOne({
+      buyerAccounts: { $elemMatch: { $regex: name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), $options: "i" } },
+      type: "customer",
+    }).lean();
+    if (exact) return res.json({ customer: exact });
+
+    // 2. Fuzzy match against buyer accounts
+    const allCustomers = await AddressBook.find({ type: "customer", buyerAccounts: { $exists: true, $not: { $size: 0 } } })
+      .select("companyName phone email defaultPod buyerAccounts").lean();
+
+    for (const c of allCustomers) {
+      for (const acct of (c.buyerAccounts || [])) {
+        const hay = acct.toLowerCase().replace(/[^a-z0-9]/g, "");
+        if (hay.includes(needle) || needle.includes(hay)) {
+          return res.json({ customer: c });
+        }
+      }
+    }
+
+    res.json({ customer: null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

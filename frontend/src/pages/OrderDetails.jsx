@@ -2514,7 +2514,7 @@ export default function OrderDetails() {
               Customer
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-              {[["customerName","Business Name"],["contactName","Contact Name"],["customerPhone","Phone / WhatsApp"],["customerEmail","Email"]].map(([k,lbl])=>(
+              {[["customerName","Customer (Billing)"],["buyerName","Buyer Account (Receipt)"],["contactName","Contact Name"],["customerPhone","Phone / WhatsApp"],["customerEmail","Email"]].map(([k,lbl])=>(
                 <label key={k} style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   {lbl}
                   <input value={editForm[k]||""} onChange={e=>setEditForm(f=>({...f,[k]:e.target.value}))}

@@ -8,6 +8,7 @@ const orderSchema = new mongoose.Schema(
     contactName:  String,
     customerPhone: String,
     customerEmail: String,
+    buyerName: { type: String, default: "" }, // auction account name (may differ from customerName)
 
     requestType: {
       type: String,

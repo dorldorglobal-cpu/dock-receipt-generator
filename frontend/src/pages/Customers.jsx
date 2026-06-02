@@ -98,6 +98,19 @@ function CustomerForm({ form, setForm }) {
           <option value="LOME">🇹🇬 Lomé, Togo</option>
         </select>
       </label>
+      <label style={{ gridColumn: "1 / -1" }}>
+        Buyer Accounts (auction names that belong to this customer)
+        <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 6 }}>
+          One per line — e.g. GOLDEN NOOR INTERNATIONAL LTD
+        </div>
+        <textarea
+          value={(form.buyerAccounts || []).join("\n")}
+          onChange={e => setForm(f => ({ ...f, buyerAccounts: e.target.value.split("\n").map(s => s.trim()).filter(Boolean) }))}
+          rows={3}
+          placeholder={"GOLDEN NOOR INTERNATIONAL LTD\nANOTHER AUCTION ACCOUNT"}
+          style={{ resize: "vertical", fontFamily: "inherit", fontSize: 13 }}
+        />
+      </label>
     </div>
   );
 }
@@ -157,7 +170,8 @@ function EditModal({ customer, onSave, onClose }) {
     balance:      customer.balance      || "",
     overdue:      customer.overdue      || "",
     notes:        customer.notes        || "",
-    defaultPod:   customer.defaultPod   || "",
+    defaultPod:     customer.defaultPod   || "",
+    buyerAccounts:  customer.buyerAccounts || [],
   });
   const [saving, setSaving] = useState(false);
 

@@ -74,6 +74,7 @@ export default function CreateOrder() {
     condition: "Runner",
     titleStatus: "Title",
 
+    buyerName: "",
     lotNumber: "",
     pin: "",
 
@@ -127,6 +128,7 @@ export default function CreateOrder() {
           ...(f.model            ? { model:             f.model            } : {}),
           ...(f.vin              ? { vin:               f.vin              } : {}),
           ...(f.color            ? { color:             f.color            } : {}),
+          ...(f.buyerName        ? { buyerName:         f.buyerName        } : {}),
           ...(f.lotNumber        ? { lotNumber:         f.lotNumber        } : {}),
           ...(f.pickupName       ? { pickupName:        f.pickupName       } : {}),
           ...(f.pickupAddress    ? { pickupAddress:     f.pickupAddress    } : {}),
@@ -818,6 +820,14 @@ export default function CreateOrder() {
             onSelect={selectExporter}
           />
 
+          {/* Buyer account match banner */}
+          {form.buyerName && form.buyerName !== form.customerName && (
+            <div style={{ background:"rgba(251,191,36,0.08)", border:"1px solid rgba(251,191,36,0.3)",
+              borderRadius:8, padding:"8px 14px", fontSize:12, color:"#fbbf24", marginBottom:10 }}>
+              📋 Buyer account on receipt: <strong>{form.buyerName}</strong> → Customer auto-set to <strong>{form.customerName}</strong>
+            </div>
+          )}
+
           <div className="form-grid">
             <label>
               Business Name
@@ -825,6 +835,16 @@ export default function CreateOrder() {
                 value={form.customerName}
                 onChange={(e) => update("customerName", e.target.value)}
                 placeholder="e.g. AHAB GENERAL ENTERPRISES"
+              />
+            </label>
+
+            <label>
+              Buyer Account (on receipt)
+              <input
+                value={form.buyerName}
+                onChange={(e) => update("buyerName", e.target.value)}
+                placeholder="e.g. GOLDEN NOOR INTERNATIONAL"
+                style={{ color: "var(--text-secondary)" }}
               />
             </label>
 

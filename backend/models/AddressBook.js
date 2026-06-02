@@ -14,6 +14,7 @@ const addressBookSchema = new mongoose.Schema(
     type: String,
     notes: String,
     defaultPod: { type: String, default: "" }, // e.g. "LAGOS", "TEMA" — auto-fills POD on new orders
+    buyerAccounts: { type: [String], default: [] }, // auction account names that belong to this customer
     balance: Number,
     overdue: Number,
   },
