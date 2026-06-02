@@ -233,7 +233,7 @@ export default function CreateOrder() {
   const podToShippingLine = (pod) => {
     if (!pod) return "";
     const p = pod.toUpperCase();
-    if (["LAGOS", "COTONOU", "LOME"].includes(p)) return "SALLAUM";
+    if (["LAGOS", "COTONOU", "LOME", "DAKAR", "ABIDJAN"].includes(p)) return "SALLAUM";
     if (p === "TEMA") return "ACL";
     return "";
   };
