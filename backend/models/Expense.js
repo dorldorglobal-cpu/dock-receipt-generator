@@ -32,12 +32,16 @@ const expenseSchema = new mongoose.Schema(
     invoiceNumber: { type: String, default: "" },
 
     // Bill document (vendor's invoice / dispatch sheet)
-    billFileName: { type: String, default: "" },
-    billMime:     { type: String, default: "" },
+    billFileName:   { type: String, default: "" },
+    billMime:       { type: String, default: "" },
+    billDriveId:    { type: String, default: "" },
+    billDriveUrl:   { type: String, default: "" },
 
     // Receipt proof (payment confirmation)
-    receiptFileName: { type: String, default: "" },
-    receiptMime:     { type: String, default: "" },
+    receiptFileName:   { type: String, default: "" },
+    receiptMime:       { type: String, default: "" },
+    receiptDriveId:    { type: String, default: "" },
+    receiptDriveUrl:   { type: String, default: "" },
 
     notes: { type: String, default: "" },
 

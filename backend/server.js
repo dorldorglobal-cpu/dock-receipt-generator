@@ -81,16 +81,24 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     const dispatchDate = aiResult.dispatchDate || "";
     const origin = aiResult.origin || "";
     const carrier = aiResult.carrier || "";
-    const savedName = `${Date.now()}-${Math.round(Math.random()*1e9)}.pdf`;
-    const receiptsDir = path.join(__dirname, "uploads/receipts");
-    if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir, { recursive: true });
-    fs.writeFileSync(path.join(receiptsDir, savedName), buffer);
+    // Upload dispatch PDF to Google Drive instead of local disk
+    const { uploadBufferToDrive, getOrCreateFolder } = require("./googleDrive");
+    let billFileName = "", billDriveId = "", billDriveUrl = "";
+    try {
+      const folderId = await getOrCreateFolder("DDG Expenses", "root");
+      const savedName = `${Date.now()}-dispatch.pdf`;
+      const driveFile = await uploadBufferToDrive(buffer, savedName, "application/pdf", folderId);
+      billFileName = driveFile.name;
+      billDriveId  = driveFile.id;
+      billDriveUrl = driveFile.webViewLink;
+    } catch (e) { console.warn("Drive upload failed:", e.message); }
+
     const Order = require("./models/Order");
     let matchedOrder = null;
     if (orderId) matchedOrder = await Order.findById(orderId).select("refNumber _id").lean().catch(() => null);
     const row = { vin, ymm, total, loadId, dispatchDate, origin, carrier,
       vendor: carrier,
-      billFileName: savedName, billMime: "application/pdf",
+      billFileName, billDriveId, billDriveUrl, billMime: "application/pdf",
       orderId: matchedOrder?._id || orderId || null,
       orderRef: matchedOrder?.refNumber || orderRef || "",
       matched: !!(matchedOrder || orderId),

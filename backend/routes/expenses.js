@@ -1,4 +1,4 @@
-const express   = require("express");
+﻿const express   = require("express");
 const router    = express.Router();
 const multer    = require("multer");
 const path      = require("path");
@@ -6,21 +6,31 @@ const fs        = require("fs");
 const pdfParse  = require("pdf-parse");
 const Expense   = require("../models/Expense");
 const Order     = require("../models/Order");
+const { uploadBufferToDrive, getOrCreateFolder, deleteDriveFile } = require("../googleDrive");
 
-// ── File upload storage ───────────────────────────────────────────────────────
-const uploadDir = path.join(__dirname, "../uploads/receipts");
-if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+// ── Google Drive folder for expenses ─────────────────────────────────────────
+const EXPENSES_PARENT_FOLDER = process.env.EXPENSES_DRIVE_FOLDER_ID || "root";
+let _expensesFolderId = null;
+async function getExpensesFolderId() {
+  if (_expensesFolderId) return _expensesFolderId;
+  _expensesFolderId = await getOrCreateFolder("DDG Expenses", EXPENSES_PARENT_FOLDER);
+  return _expensesFolderId;
+}
 
-const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, uploadDir),
-  filename:    (req, file, cb) => {
-    const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-    cb(null, unique + path.extname(file.originalname));
-  },
-});
+// ── Upload to Drive helper ────────────────────────────────────────────────────
+async function uploadFileToDriveExpenses(buffer, originalName, mimeType) {
+  const folderId = await getExpensesFolderId();
+  const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
+  const ext = path.extname(originalName) || ".pdf";
+  const fileName = unique + ext;
+  const result = await uploadBufferToDrive(buffer, fileName, mimeType, folderId);
+  return result; // { id, name, webViewLink }
+}
+
+// ── Multer — memory storage (no local disk) ───────────────────────────────────
 const upload = multer({
-  storage,
-  limits: { fileSize: 20 * 1024 * 1024 }, // 20 MB
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 20 * 1024 * 1024 },
   fileFilter: (req, file, cb) => {
     const allowed = /jpeg|jpg|png|gif|pdf|webp/i;
     if (allowed.test(path.extname(file.originalname)) && allowed.test(file.mimetype)) {
@@ -31,7 +41,6 @@ const upload = multer({
   },
 });
 
-// Accept both "receipt" and "bill" file fields
 const uploadFields = upload.fields([
   { name: "receipt", maxCount: 1 },
   { name: "bill",    maxCount: 1 },
@@ -39,7 +48,8 @@ const uploadFields = upload.fields([
 
 const esc = (s) => (s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
-// Helper: delete a file safely
+// Legacy local file cleanup (for old records)
+const uploadDir = path.join(__dirname, "../uploads/receipts");
 function deleteFile(filename) {
   if (!filename) return;
   const p = path.join(uploadDir, filename);
@@ -200,12 +210,20 @@ router.post("/", uploadFields, async (req, res) => {
     };
 
     if (req.files?.receipt?.[0]) {
-      data.receiptFileName = req.files.receipt[0].filename;
-      data.receiptMime     = req.files.receipt[0].mimetype;
+      const f = req.files.receipt[0];
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      data.receiptFileName = driveFile.name;
+      data.receiptMime     = f.mimetype;
+      data.receiptDriveId  = driveFile.id;
+      data.receiptDriveUrl = driveFile.webViewLink;
     }
     if (req.files?.bill?.[0]) {
-      data.billFileName = req.files.bill[0].filename;
-      data.billMime     = req.files.bill[0].mimetype;
+      const f = req.files.bill[0];
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      data.billFileName = driveFile.name;
+      data.billMime     = f.mimetype;
+      data.billDriveId  = driveFile.id;
+      data.billDriveUrl = driveFile.webViewLink;
     }
 
     const expense = await Expense.create(data);
@@ -246,14 +264,24 @@ router.put("/:id", uploadFields, async (req, res) => {
     const old = await Expense.findById(req.params.id).select("receiptFileName billFileName").lean();
 
     if (req.files?.receipt?.[0]) {
-      deleteFile(old?.receiptFileName);
-      update.receiptFileName = req.files.receipt[0].filename;
-      update.receiptMime     = req.files.receipt[0].mimetype;
+      if (old?.receiptDriveId) await deleteDriveFile(old.receiptDriveId);
+      else deleteFile(old?.receiptFileName);
+      const f = req.files.receipt[0];
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      update.receiptFileName = driveFile.name;
+      update.receiptMime     = f.mimetype;
+      update.receiptDriveId  = driveFile.id;
+      update.receiptDriveUrl = driveFile.webViewLink;
     }
     if (req.files?.bill?.[0]) {
-      deleteFile(old?.billFileName);
-      update.billFileName = req.files.bill[0].filename;
-      update.billMime     = req.files.bill[0].mimetype;
+      if (old?.billDriveId) await deleteDriveFile(old.billDriveId);
+      else deleteFile(old?.billFileName);
+      const f = req.files.bill[0];
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      update.billFileName = driveFile.name;
+      update.billMime     = f.mimetype;
+      update.billDriveId  = driveFile.id;
+      update.billDriveUrl = driveFile.webViewLink;
     }
 
     const updated = await Expense.findByIdAndUpdate(
@@ -304,17 +332,35 @@ router.patch("/:id/pay", async (req, res) => {
 function serveFile(fieldName) {
   return async (req, res) => {
     try {
-      const fileField = `${fieldName}FileName`;
-      const mimeField = `${fieldName}Mime`;
-      const expense = await Expense.findById(req.params.id)
-        .select(`${fileField} ${mimeField}`).lean();
+      const driveUrlField = `${fieldName}DriveUrl`;
+      const driveIdField  = `${fieldName}DriveId`;
+      const fileField     = `${fieldName}FileName`;
+      const mimeField     = `${fieldName}Mime`;
+      const expense = await Expense.findById(req.params.id).lean();
+      if (!expense) return res.status(404).json({ error: "Not found" });
+
+      // New Drive-based files — redirect to Drive
+      if (expense[driveIdField]) {
+        const { drive } = require("../googleDrive");
+        const fileRes = await drive.files.get(
+          { fileId: expense[driveIdField], alt: "media" },
+          { responseType: "stream" }
+        );
+        res.setHeader("Content-Type", expense[mimeField] || "application/octet-stream");
+        res.setHeader("Content-Disposition", `inline; filename="${expense[fileField] || fieldName}"`);
+        fileRes.data.pipe(res);
+        return;
+      }
+
+      // Legacy local files
       const fn = expense?.[fileField];
       if (!fn) return res.status(404).json({ error: "No file" });
       const filePath = path.join(uploadDir, fn);
-      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found" });
+      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found on disk" });
       res.setHeader("Content-Type", expense[mimeField] || "application/octet-stream");
       res.sendFile(filePath);
     } catch (err) {
+      console.error("serveFile error:", err.message);
       res.status(500).json({ error: "Failed to serve file" });
     }
   };
@@ -323,13 +369,17 @@ function serveFile(fieldName) {
 function deleteFileRoute(fieldName) {
   return async (req, res) => {
     try {
-      const fileField = `${fieldName}FileName`;
-      const mimeField = `${fieldName}Mime`;
+      const driveIdField = `${fieldName}DriveId`;
+      const fileField    = `${fieldName}FileName`;
+      const mimeField    = `${fieldName}Mime`;
       const expense = await Expense.findById(req.params.id);
       if (!expense) return res.status(404).json({ error: "Not found" });
-      deleteFile(expense[fileField]);
-      expense[fileField] = "";
-      expense[mimeField] = "";
+      if (expense[driveIdField]) await deleteDriveFile(expense[driveIdField]);
+      else deleteFile(expense[fileField]);
+      expense[fileField]    = "";
+      expense[mimeField]    = "";
+      expense[driveIdField] = "";
+      expense[`${fieldName}DriveUrl`] = "";
       await expense.save();
       res.json({ success: true });
     } catch (err) {
@@ -350,13 +400,10 @@ router.get("/:id/bill", serveFile("bill"));
 // ── DELETE /api/expenses/:id/bill ─────────────────────────────────────────────
 router.delete("/:id/bill", deleteFileRoute("bill"));
 
-// ── Helper: save buffer to uploads/receipts and return filename ───────────────
-function saveUploadedFile(buffer, originalName) {
-  const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
-  const ext    = path.extname(originalName) || ".pdf";
-  const fname  = unique + ext;
-  fs.writeFileSync(path.join(uploadDir, fname), buffer);
-  return fname;
+// ── Helper: save buffer to Drive and return filename ─────────────────────────
+async function saveUploadedFile(buffer, originalName, mimeType) {
+  const driveFile = await uploadFileToDriveExpenses(buffer, originalName, mimeType || "application/pdf");
+  return { fname: driveFile.name, driveId: driveFile.id, driveUrl: driveFile.webViewLink };
 }
 
 // ── POST /api/expenses/parse-sallaum — parse PDF, return VIN rows + order matches ──
@@ -366,7 +413,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
 
-    const savedFileName = saveUploadedFile(req.file.buffer, req.file.originalname);
+    const savedFile = await saveUploadedFile(req.file.buffer, req.file.originalname);
 
     const data = await pdfParse(req.file.buffer);
     const text = data.text;
@@ -433,7 +480,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       };
     });
 
-    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFileName, billMime: "application/pdf" });
+    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf" });
   } catch (err) {
     console.error("parse-sallaum error:", err);
     res.status(500).json({ error: err.message });
@@ -499,7 +546,7 @@ router.post("/parse-dispatch-url", express.json(), async (req, res) => {
     if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found on disk" });
 
     const buffer = fs.readFileSync(filePath);
-    const savedFileName = saveUploadedFile(buffer, filename || path.basename(filePath));
+    const savedFile = await saveUploadedFile(buffer, filename || path.basename(filePath));
     const data = await pdfParse(buffer);
     const text = data.text;
 
@@ -530,7 +577,7 @@ router.post("/parse-dispatch-url", express.json(), async (req, res) => {
 
     const row = {
       vin, ymm, total, loadId, dispatchDate, origin,
-      billFileName: savedFileName, billMime: "application/pdf",
+      billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf",
       orderId:  matchedOrder?._id  || orderId  || null,
       orderRef: matchedOrder?.refNumber || orderRef || "",
       matched:  !!(matchedOrder || orderId),
@@ -554,7 +601,7 @@ router.post("/parse-dispatch", memUpload.array("invoices", 50), async (req, res)
 
     for (const file of req.files) {
       try {
-        const savedFileName = saveUploadedFile(file.buffer, file.originalname);
+        const savedFile = await saveUploadedFile(file.buffer, file.originalname);
         const data = await pdfParse(file.buffer);
         const text = data.text;
 
@@ -608,7 +655,7 @@ router.post("/parse-dispatch", memUpload.array("invoices", 50), async (req, res)
           ymm,
           origin,
           dispatchDate,
-          billFileName: savedFileName,
+          billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl,
           billMime:     "application/pdf",
           orderId:      order?._id || null,
           orderRef:     order?.refNumber || "",
@@ -693,7 +740,7 @@ router.post("/parse-acl", memUpload.array("invoices", 50), async (req, res) => {
 
     for (const file of req.files) {
       try {
-        const savedFileName = saveUploadedFile(file.buffer, file.originalname);
+        const savedFile = await saveUploadedFile(file.buffer, file.originalname);
         const data = await pdfParse(file.buffer);
         const text = data.text;
 
@@ -758,7 +805,7 @@ router.post("/parse-acl", memUpload.array("invoices", 50), async (req, res) => {
           pod,
           ymm,
           billDate,
-          billFileName: savedFileName,
+          billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl,
           billMime:     "application/pdf",
           orderId:      order?._id || null,
           orderRef:     order?.refNumber || "",
@@ -840,7 +887,7 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
 
     for (const file of req.files) {
       try {
-        const savedFileName = saveUploadedFile(file.buffer, file.originalname);
+        const savedFile = await saveUploadedFile(file.buffer, file.originalname);
         const data = await pdfParse(file.buffer);
         const text = data.text;
 
@@ -1038,7 +1085,7 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
           };
         });
 
-        results.push({ fileName: file.originalname, invoiceNumber, billDate, vendor, container, booking, total, rows, billFileName: savedFileName, billMime: "application/pdf" });
+        results.push({ fileName: file.originalname, invoiceNumber, billDate, vendor, container, booking, total, rows, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf" });
       } catch (e) {
         results.push({ fileName: file.originalname, error: e.message, rows: [] });
       }
@@ -1287,3 +1334,4 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+

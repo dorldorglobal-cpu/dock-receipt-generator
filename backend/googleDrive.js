@@ -100,13 +100,49 @@ async function deleteDriveFolder(folderId) {
   await drive.files.delete({ fileId: folderId });
 }
 
+async function deleteDriveFile(fileId) {
+  try { await drive.files.delete({ fileId }); } catch {}
+}
+
+// Upload a buffer (in-memory file) directly to Drive
+async function uploadBufferToDrive(buffer, fileName, mimeType, folderId) {
+  const { Readable } = require("stream");
+  const stream = new Readable();
+  stream.push(buffer);
+  stream.push(null);
+  const response = await drive.files.create({
+    requestBody: { name: fileName, parents: [folderId] },
+    media: { mimeType, body: stream },
+    fields: "id, name, webViewLink",
+  });
+  return response.data;
+}
+
+// Get or create a folder by name inside a parent folder
+async function getOrCreateFolder(name, parentId) {
+  const res = await drive.files.list({
+    q: `name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    fields: "files(id, name)",
+    pageSize: 1,
+  });
+  if (res.data.files.length > 0) return res.data.files[0].id;
+  const folder = await drive.files.create({
+    requestBody: { name, mimeType: "application/vnd.google-apps.folder", parents: [parentId] },
+    fields: "id",
+  });
+  return folder.data.id;
+}
+
 module.exports = {
   drive,
   createDriveFolder,
   uploadFileToDrive,
+  uploadBufferToDrive,
+  getOrCreateFolder,
   listFilesInFolder,
   listFoldersInFolder,
   downloadDriveFile,
   moveDriveFolder,
   deleteDriveFolder,
+  deleteDriveFile,
 };
