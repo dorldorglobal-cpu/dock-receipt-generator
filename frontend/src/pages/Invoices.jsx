@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}";
 
 const f$ = (n) =>
   "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -461,3 +461,4 @@ export default function Invoices() {
     </div>
   );
 }
+

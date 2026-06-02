@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 function fmt(n) {
   const num = Number(n || 0);
@@ -26,14 +26,14 @@ export default function OceanFreight() {
   useEffect(() => { fetchRows(); }, []);
 
   const fetchRows = async () => {
-    const res  = await fetch("http://localhost:4000/api/pricing?type=ocean");
+    const res  = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing?type=ocean");
     setRows(await res.json());
   };
 
   const saveRow = async () => {
     if (!form.pol || !form.pod) { alert("POL and POD are required"); return; }
     await fetch(
-      form._id ? `http://localhost:4000/api/pricing/${form._id}` : "http://localhost:4000/api/pricing",
+      form._id ? `${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/pricing/${form._id}` : "${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/pricing",
       {
         method: form._id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
@@ -58,7 +58,7 @@ export default function OceanFreight() {
     if (!window.confirm("Populate ocean freight on all orders that are currently $0?")) return;
     setPopulating(true);
     try {
-      const res = await fetch("http://localhost:4000/api/orders/bulk-populate-ocean", { method: "POST" });
+      const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/orders/bulk-populate-ocean", { method: "POST" });
       const data = await res.json();
       alert(`Done! Updated ${data.updated} order${data.updated !== 1 ? "s" : ""}.`);
     } catch {
@@ -69,7 +69,7 @@ export default function OceanFreight() {
 
   const deleteRow = async (id) => {
     if (!window.confirm("Delete this rate?")) return;
-    await fetch(`http://localhost:4000/api/pricing/${id}`, { method:"DELETE" });
+    await fetch(`${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/pricing/${id}`, { method:"DELETE" });
     fetchRows();
   };
 
@@ -295,3 +295,5 @@ export default function OceanFreight() {
     </div>
   );
 }
+
+

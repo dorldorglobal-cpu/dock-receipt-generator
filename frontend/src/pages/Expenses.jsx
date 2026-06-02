@@ -1,7 +1,7 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
-const API = "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}";
 
 const CATEGORIES = [
   "Towing / Transport",
@@ -1774,3 +1774,5 @@ export default function Expenses() {
     </div>
   );
 }
+
+

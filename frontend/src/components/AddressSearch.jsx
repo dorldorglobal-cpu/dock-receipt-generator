@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+﻿import { useEffect, useRef, useState } from "react";
 
 export default function AddressSearch({
   label,
@@ -55,7 +55,7 @@ export default function AddressSearch({
 
   const fetchResults = async () => {
     const res = await fetch(
-      `http://localhost:4000/api/address-book?search=${encodeURIComponent(
+      `${import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}"}/api/address-book?search=${encodeURIComponent(
         search
       )}${type ? `&type=${type}` : ""}`
     );
@@ -76,7 +76,7 @@ export default function AddressSearch({
       return;
     }
 
-    const res = await fetch("http://localhost:4000/api/address-book", {
+    const res = await fetch("${import.meta.env.VITE_API_URL || "http://localhost:4000"}/api/address-book", {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -308,3 +308,4 @@ export default function AddressSearch({
     </div>
   );
 }
+

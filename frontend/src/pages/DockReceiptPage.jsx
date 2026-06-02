@@ -1,7 +1,7 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+﻿import { useEffect, useState, useCallback, useRef } from "react";
 import "../App.css";
 
-const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const API = import.meta.env.VITE_API_URL || "${import.meta.env.VITE_API_URL || "http://localhost:4000"}";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -590,3 +590,4 @@ export default function DockReceiptPage() {
     </div>
   );
 }
+
