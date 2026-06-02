@@ -377,6 +377,13 @@ export default function CreateOrder() {
     MA: "PROVIDENCE", CT: "PROVIDENCE",
   };
 
+  // Shipping line by port — overrides POD-based hint when pickup region is known
+  const portToShippingLine = {
+    PROVIDENCE: "SALLAUM", FREEPORT: "ACL", BALTIMORE: "ACL",
+    JACKSONVILLE: "SALLAUM", NEWARK: "SALLAUM", BRUNSWICK: "SALLAUM",
+    WILMINGTON: "SALLAUM",
+  };
+
   const suggestDeliveryFromPickupCity = async (city, shippingLineHint, state) => {
     if (!city && !state) return;
     try {
@@ -389,7 +396,11 @@ export default function CreateOrder() {
         rates.find((r) => r.port && r.name && cityNorm && normCity(r.name).includes(cityNorm));
 
       const port = match?.port || (state && stateToPort[state.toUpperCase()]);
-      if (port) handlePolChange(port.toUpperCase(), shippingLineHint);
+      if (port) {
+        // Port-based shipping line overrides POD-based hint (e.g. MA→PROVIDENCE→SALLAUM, not ACL)
+        const lineHint = portToShippingLine[port.toUpperCase()] || shippingLineHint;
+        handlePolChange(port.toUpperCase(), lineHint);
+      }
     } catch (err) {
       console.error("Towing city lookup failed", err);
     }

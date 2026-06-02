@@ -99,10 +99,12 @@ function listLocalFiles(orderId) {
 const DELIVERY_BY_REGION = [
   { states:["tx","texas","la","louisiana","ms","mississippi","al","alabama","ga","georgia","fl","florida","ar","arkansas","ok","oklahoma","tn","tennessee","sc","south carolina","nc","north carolina","mo","missouri"],
     delivery:{ deliveryName:"ACL Freeport", deliveryAddress:"1 Port Road", deliveryCity:"Freeport", deliveryState:"TX", deliveryZip:"77541" } },
-  { states:["nj","new jersey","ny","new york","ct","connecticut","ma","massachusetts","ri","rhode island","pa","pennsylvania","de","delaware","md","maryland","va","virginia","nh","new hampshire","me","maine","vt","vermont"],
+  { states:["nj","new jersey","ny","new york","ct","connecticut","ma","massachusetts","ri","rhode island","pa","pennsylvania","de","delaware","nh","new hampshire","me","maine","vt","vermont"],
+    delivery:{ deliveryName:"Sallaum Providence", deliveryAddress:"Davisville Marine Terminal", deliveryCity:"Providence", deliveryState:"RI", deliveryZip:"02905" } },
+  { states:["md","maryland","va","virginia"],
     delivery:{ deliveryName:"ACL Baltimore", deliveryAddress:"2001 E McComas St", deliveryCity:"Baltimore", deliveryState:"MD", deliveryZip:"21230" } },
   { states:["ca","california","az","arizona","nv","nevada","nm","new mexico","ut","utah","co","colorado","or","oregon","wa","washington","id","idaho"],
-    delivery:{ deliveryName:"ACL Baltimore", deliveryAddress:"2001 E McComas St", deliveryCity:"Baltimore", deliveryState:"MD", deliveryZip:"21230" } },
+    delivery:{ deliveryName:"Sallaum Providence", deliveryAddress:"Davisville Marine Terminal", deliveryCity:"Providence", deliveryState:"RI", deliveryZip:"02905" } },
 ];
 const AFRICA_PODS = ["TEMA","LAGOS","COTONOU","LOME","DAKAR","ABIDJAN","DURBAN","DOUALA"];
 function applyRoroDelivery(result) {
