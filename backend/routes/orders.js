@@ -157,21 +157,52 @@ function cleanSpread(obj) {
 router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
-    const parsed = await parseBuyerReceipt(req.file.path);
+
+    let parsed = await parseBuyerReceipt(req.file.path);
+    const fileBuffer = fs.readFileSync(req.file.path);
     fs.unlink(req.file.path, () => {});
 
-    // Check if customer exists in address book — fuzzy match on name
+    // ── If regex parser returned little/nothing, fall back to AI ────────────
+    const hasData = parsed && (parsed.vin || parsed.customerName || parsed.pickupAddress);
+    if (!hasData) {
+      try {
+        const pdfParse = require("pdf-parse");
+        const Groq = require("groq-sdk");
+        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
+        const pdfData = await pdfParse(fileBuffer);
+        const aiRes = await groq.chat.completions.create({
+          model: "llama-3.3-70b-versatile",
+          messages: [
+            { role: "system", content: `You are a logistics document parser. Extract order fields from this buyer receipt/bill of sale.
+Return ONLY a JSON object with these keys (empty string if not found):
+customerName (the BUYER/MEMBER company name),
+customerPhone, customerEmail,
+year, make, model, vin, color, mileage,
+lotNumber (strip leading zeros and dashes),
+bidAmount (sale price as number),
+pickupName (seller/yard name where vehicle is located),
+pickupAddress, pickupCity, pickupState, pickupZip` },
+            { role: "user", content: `Extract from this document:\n\n${pdfData.text.slice(0, 6000)}` },
+          ],
+          response_format: { type: "json_object" },
+          temperature: 0.1,
+        });
+        parsed = JSON.parse(aiRes.choices[0].message.content);
+      } catch (aiErr) {
+        console.error("AI buyer receipt fallback failed:", aiErr.message);
+      }
+    }
+
+    // ── Customer lookup ─────────────────────────────────────────────────────
     let customerFound = null;
     if (parsed.customerName) {
       const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const name = parsed.customerName.trim();
-      // Build variants: original, hyphens→spaces, spaces→hyphens, strip punctuation
       const normalize = (s) => s.replace(/[-_,.']/g, " ").replace(/\s+/g, " ").trim();
       const variants = [...new Set([name, normalize(name), name.replace(/\s+/g, "-")])].map(esc);
       customerFound = await AddressBook.findOne({
         $or: variants.map(v => ({ companyName: { $regex: v, $options: "i" } })),
       });
-      // If still not found, try matching on first significant word(s)
       if (!customerFound) {
         const words = normalize(name).split(" ").filter(w => w.length > 3);
         if (words.length) {
@@ -181,6 +212,7 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
         }
       }
     }
+
     res.json({ ...parsed, customerFound: !!customerFound, customerRecord: customerFound || null });
   } catch (err) {
     console.error("Parse buyer receipt error:", err);
