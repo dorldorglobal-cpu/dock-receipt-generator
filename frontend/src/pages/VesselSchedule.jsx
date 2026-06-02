@@ -126,7 +126,7 @@ export default function VesselSchedule() {
     if (sallaumFile) fd.append("sallaum", sallaumFile);
     if (aclFile)     fd.append("acl",     aclFile);
     try {
-      const res  = await fetch("${API}/api/schedule/update-from-pdfs", { method:"POST", body:fd });
+      const res  = await fetch(`${API}/api/schedule/update-from-pdfs`, { method:"POST", body:fd });
       const data = await res.json();
       setResult(data);
       if (data.success) { fetchSchedule(); setSallaumFile(null); setAclFile(null); }

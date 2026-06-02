@@ -523,7 +523,7 @@ export default function CreateOrder() {
     setMessage("Saving order...");
     setDupOrderId(null);
 
-    const res = await fetch("${API}/api/orders", {
+    const res = await fetch(`${API}/api/orders`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(form),

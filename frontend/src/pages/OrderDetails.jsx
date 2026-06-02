@@ -200,7 +200,7 @@ export default function OrderDetails() {
 
   // Load vessel list once
   useEffect(() => {
-    fetch("${API}/api/schedule/vessels")
+    fetch(`${API}/api/schedule/vessels`)
       .then(r => r.json()).then(setScheduleVessels).catch(() => {});
   }, []);
 
@@ -983,7 +983,7 @@ export default function OrderDetails() {
       weightKgs: drWeightOverride || base.weightKgs || "",
     };
 
-    const res = await fetch("${API}/generate-pdf", {
+    const res = await fetch(`${API}/generate-pdf`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),
@@ -1043,7 +1043,7 @@ export default function OrderDetails() {
     try {
       const b64 = drSendModal.pdfBase64;
       await Promise.all(recipients.map(to =>
-        fetch("${API}/api/send-email", {
+        fetch(`${API}/api/send-email`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ to, subject: drSendSubject, body: drSendBody, pdfBase64: b64, pdfName: drSendModal.pdfName }),
@@ -1702,7 +1702,7 @@ export default function OrderDetails() {
               const createBillFromDoc = async (docLabel) => {
                 try {
                   setMessage(`Parsing ${docLabel}...`);
-                  const res = await fetch("${API}/api/expenses/parse-dispatch-url", {
+                  const res = await fetch(`${API}/api/expenses/parse-dispatch-url`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
@@ -3220,7 +3220,7 @@ export default function OrderDetails() {
                     onClick={async () => {
                       setBillParsing(true);
                       try {
-                        const r = await fetch("${API}/api/vendors/parse-document", {
+                        const r = await fetch(`${API}/api/vendors/parse-document`, {
                           method:  "POST",
                           headers: { "Content-Type": "application/json" },
                           body:    JSON.stringify({ text: billDocPaste }),

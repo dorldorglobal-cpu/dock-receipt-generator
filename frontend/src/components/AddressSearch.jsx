@@ -78,7 +78,7 @@ export default function AddressSearch({
       return;
     }
 
-    const res = await fetch("${API}/api/address-book", {
+    const res = await fetch(`${API}/api/address-book`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
