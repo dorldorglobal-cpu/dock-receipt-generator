@@ -855,6 +855,28 @@ export default function OrderDetails() {
       try { await fetchDriveFiles(); } catch {}
       try { await fetchOrder();      } catch {}
       setMessage(`✅ ${file.name} uploaded`);
+
+      // ── If Email doc, parse for PIN and auto-update order ────────────
+      if (label === "Email") {
+        try {
+          const parseFd = new FormData();
+          parseFd.append("file", file);
+          parseFd.append("message", "Extract the gate release PIN or pickup PIN number from this email. Return only the PIN number, nothing else. If not found return empty string.");
+          parseFd.append("history", "[]");
+          const parseRes = await fetch(`${API}/api/claude/upload-chat`, { method: "POST", body: parseFd });
+          const parseData = await parseRes.json();
+          const pin = parseData.reply?.trim().replace(/[^0-9A-Za-z]/g, "");
+          if (pin && pin.length >= 4 && pin.length <= 20) {
+            await fetch(`${API}/api/orders/${id}`, {
+              method: "PUT",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ pin }),
+            });
+            await fetchOrder();
+            setMessage(`✅ ${file.name} uploaded · PIN extracted: ${pin}`);
+          }
+        } catch {}
+      }
     } catch (e) {
       setMessage(`❌ Upload error: ${file.name}`);
     } finally {
