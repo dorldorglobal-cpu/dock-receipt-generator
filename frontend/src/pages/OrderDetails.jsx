@@ -885,19 +885,19 @@ export default function OrderDetails() {
     }
   };
 
-  // Delete a file from Drive and the order
-  const deleteFile = async (driveFileId, fileName) => {
-    if (!window.confirm(`Delete "${fileName}"?`)) return;
+  // Delete a file from Drive and the order. Pass silent=true to skip confirm + toast.
+  const deleteFile = async (driveFileId, fileName, silent = false) => {
+    if (!silent && !window.confirm(`Delete "${fileName}"?`)) return;
     try {
       const res = await fetch(
         `${API}/api/orders/${id}/files/${driveFileId}?name=${encodeURIComponent(fileName)}`,
         { method: "DELETE" }
       );
-      if (!res.ok) { setMessage("❌ Delete failed"); return; }
+      if (!res.ok) { if (!silent) setMessage("❌ Delete failed"); return; }
       await fetchDriveFiles();
-      setMessage(`✓ ${fileName} deleted`);
+      if (!silent) setMessage(`✓ ${fileName} deleted`);
     } catch (e) {
-      setMessage("❌ Delete failed");
+      if (!silent) setMessage("❌ Delete failed");
     }
   };
 
@@ -1010,6 +1010,15 @@ export default function OrderDetails() {
   const generateDockReceipt = async (overridePayload) => {
     setMessage("Generating Dock Receipt...");
     try {
+    // Delete any existing Dock Receipt files first to avoid duplicates
+    const oldDrs = driveFiles.filter(f => {
+      const match = (order.files || []).find(of => of.filename === f.name || of.originalName === f.name);
+      return (match?.label || "") === "Dock Receipt";
+    });
+    for (const old of oldDrs) {
+      await deleteFile(old.id, old.name, true).catch(() => {});
+    }
+
     const base = overridePayload || drPayload || order;
     const payload = {
       ...base,
@@ -1378,8 +1387,18 @@ export default function OrderDetails() {
           if (!b64) {
             try {
               setMessage("Generating DR…");
-              const res = await fetch(`${API}/api/orders/${id}/generate-dr`, { method: "POST",
-                headers: { "Content-Type": "application/json" }, body: JSON.stringify(base) });
+              const payload = {
+                ...base,
+                referenceNumber: base.refNumber || base.referenceNumber,
+                vehicleYearMakeModel: base.vehicleYearMakeModel || `${base.year||""} ${base.make||""} ${base.model||""}`.trim(),
+                portOfLoading: base.pol || base.portOfLoading || "",
+                portOfDischarge: base.pod || base.portOfDischarge || "",
+                weightKgs: drWeightOverride || base.weightKgs || "",
+              };
+              const res = await fetch(`${API}/generate-pdf`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(payload),
+              });
               if (!res.ok) throw new Error("DR generation failed");
               const buf = await res.arrayBuffer();
               b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
@@ -1824,11 +1843,16 @@ export default function OrderDetails() {
                         🧮 Create Bill from Rated Draft
                       </button>
                     )}
-                    <button onClick={() => deleteFile(f.id, f.name)}
-                      title="Delete file"
-                      style={{ background:"none", border:"none", cursor:"pointer",
-                        color:"#f87171", fontSize:15, padding:"2px 6px", borderRadius:4 }}>
-                      🗑
+                    <a href={f.webViewLink} download onClick={e => e.stopPropagation()}
+                      style={{ background:"none", border:"1px solid var(--border)", borderRadius:5,
+                        color:"var(--text-secondary)", fontSize:11, padding:"3px 9px",
+                        cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>
+                      ⬇ Download
+                    </a>
+                    <button onClick={e => { e.stopPropagation(); deleteFile(f.id, f.name); }}
+                      style={{ background:"none", border:"1px solid rgba(248,113,113,0.3)", borderRadius:5,
+                        cursor:"pointer", color:"#f87171", fontSize:11, padding:"3px 9px", whiteSpace:"nowrap" }}>
+                      🗑 Delete
                     </button>
                   </td>
                 </tr>
