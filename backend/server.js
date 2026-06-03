@@ -8,7 +8,6 @@ const fs = require("fs");
 const path = require("path");
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require("pdf-lib");
 const nodemailer = require("nodemailer");
-const { Resend } = require("resend");
 const pricingRoutes = require("./routes/pricing");
 const scheduleRoutes = require("./routes/scheduleRoutes");
 const ScheduleRow = require("./models/Schedule");
@@ -1140,21 +1139,27 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     const { to, subject, body, pdfBase64, pdfName } = req.body;
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
-    const resend = new Resend(process.env.RESEND_API_KEY);
-
-    const attachments = pdfBase64
-      ? [{ filename: pdfName || "document.pdf", content: pdfBase64 }]
-      : [];
-
-    const { error } = await resend.emails.send({
+    const payload = {
       from: "DDG OPS <onboarding@resend.dev>",
       to,
       subject,
       text: body || "",
-      attachments,
+    };
+    if (pdfBase64) {
+      payload.attachments = [{ filename: pdfName || "document.pdf", content: pdfBase64 }];
+    }
+
+    const resp = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
     });
 
-    if (error) throw new Error(error.message);
+    const result = await resp.json();
+    if (!resp.ok) throw new Error(result.message || result.error || `Resend error ${resp.status}`);
 
     res.json({ success: true });
   } catch (err) {
