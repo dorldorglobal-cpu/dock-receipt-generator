@@ -1081,13 +1081,29 @@ export default function OrderDetails() {
     setDrSending(true);
     try {
       const b64 = drSendModal.pdfBase64;
-      await Promise.all(recipients.map(to =>
-        fetch(`${API}/api/send-email`, {
+
+      const fetchWithTimeout = (url, opts, ms = 30000) => {
+        const ctrl = new AbortController();
+        const timer = setTimeout(() => ctrl.abort(), ms);
+        return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+      };
+
+      const results = await Promise.all(recipients.map(to =>
+        fetchWithTimeout(`${API}/api/send-email`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ to, subject: drSendSubject, body: drSendBody, pdfBase64: b64, pdfName: drSendModal.pdfName }),
         })
       ));
+
+      // Check for server-side errors
+      for (const r of results) {
+        if (!r.ok) {
+          const err = await r.json().catch(() => ({}));
+          throw new Error(err.error || `Server error ${r.status}`);
+        }
+      }
+
       // Log to timeline
       const sentTo = [drSendTo.trim(), drSendTrucker.trim()].filter(Boolean);
       const details = sentTo.map((e, i) => i === 0 ? `Customer: ${e}` : `Driver: ${e}`).join(" | ");
@@ -1100,9 +1116,11 @@ export default function OrderDetails() {
       setDrSendModal(null);
       setMessage("✅ DR sent successfully");
     } catch(e) {
-      setMessage("❌ Failed to send DR: " + e.message);
+      const msg = e.name === "AbortError" ? "Request timed out — check server logs" : e.message;
+      setMessage("❌ Failed to send DR: " + msg);
+    } finally {
+      setDrSending(false);
     }
-    setDrSending(false);
   };
 
   const generateInvoicePdf = async () => {
