@@ -8,6 +8,7 @@ const fs = require("fs");
 const path = require("path");
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require("pdf-lib");
 const nodemailer = require("nodemailer");
+const { Resend } = require("resend");
 const pricingRoutes = require("./routes/pricing");
 const scheduleRoutes = require("./routes/scheduleRoutes");
 const ScheduleRow = require("./models/Schedule");
@@ -1139,15 +1140,22 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     const { to, subject, body, pdfBase64, pdfName } = req.body;
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
-    const mailOpts = {
-      from: `DDG OPS <${process.env.GMAIL_USER}>`,
+    const resend = new Resend(process.env.RESEND_API_KEY);
+
+    const attachments = pdfBase64
+      ? [{ filename: pdfName || "document.pdf", content: pdfBase64 }]
+      : [];
+
+    const { error } = await resend.emails.send({
+      from: "DDG OPS <noreply@dorldorglobal.com>",
       to,
       subject,
       text: body || "",
-      attachments: pdfBase64 ? [{ filename: pdfName || "document.pdf", content: pdfBase64, encoding: "base64" }] : [],
-    };
+      attachments,
+    });
 
-    await mailer.sendMail(mailOpts);
+    if (error) throw new Error(error.message);
+
     res.json({ success: true });
   } catch (err) {
     console.error("Email error:", err);
