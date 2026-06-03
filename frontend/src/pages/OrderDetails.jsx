@@ -3583,7 +3583,15 @@ export default function OrderDetails() {
                 </button>
               </div>
             </div>
-            <iframe src={docPreview.url} style={{ flex: 1, border: "none", width: "100%" }} title={docPreview.name} />
+            <iframe
+              src={(() => {
+                const m = docPreview.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                return m ? `https://drive.google.com/file/d/${m[1]}/preview` : docPreview.url;
+              })()}
+              style={{ flex: 1, border: "none", width: "100%" }}
+              title={docPreview.name}
+              allow="autoplay"
+            />
           </div>
         </div>
       )}
