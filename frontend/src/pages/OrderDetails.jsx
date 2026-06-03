@@ -1300,8 +1300,8 @@ export default function OrderDetails() {
       {/* ── Page Header ─────────────────────────────── */}
       <div className="page-header">
         <div>
-          <h1>Order #{order.refNumber}</h1>
-          <p>{order.year} {order.make} {order.model} — {order.vin}</p>
+          <h1 style={{ fontSize: 32, fontWeight: 800 }}>Order #{order.refNumber}</h1>
+          <p style={{ color: "var(--text-primary)", fontWeight: 500 }}>{order.year} {order.make} {order.model} — {order.vin}</p>
           {order.voyageFolderName && (
             <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: 10 }}>
               <p style={{ margin: 0 }}>
