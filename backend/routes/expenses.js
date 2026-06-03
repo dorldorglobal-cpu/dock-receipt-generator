@@ -8,18 +8,13 @@ const Expense   = require("../models/Expense");
 const Order     = require("../models/Order");
 const { uploadBufferToDrive, getOrCreateFolder, deleteDriveFile } = require("../googleDrive");
 
-// ── Google Drive folder for expenses ─────────────────────────────────────────
-const EXPENSES_PARENT_FOLDER = process.env.EXPENSES_DRIVE_FOLDER_ID || "root";
-let _expensesFolderId = null;
-async function getExpensesFolderId() {
-  if (_expensesFolderId) return _expensesFolderId;
-  _expensesFolderId = await getOrCreateFolder("DDG Expenses", EXPENSES_PARENT_FOLDER);
-  return _expensesFolderId;
-}
+// ── Google Drive folders for expenses ────────────────────────────────────────
+const DRIVE_RECEIPTS_FOLDER = "1zS9GARKen1KMucPSlm7ags9lq5LhS_Fv"; // Website > Expenses > Receipts
+const DRIVE_BILLS_FOLDER    = "1QJuyyxY8Uumc7Zvhu1UUxqoTk67AbUTJ"; // Website > Expenses > Bills
 
 // ── Upload to Drive helper ────────────────────────────────────────────────────
-async function uploadFileToDriveExpenses(buffer, originalName, mimeType) {
-  const folderId = await getExpensesFolderId();
+async function uploadFileToDriveExpenses(buffer, originalName, mimeType, type = "bill") {
+  const folderId = type === "receipt" ? DRIVE_RECEIPTS_FOLDER : DRIVE_BILLS_FOLDER;
   const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const ext = path.extname(originalName) || ".pdf";
   const fileName = unique + ext;
@@ -1334,4 +1329,5 @@ router.delete("/:id", async (req, res) => {
 });
 
 module.exports = router;
+
 
