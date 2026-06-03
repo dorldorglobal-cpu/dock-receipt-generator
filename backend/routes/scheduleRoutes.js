@@ -805,64 +805,21 @@ router.post("/upload-acl-pdf", upload.single("schedule"), async (req, res) => {
   }
 });
 
-// ─── SALLAUM: Parse PDF directly ─────────────────────────────────────────────
-// Reads the Sallaum weekly schedule PDF and builds schedule rows from the text.
+// ─── SALLAUM: Hybrid PDF parser ───────────────────────────────────────────────
 // Strategy:
-//   1. Find voyage codes + vessel names from header section
-//   2. Parse POL rows (alternating Cut Off / ETA pairs per column)
-//   3. Parse POD rows (one ETA per column)
-//   4. Use sailing-time scoring to map voyage codes → visual columns
-//   5. Build schedule rows
-
-const SALLAUM_CROSSING = { // typical transit days from US POL departure to POD arrival
-  COTONOU: [24, 36], LOME: [24, 36], LAGOS: [22, 34],
-  DURBAN: [38, 55],  DAKAR: [15, 22], TEMA: [24, 36], ABIDJAN: [24, 36],
-};
+//   1. Parse PDF to get date columns (reliable — PDF has correct dates)
+//   2. Fetch website to get vessel names + port-call patterns (reliable routing)
+//   3. Match each website vessel to its PDF column via port-call Jaccard overlap
+//   4. Build rows: vessel/voyage from website, dates from PDF column
 
 async function parseSallaumPdfDirect(buffer) {
+  // ── Parse PDF date tables ────────────────────────────────────────────────────
   const { text } = await pdfParse(buffer);
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const VOYAGE_RE = /\b(2[0-9][A-Z]{2}\d{2})\b/g;
-
-  // ── 1. Collect voyage codes (in text order) and vessel names ────────────────
-  const voyageCodes = [];       // ordered as they appear in text
-  const vesselForVoyage = {};   // voyage -> vessel name
-
-  for (let i = 0; i < lines.length; i++) {
-    const codes = [...lines[i].matchAll(VOYAGE_RE)].map(m => m[1]);
-    for (const code of codes) {
-      if (!voyageCodes.includes(code)) {
-        voyageCodes.push(code);
-        // Vessel name is usually on the line immediately before the voyage code
-        for (let j = i - 1; j >= Math.max(0, i - 2); j--) {
-          const prev = lines[j];
-          if (/^[A-Z][a-z]/.test(prev) && !prev.match(VOYAGE_RE) && !/\d{3}\s*MT|^\d/.test(prev)) {
-            vesselForVoyage[code] = prev.toUpperCase();
-            break;
-          }
-        }
-      }
-    }
-  }
-
-  // Match unassigned vessel names to unmatched voyage codes
-  const usedNames = new Set(Object.values(vesselForVoyage));
-  const orphanNames = [];
-  for (const line of lines) {
-    if (/^[A-Z][a-z]/.test(line) && !line.match(VOYAGE_RE) && !/\d{3}\s*MT|MT$|^\d|8\.10|5\.15/i.test(line)
-        && !usedNames.has(line.toUpperCase()) && !orphanNames.includes(line.toUpperCase())) {
-      orphanNames.push(line.toUpperCase());
-    }
-  }
-  const unmatchedCodes = voyageCodes.filter(c => !vesselForVoyage[c]);
-  unmatchedCodes.forEach((c, i) => { if (orphanNames[i]) vesselForVoyage[c] = orphanNames[i]; });
-
-  // ── 2. Parse POL rows ───────────────────────────────────────────────────────
-  const POL_RE = /^(Freeport|Jacksonville|Baltimore\s+(?:Tradepoint|South\s+Locus\s+Point)|Brunswick\s+GA|NORAD\s+Davisville)/i;
   const TOKEN_RE = /\b(\d{1,2}-[A-Za-z]{3}|N\/A)\b/g;
 
-  const polData = {};   // pol -> [{cutoff, sail}] per visual column
-  const podData = {};   // pod -> [arrival] per visual column
+  const polData = {};   // pol -> [{cutoff, sail}] indexed by visual column
+  const podData = {};   // pod -> [arrival] indexed by visual column
   let mode = null;
 
   for (const line of lines) {
@@ -871,85 +828,155 @@ async function parseSallaumPdfDirect(buffer) {
     if (!mode) continue;
 
     if (mode === "POL") {
-      const m = line.match(POL_RE);
+      const m = line.match(/^(Freeport|Jacksonville|Baltimore[^\d]*|Brunswick\s+GA|NORAD\s+Davisville)/i);
       if (!m) continue;
       const pol = normalizePolPod(m[0]);
       const tokens = [...line.matchAll(TOKEN_RE)].map(t => t[1]);
-      polData[pol] = [];
+      // Store all columns — if same POL appears twice (e.g. two Baltimore rows) merge by taking non-empty
+      const newPairs = [];
       for (let i = 0; i + 1 < tokens.length; i += 2) {
-        polData[pol].push({
+        newPairs.push({
           cutoff: tokens[i]   === "N/A" ? "" : parseDateStr(tokens[i]),
           sail:   tokens[i+1] === "N/A" ? "" : parseDateStr(tokens[i+1]),
         });
       }
+      if (!polData[pol]) {
+        polData[pol] = newPairs;
+      } else {
+        // Merge: prefer non-empty values from either row
+        for (let c = 0; c < Math.max(polData[pol].length, newPairs.length); c++) {
+          const existing = polData[pol][c] || { cutoff: "", sail: "" };
+          const incoming = newPairs[c]     || { cutoff: "", sail: "" };
+          polData[pol][c] = {
+            cutoff: existing.cutoff || incoming.cutoff,
+            sail:   existing.sail   || incoming.sail,
+          };
+        }
+      }
     }
 
     if (mode === "POD") {
-      const podMatch = line.match(/^(Cotonou|Lome|Lagos|Durban|Dakar|Tema|Abidjan)/i);
-      if (!podMatch) continue;
-      const pod = normalizePolPod(podMatch[0]);
+      const pm = line.match(/^(Cotonou|Lome|Lagos|Durban|Dakar|Tema|Abidjan)/i);
+      if (!pm) continue;
+      const pod = normalizePolPod(pm[0]);
       const tokens = [...line.matchAll(TOKEN_RE)].map(t => t[1]);
       podData[pod] = tokens.map(t => t === "N/A" ? "" : parseDateStr(t));
     }
   }
 
-  const numCols = Math.max(...Object.values(polData).map(a => a.length), voyageCodes.length);
+  const numCols = Math.max(...Object.values(polData).map(a => a.length));
+  if (numCols === 0) throw new Error("No POL date columns found in PDF");
 
-  // ── 3. Score each (voyage-code, column) assignment ──────────────────────────
-  function scoreAssignment(col) {
-    let score = 0;
-    for (const [pol, pairs] of Object.entries(polData)) {
-      const pair = pairs[col];
-      if (!pair || !pair.sail) continue;
-      const sailMs = new Date(pair.sail).getTime();
-      if (isNaN(sailMs)) continue;
-      for (const [pod, etas] of Object.entries(podData)) {
-        const eta = etas[col];
-        if (!eta) continue;
-        const etaMs = new Date(eta).getTime();
-        if (isNaN(etaMs)) continue;
-        const days = (etaMs - sailMs) / 86400000;
-        const [lo, hi] = SALLAUM_CROSSING[pod.toUpperCase()] || [20, 40];
-        score += (days >= lo - 3 && days <= hi + 3) ? 1 : -1;
+  // ── Build port-call set per PDF column ──────────────────────────────────────
+  const colPolSet = {}; // col -> Set<pol>
+  for (const [pol, pairs] of Object.entries(polData)) {
+    for (let c = 0; c < numCols; c++) {
+      if (pairs[c] && pairs[c].sail) {
+        if (!colPolSet[c]) colPolSet[c] = new Set();
+        colPolSet[c].add(pol);
       }
     }
-    return score;
   }
 
-  // Greedy assignment: best-scoring unused column per voyage code
-  const assignedCol = {};   // voyageCode -> column index
-  const usedCols = new Set();
-
-  for (const code of voyageCodes) {
-    let best = -1, bestScore = -Infinity;
-    for (let c = 0; c < numCols; c++) {
-      if (usedCols.has(c)) continue;
-      const s = scoreAssignment(c);
-      if (s > bestScore) { bestScore = s; best = c; }
-    }
-    if (best !== -1) { assignedCol[code] = best; usedCols.add(best); }
+  // ── Fetch website for vessel names + routing ─────────────────────────────────
+  let websiteRows = [];
+  try { websiteRows = await fetchAndParseSallaum(); } catch (e) {
+    console.warn("[Sallaum hybrid] website fetch failed:", e.message);
   }
 
-  // ── 4. Build schedule rows ───────────────────────────────────────────────────
   const scheduleRows = [];
   const now = new Date();
 
-  for (const [code, col] of Object.entries(assignedCol)) {
-    const vessel = vesselForVoyage[code] || code;
-    for (const [pol, pairs] of Object.entries(polData)) {
-      const pair = pairs[col];
-      if (!pair || (!pair.cutoff && !pair.sail)) continue;
-      for (const [pod, etas] of Object.entries(podData)) {
-        const arrival = etas[col] || "";
-        if (!arrival) continue;
-        scheduleRows.push({ carrier: "SALLAUM", vessel, voyage: code, pol, pod,
-          cutoffDate: pair.cutoff || "", sailDate: pair.sail || "",
-          arrivalDate: arrival, updatedAt: now });
+  if (websiteRows.length > 0) {
+    // Build per-vessel port-call sets from website
+    const vesselMeta = {}; // "vessel|voyage" -> { vessel, voyage, pols: Set }
+    for (const r of websiteRows) {
+      const key = `${r.vessel}|${r.voyage}`;
+      if (!vesselMeta[key]) vesselMeta[key] = { vessel: r.vessel, voyage: r.voyage, pols: new Set() };
+      vesselMeta[key].pols.add(r.pol);
+    }
+
+    // Match each website vessel to a PDF column by Jaccard port-call similarity
+    const usedCols = new Set();
+    const vesselToCol = {};
+    // Sort by descending port-call set size so vessels with distinct patterns get matched first
+    const sorted = Object.entries(vesselMeta).sort((a, b) => b[1].pols.size - a[1].pols.size);
+    for (const [key, meta] of sorted) {
+      let bestCol = -1, bestScore = -1;
+      for (let c = 0; c < numCols; c++) {
+        if (usedCols.has(c)) continue;
+        const pdfPols = colPolSet[c] || new Set();
+        const intersection = [...meta.pols].filter(p => pdfPols.has(p)).length;
+        const union = new Set([...meta.pols, ...pdfPols]).size;
+        const score = union > 0 ? intersection / union : 0;
+        if (score > bestScore) { bestScore = score; bestCol = c; }
+      }
+      if (bestCol !== -1) { vesselToCol[key] = bestCol; usedCols.add(bestCol); }
+    }
+
+    // Build rows: vessel/voyage from website, dates from matched PDF column
+    for (const [key, col] of Object.entries(vesselToCol)) {
+      const { vessel, voyage } = vesselMeta[key];
+      for (const [pol, pairs] of Object.entries(polData)) {
+        const pair = pairs[col];
+        if (!pair || (!pair.cutoff && !pair.sail)) continue;
+        for (const [pod, etas] of Object.entries(podData)) {
+          const arrival = etas[col] || "";
+          if (!arrival) continue;
+          scheduleRows.push({ carrier: "SALLAUM", vessel, voyage, pol, pod,
+            cutoffDate: pair.cutoff || "", sailDate: pair.sail || "",
+            arrivalDate: arrival, updatedAt: now });
+        }
+      }
+    }
+    console.log(`[Sallaum hybrid] matched ${Object.keys(vesselToCol).length} vessels to columns | rows: ${scheduleRows.length}`);
+  }
+
+  // Fallback if website unavailable: extract voyage codes from PDF text
+  if (scheduleRows.length === 0) {
+    console.warn("[Sallaum hybrid] falling back to PDF-only mode");
+    const VOYAGE_RE = /\b(2[0-9][A-Z]{2}\d{2})\b/g;
+    const voyageCodes = [];
+    const vesselForVoyage = {};
+    for (let i = 0; i < lines.length; i++) {
+      for (const m of lines[i].matchAll(VOYAGE_RE)) {
+        const code = m[1];
+        if (!voyageCodes.includes(code)) {
+          voyageCodes.push(code);
+          for (let j = i - 1; j >= Math.max(0, i - 2); j--) {
+            const prev = lines[j];
+            if (/^[A-Z][a-z]/.test(prev) && !prev.match(VOYAGE_RE) && !/\d{3}\s*MT|^\d/.test(prev)) {
+              vesselForVoyage[code] = prev.toUpperCase(); break;
+            }
+          }
+        }
+      }
+    }
+    // Assign codes to columns in chronological order (sort columns by earliest sail date)
+    const colFirstSail = {};
+    for (let c = 0; c < numCols; c++) {
+      const sails = Object.values(polData).map(p => p[c]?.sail).filter(Boolean).map(d => new Date(d).getTime()).filter(n => !isNaN(n));
+      colFirstSail[c] = sails.length ? Math.min(...sails) : Infinity;
+    }
+    const sortedCols = Array.from({ length: numCols }, (_, i) => i).sort((a, b) => colFirstSail[a] - colFirstSail[b]);
+    const sortedCodes = voyageCodes.slice(0, sortedCols.length);
+    for (let i = 0; i < sortedCodes.length; i++) {
+      const code = sortedCodes[i], col = sortedCols[i];
+      const vessel = vesselForVoyage[code] || code;
+      for (const [pol, pairs] of Object.entries(polData)) {
+        const pair = pairs[col];
+        if (!pair || (!pair.cutoff && !pair.sail)) continue;
+        for (const [pod, etas] of Object.entries(podData)) {
+          const arrival = etas[col] || "";
+          if (!arrival) continue;
+          scheduleRows.push({ carrier: "SALLAUM", vessel, voyage: code, pol, pod,
+            cutoffDate: pair.cutoff || "", sailDate: pair.sail || "",
+            arrivalDate: arrival, updatedAt: now });
+        }
       }
     }
   }
 
-  console.log(`[Sallaum PDF] vessels: ${voyageCodes.join(", ")} | rows: ${scheduleRows.length}`);
   return scheduleRows;
 }
 
