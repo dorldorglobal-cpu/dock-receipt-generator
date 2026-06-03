@@ -1140,7 +1140,7 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
     const payload = {
-      from: "DDG OPS <onboarding@resend.dev>",
+      from: "Dor Ldor Global <onboarding@resend.dev>",
       to,
       subject,
       text: body || "",

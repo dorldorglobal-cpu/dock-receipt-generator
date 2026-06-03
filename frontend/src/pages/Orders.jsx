@@ -144,7 +144,7 @@ export default function Orders() {
             const sc = statusStyle(o.status);
             return (
               <tr key={o._id} onClick={() => navigate(`/orders/${o._id}`)} style={{ cursor: "pointer" }}>
-                <td><strong>{o.refNumber}</strong></td>
+                <td><strong style={{ fontSize: 16 }}>{o.refNumber}</strong></td>
                 <td>
                   <div>{o.customerName}</div>
                   <small>{o.customerPhone}</small>
@@ -159,7 +159,10 @@ export default function Orders() {
                     </div>
                   )}
                 </td>
-                <td>{o.year} {o.make} {o.model}<br/><small>{o.vin}</small></td>
+                <td>
+                  <div style={{ color: "var(--text-primary)" }}>{o.year} {o.make} {o.model}</div>
+                  <small style={{ color: "var(--text-primary)", opacity: 0.7 }}>{o.vin}</small>
+                </td>
                 <td>{o.pol} → {o.pod}</td>
                 <td>
                   <div style={{ fontSize: 13 }}>{o.vessel || "—"}</div>

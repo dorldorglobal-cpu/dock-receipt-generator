@@ -170,6 +170,7 @@ export default function OrderDetails() {
   const [driveFiles,        setDriveFiles]        = useState([]);
   const [uploadingLabels,   setUploadingLabels]   = useState({});   // { AES: 1, Dispatch: 0, ... }
   const [draggingLabel,     setDraggingLabel]     = useState(null);
+  const [docPreview,        setDocPreview]        = useState(null); // { name, url }
   const [editingFeeKey,     setEditingFeeKey]     = useState(null); // key of fee row being inline-edited
   const [editingInternalRow, setEditingInternalRow] = useState(null); // "towing" | "ocean" | null
   const [oceanEditForm,     setOceanEditForm]     = useState({ pol:"", pod:"", shippingLine:"", sell:"", cost:"", category:"1" });
@@ -1777,7 +1778,8 @@ export default function OrderDetails() {
               };
 
               return (
-                <tr key={f.id}>
+                <tr key={f.id} onClick={() => setDocPreview({ name: f.name, url: f.webViewLink })}
+                  style={{ cursor: "pointer" }}>
                   <td>{f.name}</td>
                   <td>
                     <span style={{ fontSize:11, padding:"2px 7px", borderRadius:5,
@@ -1788,7 +1790,7 @@ export default function OrderDetails() {
                     </span>
                   </td>
                   <td>{f.modifiedTime ? new Date(f.modifiedTime).toLocaleString() : ""}</td>
-                  <td><a href={f.webViewLink} target="_blank" rel="noreferrer">View</a></td>
+                  <td><a href={f.webViewLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>↗ Open</a></td>
                   <td style={{ display:"flex", gap:6, alignItems:"center" }}>
                     {isDispatch && (
                       <button
@@ -3551,6 +3553,37 @@ export default function OrderDetails() {
                 {invSending ? "Sending…" : "Send Invoice"}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Doc Preview Popup ── */}
+      {docPreview && (
+        <div className="modal-backdrop" onClick={() => setDocPreview(null)}
+          style={{ zIndex: 1000 }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{
+              background: "var(--bg-card)", borderRadius: 12, overflow: "hidden",
+              width: "80vw", height: "88vh", display: "flex", flexDirection: "column",
+              boxShadow: "0 24px 80px rgba(0,0,0,0.6)",
+            }}>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "10px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {docPreview.name}
+              </span>
+              <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+                <a href={docPreview.url} target="_blank" rel="noreferrer"
+                  style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>
+                  ↗ Open in new tab
+                </a>
+                <button onClick={() => setDocPreview(null)}
+                  style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>
+                  ✕
+                </button>
+              </div>
+            </div>
+            <iframe src={docPreview.url} style={{ flex: 1, border: "none", width: "100%" }} title={docPreview.name} />
           </div>
         </div>
       )}
