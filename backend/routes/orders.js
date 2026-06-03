@@ -119,13 +119,16 @@ function applyRoroDelivery(result) {
 }
 
 const FOLDERS = {
-  OUTSTANDING: "1u0RFpsp628DzeLJEQ7yPN1hTBN1a0YDk",
-  WAITING_TO_SAIL: "1J-x7kvr8fBtcn1-CtIr5GGdxQ0GzvzoF",
-  SAILED: "1vpvhS5q8LxAt5h6GA523Yqv9XOXspk0T",
-  COMPLETED: "1jUEPREQaGE8_hfsDOTfYYwTbTDo1jh64",
+  // ── Dor L'dor Global > Website ───────────────────────────────────────────
+  OUTSTANDING:     "1H1z3qz7Q9evi0RI3Bp2LHcVbIi72oAuj", // New Orders
+  DISPATCHED:      "16p_LdTlIAa_Je8VHwKsatVjJuI_mpQPy", // Dispatched
+  WAITING_TO_SAIL: "1l2UlM3T8CMWzA0koiRWUuexxHI7U694X", // Waiting to Sail
+  SAILED:          "1GBMhn6FMLSWUVGrt4GVDD8mEqHpEcuJd", // Sailed
+  ARRIVED:         "1vKMq92Xg3Fgel7m2eNqLtLM-WdCb8RbD", // Arrived
+  COMPLETED:       "19cOmHNa0s7BewQ7wqdXPtLcGwx1pjklC", // Completed
 
-  ACL: "14OZ-HaLglmmpbL-heSOciJ5Q5kx41VTv",
-  SALLAUM: "1Q_dcGLipM5X5l_3k4tLBiqwcoYcPabe8",
+  ACL:     "12d_VzDnu63UjNIUoX01EwLCrbKwa_QtK", // Waiting to Sail > ACL
+  SALLAUM: "1ieF0GqNCjWo-nuiVEY3Ot69_dP7gQm6i", // Waiting to Sail > SALLAUM
 };
 
 async function generateRefNumber() {
@@ -149,9 +152,13 @@ router.get("/next-ref", async (req, res) => {
 });
 
 function folderForStatus(status) {
-  if (status === "Waiting to Sail") return FOLDERS.WAITING_TO_SAIL;
-  if (status === "Completed") return FOLDERS.COMPLETED;
-  if (["Sailed", "Arrived", "Paid"].includes(status)) return FOLDERS.SAILED;
+  if (status === "New Order")        return FOLDERS.OUTSTANDING;
+  if (status === "Dispatched")       return FOLDERS.DISPATCHED;
+  if (status === "Waiting to Sail")  return FOLDERS.WAITING_TO_SAIL;
+  if (status === "Sailed")           return FOLDERS.SAILED;
+  if (status === "Arrived")          return FOLDERS.ARRIVED;
+  if (status === "Completed")        return FOLDERS.COMPLETED;
+  if (status === "Paid")             return FOLDERS.COMPLETED;
   return FOLDERS.OUTSTANDING;
 }
 
