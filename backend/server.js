@@ -1147,7 +1147,7 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
       : [];
 
     const { error } = await resend.emails.send({
-      from: "DDG OPS <noreply@dorldorglobal.com>",
+      from: "DDG OPS <onboarding@resend.dev>",
       to,
       subject,
       text: body || "",
