@@ -868,6 +868,17 @@ app.post("/generate-pdf", async (req, res) => {
 
     const { height } = page.getSize();
 
+    // ── Erase the vertical divider between "NO. OF PACKAGES" and "DELIVERY ORDER"
+    // columns so the YMM/VIN text has full width without a line cutting through it.
+    page.drawRectangle({
+      x: 193,
+      y: height - 563,
+      width: 7,
+      height: 233,
+      color: rgb(1, 1, 1),
+      borderWidth: 0,
+    });
+
     function y(topY) {
       return height - topY;
     }
