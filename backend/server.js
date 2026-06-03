@@ -1169,7 +1169,7 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     const mimeLines = [
       `From: ${from}`,
       `To: ${to}`,
-      `Subject: ${subject}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
       `MIME-Version: 1.0`,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,
       ``,

@@ -1074,7 +1074,7 @@ export default function OrderDetails() {
     setDrSendModal({ pdfBase64: base64, pdfName });
     setDrSendTo(order.customerEmail || "");
     setDrSendTrucker("");
-    setDrSendSubject(`Dock Receipt — ${order.refNumber || ""} | ${payload.vehicleYearMakeModel || ""} | VIN: ${payload.vin || order.vin || ""}`);
+    setDrSendSubject(`Dock Receipt - ${order.refNumber || ""} | ${payload.vehicleYearMakeModel || ""} | VIN: ${payload.vin || order.vin || ""}`);
     setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${payload.vin || order.vin || ""}\nVessel: ${payload.vessel || ""} | Voyage: ${payload.voyage || ""}\nPort of Loading: ${payload.portOfLoading || ""}\n\nRegards,\nDDG OPS`);
 
     setMessage("Dock Receipt generated & uploaded");
@@ -1412,7 +1412,7 @@ export default function OrderDetails() {
           setDrSendModal({ pdfBase64: b64, pdfName });
           setDrSendTo(order.customerEmail || "");
           setDrSendTrucker("");
-          setDrSendSubject(`Dock Receipt — ${order.refNumber||""} | ${ymm} | VIN: ${vin}`);
+          setDrSendSubject(`Dock Receipt - ${order.refNumber||""} | ${ymm} | VIN: ${vin}`);
           setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${vin}\nVessel: ${base.vessel||""} | Voyage: ${base.voyage||""}\nPort of Loading: ${base.pol||base.portOfLoading||""}\n\nRegards,\nDor Ldor Global`);
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
           ✉️ Send DR
