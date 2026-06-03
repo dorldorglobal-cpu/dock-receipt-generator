@@ -362,10 +362,10 @@ router.post("/", async (req, res) => {
       // Keep counter in sync if manual number is higher
       const num = parseInt(refNumber);
       if (!isNaN(num)) {
-        await Counter.findByIdAndUpdate("orderRef",
-          [{ $set: { seq: { $max: ["$seq", num] } } }],
-          { upsert: true }
-        );
+        const current = await Counter.findById("orderRef");
+        if (!current || current.seq < num) {
+          await Counter.findByIdAndUpdate("orderRef", { $set: { seq: num } }, { upsert: true });
+        }
       }
     } else {
       refNumber = await generateRefNumber();
