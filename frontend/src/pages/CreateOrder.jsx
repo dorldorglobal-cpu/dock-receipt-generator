@@ -313,10 +313,10 @@ export default function CreateOrder() {
 
   // ── Nearest warehouse by pickup state ────────────────────────────────────
   const WH_LIST = [
-    { name: "EZ CARGO",             city: "Old Bridge", state: "NJ", lat: 40.45, lng: -74.32 },
-    { name: "SAVANNAH AUTO EXPORT", city: "Savannah",   state: "GA", lat: 32.08, lng: -81.10 },
-    { name: "ISHIP",                city: "Houston",    state: "TX", lat: 29.76, lng: -95.37 },
-    { name: "CEDARS EXPRESS",       city: "Compton",    state: "CA", lat: 33.90, lng: -118.22 },
+    { name: "EZ CARGO",             address: "3220 Bordentown Avenue",   city: "Old Bridge",  state: "NJ", zip: "08857", lat: 40.45, lng: -74.32 },
+    { name: "SAVANNAH AUTO EXPORT", address: "109A Barrow Dr",           city: "Pooler",      state: "GA", zip: "31322", lat: 32.08, lng: -81.10 },
+    { name: "ISHIP",                address: "9324 Tavenor Ln",          city: "Houston",     state: "TX", zip: "77075", lat: 29.76, lng: -95.37 },
+    { name: "CEDARS EXPRESS",       address: "19070 S Reyes Ave",        city: "Compton",     state: "CA", zip: "90221", lat: 33.90, lng: -118.22 },
   ];
   const WH_CENTROIDS = {
     AL:[32.80,-86.79],AZ:[34.05,-111.09],AR:[34.97,-92.37],CA:[36.78,-119.42],
@@ -1065,18 +1065,68 @@ export default function CreateOrder() {
 
           <AddressSearch
             label="Pickup Location"
-            type="auction"
             value={form.pickupLocation}
             onSelect={selectPickup}
           />
 
-
           <AddressSearch
             label="Delivery / Port Location"
-            type="port"
             value={form.deliveryLocation}
             onSelect={selectDelivery}
           />
+
+          {/* ── Warehouse Picker (Container orders only) ──────────────── */}
+          {form.requestType === "Container" && (
+            <div style={{ marginBottom: 16 }}>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)",
+                textTransform: "uppercase", letterSpacing: "0.07em", marginBottom: 8 }}>
+                🏭 Select Warehouse (Delivery Location)
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(220px, 1fr))", gap: 10 }}>
+                {WH_LIST.map(wh => {
+                  const isSelected = form.deliveryName === wh.name;
+                  return (
+                    <div
+                      key={wh.name}
+                      onClick={() => setForm(prev => ({
+                        ...prev,
+                        deliveryLocation: wh.name,
+                        deliveryName:     wh.name,
+                        deliveryAddress:  wh.address,
+                        deliveryCity:     wh.city,
+                        deliveryState:    wh.state,
+                        deliveryZip:      wh.zip,
+                      }))}
+                      style={{
+                        background: isSelected ? "rgba(16,185,129,0.15)" : "var(--bg-panel)",
+                        border: `1.5px solid ${isSelected ? "rgba(16,185,129,0.6)" : "var(--border)"}`,
+                        borderRadius: 8, padding: "10px 14px", cursor: "pointer",
+                        transition: "all 0.15s",
+                      }}
+                    >
+                      <div style={{ fontWeight: 700, fontSize: 13, color: isSelected ? "#34d399" : "var(--text-primary)", marginBottom: 3 }}>
+                        {wh.name}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--text-muted)", lineHeight: 1.5 }}>
+                        {wh.address}<br />{wh.city}, {wh.state} {wh.zip}
+                      </div>
+                      {isSelected && (
+                        <div style={{ marginTop: 6, fontSize: 11, color: "#34d399", fontWeight: 600 }}>✓ Selected</div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              {form.deliveryName && WH_LIST.some(w => w.name === form.deliveryName) && (
+                <button type="button" onClick={() => setForm(prev => ({
+                  ...prev, deliveryLocation: "", deliveryName: "", deliveryAddress: "", deliveryCity: "", deliveryState: "", deliveryZip: "",
+                }))}
+                  style={{ marginTop: 8, fontSize: 11, color: "var(--text-muted)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                  Clear selection
+                </button>
+              )}
+            </div>
+          )}
 
           <div className="form-grid">
             <label>
@@ -1262,7 +1312,7 @@ export default function CreateOrder() {
                       <div style={{ fontSize: 11, color: "var(--text-muted)", marginBottom: 2 }}>NEAREST WAREHOUSE</div>
                       <strong style={{ fontSize: 14, color: "#34d399" }}>{wh.name}</strong>
                       <span style={{ fontSize: 11, color: "var(--text-muted)", marginLeft: 8 }}>
-                        {wh.city}, {wh.state} — {wh.miles} mi
+                        {wh.address}, {wh.city}, {wh.state} {wh.zip} — {wh.miles} mi
                       </span>
                     </div>
                   </div>

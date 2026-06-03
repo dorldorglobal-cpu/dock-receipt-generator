@@ -23,6 +23,9 @@ const upload = multer({ storage: multer.memoryStorage() });
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
+
+// ── Health check (used by keep-alive self-ping) ──
+app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 app.use("/api/pricing", pricingRoutes);
 app.use("/api/schedule", scheduleRoutes);
 
@@ -1164,6 +1167,15 @@ mongoose
 
       // Then refresh every 24 hours
       setInterval(autoRefreshSallaumSchedule, 24 * 60 * 60 * 1000);
+
+      // ── Keep-alive ping (prevents Render free tier from sleeping) ──
+      // Pings the server's own health endpoint every 14 minutes
+      const SELF_URL = process.env.RENDER_EXTERNAL_URL || "http://localhost:4000";
+      setInterval(() => {
+        fetch(`${SELF_URL}/api/health`)
+          .then(() => console.log("[keep-alive] ping ok"))
+          .catch(err => console.warn("[keep-alive] ping failed:", err.message));
+      }, 14 * 60 * 1000);
     });
   })
   .catch((err) => {
