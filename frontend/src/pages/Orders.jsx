@@ -144,7 +144,7 @@ export default function Orders() {
             const sc = statusStyle(o.status);
             return (
               <tr key={o._id} onClick={() => navigate(`/orders/${o._id}`)} style={{ cursor: "pointer" }}>
-                <td><strong style={{ fontSize: 16 }}>{o.refNumber}</strong></td>
+                <td><strong style={{ fontSize: 22, letterSpacing: "0.01em" }}>{o.refNumber}</strong></td>
                 <td>
                   <div>{o.customerName}</div>
                   <small>{o.customerPhone}</small>

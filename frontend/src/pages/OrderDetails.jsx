@@ -1368,17 +1368,33 @@ export default function OrderDetails() {
             border: "none", background: "#059669", color: "white", cursor: "pointer", fontSize: "13px" }}>
           Generate Dock Receipt
         </button>
-        <button onClick={() => {
-          if (!lastDrBase64) return alert("Generate the DR first, then use Send DR to email it.");
+        <button onClick={async () => {
           const base = drPayload || order;
           const ymm = base.vehicleYearMakeModel || `${base.year||""} ${base.make||""} ${base.model||""}`.trim();
           const vin = base.vin || order.vin || "";
           const pdfName = `${order.refNumber||"dock-receipt"} DR.pdf`;
-          setDrSendModal({ pdfBase64: lastDrBase64, pdfName });
+          // Auto-generate DR silently if not yet cached
+          let b64 = lastDrBase64;
+          if (!b64) {
+            try {
+              setMessage("Generating DR…");
+              const res = await fetch(`${API}/api/orders/${id}/generate-dr`, { method: "POST",
+                headers: { "Content-Type": "application/json" }, body: JSON.stringify(base) });
+              if (!res.ok) throw new Error("DR generation failed");
+              const buf = await res.arrayBuffer();
+              b64 = btoa(String.fromCharCode(...new Uint8Array(buf)));
+              setLastDrBase64(b64);
+              setMessage("");
+            } catch(e) {
+              setMessage("❌ Could not generate DR: " + e.message);
+              return;
+            }
+          }
+          setDrSendModal({ pdfBase64: b64, pdfName });
           setDrSendTo(order.customerEmail || "");
           setDrSendTrucker("");
           setDrSendSubject(`Dock Receipt — ${order.refNumber||""} | ${ymm} | VIN: ${vin}`);
-          setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${vin}\nVessel: ${base.vessel||""} | Voyage: ${base.voyage||""}\nPort of Loading: ${base.pol||base.portOfLoading||""}\n\nRegards,\nDDG OPS`);
+          setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${vin}\nVessel: ${base.vessel||""} | Voyage: ${base.voyage||""}\nPort of Loading: ${base.pol||base.portOfLoading||""}\n\nRegards,\nDor Ldor Global`);
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
           ✉️ Send DR
         </button>
