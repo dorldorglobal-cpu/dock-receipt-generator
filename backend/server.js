@@ -1133,33 +1133,72 @@ mailer.verify(err => {
   else console.log("[Email] SMTP ready");
 });
 
+// ── Gmail REST API helper ─────────────────────────────────────────────────────
+async function getGmailAccessToken() {
+  const resp = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      client_id:     process.env.GMAIL_CLIENT_ID,
+      client_secret: process.env.GMAIL_CLIENT_SECRET,
+      refresh_token: process.env.GMAIL_REFRESH_TOKEN,
+      grant_type:    "refresh_token",
+    }),
+  });
+  const data = await resp.json();
+  if (!resp.ok) throw new Error(data.error_description || data.error || "Failed to get Gmail access token");
+  return data.access_token;
+}
+
 // POST /api/send-email  { to, subject, body, pdfBase64, pdfName }
 app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) => {
   try {
     const { to, subject, body, pdfBase64, pdfName } = req.body;
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
-    const payload = {
-      from: "Dor Ldor Global <onboarding@resend.dev>",
-      to,
-      subject,
-      text: body || "",
-    };
+    const accessToken = await getGmailAccessToken();
+    const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+
+    // Build MIME message
+    const boundary = "DDG_BOUNDARY_" + Date.now();
+    const mimeLines = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: ${subject}`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      ``,
+      body || "",
+    ];
+
     if (pdfBase64) {
-      payload.attachments = [{ filename: pdfName || "document.pdf", content: pdfBase64 }];
+      mimeLines.push(
+        `--${boundary}`,
+        `Content-Type: application/pdf; name="${pdfName || "document.pdf"}"`,
+        `Content-Transfer-Encoding: base64`,
+        `Content-Disposition: attachment; filename="${pdfName || "document.pdf"}"`,
+        ``,
+        pdfBase64,
+      );
     }
 
-    const resp = await fetch("https://api.resend.com/emails", {
+    mimeLines.push(`--${boundary}--`);
+    const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+
+    const gmailResp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.RESEND_API_KEY}`,
+        "Authorization": `Bearer ${accessToken}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(payload),
+      body: JSON.stringify({ raw }),
     });
 
-    const result = await resp.json();
-    if (!resp.ok) throw new Error(result.message || result.error || `Resend error ${resp.status}`);
+    const result = await gmailResp.json();
+    if (!gmailResp.ok) throw new Error(result.error?.message || `Gmail API error ${gmailResp.status}`);
 
     res.json({ success: true });
   } catch (err) {
