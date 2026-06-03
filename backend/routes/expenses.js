@@ -13,13 +13,21 @@ const DRIVE_RECEIPTS_FOLDER = "1zS9GARKen1KMucPSlm7ags9lq5LhS_Fv"; // Website > 
 const DRIVE_BILLS_FOLDER    = "1QJuyyxY8Uumc7Zvhu1UUxqoTk67AbUTJ"; // Website > Expenses > Bills
 
 // ── Upload to Drive helper ────────────────────────────────────────────────────
-async function uploadFileToDriveExpenses(buffer, originalName, mimeType, type = "bill") {
-  const folderId = type === "receipt" ? DRIVE_RECEIPTS_FOLDER : DRIVE_BILLS_FOLDER;
+// If tied to an order, upload to that order's Drive folder; else use Expenses fallback
+async function uploadFileToDriveExpenses(buffer, originalName, mimeType, type = "bill", orderId = null) {
+  let folderId = type === "receipt" ? DRIVE_RECEIPTS_FOLDER : DRIVE_BILLS_FOLDER;
+
+  if (orderId) {
+    try {
+      const order = await Order.findById(orderId).select("driveFolderId").lean();
+      if (order?.driveFolderId) folderId = order.driveFolderId;
+    } catch {}
+  }
+
   const unique = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const ext = path.extname(originalName) || ".pdf";
   const fileName = unique + ext;
-  const result = await uploadBufferToDrive(buffer, fileName, mimeType, folderId);
-  return result; // { id, name, webViewLink }
+  return await uploadBufferToDrive(buffer, fileName, mimeType, folderId);
 }
 
 // ── Multer — memory storage (no local disk) ───────────────────────────────────
@@ -206,7 +214,7 @@ router.post("/", uploadFields, async (req, res) => {
 
     if (req.files?.receipt?.[0]) {
       const f = req.files.receipt[0];
-      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype, "receipt", resolvedOrderId);
       data.receiptFileName = driveFile.name;
       data.receiptMime     = f.mimetype;
       data.receiptDriveId  = driveFile.id;
@@ -214,7 +222,7 @@ router.post("/", uploadFields, async (req, res) => {
     }
     if (req.files?.bill?.[0]) {
       const f = req.files.bill[0];
-      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype, "bill", resolvedOrderId);
       data.billFileName = driveFile.name;
       data.billMime     = f.mimetype;
       data.billDriveId  = driveFile.id;
@@ -256,13 +264,14 @@ router.put("/:id", uploadFields, async (req, res) => {
     // Remove undefined keys
     Object.keys(update).forEach(k => update[k] === undefined && delete update[k]);
 
-    const old = await Expense.findById(req.params.id).select("receiptFileName billFileName").lean();
+    const old = await Expense.findById(req.params.id).select("receiptFileName billFileName receiptDriveId billDriveId orderId").lean();
+    const linkedOrderId = orderId || old?.orderId || null;
 
     if (req.files?.receipt?.[0]) {
       if (old?.receiptDriveId) await deleteDriveFile(old.receiptDriveId);
       else deleteFile(old?.receiptFileName);
       const f = req.files.receipt[0];
-      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype, "receipt", linkedOrderId);
       update.receiptFileName = driveFile.name;
       update.receiptMime     = f.mimetype;
       update.receiptDriveId  = driveFile.id;
@@ -272,7 +281,7 @@ router.put("/:id", uploadFields, async (req, res) => {
       if (old?.billDriveId) await deleteDriveFile(old.billDriveId);
       else deleteFile(old?.billFileName);
       const f = req.files.bill[0];
-      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype);
+      const driveFile = await uploadFileToDriveExpenses(f.buffer, f.originalname, f.mimetype, "bill", linkedOrderId);
       update.billFileName = driveFile.name;
       update.billMime     = f.mimetype;
       update.billDriveId  = driveFile.id;
