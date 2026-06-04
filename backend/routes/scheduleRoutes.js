@@ -4,8 +4,6 @@ const pdfParse = require("pdf-parse");
 const XLSX = require("xlsx");
 const multer = require("multer");
 const ScheduleRow = require("../models/Schedule");
-const { execFile } = require("child_process");
-const os = require("os");
 const path = require("path");
 const fs = require("fs");
 
@@ -470,43 +468,197 @@ function parseMMDD(str) {
   return new Date(year, parseInt(m[1]) - 1, parseInt(m[2])).getTime();
 }
 
-// ─── ACL PDF → Python parser helper ──────────────────────────────────────────
+// ─── ACL PDF → Pure JS x-coordinate parser ───────────────────────────────────
 //
-// Runs parse_acl_pdf.py (pdfplumber) as a child process.
-// Returns { scheduleRows, rowCount } on success; throws on failure.
+// Mirrors parse_acl_pdf.py logic entirely in JS using pdfParse pagerender.
+// No Python / pdfplumber dependency — works on any Node.js host (Render, etc).
+//
+// ACL PDF section structure:
+//   Row 0: vessel names  "Grande Dakar  Grande Lagos  Grande Sicilia …"
+//   Row 1: voyage codes  "GDK0626  GLG0326  GSI0526 …"
+//   POL header:          "POL  ETA  Latest Delivery  ETA  Latest Delivery …"
+//   POL data:            "Baltimore  6/7  6/1  6/5  5/29 …"
+//   POD header:          "POD  ETA  ETA  ETA …"
+//   POD data:            "Lagos  6/23  6/22  6/23 …"
+//
+// Column alignment driven by voyage-code x-positions (most precise).
 
-function parseAclPdfWithPython(buffer) {
-  return new Promise((resolve, reject) => {
-    const tmpPath = path.join(os.tmpdir(), `acl_sched_${Date.now()}.pdf`);
-    try { fs.writeFileSync(tmpPath, buffer); } catch (e) { return reject(e); }
+async function parseAclPdfJs(buffer) {
+  const allItems = []; // { str, x, y }
 
-    const scriptPath = path.join(__dirname, "..", "parse_acl_pdf.py");
+  await pdfParse(buffer, {
+    pagerender: async function(pageData) {
+      const tc = await pageData.getTextContent();
+      for (const item of tc.items) {
+        const s = (item.str || "").trim();
+        if (!s) continue;
+        allItems.push({ str: s, x: item.transform[4], y: item.transform[5] });
+      }
+      return tc.items.map(i => i.str).join(" ") + "\n";
+    },
+  }).catch(() => {});
 
-    // Try "python" first (Windows), fallback to "python3" (Linux/Mac)
-    const tryExec = (cmd) => {
-      execFile(cmd, [scriptPath, tmpPath], { timeout: 45000 }, (err, stdout, stderr) => {
-        try { fs.unlinkSync(tmpPath); } catch {}
+  if (allItems.length === 0) throw new Error("No text extracted from ACL PDF");
 
-        if (err) {
-          // If "python" not found, retry with "python3"
-          if (cmd === "python" && (err.code === "ENOENT" || (stderr || "").includes("not found"))) {
-            return tryExec("python3");
-          }
-          return reject(new Error(`PDF parse script error: ${stderr || err.message}`));
+  // Group items into visual rows (similar y → same row), sorted top-to-bottom
+  const yBucket = y => Math.round(y / 5) * 5;
+  const rowMap = {};
+  for (const item of allItems) {
+    const k = yBucket(item.y);
+    if (!rowMap[k]) rowMap[k] = [];
+    rowMap[k].push(item);
+  }
+  const textRows = Object.entries(rowMap)
+    .sort((a, b) => parseFloat(b[0]) - parseFloat(a[0])) // y descending = top first
+    .map(([, items]) => items.sort((a, b) => a.x - b.x));
+
+  const VOYAGE_CODE_RE = /^[A-Z]{3}\d{4}$/;
+  const DATE_RE        = /^\d{1,2}\/\d{1,2}$/;
+
+  const scheduleRows = [];
+  const now = new Date();
+
+  let ri = 0;
+  while (ri < textRows.length) {
+    const row = textRows[ri];
+
+    // ── Look for a vessel-name row ("Grande Dakar  Grande Lagos …") ───────────
+    const grandeIdx = row.findIndex(item => /^Grande$/i.test(item.str));
+    if (grandeIdx === -1) { ri++; continue; }
+
+    // Parse vessel names: "Grande" + next word = one vessel
+    const vessels = [], vesselXs = [];
+    for (let j = grandeIdx; j < row.length - 1; j++) {
+      if (/^Grande$/i.test(row[j].str)) {
+        vessels.push(`GRANDE ${row[j + 1].str.toUpperCase()}`);
+        vesselXs.push((row[j].x + row[j + 1].x) / 2);
+        j++; // skip the name word
+      }
+    }
+    if (vessels.length === 0) { ri++; continue; }
+
+    // ── Voyage code row (immediately after vessel row) ─────────────────────────
+    ri++;
+    if (ri >= textRows.length) break;
+    const voyageRow = textRows[ri];
+    const voyages = [], colXs = [];
+    for (const item of voyageRow) {
+      if (VOYAGE_CODE_RE.test(item.str)) {
+        voyages.push(item.str.toUpperCase());
+        colXs.push(item.x);
+      }
+    }
+
+    // Use voyage x-positions if count matches vessel count, else fall back
+    const effectiveColXs  = colXs.length === vessels.length ? colXs  : vesselXs;
+    const effectiveVoyages = colXs.length === vessels.length ? voyages : vessels.map(() => "");
+
+    // Build column bands (midpoints between adjacent column centers)
+    const colBands = effectiveColXs.map((x, idx) => ({
+      vessel:  vessels[idx]          || `ACL_${idx}`,
+      voyage:  effectiveVoyages[idx] || "",
+      x,
+      left:  idx > 0                         ? (x + effectiveColXs[idx - 1]) / 2 : x - 90,
+      right: idx < effectiveColXs.length - 1 ? (x + effectiveColXs[idx + 1]) / 2 : x + 90,
+    }));
+
+    const assignCol = x => colBands.find(b => x >= b.left && x < b.right) || null;
+
+    console.log(`[ACL PDF] section: ${vessels.join(", ")}`);
+    console.log(`[ACL PDF] voyages: ${effectiveVoyages.join(", ")}`);
+
+    // ── Scan ahead for POL/POD sections ───────────────────────────────────────
+    ri++;
+    const polData = {}; // pol → { voyage → { sail, cutoff } }
+    const podData = {}; // pod → { voyage → arrival }
+    let mode = null;
+
+    while (ri < textRows.length) {
+      const r = textRows[ri];
+      const rTexts = r.map(i => i.str);
+
+      // Stop at start of next section
+      if (r.some(item => /^Grande$/i.test(item.str))) break;
+
+      // POL header: first token "POL" and row contains "ETA"
+      if (/^POL$/i.test(rTexts[0]) && rTexts.some(t => /^ETA$/i.test(t))) {
+        mode = "POL"; ri++; continue;
+      }
+      // POD header: first token "POD" and row contains "ETA"
+      if (/^POD$/i.test(rTexts[0]) && rTexts.some(t => /^ETA$/i.test(t))) {
+        mode = "POD"; ri++; continue;
+      }
+      if (!mode) { ri++; continue; }
+
+      // Skip footnotes
+      if (/^(Please|Other|Shaded|Forklift)/i.test(rTexts[0])) { ri++; continue; }
+
+      const firstTok = rTexts[0] || "";
+
+      if (mode === "POL") {
+        const polMatch = firstTok.match(/^(Freeport|Jacksonville|Baltimore|Wilmington|Providence|Brunswick)/i);
+        if (!polMatch) { ri++; continue; }
+        const pol = normalizePolPod(firstTok);
+        if (!polData[pol]) polData[pol] = {};
+
+        // Group date items by column; within each column left=sail, right=cutoff
+        const byCol = {};
+        for (const item of r) {
+          if (!DATE_RE.test(item.str)) continue;
+          const col = assignCol(item.x);
+          if (!col) continue;
+          if (!byCol[col.voyage]) byCol[col.voyage] = [];
+          byCol[col.voyage].push(item);
         }
-
-        let result;
-        try { result = JSON.parse(stdout); } catch {
-          return reject(new Error(`Bad JSON from PDF parser: ${stdout.slice(0, 300)}`));
+        for (const [voyage, items] of Object.entries(byCol)) {
+          items.sort((a, b) => a.x - b.x);
+          const sail   = items[0] ? parseDateStr(items[0].str) : "";
+          const cutoff = items[1] ? parseDateStr(items[1].str) : "";
+          if (!polData[pol][voyage]) polData[pol][voyage] = { sail, cutoff };
         }
+      }
 
-        if (result.error) return reject(new Error(result.error));
-        resolve(result);
-      });
-    };
+      if (mode === "POD") {
+        const podMatch = firstTok.match(/^(Lagos|Tema|Cotonou|Lome|Dakar)/i);
+        if (!podMatch) { ri++; continue; }
+        const pod = normalizePolPod(firstTok);
+        if (!podData[pod]) podData[pod] = {};
 
-    tryExec("python");
-  });
+        for (const item of r) {
+          if (!DATE_RE.test(item.str)) continue;
+          const col = assignCol(item.x);
+          if (!col || podData[pod][col.voyage]) continue;
+          podData[pod][col.voyage] = parseDateStr(item.str);
+        }
+      }
+
+      ri++;
+    }
+
+    // ── Build schedule rows for this section ───────────────────────────────────
+    for (const col of colBands) {
+      for (const [pol, voyMap] of Object.entries(polData)) {
+        const pair = voyMap[col.voyage];
+        if (!pair || (!pair.sail && !pair.cutoff)) continue;
+        for (const [pod, podVoyMap] of Object.entries(podData)) {
+          const arrival = podVoyMap[col.voyage] || "";
+          if (!arrival) continue;
+          scheduleRows.push({
+            carrier: "ACL", vessel: col.vessel, voyage: col.voyage,
+            pol, pod,
+            cutoffDate:  pair.cutoff || "",
+            sailDate:    pair.sail   || "",
+            arrivalDate: arrival,
+            updatedAt:   now,
+          });
+        }
+      }
+    }
+  }
+
+  console.log(`[ACL PDF JS] built ${scheduleRows.length} schedule rows`);
+  if (scheduleRows.length === 0) throw new Error("No schedule rows found in ACL PDF — check PDF format");
+  return { scheduleRows, rowCount: scheduleRows.length };
 }
 
 // ─── Excel Schedule Parser (existing Excel upload) ────────────────────────────
@@ -572,14 +724,12 @@ router.post("/refresh-acl", async (req, res) => {
   }
 });
 
-// POST /api/schedule/upload-acl-pdf  - parse ACL weekly PDF (standalone, no Grimaldi needed)
-// Uses parse_acl_pdf.py (pdfplumber) to extract vessel / voyage / pol / pod / dates
-// directly from the column-aligned PDF table.
+// POST /api/schedule/upload-acl-pdf  - parse ACL weekly PDF (pure JS, no Python needed)
 router.post("/upload-acl-pdf", upload.single("schedule"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
 
-    const result = await parseAclPdfWithPython(req.file.buffer);
+    const result = await parseAclPdfJs(req.file.buffer);
     const { scheduleRows } = result;
 
     if (!scheduleRows || scheduleRows.length === 0) {
@@ -1037,7 +1187,8 @@ router.post("/update-from-pdfs", uploadTwo.fields([
 
     // ── ACL PDF → DB ──────────────────────────────────────────────────────────
     if (req.files?.acl) {
-      const rows = await parseAclPdfStandalone(req.files.acl[0].buffer).catch(() => []);
+      const result = await parseAclPdfJs(req.files.acl[0].buffer).catch(() => null);
+      const rows = result?.scheduleRows || [];
       if (rows.length) {
         await ScheduleRow.deleteMany({ carrier: "ACL" });
         await ScheduleRow.insertMany(rows);
