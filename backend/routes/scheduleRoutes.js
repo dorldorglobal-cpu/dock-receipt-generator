@@ -726,12 +726,42 @@ router.post("/refresh-acl", async (req, res) => {
   }
 });
 
-// POST /api/schedule/upload-acl-pdf  - parse ACL weekly PDF (pure JS, no Python needed)
+// ─── ACL PDF → Python/pdfplumber parser ──────────────────────────────────────
+function parseAclPdfWithPython(buffer) {
+  return new Promise((resolve, reject) => {
+    const tmpPath = path.join(os.tmpdir(), `acl_sched_${Date.now()}.pdf`);
+    try { fs.writeFileSync(tmpPath, buffer); } catch (e) { return reject(e); }
+
+    const scriptPath = path.join(__dirname, "..", "parse_acl_pdf.py");
+
+    const tryExec = (cmd) => {
+      execFile(cmd, [scriptPath, tmpPath], { timeout: 60000 }, (err, stdout, stderr) => {
+        try { fs.unlinkSync(tmpPath); } catch {}
+        if (err) {
+          if (cmd === "python" && (err.code === "ENOENT" || (stderr || "").includes("not found"))) {
+            return tryExec("python3");
+          }
+          return reject(new Error(`ACL PDF parse error: ${stderr || err.message}`));
+        }
+        let result;
+        try { result = JSON.parse(stdout); } catch {
+          return reject(new Error(`Bad JSON from ACL parser: ${stdout.slice(0, 300)}`));
+        }
+        if (result.error) return reject(new Error(result.error));
+        resolve(result);
+      });
+    };
+
+    tryExec("python");
+  });
+}
+
+// POST /api/schedule/upload-acl-pdf  - parse ACL weekly PDF via pdfplumber
 router.post("/upload-acl-pdf", upload.single("schedule"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
 
-    const result = await parseAclPdfJs(req.file.buffer);
+    const result = await parseAclPdfWithPython(req.file.buffer);
     const { scheduleRows } = result;
 
     if (!scheduleRows || scheduleRows.length === 0) {
@@ -1211,7 +1241,7 @@ router.post("/update-from-pdfs", uploadTwo.fields([
 
     // ── ACL PDF → DB ──────────────────────────────────────────────────────────
     if (req.files?.acl) {
-      const result = await parseAclPdfJs(req.files.acl[0].buffer).catch(() => null);
+      const result = await parseAclPdfWithPython(req.files.acl[0].buffer).catch(() => null);
       const rows = result?.scheduleRows || [];
       if (rows.length) {
         await ScheduleRow.deleteMany({ carrier: "ACL" });
