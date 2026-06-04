@@ -105,6 +105,8 @@ export default function DockReceiptPage() {
   const [orderMatch, setOrderMatch]       = useState(null); // null | { found, orderId, refNumber, status }
   const [creatingOrder, setCreatingOrder] = useState(false);
   const [createdOrder, setCreatedOrder]   = useState(null); // { orderId, refNumber } after creation
+  const [savingFiles, setSavingFiles]     = useState(false);
+  const [filesSaved, setFilesSaved]       = useState(false);
   const [sendModal, setSendModal]       = useState(null); // { pdfBase64, pdfName }
   const [sendTo, setSendTo]             = useState("");
   const [sendTrucker, setSendTrucker]   = useState("");
@@ -175,6 +177,7 @@ export default function DockReceiptPage() {
     setResult(null);
     setOrderMatch(null);
     setCreatedOrder(null);
+    setFilesSaved(false);
 
     const fd = new FormData();
     if (aesFile)      fd.append("aes", aesFile);
@@ -273,6 +276,41 @@ export default function DockReceiptPage() {
     };
   };
 
+  // ── Upload AES + Dispatch files to an order's Drive folder ──────────────────
+  const saveFilesToOrder = async (orderId) => {
+    if (!orderId) return;
+    setSavingFiles(true);
+    setFilesSaved(false);
+    const uploads = [
+      aesFile      && { file: aesFile,      label: "AES" },
+      dispatchFile && { file: dispatchFile, label: "Dispatch" },
+    ].filter(Boolean);
+
+    if (uploads.length === 0) { setSavingFiles(false); return; }
+
+    let allOk = true;
+    for (const { file, label } of uploads) {
+      try {
+        const fd = new FormData();
+        fd.append("file",  file);
+        fd.append("label", label);
+        const res = await fetch(`${API}/api/orders/${orderId}/upload-drive`, {
+          method: "POST",
+          body: fd,
+        });
+        if (!res.ok) allOk = false;
+      } catch { allOk = false; }
+    }
+
+    setSavingFiles(false);
+    if (allOk) {
+      setFilesSaved(true);
+      setMsg(`✅ AES${dispatchFile ? " & Dispatch" : ""} saved to order folder`, "success");
+    } else {
+      setMsg("⚠️ Some files failed to upload to the order folder", "error");
+    }
+  };
+
   // ── Create order from DR data ─────────────────────────────────────────────
   const createOrderFromDR = async () => {
     if (!result) return;
@@ -292,9 +330,12 @@ export default function DockReceiptPage() {
         return;
       }
       if (!res.ok) throw new Error(data.error || "Failed to create order");
-      setCreatedOrder({ orderId: data._id, refNumber: data.refNumber });
-      setOrderMatch({ found: true, orderId: data._id, refNumber: data.refNumber, status: "New Order" });
-      setMsg(`✅ Order #${data.refNumber} created from DR`, "success");
+      const newOrderId = data._id;
+      setCreatedOrder({ orderId: newOrderId, refNumber: data.refNumber });
+      setOrderMatch({ found: true, orderId: newOrderId, refNumber: data.refNumber, status: "New Order" });
+      setMsg(`✅ Order #${data.refNumber} created — uploading files…`, "success");
+      // Auto-upload AES + Dispatch to the new order's folder
+      await saveFilesToOrder(newOrderId);
     } catch (err) {
       setMsg(`❌ Could not create order: ${err.message}`, "error");
     } finally {
@@ -624,14 +665,33 @@ export default function DockReceiptPage() {
                   </span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 8 }}>
+              <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                 {orderMatch.found ? (
-                  <button
-                    onClick={() => navigate(`/orders/${orderMatch.orderId}`)}
-                    style={{ padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer",
-                      background: "rgba(52,211,153,0.2)", color: "#34d399", fontWeight: 600, fontSize: 12 }}>
-                    Open Order →
-                  </button>
+                  <>
+                    {/* Save files button — shown whenever an order exists and files are loaded */}
+                    {(aesFile || dispatchFile) && !filesSaved && (
+                      <button
+                        onClick={() => saveFilesToOrder(orderMatch.orderId)}
+                        disabled={savingFiles}
+                        style={{ padding: "6px 14px", borderRadius: 7, border: "none",
+                          cursor: savingFiles ? "not-allowed" : "pointer",
+                          background: "rgba(251,191,36,0.18)", color: "#fbbf24",
+                          fontWeight: 600, fontSize: 12 }}>
+                        {savingFiles ? "Uploading…" : "📎 Save Files to Order"}
+                      </button>
+                    )}
+                    {filesSaved && (
+                      <span style={{ fontSize: 12, color: "#34d399", alignSelf: "center" }}>
+                        ✅ Files saved
+                      </span>
+                    )}
+                    <button
+                      onClick={() => navigate(`/orders/${orderMatch.orderId}`)}
+                      style={{ padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer",
+                        background: "rgba(52,211,153,0.2)", color: "#34d399", fontWeight: 600, fontSize: 12 }}>
+                      Open Order →
+                    </button>
+                  </>
                 ) : (
                   <button
                     onClick={createOrderFromDR}
