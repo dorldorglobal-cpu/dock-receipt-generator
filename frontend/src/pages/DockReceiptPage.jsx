@@ -99,7 +99,6 @@ export default function DockReceiptPage() {
   const [search, setSearch]             = useState("");
   const [searchResults, setSearchResults] = useState([]);
   const [scheduleStatus, setScheduleStatus] = useState(null);
-  const [refreshing, setRefreshing]     = useState("");
 
   // ── Order cross-check state ─────────────────────────────────────────────────
   const [orderMatch, setOrderMatch]       = useState(null); // null | { found, orderId, refNumber, status }
@@ -125,50 +124,6 @@ export default function DockReceiptPage() {
   };
 
   const setMsg = (text, type = "") => { setMessage(text); setMsgType(type); };
-
-
-
-  // ── Sallaum: Upload PDF ─────────────────────────────────────────────────────
-  const [sallaumFile, setSallaumFile] = useState(null);
-
-  const uploadSallaumPdf = async () => {
-    if (!sallaumFile) { setMsg("Select the Sallaum schedule PDF first", "error"); return; }
-    setRefreshing("sallaum-pdf");
-    setMsg("Parsing Sallaum schedule PDF…");
-    try {
-      const fd = new FormData();
-      fd.append("schedule", sallaumFile);
-      const res = await fetch(`${API}/api/schedule/upload-pdf`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setMsg(`✅ Sallaum schedule loaded — ${data.rows} routes`, "success");
-      setSallaumFile(null);
-      loadScheduleStatus();
-    } catch (err) {
-      setMsg(`❌ Sallaum PDF failed: ${err.message}`, "error");
-    } finally { setRefreshing(""); }
-  };
-
-  // ── ACL: Upload PDF ─────────────────────────────────────────────────────────
-  const [aclFile, setAclFile] = useState(null);
-
-  const uploadAclPdf = async () => {
-    if (!aclFile) { setMsg("Select the ACL schedule PDF first", "error"); return; }
-    setRefreshing("acl-pdf");
-    setMsg("Parsing ACL schedule PDF…");
-    try {
-      const fd = new FormData();
-      fd.append("schedule", aclFile);
-      const res = await fetch(`${API}/api/schedule/upload-acl-pdf`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setMsg(`✅ ACL schedule loaded — ${data.rows} routes`, "success");
-      setAclFile(null);
-      loadScheduleStatus();
-    } catch (err) {
-      setMsg(`❌ ACL PDF failed: ${err.message}`, "error");
-    } finally { setRefreshing(""); }
-  };
 
   // ── VIN → order check (standalone, reusable) ─────────────────────────────
   const checkVin = async (vin) => {
@@ -221,6 +176,9 @@ export default function DockReceiptPage() {
     const year  = ymm[0] || "";
     const make  = ymm[1] || "";
     const model = ymm.slice(2).join(" ") || "";
+
+    // Use the DR reference number as the order number (migrating from old system)
+    const refNumber = (r.referenceNumber || "").trim() || undefined;
 
     // Normalize condition: "RUNNER" → "Runner", "NONRUNNER" → "Nonrunner"
     const condMap = { RUNNER: "Runner", NONRUNNER: "Nonrunner", FORKLIFT: "Forklift" };
@@ -278,6 +236,7 @@ export default function DockReceiptPage() {
       deliveryZip:      r.deliveryZip       || "",
       // Use consigneeName as customer name fallback — editable after creation
       customerName:     r.consigneeName     || "",
+      refNumber,
       condition:        normCond,
       titleStatus:      normTitle,
       status:           "New Order",
@@ -498,67 +457,29 @@ export default function DockReceiptPage() {
         </div>
       )}
 
-      {/* ── Vessel Schedules ── */}
-      <div className="form-section">
-        <h2>Vessel Schedules</h2>
-
-        <div className="schedule-status-row">
-          {/* Sallaum card */}
-          <div className={`schedule-card ${scheduleStatus?.sallaum?.loaded ? "loaded" : "empty"}`}>
-            <div className="sc-carrier">Sallaum Lines</div>
-            <div className="sc-status">
-              {scheduleStatus?.sallaum?.loaded
-                ? `✅ ${scheduleStatus.sallaum.rows} routes loaded`
-                : "⚪ Not loaded"}
-            </div>
-            {scheduleStatus?.sallaum?.updatedAt && (
-              <div className="sc-meta">Updated {fmtDate(scheduleStatus.sallaum.updatedAt)}</div>
-            )}
-            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-              <DropZone
-                label="Upload Sallaum Schedule PDF"
-                sub="Sallaum RoRo schedule PDF"
-                file={sallaumFile}
-                onFile={setSallaumFile}
-                accept=".pdf"
-              />
-              {sallaumFile && (
-                <button onClick={uploadSallaumPdf} disabled={refreshing === "sallaum-pdf"}
-                  style={{ fontSize: 12, padding: "7px 14px" }}>
-                  {refreshing === "sallaum-pdf" ? "Parsing PDF…" : "⬆ Load Sallaum Schedule"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* ACL card */}
-          <div className={`schedule-card ${scheduleStatus?.acl?.loaded ? "loaded" : "empty"}`}>
-            <div className="sc-carrier">ACL / Grimaldi</div>
-            <div className="sc-status">
-              {scheduleStatus?.acl?.loaded
-                ? `✅ ${scheduleStatus.acl.rows} routes loaded`
-                : "⚪ Not loaded"}
-            </div>
-            {scheduleStatus?.acl?.updatedAt && (
-              <div className="sc-meta">Updated {fmtDate(scheduleStatus.acl.updatedAt)}</div>
-            )}
-            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
-              <DropZone
-                label="Upload ACL Schedule PDF"
-                sub="Weekly RoRo PDF (e.g. ACL Week 21 RoRo Schedule.pdf)"
-                file={aclFile}
-                onFile={setAclFile}
-                accept=".pdf"
-              />
-              {aclFile && (
-                <button onClick={uploadAclPdf} disabled={refreshing === "acl-pdf"}
-                  style={{ fontSize: 12, padding: "7px 14px" }}>
-                  {refreshing === "acl-pdf" ? "Parsing PDF…" : "⬆ Load ACL Schedule"}
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
+      {/* ── Vessel Schedule Status ── */}
+      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "10px 16px",
+        background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 10,
+        marginBottom: 20, flexWrap: "wrap" }}>
+        <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+          Schedule
+        </span>
+        <span style={{ fontSize: 13 }}>
+          {scheduleStatus?.sallaum?.loaded
+            ? <span style={{ color: "#34d399" }}>✅ Sallaum — {scheduleStatus.sallaum.rows} routes</span>
+            : <span style={{ color: "#f87171" }}>⚪ Sallaum not loaded</span>}
+        </span>
+        <span style={{ fontSize: 13 }}>
+          {scheduleStatus?.acl?.loaded
+            ? <span style={{ color: "#34d399" }}>✅ ACL — {scheduleStatus.acl.rows} routes</span>
+            : <span style={{ color: "#f87171" }}>⚪ ACL not loaded</span>}
+        </span>
+        <button onClick={() => navigate("/vessel-schedule")}
+          style={{ marginLeft: "auto", padding: "5px 14px", borderRadius: 7, fontSize: 12,
+            border: "1px solid var(--border)", background: "var(--bg-elevated)",
+            color: "var(--text-secondary)", cursor: "pointer", fontWeight: 600 }}>
+          Update Schedules →
+        </button>
       </div>
 
       {/* ── Search Saved Shipments ── */}
