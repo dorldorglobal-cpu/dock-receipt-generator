@@ -813,6 +813,51 @@ router.post("/upload-acl-pdf", upload.single("schedule"), async (req, res) => {
 //   4. Build rows: vessel/voyage from website, dates from PDF column
 
 async function parseSallaumPdfDirect(buffer) {
+  // ── Extract voyage codes with x-coordinates (gives visual left-to-right order)
+  const voyagePositions = []; // { code, x, y }
+  let vesselNameItems = [];   // { str, x, y } for lines near voyage codes
+
+  await pdfParse(buffer, {
+    pagerender: async function(pageData) {
+      const tc = await pageData.getTextContent();
+      for (const item of tc.items) {
+        const s = (item.str || "").trim();
+        const x = item.transform[4];
+        const y = item.transform[5];
+        const codeMatch = s.match(/^(2[0-9][A-Z]{2}\d{2})$/);
+        if (codeMatch) voyagePositions.push({ code: codeMatch[1], x, y });
+        if (/^[A-Z][a-z]/.test(s) && s.length > 3) vesselNameItems.push({ str: s.toUpperCase(), x, y });
+      }
+      // Return plain text for the fallback text variable
+      return tc.items.map(i => i.str).join(" ") + "\n";
+    },
+  }).catch(() => {}); // ignore — we only need voyagePositions
+
+  // Sort voyage codes by x-coordinate within their header row = visual column order
+  // Use only the first occurrence of each code (header row = highest y value per code)
+  const firstY = {};
+  for (const vp of voyagePositions) {
+    if (firstY[vp.code] === undefined || vp.y > firstY[vp.code]) firstY[vp.code] = vp.y;
+  }
+  const headerVoyages = [];
+  for (const vp of voyagePositions) {
+    if (Math.abs(vp.y - firstY[vp.code]) < 5 && !headerVoyages.find(v => v.code === vp.code)) {
+      headerVoyages.push(vp);
+    }
+  }
+  headerVoyages.sort((a, b) => a.x - b.x); // left → right
+  const sortedVoyageCodes = headerVoyages.map(v => v.code);
+  console.log("[Sallaum PDF] voyage codes by x-position:", sortedVoyageCodes.join(", "));
+
+  // Map voyage code → vessel name (vessel name is near the code by y-coordinate)
+  const vesselForVoyage = {};
+  for (const vp of headerVoyages) {
+    const nearby = vesselNameItems
+      .filter(n => Math.abs(n.x - vp.x) < 60 && n.y > vp.y && n.y < vp.y + 80)
+      .sort((a, b) => a.y - b.y); // closest above
+    if (nearby.length) vesselForVoyage[vp.code] = nearby[nearby.length - 1].str;
+  }
+
   // ── Parse PDF date tables ────────────────────────────────────────────────────
   const { text } = await pdfParse(buffer);
   const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
@@ -887,34 +932,44 @@ async function parseSallaumPdfDirect(buffer) {
   const scheduleRows = [];
   const now = new Date();
 
-  if (websiteRows.length > 0) {
-    // Extract website vessels in visual left-to-right order (chronological).
-    // The website parser emits rows vessel-by-vessel in column order, so first
-    // appearance order = visual order = chronological order.
-    const websiteVessels = []; // [{vessel, voyage}] in visual order
+  // ── Sort PDF columns by earliest sail date (= visual left-to-right order) ───
+  const colFirstSail = {};
+  for (let c = 0; c < numCols; c++) {
+    const sails = Object.values(polData).map(p => p[c]?.sail).filter(Boolean)
+      .map(d => new Date(d).getTime()).filter(n => !isNaN(n));
+    colFirstSail[c] = sails.length ? Math.min(...sails) : Infinity;
+  }
+  const sortedCols = Array.from({ length: numCols }, (_, i) => i)
+    .sort((a, b) => colFirstSail[a] - colFirstSail[b]);
+
+  // ── Use x-position sorted voyage codes if available, else fall back to website
+  let vesselOrder = []; // [{ vessel, voyage }] in visual left-to-right order
+
+  if (sortedVoyageCodes.length >= numCols) {
+    // Use x-coordinate extracted order — most reliable
+    for (const code of sortedVoyageCodes.slice(0, numCols)) {
+      // Try to find vessel name from website rows or nearby text
+      const wsRow = websiteRows.find(r => r.voyage === code);
+      const vessel = wsRow?.vessel || vesselForVoyage[code] || code;
+      vesselOrder.push({ vessel, voyage: code });
+    }
+    console.log("[Sallaum PDF] using x-position order:", vesselOrder.map(v => v.voyage).join(", "));
+  } else if (websiteRows.length > 0) {
+    // Fallback: website vessel order (chronological)
     for (const r of websiteRows) {
-      if (!websiteVessels.find(v => v.voyage === r.voyage)) {
-        websiteVessels.push({ vessel: r.vessel, voyage: r.voyage });
+      if (!vesselOrder.find(v => v.voyage === r.voyage)) {
+        vesselOrder.push({ vessel: r.vessel, voyage: r.voyage });
       }
     }
+    console.log("[Sallaum PDF] using website order:", vesselOrder.map(v => v.voyage).join(", "));
+  }
 
-    // Sort PDF columns by their earliest sail date (ascending = visual left-to-right)
-    const colFirstSail = {};
-    for (let c = 0; c < numCols; c++) {
-      const sails = Object.values(polData).map(p => p[c]?.sail).filter(Boolean)
-        .map(d => new Date(d).getTime()).filter(n => !isNaN(n));
-      colFirstSail[c] = sails.length ? Math.min(...sails) : Infinity;
-    }
-    const sortedCols = Array.from({ length: numCols }, (_, i) => i)
-      .sort((a, b) => colFirstSail[a] - colFirstSail[b]);
-
-    // Zip: website vessel #i (visual order) → sorted PDF column #i
-    const count = Math.min(websiteVessels.length, sortedCols.length);
-    console.log(`[Sallaum hybrid] zipping ${count} vessels to ${sortedCols.length} PDF columns`);
+  if (vesselOrder.length > 0) {
+    const count = Math.min(vesselOrder.length, sortedCols.length);
     for (let i = 0; i < count; i++) {
-      const { vessel, voyage } = websiteVessels[i];
+      const { vessel, voyage } = vesselOrder[i];
       const col = sortedCols[i];
-      console.log(`  [${i}] ${vessel} ${voyage} → PDF col ${col} (first sail: ${new Date(colFirstSail[col]).toDateString()})`);
+      console.log(`  [${i}] ${vessel} ${voyage} → col ${col} (first sail: ${new Date(colFirstSail[col]).toDateString()})`);
       for (const [pol, pairs] of Object.entries(polData)) {
         const pair = pairs[col];
         if (!pair || (!pair.cutoff && !pair.sail)) continue;
@@ -927,7 +982,7 @@ async function parseSallaumPdfDirect(buffer) {
         }
       }
     }
-    console.log(`[Sallaum hybrid] rows built: ${scheduleRows.length}`);
+    console.log(`[Sallaum PDF] rows built: ${scheduleRows.length}`);
   }
 
   // Fallback if website unavailable: extract voyage codes from PDF text
