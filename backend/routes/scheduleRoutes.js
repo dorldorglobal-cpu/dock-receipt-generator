@@ -817,8 +817,8 @@ async function parseSallaumPdfDirect(buffer) {
   // Build column descriptors, assigning vessel name tokens by x-proximity
   const columns = voyageRow.map(vi => {
     const tokens = vesselBand
-      .filter(t => Math.abs(t.x - vi.x) < 55)
-      .sort((a, b) => b.y - a.y); // topmost first
+      .filter(t => Math.abs(t.x - vi.x) < 80)   // wider tolerance for vessel names
+      .sort((a, b) => b.y - a.y);
     const vessel = tokens.map(t => t.str).join(" ").trim().toUpperCase() || vi.str;
     return { voyage: vi.str, vessel, x: vi.x };
   });
@@ -829,13 +829,22 @@ async function parseSallaumPdfDirect(buffer) {
     const next = columns[i + 1];
     return {
       ...col,
-      left:  prev ? (col.x + prev.x) / 2 : col.x - 120,
-      right: next ? (col.x + next.x) / 2 : col.x + 120,
+      left:  prev ? (col.x + prev.x) / 2 : col.x - 150,
+      right: next ? (col.x + next.x) / 2 : col.x + 150,
     };
   });
 
+  // Assign an item's x to its column — use nearest column if none match (handles slight misalignment)
   function assignCol(x) {
-    return colBands.find(b => x >= b.left && x < b.right) || null;
+    const exact = colBands.find(b => x >= b.left && x < b.right);
+    if (exact) return exact;
+    // Nearest fallback — only within reasonable range
+    let best = null, bestDist = 80;
+    for (const b of colBands) {
+      const dist = Math.min(Math.abs(x - b.left), Math.abs(x - b.right), Math.abs(x - b.x));
+      if (dist < bestDist) { bestDist = dist; best = b; }
+    }
+    return best;
   }
 
   // ── Group all PDF items into visual rows (similar y → same row) ───────────────
@@ -844,7 +853,7 @@ async function parseSallaumPdfDirect(buffer) {
   const textRows = [];
   let currentRow = [], lastY = null;
   for (const item of itemsSortedTopDown) {
-    if (lastY === null || Math.abs(item.y - lastY) < 7) {
+    if (lastY === null || Math.abs(item.y - lastY) < 10) {  // increased row tolerance
       currentRow.push(item);
       lastY = (lastY === null) ? item.y : (lastY * 0.6 + item.y * 0.4);
     } else {
@@ -891,14 +900,14 @@ async function parseSallaumPdfDirect(buffer) {
 
       for (const [voyage, items] of Object.entries(colDates)) {
         items.sort((a, b) => a.x - b.x); // left=cutoff, right=sail
-        const cutoff = items[0]?.str === "N/A" ? "" : parseDateStr(items[0]?.str || "");
-        const sail   = items[1]?.str === "N/A" ? "" : parseDateStr(items[1]?.str || items[0]?.str || "");
-        // Merge if this POL row appeared before (e.g. duplicate Baltimore rows)
+        const cutoff = (!items[0] || items[0].str === "N/A") ? "" : parseDateStr(items[0].str);
+        const sail   = (!items[1] || items[1].str === "N/A") ? "" : parseDateStr(items[1].str);
+        // Always merge: keep whichever row has the real date (handles duplicate Baltimore rows)
         if (!polData[pol][voyage]) {
           polData[pol][voyage] = { cutoff, sail };
         } else {
-          polData[pol][voyage].cutoff = polData[pol][voyage].cutoff || cutoff;
-          polData[pol][voyage].sail   = polData[pol][voyage].sail   || sail;
+          if (cutoff) polData[pol][voyage].cutoff = cutoff;
+          if (sail)   polData[pol][voyage].sail   = sail;
         }
       }
     }

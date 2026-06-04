@@ -759,17 +759,22 @@ app.post("/upload", upload.any(), async (req, res) => {
         ? { $in: ["PROVIDENCE", "DAVISVILLE"] }
         : polNorm;
 
-      // 1. Exact vessel name match
+      // 1. Exact vessel name
       let dbMatch = await ScheduleRow.findOne({
         vessel: { $regex: `^${esc(vClean)}$`, $options: "i" },
         pol: polAliases, pod: podNorm,
       });
-      // 2. Partial last-word match
+      // 2. Last-word vessel match (e.g. "AMSTERDAM" finds "RCC AMSTERDAM")
       if (!dbMatch) {
         dbMatch = await ScheduleRow.findOne({
           vessel: { $regex: esc(vesselSearchWord), $options: "i" },
           pol: polAliases, pod: podNorm,
         });
+      }
+      // 3. Vessel stored as voyage code (e.g. "26AT01") — match on POL+POD only, pick most recent
+      if (!dbMatch) {
+        dbMatch = await ScheduleRow.findOne({ pol: polAliases, pod: podNorm })
+          .sort({ updatedAt: -1 });
       }
       if (dbMatch) {
         match = {
@@ -778,6 +783,7 @@ app.post("/upload", upload.any(), async (req, res) => {
           sailDate:    dbMatch.sailDate,
           arrivalDate: dbMatch.arrivalDate,
         };
+        console.log(`[schedule] matched ${dbMatch.vessel} ${dbMatch.voyage} for ${vClean} ${polNorm}→${podNorm}`);
       }
     }
 
