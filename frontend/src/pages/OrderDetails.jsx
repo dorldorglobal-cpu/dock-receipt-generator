@@ -957,6 +957,8 @@ export default function OrderDetails() {
       pol:             order.pol             || "",
       pod:             order.pod             || "",
       bookingNumber:   order.bookingNumber   || "",
+      containerNumber: order.containerNumber || "",
+      sealNumber:      order.sealNumber      || "",
       notes:           order.notes           || "",
     });
     setShowEdit(true);
@@ -1595,6 +1597,12 @@ export default function OrderDetails() {
           </div>
           <p style={{ margin: "0 0 4px", fontSize: 13 }}><strong>Line:</strong> {order.shippingLine || "—"}</p>
           <p style={{ margin: "0 0 4px", fontSize: 13 }}><strong>Booking #:</strong> {order.bookingNumber || "—"}</p>
+          {order.requestType === "Container" && (
+            <>
+              <p style={{ margin: "0 0 4px", fontSize: 13 }}><strong>Container #:</strong> {order.containerNumber || "—"}</p>
+              <p style={{ margin: "0 0 4px", fontSize: 13 }}><strong>Seal #:</strong> {order.sealNumber || "—"}</p>
+            </>
+          )}
           <p style={{ margin: "0 0 10px", fontSize: 13 }}><strong>Type:</strong> {order.requestType}</p>
 
           {/* ── Vessel & Schedule Dates ── */}
@@ -2700,6 +2708,22 @@ export default function OrderDetails() {
                 <input value={editForm.bookingNumber||""} onChange={e=>setEditForm(f=>({...f,bookingNumber:e.target.value}))}
                   style={{ display:"block", width:"100%", marginTop:4 }} />
               </label>
+              {(editForm.requestType || order.requestType) === "Container" && (
+                <>
+                  <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    Container #
+                    <input value={editForm.containerNumber||""} onChange={e=>setEditForm(f=>({...f,containerNumber:e.target.value.toUpperCase()}))}
+                      placeholder="e.g. MSCU1234567"
+                      style={{ display:"block", width:"100%", marginTop:4 }} />
+                  </label>
+                  <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    Seal #
+                    <input value={editForm.sealNumber||""} onChange={e=>setEditForm(f=>({...f,sealNumber:e.target.value.toUpperCase()}))}
+                      placeholder="e.g. SL123456"
+                      style={{ display:"block", width:"100%", marginTop:4 }} />
+                  </label>
+                </>
+              )}
             </div>
 
             {/* Notes */}

@@ -71,6 +71,8 @@ export default function CreateOrder() {
     sailDate: "",
     arrivalDate: "",
     bookingNumber: "",
+    containerNumber: "",
+    sealNumber: "",
     condition: "Runner",
     titleStatus: "Title",
 
@@ -1224,6 +1226,27 @@ export default function CreateOrder() {
                 onChange={(e) => update("bookingNumber", e.target.value)}
               />
             </label>
+
+            {form.requestType === "Container" && (
+              <>
+                <label>
+                  Container #
+                  <input
+                    value={form.containerNumber}
+                    onChange={(e) => update("containerNumber", e.target.value.toUpperCase())}
+                    placeholder="e.g. MSCU1234567"
+                  />
+                </label>
+                <label>
+                  Seal #
+                  <input
+                    value={form.sealNumber}
+                    onChange={(e) => update("sealNumber", e.target.value.toUpperCase())}
+                    placeholder="e.g. SL123456"
+                  />
+                </label>
+              </>
+            )}
 
             {/* ── Vessel / Schedule ── */}
             <label style={{ gridColumn: "1 / -1" }}>
