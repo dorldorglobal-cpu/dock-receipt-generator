@@ -140,6 +140,19 @@ async function generateRefNumber() {
   return counter.seq.toString();
 }
 
+// ── GET /api/orders/by-vin/:vin — look up an order by VIN ────────────────────
+router.get("/by-vin/:vin", async (req, res) => {
+  try {
+    const vin = (req.params.vin || "").trim().toUpperCase();
+    if (!vin) return res.status(400).json({ error: "VIN required" });
+    const order = await Order.findOne({ vin: { $regex: `^${vin}$`, $options: "i" } }).sort({ createdAt: -1 });
+    if (!order) return res.json({ found: false });
+    res.json({ found: true, orderId: order._id, refNumber: order.refNumber, status: order.status });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/orders/next-ref — peek at next order number without reserving it ──
 router.get("/next-ref", async (req, res) => {
   try {

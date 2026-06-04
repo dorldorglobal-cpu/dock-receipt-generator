@@ -1,4 +1,5 @@
 import { useEffect, useState, useCallback, useRef } from "react";
+import { useNavigate } from "react-router-dom";
 import "../App.css";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -87,6 +88,7 @@ function RadioGroup({ name, options, value, onChange }) {
 // ─── Main Component ───────────────────────────────────────────────────────────
 
 export default function DockReceiptPage() {
+  const navigate = useNavigate();
   const [aesFile, setAesFile]           = useState(null);
   const [dispatchFile, setDispatchFile] = useState(null);
   const [condition, setCondition]       = useState("RUNNER");
@@ -98,6 +100,11 @@ export default function DockReceiptPage() {
   const [searchResults, setSearchResults] = useState([]);
   const [scheduleStatus, setScheduleStatus] = useState(null);
   const [refreshing, setRefreshing]     = useState("");
+
+  // ── Order cross-check state ─────────────────────────────────────────────────
+  const [orderMatch, setOrderMatch]       = useState(null); // null | { found, orderId, refNumber, status }
+  const [creatingOrder, setCreatingOrder] = useState(false);
+  const [createdOrder, setCreatedOrder]   = useState(null); // { orderId, refNumber } after creation
   const [sendModal, setSendModal]       = useState(null); // { pdfBase64, pdfName }
   const [sendTo, setSendTo]             = useState("");
   const [sendTrucker, setSendTrucker]   = useState("");
@@ -166,6 +173,8 @@ export default function DockReceiptPage() {
     if (!aesFile) { setMsg("Upload an AES PDF first", "error"); return; }
     setMsg("Processing…");
     setResult(null);
+    setOrderMatch(null);
+    setCreatedOrder(null);
 
     const fd = new FormData();
     if (aesFile)      fd.append("aes", aesFile);
@@ -175,10 +184,121 @@ export default function DockReceiptPage() {
       const res = await fetch(`${API}/upload`, { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) { setMsg(data.error || "Error processing files", "error"); return; }
-      setResult({ ...data, condition, titleStatus });
+      const parsed = { ...data, condition, titleStatus };
+      setResult(parsed);
       setMsg("✅ Files parsed successfully", "success");
+
+      // ── Auto cross-check VIN against orders ──────────────────────────────
+      const vin = (data.vin || "").trim();
+      if (vin) {
+        try {
+          const chk = await fetch(`${API}/api/orders/by-vin/${encodeURIComponent(vin)}`);
+          const match = await chk.json();
+          setOrderMatch(match);
+        } catch { /* non-critical */ }
+      }
     } catch {
       setMsg("❌ Backend not reachable", "error");
+    }
+  };
+
+  // ── Map DR result fields → Order payload ─────────────────────────────────
+  const buildOrderPayload = (r) => {
+    // Parse "2019 TOYOTA CAMRY" → { year, make, model }
+    const ymm = (r.vehicleYearMakeModel || "").trim().split(/\s+/);
+    const year  = ymm[0] || "";
+    const make  = ymm[1] || "";
+    const model = ymm.slice(2).join(" ") || "";
+
+    // Normalize condition: "RUNNER" → "Runner", "NONRUNNER" → "Nonrunner"
+    const condMap = { RUNNER: "Runner", NONRUNNER: "Nonrunner", FORKLIFT: "Forklift" };
+    const normCond = condMap[(r.condition || "").toUpperCase()] || "Runner";
+
+    // Normalize title status: "TITLE" → "Title", "NO TITLE" → "No Title"
+    const titleMap = { TITLE: "Title", "NO TITLE": "No Title" };
+    const normTitle = titleMap[(r.titleStatus || "").toUpperCase()] || "Pending";
+
+    // Infer shipping line from POD
+    const podLine = { LAGOS: "SALLAUM", COTONOU: "SALLAUM", LOME: "SALLAUM",
+                      DAKAR: "SALLAUM", TEMA: "ACL" };
+    const shippingLine = podLine[(r.portOfDischarge || "").toUpperCase()] || "";
+
+    return {
+      requestType:      "RORO",
+      vin:              (r.vin              || "").toUpperCase(),
+      year, make, model,
+      vehicleYearMakeModel: r.vehicleYearMakeModel || "",
+      bookingNumber:    r.bookingNumber     || "",
+      vessel:           r.vessel            || "",
+      voyage:           r.voyage            || "",
+      pol:              r.portOfLoading     || "",
+      pod:              r.portOfDischarge   || "",
+      shippingLine,
+      cutoffDate:       r.cutoffDate        || "",
+      sailDate:         r.sailDate          || "",
+      arrivalDate:      r.arrivalDate       || "",
+      aesItn:           r.aesItn            || "",
+      weightKgs:        r.weightKgs         || "",
+      value:            r.value             || "",
+      consigneeName:    r.consigneeName     || "",
+      consigneeAddress: r.consigneeAddress  || "",
+      consigneeCity:    r.consigneeCity     || "",
+      consigneeState:   r.consigneeState    || "",
+      consigneeZip:     r.consigneeZip      || "",
+      consigneeCountry: r.consigneeCountry  || "",
+      exporterName:     r.exporterName      || "",
+      exporterAddress:  r.exporterAddress   || "",
+      exporterCity:     r.exporterCity      || "",
+      exporterState:    r.exporterState     || "",
+      exporterZip:      r.exporterZip       || "",
+      exporterCountry:  r.exporterCountry   || "",
+      pickupName:       r.pickupName        || "",
+      pickupLocation:   r.pickupName        || "",
+      pickupAddress:    r.pickupAddress     || "",
+      pickupCity:       r.pickupCity        || "",
+      pickupState:      r.pickupState       || "",
+      pickupZip:        r.pickupZip         || "",
+      deliveryName:     r.deliveryName      || "",
+      deliveryLocation: r.deliveryName      || "",
+      deliveryAddress:  r.deliveryAddress   || "",
+      deliveryCity:     r.deliveryCity      || "",
+      deliveryState:    r.deliveryState     || "",
+      deliveryZip:      r.deliveryZip       || "",
+      // Use consigneeName as customer name fallback — editable after creation
+      customerName:     r.consigneeName     || "",
+      condition:        normCond,
+      titleStatus:      normTitle,
+      status:           "New Order",
+      source:           "USA OFFICE",
+    };
+  };
+
+  // ── Create order from DR data ─────────────────────────────────────────────
+  const createOrderFromDR = async () => {
+    if (!result) return;
+    setCreatingOrder(true);
+    try {
+      const payload = buildOrderPayload(result);
+      const res = await fetch(`${API}/api/orders`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const data = await res.json();
+      if (res.status === 409) {
+        // VIN duplicate — order was created between check and create
+        setOrderMatch({ found: true, orderId: data.existingId, refNumber: data.refNumber || "existing", status: "" });
+        setMsg("⚠️ An order for this VIN already exists.", "error");
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || "Failed to create order");
+      setCreatedOrder({ orderId: data._id, refNumber: data.refNumber });
+      setOrderMatch({ found: true, orderId: data._id, refNumber: data.refNumber, status: "New Order" });
+      setMsg(`✅ Order #${data.refNumber} created from DR`, "success");
+    } catch (err) {
+      setMsg(`❌ Could not create order: ${err.message}`, "error");
+    } finally {
+      setCreatingOrder(false);
     }
   };
 
@@ -481,6 +601,57 @@ export default function DockReceiptPage() {
               </button>
             </div>
           </div>
+
+          {/* ── Order cross-check banner ── */}
+          {orderMatch && (
+            <div style={{
+              marginBottom: 16, padding: "12px 16px", borderRadius: 10, fontSize: 13,
+              display: "flex", alignItems: "center", justifyContent: "space-between", gap: 12, flexWrap: "wrap",
+              ...(orderMatch.found
+                ? { background: "rgba(52,211,153,0.08)", border: "1px solid rgba(52,211,153,0.35)" }
+                : { background: "rgba(251,191,36,0.08)", border: "1px solid rgba(251,191,36,0.35)" }),
+            }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <span style={{ fontSize: 18 }}>{orderMatch.found ? "✅" : "⚠️"}</span>
+                {orderMatch.found ? (
+                  <span style={{ color: "#34d399" }}>
+                    Order <strong>#{orderMatch.refNumber}</strong> already exists for this VIN
+                    {orderMatch.status ? ` — ${orderMatch.status}` : ""}
+                  </span>
+                ) : (
+                  <span style={{ color: "#fbbf24" }}>
+                    No order found for VIN <strong style={{ fontFamily: "monospace" }}>{result.vin}</strong> — create one from this DR?
+                  </span>
+                )}
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {orderMatch.found ? (
+                  <button
+                    onClick={() => navigate(`/orders/${orderMatch.orderId}`)}
+                    style={{ padding: "6px 14px", borderRadius: 7, border: "none", cursor: "pointer",
+                      background: "rgba(52,211,153,0.2)", color: "#34d399", fontWeight: 600, fontSize: 12 }}>
+                    Open Order →
+                  </button>
+                ) : (
+                  <button
+                    onClick={createOrderFromDR}
+                    disabled={creatingOrder}
+                    style={{ padding: "6px 16px", borderRadius: 7, border: "none", cursor: creatingOrder ? "not-allowed" : "pointer",
+                      background: "#1a6ef7", color: "#fff", fontWeight: 600, fontSize: 12 }}>
+                    {creatingOrder ? "Creating…" : "📋 Create Order"}
+                  </button>
+                )}
+                {createdOrder && (
+                  <button
+                    onClick={() => navigate(`/orders/${createdOrder.orderId}`)}
+                    style={{ padding: "6px 14px", borderRadius: 7, border: "1px solid rgba(52,211,153,0.4)", cursor: "pointer",
+                      background: "transparent", color: "#34d399", fontWeight: 600, fontSize: 12 }}>
+                    Open New Order →
+                  </button>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Schedule match indicator */}
           <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: "var(--radius-sm)", background: "var(--bg-panel)", fontSize: 12 }}>
