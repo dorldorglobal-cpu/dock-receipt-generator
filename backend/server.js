@@ -307,7 +307,8 @@ function normalizePort(v) {
   if (u.includes("JACKSONVILLE") || u.includes("JAX")) return "JACKSONVILLE";
   if (u.includes("FREEPORT")) return "FREEPORT";
   if (u.includes("WILMINGTON")) return "WILMINGTON";
-  if (u.includes("PROVIDENCE") || u.includes("DAVISVILLE")) return "PROVIDENCE";
+  if (u.includes("PROVIDENCE") || u.includes("DAVISVILLE") || u.includes("NORAD")) return "PROVIDENCE";
+  if (u.includes("BRUNSWICK")) return "BRUNSWICK";
 
   if (u.includes("LAGOS")) return "LAGOS";
   if (u.includes("TEMA")) return "TEMA";
@@ -753,16 +754,21 @@ app.post("/upload", upload.any(), async (req, res) => {
       const vesselWords = vClean.split(/\s+/).filter(w => w.length > 3);
       const vesselSearchWord = vesselWords[vesselWords.length - 1] || vClean;
 
+      // PROVIDENCE and DAVISVILLE are the same port — search both
+      const polAliases = polNorm === "PROVIDENCE"
+        ? { $in: ["PROVIDENCE", "DAVISVILLE"] }
+        : polNorm;
+
       // 1. Exact vessel name match
       let dbMatch = await ScheduleRow.findOne({
         vessel: { $regex: `^${esc(vClean)}$`, $options: "i" },
-        pol: polNorm, pod: podNorm,
+        pol: polAliases, pod: podNorm,
       });
       // 2. Partial last-word match
       if (!dbMatch) {
         dbMatch = await ScheduleRow.findOne({
           vessel: { $regex: esc(vesselSearchWord), $options: "i" },
-          pol: polNorm, pod: podNorm,
+          pol: polAliases, pod: podNorm,
         });
       }
       if (dbMatch) {
