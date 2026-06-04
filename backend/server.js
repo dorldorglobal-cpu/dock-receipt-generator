@@ -1050,21 +1050,7 @@ app.get("/grid-template", async (req, res) => {
 
 // ================= START =================
 
-// Auto-refresh Sallaum schedule daily at startup and every 24h
-async function autoRefreshSallaumSchedule() {
-  try {
-    const scheduleRoutes = require("./routes/scheduleRoutes");
-    const res = await fetch("http://localhost:4000/api/schedule/refresh-sallaum", {
-      method: "POST",
-    });
-    if (res.ok) {
-      const data = await res.json();
-      console.log(`[Auto-Refresh] Sallaum schedule updated: ${data.rows} rows`);
-    }
-  } catch (err) {
-    console.warn("[Auto-Refresh] Sallaum schedule update skipped:", err.message);
-  }
-}
+
 
 // ================= PARSE DISPATCH FROM URL =================
 app.post("/api/expenses/parse-dispatch-url", express.json(), async (req, res) => {

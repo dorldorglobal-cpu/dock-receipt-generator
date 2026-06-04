@@ -117,20 +117,7 @@ export default function DockReceiptPage() {
 
   const setMsg = (text, type = "") => { setMessage(text); setMsgType(type); };
 
-  // ── Refresh Sallaum from website ────────────────────────────────────────────
-  const refreshSallaum = async () => {
-    setRefreshing("sallaum");
-    setMsg("Fetching Sallaum schedule from sallaumlines.com…");
-    try {
-      const res = await fetch(`${API}/api/schedule/refresh-sallaum`, { method: "POST" });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setMsg(`✅ Sallaum: ${data.rows} schedule rows loaded`, "success");
-      loadScheduleStatus();
-    } catch (err) {
-      setMsg(`❌ Sallaum refresh failed: ${err.message}`, "error");
-    } finally { setRefreshing(""); }
-  };
+
 
   // ── ACL: Upload PDF (parses full schedule — vessel, voyage, sail, cutoff, arrival) ──
   const [aclFile, setAclFile] = useState(null);
@@ -357,13 +344,6 @@ export default function DockReceiptPage() {
             {scheduleStatus?.sallaum?.updatedAt && (
               <div className="sc-meta">Updated {fmtDate(scheduleStatus.sallaum.updatedAt)}</div>
             )}
-            <button
-              onClick={refreshSallaum}
-              disabled={refreshing === "sallaum"}
-              style={{ marginTop: 10, padding: "7px 14px", fontSize: 12 }}
-            >
-              {refreshing === "sallaum" ? "Fetching…" : "🔄 Refresh from Website"}
-            </button>
           </div>
 
           {/* ACL card */}

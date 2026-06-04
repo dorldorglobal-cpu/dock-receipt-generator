@@ -71,181 +71,6 @@ function parseDateStr(str) {
   return s;
 }
 
-// ─── Strip HTML tags ───────────────────────────────────────────────────────────
-function stripTags(html) {
-  return html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
-}
-
-// ─── Parse HTML table rows (handles colspan) ───────────────────────────────────
-function parseHTMLRows(html) {
-  const rows = [];
-  const trMatches = [...html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/gi)];
-
-  for (const trMatch of trMatches) {
-    const rowHtml = trMatch[1];
-    const cells = [];
-    const tdMatches = [...rowHtml.matchAll(/<t[dh]([^>]*)>([\s\S]*?)<\/t[dh]>/gi)];
-
-    for (const tdMatch of tdMatches) {
-      const attrs = tdMatch[1];
-      const content = stripTags(tdMatch[2]);
-      const colspanMatch = attrs.match(/colspan="?(\d+)"?/i);
-      const colspan = colspanMatch ? parseInt(colspanMatch[1]) : 1;
-      cells.push(content);
-      for (let i = 1; i < colspan; i++) cells.push("");
-    }
-
-    if (cells.length > 0) rows.push(cells);
-  }
-  return rows;
-}
-
-// ─── SALLAUM: Fetch from website & parse ──────────────────────────────────────
-
-async function fetchAndParseSallaum() {
-  const res = await fetch("https://sallaumlines.com/schedules/us-to-west-africa/");
-  if (!res.ok) throw new Error(`Sallaum website returned ${res.status}`);
-  const html = await res.text();
-
-  const rows = parseHTMLRows(html);
-
-  // Find the schedule table: look for row containing vessel names (has "Cut-Off" later)
-  let startRow = -1;
-  for (let i = 0; i < rows.length; i++) {
-    const joined = rows[i].join(" ").toLowerCase();
-    if (joined.includes("cut-off") || joined.includes("cut off") || joined.includes("platinum") || joined.includes("ocean breeze")) {
-      startRow = i;
-      break;
-    }
-  }
-  if (startRow === -1) throw new Error("Could not find schedule table in Sallaum page");
-
-  // Row 0 of table: vessel names (at odd columns)
-  // Row 1: voyage numbers
-  // Row 2: Cut-Off | ETA headers (identifies column pattern)
-
-  const tableRows = rows.slice(startRow);
-
-  // Extract vessels and voyages
-  const vessels = [];
-  const voyages = [];
-
-  // Find the vessel name row and voyage row
-  let vesselRowIdx = -1, voyageRowIdx = -1, headerRowIdx = -1;
-
-  for (let i = 0; i < Math.min(10, tableRows.length); i++) {
-    const joined = tableRows[i].join(" ");
-    if (joined.match(/platinum|ocean breeze|silver soul|glovis|rcc amsterdam|liberty peace/i)) {
-      vesselRowIdx = i;
-    }
-    if (joined.match(/26[A-Z]{2}\d{2}/i)) {
-      voyageRowIdx = i;
-    }
-    if (joined.toLowerCase().includes("cut-off") || joined.toLowerCase().includes("cut off")) {
-      headerRowIdx = i;
-      break;
-    }
-  }
-
-  if (vesselRowIdx === -1 || headerRowIdx === -1) {
-    throw new Error("Cannot identify vessel/header rows in Sallaum schedule");
-  }
-
-  const vesselRow = tableRows[vesselRowIdx];
-  const voyageRow = voyageRowIdx !== -1 ? tableRows[voyageRowIdx] : [];
-
-  // Vessels are at odd column indices (1, 3, 5, ...) - each spanning 2 cols
-  // Count how many vessels
-  for (let col = 1; col < vesselRow.length; col += 2) {
-    const name = cleanStr(vesselRow[col]);
-    if (name && name.toLowerCase() !== "cut-off" && name.toLowerCase() !== "eta") {
-      vessels.push(name.toUpperCase());
-      const voyage = cleanStr(voyageRow[col] || "").toUpperCase();
-      voyages.push(voyage);
-    }
-  }
-
-  const numVessels = vessels.length;
-  if (numVessels === 0) throw new Error("No vessels found in Sallaum schedule");
-
-  // Parse data rows
-  const polRows = {}; // polName -> [{ cutoff, sail }] indexed by vessel
-  const podRows = {}; // podName -> [arrival] indexed by vessel
-
-  let mode = null; // 'POL' | 'POD'
-
-  for (let i = headerRowIdx + 1; i < tableRows.length; i++) {
-    const cells = tableRows[i];
-    if (!cells || cells.length === 0) continue;
-
-    const rowLabel = cleanStr(cells[0]).toUpperCase();
-
-    if (rowLabel.includes("PORT") && rowLabel.includes("LOADING")) {
-      mode = "POL";
-      continue;
-    }
-    if (rowLabel.includes("PORT") && rowLabel.includes("DISCHARGE")) {
-      mode = "POD";
-      continue;
-    }
-    if (rowLabel.includes("LAST UPDATED") || rowLabel.includes("PLEASE NOTE")) continue;
-    if (!rowLabel || !mode) continue;
-
-    const portName = normalizePolPod(cells[0]);
-
-    if (mode === "POL") {
-      polRows[portName] = [];
-      for (let v = 0; v < numVessels; v++) {
-        const cutoffCol = 1 + v * 2;
-        const sailCol = 2 + v * 2;
-        const cutoff = parseDateStr(cells[cutoffCol] || "");
-        const sail = parseDateStr(cells[sailCol] || "");
-        polRows[portName].push({ cutoff, sail });
-      }
-    } else if (mode === "POD") {
-      podRows[portName] = [];
-      for (let v = 0; v < numVessels; v++) {
-        const cutoffCol = 1 + v * 2; // empty for POD
-        const arrivalCol = 2 + v * 2;
-        const arrival = parseDateStr(cells[arrivalCol] || "");
-        podRows[portName].push(arrival);
-      }
-    }
-  }
-
-  // Build schedule rows: vessel × POL × POD
-  const scheduleRows = [];
-  const now = new Date();
-
-  for (let v = 0; v < numVessels; v++) {
-    const vessel = vessels[v];
-    const voyage = voyages[v];
-
-    for (const pol of Object.keys(polRows)) {
-      const { cutoff, sail } = polRows[pol][v] || {};
-      if (!cutoff && !sail) continue; // vessel doesn't call this POL
-
-      for (const pod of Object.keys(podRows)) {
-        const arrival = podRows[pod][v] || "";
-        if (!arrival) continue; // vessel doesn't serve this POD
-
-        scheduleRows.push({
-          carrier: "SALLAUM",
-          vessel,
-          voyage,
-          pol,
-          pod,
-          cutoffDate: cutoff || "",
-          sailDate: sail || "",
-          arrivalDate: arrival,
-          updatedAt: now,
-        });
-      }
-    }
-  }
-
-  return scheduleRows;
-}
 
 // ─── ACL / Grimaldi: Fetch from website XLS ──────────────────────────────────
 //
@@ -722,29 +547,6 @@ router.get("/status", async (req, res) => {
   }
 });
 
-// POST /api/schedule/refresh-sallaum  - fetch from sallaumlines.com
-router.post("/refresh-sallaum", async (req, res) => {
-  try {
-    const rows = await fetchAndParseSallaum();
-
-    if (rows.length === 0) {
-      return res.status(400).json({ error: "No schedule rows parsed from Sallaum website" });
-    }
-
-    // Replace all Sallaum rows
-    await ScheduleRow.deleteMany({ carrier: "SALLAUM" });
-    await ScheduleRow.insertMany(rows);
-
-    res.json({
-      message: `Sallaum schedule updated from website`,
-      rows: rows.length,
-      updatedAt: new Date(),
-    });
-  } catch (err) {
-    console.error("SALLAUM REFRESH ERROR:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
 
 // POST /api/schedule/refresh-acl  - fetch from Grimaldi website XLS (no cutoffs)
 router.post("/refresh-acl", async (req, res) => {
@@ -805,231 +607,202 @@ router.post("/upload-acl-pdf", upload.single("schedule"), async (req, res) => {
   }
 });
 
-// ─── SALLAUM: Hybrid PDF parser ───────────────────────────────────────────────
+// ─── SALLAUM: PDF-only parser ─────────────────────────────────────────────────
+// Uses x-coordinates from the PDF to assign dates to the correct vessel column.
+// No website needed.
+//
 // Strategy:
-//   1. Parse PDF to get date columns (reliable — PDF has correct dates)
-//   2. Fetch website to get vessel names + port-call patterns (reliable routing)
-//   3. Match each website vessel to its PDF column via port-call Jaccard overlap
-//   4. Build rows: vessel/voyage from website, dates from PDF column
+//   1. Extract all text items with x,y coords via pdfParse pagerender
+//   2. Find voyage code row → each code defines a column center
+//   3. Find vessel names in the rows just above the voyage codes
+//   4. Build column x-bands (midpoints between adjacent column centers)
+//   5. For POL rows: 2 dates per vessel band (left=cutoff, right=sail)
+//   6. For POD rows: 1 arrival date per vessel band
+//   7. Cross-join by voyage code (no positional index guessing)
 
 async function parseSallaumPdfDirect(buffer) {
-  // ── Extract voyage codes with x-coordinates (gives visual left-to-right order)
-  const voyagePositions = []; // { code, x, y }
-  let vesselNameItems = [];   // { str, x, y } for lines near voyage codes
+  const allItems = []; // { str, x, y }
 
   await pdfParse(buffer, {
     pagerender: async function(pageData) {
       const tc = await pageData.getTextContent();
       for (const item of tc.items) {
         const s = (item.str || "").trim();
-        const x = item.transform[4];
-        const y = item.transform[5];
-        const codeMatch = s.match(/^(2[0-9][A-Z]{2}\d{2})$/);
-        if (codeMatch) voyagePositions.push({ code: codeMatch[1], x, y });
-        if (/^[A-Z][a-z]/.test(s) && s.length > 3) vesselNameItems.push({ str: s.toUpperCase(), x, y });
+        if (!s) continue;
+        allItems.push({ str: s, x: item.transform[4], y: item.transform[5] });
       }
-      // Return plain text for the fallback text variable
       return tc.items.map(i => i.str).join(" ") + "\n";
     },
-  }).catch(() => {}); // ignore — we only need voyagePositions
+  }).catch(() => {});
 
-  // Sort voyage codes by x-coordinate within their header row = visual column order
-  // Use only the first occurrence of each code (header row = highest y value per code)
-  const firstY = {};
-  for (const vp of voyagePositions) {
-    if (firstY[vp.code] === undefined || vp.y > firstY[vp.code]) firstY[vp.code] = vp.y;
+  if (allItems.length === 0) throw new Error("No text extracted from Sallaum PDF");
+
+  // ── Find voyage codes and the row they appear on ─────────────────────────────
+  // Sallaum voyage codes: e.g. 26LA01, 26LB02, 26PC01
+  const VOYAGE_RE = /^(2[0-9][A-Z]{2,3}\d{1,3}[A-Z]?)$/;
+  const voyageItems = allItems.filter(i => VOYAGE_RE.test(i.str));
+  if (voyageItems.length === 0) throw new Error("No voyage codes found in Sallaum PDF");
+
+  // Pick the y-row that contains the most voyage codes (the header row)
+  const yBucket = y => Math.round(y / 8) * 8;
+  const yGroups = {};
+  for (const vi of voyageItems) {
+    const k = yBucket(vi.y);
+    if (!yGroups[k]) yGroups[k] = [];
+    yGroups[k].push(vi);
   }
-  const headerVoyages = [];
-  for (const vp of voyagePositions) {
-    if (Math.abs(vp.y - firstY[vp.code]) < 5 && !headerVoyages.find(v => v.code === vp.code)) {
-      headerVoyages.push(vp);
+  const [bestYKey, voyageRow] = Object.entries(yGroups).sort((a, b) => b[1].length - a[1].length)[0];
+  const voyageHeaderY = parseFloat(bestYKey);
+  voyageRow.sort((a, b) => a.x - b.x); // left → right
+  console.log("[Sallaum PDF] voyage codes:", voyageRow.map(v => v.str).join(", "));
+
+  // ── Extract vessel names from text just above the voyage code row ─────────────
+  // Vessel names appear 5–100pt above the voyage header row (higher y = higher on page)
+  const vesselBand = allItems.filter(i =>
+    i.y > voyageHeaderY + 5 && i.y < voyageHeaderY + 100 &&
+    /^[A-Z][A-Za-z]/.test(i.str) && i.str.length > 3 &&
+    !VOYAGE_RE.test(i.str)
+  );
+
+  // Build column descriptors, assigning vessel name tokens by x-proximity
+  const columns = voyageRow.map(vi => {
+    const tokens = vesselBand
+      .filter(t => Math.abs(t.x - vi.x) < 55)
+      .sort((a, b) => b.y - a.y); // topmost first
+    const vessel = tokens.map(t => t.str).join(" ").trim().toUpperCase() || vi.str;
+    return { voyage: vi.str, vessel, x: vi.x };
+  });
+
+  // ── Define column x-bands (midpoints between adjacent voyage code centers) ────
+  const colBands = columns.map((col, i) => {
+    const prev = columns[i - 1];
+    const next = columns[i + 1];
+    return {
+      ...col,
+      left:  prev ? (col.x + prev.x) / 2 : col.x - 120,
+      right: next ? (col.x + next.x) / 2 : col.x + 120,
+    };
+  });
+
+  function assignCol(x) {
+    return colBands.find(b => x >= b.left && x < b.right) || null;
+  }
+
+  // ── Group all PDF items into visual rows (similar y → same row) ───────────────
+  const DATE_RE = /^\d{1,2}-[A-Za-z]{3}$|^N\/A$/;
+  const itemsSortedTopDown = [...allItems].sort((a, b) => b.y - a.y);
+  const textRows = [];
+  let currentRow = [], lastY = null;
+  for (const item of itemsSortedTopDown) {
+    if (lastY === null || Math.abs(item.y - lastY) < 7) {
+      currentRow.push(item);
+      lastY = (lastY === null) ? item.y : (lastY * 0.6 + item.y * 0.4);
+    } else {
+      if (currentRow.length) textRows.push(currentRow.sort((a, b) => a.x - b.x));
+      currentRow = [item];
+      lastY = item.y;
     }
   }
-  headerVoyages.sort((a, b) => a.x - b.x); // left → right
-  const sortedVoyageCodes = headerVoyages.map(v => v.code);
-  console.log("[Sallaum PDF] voyage codes by x-position:", sortedVoyageCodes.join(", "));
+  if (currentRow.length) textRows.push(currentRow.sort((a, b) => a.x - b.x));
 
-  // Map voyage code → vessel name (vessel name is near the code by y-coordinate)
-  const vesselForVoyage = {};
-  for (const vp of headerVoyages) {
-    const nearby = vesselNameItems
-      .filter(n => Math.abs(n.x - vp.x) < 60 && n.y > vp.y && n.y < vp.y + 80)
-      .sort((a, b) => a.y - b.y); // closest above
-    if (nearby.length) vesselForVoyage[vp.code] = nearby[nearby.length - 1].str;
-  }
-
-  // ── Parse PDF date tables ────────────────────────────────────────────────────
-  const { text } = await pdfParse(buffer);
-  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const TOKEN_RE = /\b(\d{1,2}-[A-Za-z]{3}|N\/A)\b/g;
-
-  const polData = {};   // pol -> [{cutoff, sail}] indexed by visual column
-  const podData = {};   // pod -> [arrival] indexed by visual column
+  // ── Parse POL / POD sections ─────────────────────────────────────────────────
+  // polData[pol][voyage] = { cutoff, sail }
+  // podData[pod][voyage] = arrival
+  const polData = {};
+  const podData = {};
   let mode = null;
 
-  for (const line of lines) {
-    if (/^POL\s+Cut\s+Off/i.test(line)) { mode = "POL"; continue; }
-    if (/^POD$/i.test(line))            { mode = "POD"; continue; }
+  for (const row of textRows) {
+    const texts = row.map(i => i.str);
+    const joined = texts.join(" ");
+
+    // Section header detection
+    if (/\bPOL\b/i.test(joined) && /cut.?off/i.test(joined)) { mode = "POL"; continue; }
+    if (/^POD$/i.test(joined.trim()) || (/\bPOD\b/i.test(texts[0]) && texts.length <= 3)) { mode = "POD"; continue; }
     if (!mode) continue;
 
+    const firstTok = texts[0] || "";
+
     if (mode === "POL") {
-      const m = line.match(/^(Freeport|Jacksonville|Baltimore[^\d]*|Brunswick\s+GA|NORAD\s+Davisville)/i);
-      if (!m) continue;
-      const pol = normalizePolPod(m[0]);
-      const tokens = [...line.matchAll(TOKEN_RE)].map(t => t[1]);
-      // Store all columns — if same POL appears twice (e.g. two Baltimore rows) merge by taking non-empty
-      const newPairs = [];
-      for (let i = 0; i + 1 < tokens.length; i += 2) {
-        newPairs.push({
-          cutoff: tokens[i]   === "N/A" ? "" : parseDateStr(tokens[i]),
-          sail:   tokens[i+1] === "N/A" ? "" : parseDateStr(tokens[i+1]),
-        });
+      const polMatch = firstTok.match(/^(Freeport|Jacksonville|Baltimore|Brunswick|NORAD|Davisville|Providence|Wilmington)/i);
+      if (!polMatch) continue;
+      const pol = normalizePolPod(firstTok);
+      if (!polData[pol]) polData[pol] = {};
+
+      // Collect all date items in this row, grouped by column
+      const dateItems = row.filter(i => DATE_RE.test(i.str));
+      const colDates = {}; // voyage -> sorted array of date items (left-to-right)
+      for (const di of dateItems) {
+        const col = assignCol(di.x);
+        if (!col) continue;
+        if (!colDates[col.voyage]) colDates[col.voyage] = [];
+        colDates[col.voyage].push(di);
       }
-      if (!polData[pol]) {
-        polData[pol] = newPairs;
-      } else {
-        // Merge: prefer non-empty values from either row
-        for (let c = 0; c < Math.max(polData[pol].length, newPairs.length); c++) {
-          const existing = polData[pol][c] || { cutoff: "", sail: "" };
-          const incoming = newPairs[c]     || { cutoff: "", sail: "" };
-          polData[pol][c] = {
-            cutoff: existing.cutoff || incoming.cutoff,
-            sail:   existing.sail   || incoming.sail,
-          };
+
+      for (const [voyage, items] of Object.entries(colDates)) {
+        items.sort((a, b) => a.x - b.x); // left=cutoff, right=sail
+        const cutoff = items[0]?.str === "N/A" ? "" : parseDateStr(items[0]?.str || "");
+        const sail   = items[1]?.str === "N/A" ? "" : parseDateStr(items[1]?.str || items[0]?.str || "");
+        // Merge if this POL row appeared before (e.g. duplicate Baltimore rows)
+        if (!polData[pol][voyage]) {
+          polData[pol][voyage] = { cutoff, sail };
+        } else {
+          polData[pol][voyage].cutoff = polData[pol][voyage].cutoff || cutoff;
+          polData[pol][voyage].sail   = polData[pol][voyage].sail   || sail;
         }
       }
     }
 
     if (mode === "POD") {
-      const pm = line.match(/^(Cotonou|Lome|Lagos|Durban|Dakar|Tema|Abidjan)/i);
-      if (!pm) continue;
-      const pod = normalizePolPod(pm[0]);
-      const tokens = [...line.matchAll(TOKEN_RE)].map(t => t[1]);
-      podData[pod] = tokens.map(t => t === "N/A" ? "" : parseDateStr(t));
-    }
-  }
+      const podMatch = firstTok.match(/^(Cotonou|Lome|Lagos|Durban|Dakar|Tema|Abidjan)/i);
+      if (!podMatch) continue;
+      const pod = normalizePolPod(firstTok);
+      if (!podData[pod]) podData[pod] = {};
 
-  const numCols = Math.max(...Object.values(polData).map(a => a.length));
-  if (numCols === 0) throw new Error("No POL date columns found in PDF");
-
-  // ── Build port-call set per PDF column ──────────────────────────────────────
-  const colPolSet = {}; // col -> Set<pol>
-  for (const [pol, pairs] of Object.entries(polData)) {
-    for (let c = 0; c < numCols; c++) {
-      if (pairs[c] && pairs[c].sail) {
-        if (!colPolSet[c]) colPolSet[c] = new Set();
-        colPolSet[c].add(pol);
+      const dateItems = row.filter(i => DATE_RE.test(i.str));
+      for (const di of dateItems) {
+        const col = assignCol(di.x);
+        if (!col) continue;
+        const arrival = di.str === "N/A" ? "" : parseDateStr(di.str);
+        if (arrival && !podData[pod][col.voyage]) podData[pod][col.voyage] = arrival;
       }
     }
   }
 
-  // ── Fetch website for vessel names + routing ─────────────────────────────────
-  let websiteRows = [];
-  try { websiteRows = await fetchAndParseSallaum(); } catch (e) {
-    console.warn("[Sallaum hybrid] website fetch failed:", e.message);
-  }
+  const polCount = Object.keys(polData).length;
+  const podCount = Object.keys(podData).length;
+  console.log(`[Sallaum PDF] POLs: ${Object.keys(polData).join(", ")}`);
+  console.log(`[Sallaum PDF] PODs: ${Object.keys(podData).join(", ")}`);
+  if (polCount === 0) throw new Error("No POL dates found in Sallaum PDF");
 
+  // ── Build schedule rows ───────────────────────────────────────────────────────
   const scheduleRows = [];
   const now = new Date();
 
-  // ── Sort PDF columns by earliest sail date (= visual left-to-right order) ───
-  const colFirstSail = {};
-  for (let c = 0; c < numCols; c++) {
-    const sails = Object.values(polData).map(p => p[c]?.sail).filter(Boolean)
-      .map(d => new Date(d).getTime()).filter(n => !isNaN(n));
-    colFirstSail[c] = sails.length ? Math.min(...sails) : Infinity;
-  }
-  const sortedCols = Array.from({ length: numCols }, (_, i) => i)
-    .sort((a, b) => colFirstSail[a] - colFirstSail[b]);
-
-  // ── Use x-position sorted voyage codes if available, else fall back to website
-  let vesselOrder = []; // [{ vessel, voyage }] in visual left-to-right order
-
-  if (sortedVoyageCodes.length >= numCols) {
-    // Use x-coordinate extracted order — most reliable
-    for (const code of sortedVoyageCodes.slice(0, numCols)) {
-      // Try to find vessel name from website rows or nearby text
-      const wsRow = websiteRows.find(r => r.voyage === code);
-      const vessel = wsRow?.vessel || vesselForVoyage[code] || code;
-      vesselOrder.push({ vessel, voyage: code });
-    }
-    console.log("[Sallaum PDF] using x-position order:", vesselOrder.map(v => v.voyage).join(", "));
-  } else if (websiteRows.length > 0) {
-    // Fallback: website vessel order (chronological)
-    for (const r of websiteRows) {
-      if (!vesselOrder.find(v => v.voyage === r.voyage)) {
-        vesselOrder.push({ vessel: r.vessel, voyage: r.voyage });
-      }
-    }
-    console.log("[Sallaum PDF] using website order:", vesselOrder.map(v => v.voyage).join(", "));
-  }
-
-  if (vesselOrder.length > 0) {
-    const count = Math.min(vesselOrder.length, sortedCols.length);
-    for (let i = 0; i < count; i++) {
-      const { vessel, voyage } = vesselOrder[i];
-      const col = sortedCols[i];
-      console.log(`  [${i}] ${vessel} ${voyage} → col ${col} (first sail: ${new Date(colFirstSail[col]).toDateString()})`);
-      for (const [pol, pairs] of Object.entries(polData)) {
-        const pair = pairs[col];
-        if (!pair || (!pair.cutoff && !pair.sail)) continue;
-        for (const [pod, etas] of Object.entries(podData)) {
-          const arrival = etas[col] || "";
-          if (!arrival) continue;
-          scheduleRows.push({ carrier: "SALLAUM", vessel, voyage, pol, pod,
-            cutoffDate: pair.cutoff || "", sailDate: pair.sail || "",
-            arrivalDate: arrival, updatedAt: now });
-        }
-      }
-    }
-    console.log(`[Sallaum PDF] rows built: ${scheduleRows.length}`);
-  }
-
-  // Fallback if website unavailable: extract voyage codes from PDF text
-  if (scheduleRows.length === 0) {
-    console.warn("[Sallaum hybrid] falling back to PDF-only mode");
-    const VOYAGE_RE = /\b(2[0-9][A-Z]{2}\d{2})\b/g;
-    const voyageCodes = [];
-    const vesselForVoyage = {};
-    for (let i = 0; i < lines.length; i++) {
-      for (const m of lines[i].matchAll(VOYAGE_RE)) {
-        const code = m[1];
-        if (!voyageCodes.includes(code)) {
-          voyageCodes.push(code);
-          for (let j = i - 1; j >= Math.max(0, i - 2); j--) {
-            const prev = lines[j];
-            if (/^[A-Z][a-z]/.test(prev) && !prev.match(VOYAGE_RE) && !/\d{3}\s*MT|^\d/.test(prev)) {
-              vesselForVoyage[code] = prev.toUpperCase(); break;
-            }
-          }
-        }
-      }
-    }
-    // Assign codes to columns in chronological order (sort columns by earliest sail date)
-    const colFirstSail = {};
-    for (let c = 0; c < numCols; c++) {
-      const sails = Object.values(polData).map(p => p[c]?.sail).filter(Boolean).map(d => new Date(d).getTime()).filter(n => !isNaN(n));
-      colFirstSail[c] = sails.length ? Math.min(...sails) : Infinity;
-    }
-    const sortedCols = Array.from({ length: numCols }, (_, i) => i).sort((a, b) => colFirstSail[a] - colFirstSail[b]);
-    const sortedCodes = voyageCodes.slice(0, sortedCols.length);
-    for (let i = 0; i < sortedCodes.length; i++) {
-      const code = sortedCodes[i], col = sortedCols[i];
-      const vessel = vesselForVoyage[code] || code;
-      for (const [pol, pairs] of Object.entries(polData)) {
-        const pair = pairs[col];
-        if (!pair || (!pair.cutoff && !pair.sail)) continue;
-        for (const [pod, etas] of Object.entries(podData)) {
-          const arrival = etas[col] || "";
-          if (!arrival) continue;
-          scheduleRows.push({ carrier: "SALLAUM", vessel, voyage: code, pol, pod,
-            cutoffDate: pair.cutoff || "", sailDate: pair.sail || "",
-            arrivalDate: arrival, updatedAt: now });
-        }
+  for (const col of columns) {
+    const { vessel, voyage } = col;
+    for (const [pol, voyageMap] of Object.entries(polData)) {
+      const pair = voyageMap[voyage];
+      if (!pair || (!pair.cutoff && !pair.sail)) continue;
+      for (const [pod, podVoyageMap] of Object.entries(podData)) {
+        const arrival = podVoyageMap[voyage] || "";
+        if (!arrival) continue;
+        scheduleRows.push({
+          carrier: "SALLAUM",
+          vessel,
+          voyage,
+          pol,
+          pod,
+          cutoffDate:  pair.cutoff || "",
+          sailDate:    pair.sail   || "",
+          arrivalDate: arrival,
+          updatedAt:   now,
+        });
       }
     }
   }
 
+  console.log(`[Sallaum PDF] built ${scheduleRows.length} schedule rows`);
   return scheduleRows;
 }
 
@@ -1250,10 +1023,10 @@ router.post("/update-from-pdfs", uploadTwo.fields([
 
     let sallaumRows = 0, aclRows = 0;
 
-    // ── Sallaum → refresh from website (no local PDF parser exists for Sallaum) ─
+    // ── Sallaum PDF → DB ──────────────────────────────────────────────────────
     if (req.files?.sallaum) {
-      const rows = await fetchAndParseSallaum().catch(e => {
-        console.error("[update-from-pdfs] Sallaum website refresh error:", e.message); return [];
+      const rows = await parseSallaumPdfDirect(req.files.sallaum[0].buffer).catch(e => {
+        console.error("[update-from-pdfs] Sallaum PDF parse error:", e.message); return [];
       });
       if (rows.length) {
         await ScheduleRow.deleteMany({ carrier: "SALLAUM" });
