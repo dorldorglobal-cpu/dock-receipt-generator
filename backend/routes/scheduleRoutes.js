@@ -888,35 +888,33 @@ async function parseSallaumPdfDirect(buffer) {
   const now = new Date();
 
   if (websiteRows.length > 0) {
-    // Build per-vessel port-call sets from website
-    const vesselMeta = {}; // "vessel|voyage" -> { vessel, voyage, pols: Set }
+    // Extract website vessels in visual left-to-right order (chronological).
+    // The website parser emits rows vessel-by-vessel in column order, so first
+    // appearance order = visual order = chronological order.
+    const websiteVessels = []; // [{vessel, voyage}] in visual order
     for (const r of websiteRows) {
-      const key = `${r.vessel}|${r.voyage}`;
-      if (!vesselMeta[key]) vesselMeta[key] = { vessel: r.vessel, voyage: r.voyage, pols: new Set() };
-      vesselMeta[key].pols.add(r.pol);
-    }
-
-    // Match each website vessel to a PDF column by Jaccard port-call similarity
-    const usedCols = new Set();
-    const vesselToCol = {};
-    // Sort by descending port-call set size so vessels with distinct patterns get matched first
-    const sorted = Object.entries(vesselMeta).sort((a, b) => b[1].pols.size - a[1].pols.size);
-    for (const [key, meta] of sorted) {
-      let bestCol = -1, bestScore = -1;
-      for (let c = 0; c < numCols; c++) {
-        if (usedCols.has(c)) continue;
-        const pdfPols = colPolSet[c] || new Set();
-        const intersection = [...meta.pols].filter(p => pdfPols.has(p)).length;
-        const union = new Set([...meta.pols, ...pdfPols]).size;
-        const score = union > 0 ? intersection / union : 0;
-        if (score > bestScore) { bestScore = score; bestCol = c; }
+      if (!websiteVessels.find(v => v.voyage === r.voyage)) {
+        websiteVessels.push({ vessel: r.vessel, voyage: r.voyage });
       }
-      if (bestCol !== -1) { vesselToCol[key] = bestCol; usedCols.add(bestCol); }
     }
 
-    // Build rows: vessel/voyage from website, dates from matched PDF column
-    for (const [key, col] of Object.entries(vesselToCol)) {
-      const { vessel, voyage } = vesselMeta[key];
+    // Sort PDF columns by their earliest sail date (ascending = visual left-to-right)
+    const colFirstSail = {};
+    for (let c = 0; c < numCols; c++) {
+      const sails = Object.values(polData).map(p => p[c]?.sail).filter(Boolean)
+        .map(d => new Date(d).getTime()).filter(n => !isNaN(n));
+      colFirstSail[c] = sails.length ? Math.min(...sails) : Infinity;
+    }
+    const sortedCols = Array.from({ length: numCols }, (_, i) => i)
+      .sort((a, b) => colFirstSail[a] - colFirstSail[b]);
+
+    // Zip: website vessel #i (visual order) → sorted PDF column #i
+    const count = Math.min(websiteVessels.length, sortedCols.length);
+    console.log(`[Sallaum hybrid] zipping ${count} vessels to ${sortedCols.length} PDF columns`);
+    for (let i = 0; i < count; i++) {
+      const { vessel, voyage } = websiteVessels[i];
+      const col = sortedCols[i];
+      console.log(`  [${i}] ${vessel} ${voyage} → PDF col ${col} (first sail: ${new Date(colFirstSail[col]).toDateString()})`);
       for (const [pol, pairs] of Object.entries(polData)) {
         const pair = pairs[col];
         if (!pair || (!pair.cutoff && !pair.sail)) continue;
@@ -929,7 +927,7 @@ async function parseSallaumPdfDirect(buffer) {
         }
       }
     }
-    console.log(`[Sallaum hybrid] matched ${Object.keys(vesselToCol).length} vessels to columns | rows: ${scheduleRows.length}`);
+    console.log(`[Sallaum hybrid] rows built: ${scheduleRows.length}`);
   }
 
   // Fallback if website unavailable: extract voyage codes from PDF text
