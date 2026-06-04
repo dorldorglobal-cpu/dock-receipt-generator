@@ -170,6 +170,23 @@ export default function DockReceiptPage() {
     } finally { setRefreshing(""); }
   };
 
+  // ── VIN → order check (standalone, reusable) ─────────────────────────────
+  const checkVin = async (vin) => {
+    const v = (vin || "").trim();
+    if (!v) return;
+    setOrderMatch(null);
+    try {
+      const res = await fetch(`${API}/api/orders/by-vin/${encodeURIComponent(v)}`);
+      if (!res.ok) throw new Error("lookup failed");
+      const match = await res.json();
+      setOrderMatch(match);
+    } catch (err) {
+      console.warn("[checkVin] failed:", err.message);
+      // Set a sentinel so the banner still renders with a manual "Create Order" option
+      setOrderMatch({ found: false, _checkFailed: true });
+    }
+  };
+
   // ── Process AES + Dispatch ──────────────────────────────────────────────────
   const processFiles = async () => {
     if (!aesFile) { setMsg("Upload an AES PDF first", "error"); return; }
@@ -189,17 +206,9 @@ export default function DockReceiptPage() {
       if (!res.ok) { setMsg(data.error || "Error processing files", "error"); return; }
       const parsed = { ...data, condition, titleStatus };
       setResult(parsed);
+      setMsg("✅ Files parsed — checking orders…", "success");
+      await checkVin(data.vin);
       setMsg("✅ Files parsed successfully", "success");
-
-      // ── Auto cross-check VIN against orders ──────────────────────────────
-      const vin = (data.vin || "").trim();
-      if (vin) {
-        try {
-          const chk = await fetch(`${API}/api/orders/by-vin/${encodeURIComponent(vin)}`);
-          const match = await chk.json();
-          setOrderMatch(match);
-        } catch { /* non-critical */ }
-      }
     } catch {
       setMsg("❌ Backend not reachable", "error");
     }
@@ -581,7 +590,7 @@ export default function DockReceiptPage() {
             </thead>
             <tbody>
               {searchResults.map((r, i) => (
-                <tr key={i} style={{ cursor: "pointer" }} onClick={() => { setResult(r); setSearchResults([]); setMsg("Shipment loaded", "success"); }}>
+                <tr key={i} style={{ cursor: "pointer" }} onClick={() => { setResult(r); setSearchResults([]); setOrderMatch(null); setCreatedOrder(null); setFilesSaved(false); setMsg("Shipment loaded", "success"); checkVin(r.vin); }}>
                   <td style={{ color: "var(--accent)" }}>{r.referenceNumber}</td>
                   <td style={{ fontFamily: "monospace", fontSize: 12 }}>{r.vin}</td>
                   <td>{r.vessel}</td>
@@ -630,7 +639,7 @@ export default function DockReceiptPage() {
         <div className="form-section">
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, paddingBottom: 12, borderBottom: "1px solid var(--border-muted)" }}>
             <h2 style={{ margin: 0, border: "none", padding: 0 }}>Parsed Result — Review & Download</h2>
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
               <button className="btn-ghost" onClick={copyExcel} style={{ fontSize: 12, padding: "7px 14px" }}>
                 📋 Copy Excel Column
               </button>
@@ -639,6 +648,13 @@ export default function DockReceiptPage() {
               </button>
               <button onClick={openSendModal} style={{ fontSize: 13, background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "8px 16px", cursor: "pointer" }}>
                 ✉️ Send DR
+              </button>
+              {/* Manual order check — always visible so user can re-trigger if auto-check missed */}
+              <button
+                onClick={() => checkVin(result.vin)}
+                style={{ fontSize: 12, padding: "7px 14px", borderRadius: 8, border: "1px solid var(--border)",
+                  background: "var(--bg-panel)", color: "var(--text-secondary)", cursor: "pointer" }}>
+                🔍 Check Order
               </button>
             </div>
           </div>
@@ -658,6 +674,10 @@ export default function DockReceiptPage() {
                   <span style={{ color: "#34d399" }}>
                     Order <strong>#{orderMatch.refNumber}</strong> already exists for this VIN
                     {orderMatch.status ? ` — ${orderMatch.status}` : ""}
+                  </span>
+                ) : orderMatch._checkFailed ? (
+                  <span style={{ color: "#f87171" }}>
+                    Could not check orders for VIN <strong style={{ fontFamily: "monospace" }}>{result.vin}</strong> — click <strong>Check Order</strong> to retry, or create one now.
                   </span>
                 ) : (
                   <span style={{ color: "#fbbf24" }}>
