@@ -128,7 +128,28 @@ export default function DockReceiptPage() {
 
 
 
-  // ── ACL: Upload PDF (parses full schedule — vessel, voyage, sail, cutoff, arrival) ──
+  // ── Sallaum: Upload PDF ─────────────────────────────────────────────────────
+  const [sallaumFile, setSallaumFile] = useState(null);
+
+  const uploadSallaumPdf = async () => {
+    if (!sallaumFile) { setMsg("Select the Sallaum schedule PDF first", "error"); return; }
+    setRefreshing("sallaum-pdf");
+    setMsg("Parsing Sallaum schedule PDF…");
+    try {
+      const fd = new FormData();
+      fd.append("schedule", sallaumFile);
+      const res = await fetch(`${API}/api/schedule/upload-pdf`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setMsg(`✅ Sallaum schedule loaded — ${data.rows} routes`, "success");
+      setSallaumFile(null);
+      loadScheduleStatus();
+    } catch (err) {
+      setMsg(`❌ Sallaum PDF failed: ${err.message}`, "error");
+    } finally { setRefreshing(""); }
+  };
+
+  // ── ACL: Upload PDF ─────────────────────────────────────────────────────────
   const [aclFile, setAclFile] = useState(null);
 
   const uploadAclPdf = async () => {
@@ -146,27 +167,6 @@ export default function DockReceiptPage() {
       loadScheduleStatus();
     } catch (err) {
       setMsg(`❌ ACL PDF failed: ${err.message}`, "error");
-    } finally { setRefreshing(""); }
-  };
-
-  // ── Upload master Excel (legacy / manual fallback) ──────────────────────────
-  const [excelFile, setExcelFile] = useState(null);
-
-  const uploadExcel = async () => {
-    if (!excelFile) { setMsg("Select an Excel schedule first", "error"); return; }
-    setRefreshing("excel");
-    setMsg("Saving Excel schedule…");
-    try {
-      const fd = new FormData();
-      fd.append("schedule", excelFile);
-      const res = await fetch(`${API}/api/schedule/upload-excel`, { method: "POST", body: fd });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Failed");
-      setMsg(`✅ Excel schedule saved (${data.rows} rows)`, "success");
-      setExcelFile(null);
-      loadScheduleStatus();
-    } catch (err) {
-      setMsg(`❌ Excel upload failed: ${err.message}`, "error");
     } finally { setRefreshing(""); }
   };
 
@@ -514,6 +514,21 @@ export default function DockReceiptPage() {
             {scheduleStatus?.sallaum?.updatedAt && (
               <div className="sc-meta">Updated {fmtDate(scheduleStatus.sallaum.updatedAt)}</div>
             )}
+            <div style={{ marginTop: 10, display: "flex", flexDirection: "column", gap: 8 }}>
+              <DropZone
+                label="Upload Sallaum Schedule PDF"
+                sub="Sallaum RoRo schedule PDF"
+                file={sallaumFile}
+                onFile={setSallaumFile}
+                accept=".pdf"
+              />
+              {sallaumFile && (
+                <button onClick={uploadSallaumPdf} disabled={refreshing === "sallaum-pdf"}
+                  style={{ fontSize: 12, padding: "7px 14px" }}>
+                  {refreshing === "sallaum-pdf" ? "Parsing PDF…" : "⬆ Load Sallaum Schedule"}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* ACL card */}
@@ -539,27 +554,6 @@ export default function DockReceiptPage() {
                 <button onClick={uploadAclPdf} disabled={refreshing === "acl-pdf"}
                   style={{ fontSize: 12, padding: "7px 14px" }}>
                   {refreshing === "acl-pdf" ? "Parsing PDF…" : "⬆ Load ACL Schedule"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          {/* Excel fallback card */}
-          <div className="schedule-card empty">
-            <div className="sc-carrier">Master Excel (Fallback)</div>
-            <div className="sc-status" style={{ color: "var(--text-muted)" }}>Manual upload</div>
-            <div style={{ marginTop: 10 }}>
-              <DropZone
-                label="Upload Master Excel"
-                sub=".xlsx with schedule data"
-                file={excelFile}
-                onFile={setExcelFile}
-                accept=".xlsx,.xls"
-              />
-              {excelFile && (
-                <button onClick={uploadExcel} disabled={refreshing === "excel"}
-                  style={{ marginTop: 8, width: "100%", fontSize: 12, padding: "7px 14px" }}>
-                  {refreshing === "excel" ? "Saving…" : "⬆ Upload Excel"}
                 </button>
               )}
             </div>
