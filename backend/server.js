@@ -1220,11 +1220,10 @@ mongoose
     app.listen(4000, () => {
       console.log("Server running on port 4000");
 
-      // Auto-refresh Sallaum schedule after short delay (let server fully start)
-      setTimeout(autoRefreshSallaumSchedule, 5000);
-
-      // Then refresh every 24 hours
-      setInterval(autoRefreshSallaumSchedule, 24 * 60 * 60 * 1000);
+      // Auto-refresh disabled — website dates differ from uploaded PDF.
+      // Schedule is updated manually by uploading the PDF from the Vessel Schedule page.
+      // setTimeout(autoRefreshSallaumSchedule, 5000);
+      // setInterval(autoRefreshSallaumSchedule, 24 * 60 * 60 * 1000);
 
       // ── Keep-alive ping (prevents Render free tier from sleeping) ──
       // Pings the server's own health endpoint every 14 minutes
