@@ -846,27 +846,28 @@ async function parseSallaumPdfDirect(buffer) {
   const numVessels = voyageCodes.length;
   console.log("[Sallaum PDF] voyage codes:", voyageCodes.map(v => v.str).join(", "));
 
+  // Vessel names: assign by x-band defined by voyage code midpoints
+  // (gap-based grouping fails when column gaps < threshold — use column zones instead)
   const vesselNames = Array(numVessels).fill("");
-  if (voyageRowIdx > 0) {
-    const nameRow = textRows[voyageRowIdx - 1]
-      .filter(i => /^[A-Z][A-Za-z]/.test(i.str) && i.str.length > 2 && !VOYAGE_RE.test(i.str));
-    const groups = [];
-    let cur = [];
-    for (let i = 0; i < nameRow.length; i++) {
-      const gap = i === 0 ? 0 : nameRow[i].x - (nameRow[i-1].x + nameRow[i-1].str.length * 6);
-      if (gap > 40 && cur.length) { groups.push(cur); cur = []; }
-      cur.push(nameRow[i]);
-    }
-    if (cur.length) groups.push(cur);
-    for (const grp of groups) {
-      const cx = (grp[0].x + grp[grp.length - 1].x) / 2;
-      let best = 0, bestD = Infinity;
-      for (let v = 0; v < numVessels; v++) {
-        const d = Math.abs(voyageCodes[v].x - cx);
-        if (d < bestD) { bestD = d; best = v; }
+  // Search up to 3 rows above the voyage row for vessel names
+  for (let above = 1; above <= 3 && voyageRowIdx - above >= 0; above++) {
+    const nameRow = textRows[voyageRowIdx - above]
+      .filter(i => /^[A-Z][A-Za-z]/.test(i.str) && i.str.length > 2 && !VOYAGE_RE.test(i.str)
+               && !/^\d+\s*MT$|^m$|^\d+\.\d+$/i.test(i.str)); // skip "150 MT", "8.10 m"
+    if (nameRow.length === 0) continue;
+
+    // x-band per vessel: midpoints between adjacent voyage code x-positions
+    for (let v = 0; v < numVessels; v++) {
+      const vx = voyageCodes[v].x;
+      const left  = v > 0             ? (vx + voyageCodes[v-1].x) / 2 : vx - 200;
+      const right = v < numVessels-1  ? (vx + voyageCodes[v+1].x) / 2 : vx + 200;
+      const tokens = nameRow.filter(t => t.x >= left && t.x < right);
+      if (tokens.length > 0) {
+        vesselNames[v] = tokens.map(t => t.str).join(" ").toUpperCase();
       }
-      vesselNames[best] = grp.map(i => i.str).join(" ").toUpperCase();
     }
+    // Stop if we found at least one name
+    if (vesselNames.some(n => n)) break;
   }
   for (let v = 0; v < numVessels; v++) {
     if (!vesselNames[v]) vesselNames[v] = voyageCodes[v].str;
@@ -879,7 +880,7 @@ async function parseSallaumPdfDirect(buffer) {
   for (let ri = voyageRowIdx + 1; ri < textRows.length; ri++) {
     const row = textRows[ri];
     const texts = row.map(i => i.str);
-    if (/\bPOL\b/i.test(texts[0]) && texts.some(t => /cut.?off/i.test(t))) { mode = "POL"; continue; }
+    if (/\bPOL\b/i.test(texts[0]) && /cut.?off/i.test(texts.join(" "))) { mode = "POL"; continue; }
     if (/^POD$/i.test(texts[0]))                                             { mode = "POD"; continue; }
     if (/please\s+note/i.test(texts.join(" ")))                              { break; }
     if (!mode) continue;
