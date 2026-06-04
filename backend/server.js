@@ -742,36 +742,35 @@ app.post("/upload", upload.any(), async (req, res) => {
 
     const forcedAesWeightKgs = forcedAesWeightMatch ? forcedAesWeightMatch[1] : "";
 
-    // Look up schedule from master-schedule.xlsx (single source of truth)
+    // Look up schedule from MongoDB ScheduleRow — same source as Orders page
     let match = null;
-    let scheduleRows = getSavedScheduleRows();
-    const excelMatch = findScheduleMatch(scheduleRows, aesData.vessel, aesData.portOfLoading, aesData.portOfDischarge);
-    if (excelMatch) match = excelMatch;
-
-    // Fall back to DB schedule rows if not found in Excel
-    if (!match) {
+    {
       const vUpper = cleanUpper(aesData.vessel).split(" V:")[0].trim();
       const polNorm = normalizePort(aesData.portOfLoading);
       const podNorm = normalizePort(aesData.portOfDischarge);
       const vClean = vUpper.replace(/^(M\/V|MV|SS|MS)\s+/i, "").split(" V:")[0].trim();
+      const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const vesselWords = vClean.split(/\s+/).filter(w => w.length > 3);
       const vesselSearchWord = vesselWords[vesselWords.length - 1] || vClean;
+
+      // 1. Exact vessel name match
       let dbMatch = await ScheduleRow.findOne({
-        vessel: { $regex: `^${vClean.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+        vessel: { $regex: `^${esc(vClean)}$`, $options: "i" },
         pol: polNorm, pod: podNorm,
       });
+      // 2. Partial last-word match
       if (!dbMatch) {
         dbMatch = await ScheduleRow.findOne({
-          vessel: { $regex: vesselSearchWord, $options: "i" },
+          vessel: { $regex: esc(vesselSearchWord), $options: "i" },
           pol: polNorm, pod: podNorm,
         });
       }
       if (dbMatch) {
         match = {
-          Voyage: dbMatch.voyage,
-          "Port Cutoff": dbMatch.cutoffDate,
-          "Sail Date": dbMatch.sailDate,
-          "Arrival Date": dbMatch.arrivalDate,
+          voyage:      dbMatch.voyage,
+          cutoffDate:  dbMatch.cutoffDate,
+          sailDate:    dbMatch.sailDate,
+          arrivalDate: dbMatch.arrivalDate,
         };
       }
     }
@@ -800,12 +799,11 @@ app.post("/upload", upload.any(), async (req, res) => {
       ...dispatchData,
       vin: aesData.vin || dispatchData.dispatchVin || "",
       weightKgs: forcedAesWeightKgs || aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
-      voyage: match ? clean(getCell(match, ["Voyage", "Voyage Number"])) : "",
-      cutoffDate: match ? (match.cutoffDate || formatExcelDate(getCell(match, ["Port Cutoff", "Cutoff Date", "Cutoff", "Cargo Cutoff", "Port cutoff"]))) : "",
-      sailDate: match ? (match.sailDate || formatExcelDate(getCell(match, ["Sail Date", "ETD", "Sail"]))) : "",
-      arrivalDate: match ? (match.arrivalDate || formatExcelDate(getCell(match, ["Arrival Date", "ETA", "Arrival"]))) : "",
+      voyage:      match ? (match.voyage      || "") : "",
+      cutoffDate:  match ? (match.cutoffDate  || "") : "",
+      sailDate:    match ? (match.sailDate    || "") : "",
+      arrivalDate: match ? (match.arrivalDate || "") : "",
       shippingLine,
-      scheduleRowsRead: scheduleRows.length,
       scheduleMatchFound: match ? "YES" : "NO",
     };
 
