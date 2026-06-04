@@ -28,6 +28,7 @@ export default function Orders() {
   const [search, setSearch]           = useState("");
   const [activeTab, setActiveTab]     = useState("all");
   const [sourceFilter, setSourceFilter] = useState("");
+  const [typeFilter, setTypeFilter]   = useState("all");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]       = useState(false);
   const navigate = useNavigate();
@@ -63,7 +64,8 @@ export default function Orders() {
     const matchSearch  = text.includes(search.toLowerCase());
     const matchTab     = activeTab === "all" || o.status === activeTab;
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
-    return matchSearch && matchTab && matchSource;
+    const matchType    = typeFilter === "all" || (o.requestType || "").toLowerCase() === typeFilter.toLowerCase();
+    return matchSearch && matchTab && matchSource && matchType;
   });
 
   const shippingLine = (o) => {
@@ -117,6 +119,33 @@ export default function Orders() {
       <div className="orders-toolbar">
         <input placeholder="Search ref, VIN, customer…" value={search}
           onChange={e => setSearch(e.target.value)} />
+
+        {/* Shipment type filter */}
+        <div style={{ display: "flex", gap: 4, background: "var(--bg-elevated)", borderRadius: 8, padding: 3, border: "1px solid var(--border)" }}>
+          {[
+            { label: "All", value: "all" },
+            { label: "⚓ RoRo", value: "RORO" },
+            { label: "📦 Container", value: "Container" },
+          ].map(opt => (
+            <button key={opt.value} onClick={() => setTypeFilter(opt.value)}
+              style={{
+                padding: "4px 12px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 12, fontWeight: 600,
+                background: typeFilter === opt.value ? "var(--bg-panel)" : "transparent",
+                color: typeFilter === opt.value
+                  ? (opt.value === "Container" ? "#fbbf24" : opt.value === "RORO" ? "#60a5fa" : "var(--text-primary)")
+                  : "var(--text-secondary)",
+                boxShadow: typeFilter === opt.value ? "0 1px 3px rgba(0,0,0,0.2)" : "none",
+                transition: "all 0.15s",
+              }}>
+              {opt.label}
+              <span style={{ marginLeft: 5, fontSize: 10, opacity: 0.75 }}>
+                {opt.value === "all" ? orders.length
+                  : orders.filter(o => (o.requestType || "").toLowerCase() === opt.value.toLowerCase()).length}
+              </span>
+            </button>
+          ))}
+        </div>
+
         <select value={sourceFilter} onChange={e => setSourceFilter(e.target.value)}
           style={{ padding:"6px 10px", borderRadius:6, border:"1px solid var(--border)",
             background:"var(--bg-input)", color:"var(--text-primary)", fontSize:13 }}>
@@ -144,7 +173,21 @@ export default function Orders() {
             const sc = statusStyle(o.status);
             return (
               <tr key={o._id} onClick={() => navigate(`/orders/${o._id}`)} style={{ cursor: "pointer" }}>
-                <td><strong>{o.refNumber}</strong></td>
+                <td>
+                  <strong>{o.refNumber}</strong>
+                  {o.requestType && (
+                    <div style={{ marginTop: 3 }}>
+                      <span style={{
+                        fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 8, letterSpacing: "0.04em",
+                        background: o.requestType === "Container" ? "rgba(251,191,36,0.12)" : "rgba(96,165,250,0.12)",
+                        color: o.requestType === "Container" ? "#fbbf24" : "#60a5fa",
+                        border: `1px solid ${o.requestType === "Container" ? "rgba(251,191,36,0.3)" : "rgba(96,165,250,0.3)"}`,
+                      }}>
+                        {o.requestType === "Container" ? "📦 CNTR" : "⚓ RORO"}
+                      </span>
+                    </div>
+                  )}
+                </td>
                 <td>
                   <div>{o.customerName}</div>
                   <small>{o.customerPhone}</small>

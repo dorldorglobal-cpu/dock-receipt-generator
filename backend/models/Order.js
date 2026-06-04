@@ -70,6 +70,8 @@ const orderSchema = new mongoose.Schema(
     pol: String,
     pod: String,
     bookingNumber: String,
+    containerNumber: { type: String, default: "" },
+    sealNumber:      { type: String, default: "" },
 
     condition: {
       type: String,

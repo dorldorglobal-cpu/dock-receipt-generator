@@ -8,6 +8,7 @@ import DockReceiptPage from "./pages/DockReceiptPage";
 import Dashboard from "./pages/Dashboard";
 
 import Orders from "./pages/Orders";
+import Containers from "./pages/Containers";
 
 import CreateOrder from "./pages/CreateOrder";
 
@@ -68,6 +69,7 @@ export default function App() {
             element={<OrderDetails />}
           />
 
+          <Route path="/containers" element={<Containers />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/expenses"  element={<Expenses />} />
           <Route path="/vendors"   element={<Vendors />} />
