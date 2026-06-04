@@ -4,8 +4,10 @@ const pdfParse = require("pdf-parse");
 const XLSX = require("xlsx");
 const multer = require("multer");
 const ScheduleRow = require("../models/Schedule");
+const { execFile } = require("child_process");
+const os   = require("os");
 const path = require("path");
-const fs = require("fs");
+const fs   = require("fs");
 
 // multer: store uploads in memory so we can access req.file.buffer
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -944,6 +946,36 @@ async function parseSallaumPdfDirect(buffer) {
   return scheduleRows;
 }
 
+// ─── Sallaum PDF → Python/pdfplumber parser ──────────────────────────────────
+function parseSallaumPdfWithPython(buffer) {
+  return new Promise((resolve, reject) => {
+    const tmpPath = path.join(os.tmpdir(), `sallaum_sched_${Date.now()}.pdf`);
+    try { fs.writeFileSync(tmpPath, buffer); } catch (e) { return reject(e); }
+
+    const scriptPath = path.join(__dirname, "..", "parse_sallaum_pdf.py");
+
+    const tryExec = (cmd) => {
+      execFile(cmd, [scriptPath, tmpPath], { timeout: 60000 }, (err, stdout, stderr) => {
+        try { fs.unlinkSync(tmpPath); } catch {}
+        if (err) {
+          if (cmd === "python" && (err.code === "ENOENT" || (stderr || "").includes("not found"))) {
+            return tryExec("python3");
+          }
+          return reject(new Error(`Sallaum PDF parse error: ${stderr || err.message}`));
+        }
+        let result;
+        try { result = JSON.parse(stdout); } catch {
+          return reject(new Error(`Bad JSON from Sallaum parser: ${stdout.slice(0, 300)}`));
+        }
+        if (result.error) return reject(new Error(result.error));
+        resolve(result);
+      });
+    };
+
+    tryExec("python");
+  });
+}
+
 // POST /api/schedule/upload-pdf  - Sallaum PDF parsed directly from PDF text
 router.post("/upload-pdf", upload.single("schedule"), async (req, res) => {
   try {
@@ -953,11 +985,14 @@ router.post("/upload-pdf", upload.single("schedule"), async (req, res) => {
     const upperText = text.toUpperCase();
 
     if (upperText.includes("SALLAUM") || upperText.includes("SILVER SOUL") || upperText.includes("PLATINUM RAY")) {
-      const rows = await parseSallaumPdfDirect(req.file.buffer);
-      if (rows.length === 0) throw new Error("No schedule rows found in PDF");
+      const result = await parseSallaumPdfWithPython(req.file.buffer);
+      const { scheduleRows } = result;
+      if (!scheduleRows || scheduleRows.length === 0) throw new Error("No schedule rows found in Sallaum PDF");
+      const now = new Date();
+      const rows = scheduleRows.map(r => ({ ...r, updatedAt: now }));
       await ScheduleRow.deleteMany({ carrier: "SALLAUM" });
       await ScheduleRow.insertMany(rows);
-      return res.json({ message: `Sallaum schedule parsed from PDF (${rows.length} rows)`, rows: rows.length, updatedAt: new Date() });
+      return res.json({ message: `Sallaum schedule parsed from PDF (${rows.length} rows)`, rows: rows.length, updatedAt: now });
     }
 
     // For ACL PDF, forward to the ACL endpoint logic
@@ -1163,9 +1198,10 @@ router.post("/update-from-pdfs", uploadTwo.fields([
 
     // ── Sallaum PDF → DB ──────────────────────────────────────────────────────
     if (req.files?.sallaum) {
-      const rows = await parseSallaumPdfDirect(req.files.sallaum[0].buffer).catch(e => {
-        console.error("[update-from-pdfs] Sallaum PDF parse error:", e.message); return [];
+      const sallaumResult = await parseSallaumPdfWithPython(req.files.sallaum[0].buffer).catch(e => {
+        console.error("[update-from-pdfs] Sallaum PDF parse error:", e.message); return null;
       });
+      const rows = sallaumResult?.scheduleRows || [];
       if (rows.length) {
         await ScheduleRow.deleteMany({ carrier: "SALLAUM" });
         await ScheduleRow.insertMany(rows);
