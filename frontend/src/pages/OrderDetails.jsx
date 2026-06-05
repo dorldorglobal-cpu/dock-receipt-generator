@@ -175,6 +175,7 @@ export default function OrderDetails() {
   const [editingInternalRow, setEditingInternalRow] = useState(null); // "towing" | "ocean" | null
   const [oceanEditForm,     setOceanEditForm]     = useState({ pol:"", pod:"", shippingLine:"", sell:"", cost:"", category:"1" });
   const [oceanLooking,      setOceanLooking]      = useState(false);
+  const [oceanRates,        setOceanRates]        = useState([]);
 
   const [voyages, setVoyages] = useState([]);
   const [voyageSearch, setVoyageSearch] = useState("");
@@ -953,6 +954,8 @@ export default function OrderDetails() {
       titleStatus:     order.titleStatus     || "Pending",
       pickupLocation:  order.pickupLocation  || "",
       deliveryLocation:order.deliveryLocation|| "",
+      requestType:     order.requestType     || "RORO",
+      containerSize:   order.containerSize   || "",
       shippingLine:    order.shippingLine    || "",
       pol:             order.pol             || "",
       pod:             order.pod             || "",
@@ -961,6 +964,9 @@ export default function OrderDetails() {
       sealNumber:      order.sealNumber      || "",
       notes:           order.notes           || "",
     });
+    // Pre-load ocean rates for Container auto-price lookup
+    fetch(`${API}/api/pricing?type=ocean`)
+      .then(r => r.json()).then(setOceanRates).catch(() => {});
     setShowEdit(true);
   };
 
@@ -973,6 +979,28 @@ export default function OrderDetails() {
     });
     const data = await res.json();
     if (!res.ok) { setMessage(data.error || "Failed to save"); return; }
+
+    // If Container + containerSize + pol set, auto-apply ocean freight from pricing table
+    if (editForm.requestType === "Container" && editForm.containerSize && editForm.pol) {
+      const pol  = editForm.pol.toUpperCase();
+      const pod  = (editForm.pod || "").toUpperCase();
+      const size = editForm.containerSize;
+      const line = (editForm.shippingLine || "").toUpperCase();
+      const match =
+        oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol && r.containerSize === size && r.shippingLine === line) ||
+        oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol && r.containerSize === size) ||
+        oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol && r.shippingLine === line);
+      if (match && match.portPrice) {
+        const newCharges = { ...charges, oceanFreight: String(match.portPrice), ...(match.cost ? { oceanCost: String(match.cost) } : {}) };
+        setCharges(newCharges);
+        await fetch(`${API}/api/orders/${id}`, {
+          method: "PUT",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ charges: newCharges }),
+        });
+      }
+    }
+
     setOrder(data);
     setShowEdit(false);
     setMessage("Order updated");
@@ -2659,6 +2687,50 @@ export default function OrderDetails() {
               letterSpacing: "0.07em", color: "var(--text-muted)", marginBottom: 8 }}>
               Shipping
             </p>
+
+            {/* Request Type toggle */}
+            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+              {["RORO","Container"].map(t => (
+                <button key={t} type="button"
+                  onClick={() => setEditForm(f => ({ ...f, requestType: t, containerSize:"", shippingLine:"", pol:"" }))}
+                  style={{
+                    padding:"6px 18px", borderRadius:20, cursor:"pointer", fontSize:12, fontWeight:600,
+                    border: editForm.requestType === t ? "none" : "1px solid var(--border)",
+                    background: editForm.requestType === t ? (t === "Container" ? "#2563eb" : "#059669") : "var(--bg-panel)",
+                    color: editForm.requestType === t ? "#fff" : "var(--text-secondary)",
+                  }}>{t}</button>
+              ))}
+            </div>
+
+            {/* Container warehouse quick-picker */}
+            {editForm.requestType === "Container" && (
+              <div style={{ marginBottom:12 }}>
+                <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:6 }}>Delivery Warehouse</div>
+                <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                  {[
+                    { name:"EZ CARGO",             pol:"NEW YORK"  },
+                    { name:"SAVANNAH AUTO EXPORT",  pol:"SAVANNAH"  },
+                    { name:"ISHIP",                 pol:"HOUSTON"   },
+                    { name:"CEDARS EXPRESS",         pol:"LONG BEACH"},
+                  ].map(wh => {
+                    const sel = editForm.deliveryLocation === wh.name;
+                    return (
+                      <button key={wh.name} type="button"
+                        onClick={() => setEditForm(f => ({ ...f, deliveryLocation: wh.name, pol: wh.pol }))}
+                        style={{
+                          padding:"5px 12px", borderRadius:8, cursor:"pointer", fontSize:11, fontWeight:600,
+                          border:`1px solid ${sel ? "rgba(96,165,250,0.6)" : "var(--border)"}`,
+                          background: sel ? "rgba(37,99,235,0.15)" : "var(--bg-panel)",
+                          color: sel ? "#60a5fa" : "var(--text-secondary)",
+                        }}>
+                        {wh.name} <span style={{ opacity:0.6, fontWeight:400 }}>({wh.pol})</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
               <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                 Shipping Line
@@ -2666,8 +2738,21 @@ export default function OrderDetails() {
                   onChange={e=>setEditForm(f=>({...f,shippingLine:e.target.value}))}
                   style={{ display:"block", width:"100%", marginTop:4 }}>
                   <option value="">Choose...</option>
-                  <option>ACL</option>
-                  <option>SALLAUM</option>
+                  {editForm.requestType === "Container" ? (
+                    <>
+                      <option>OOCL</option>
+                      <option>MAERSK</option>
+                      <option>HAPAG LLOYD</option>
+                      <option>ARKAS</option>
+                      <option>MSC</option>
+                      <option>CMA CGM</option>
+                    </>
+                  ) : (
+                    <>
+                      <option>ACL</option>
+                      <option>SALLAUM</option>
+                    </>
+                  )}
                 </select>
               </label>
               <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
@@ -2675,13 +2760,24 @@ export default function OrderDetails() {
                 <select value={editForm.pol||""} onChange={e=>setEditForm(f=>({...f,pol:e.target.value}))}
                   style={{ display:"block", width:"100%", marginTop:4 }}>
                   <option value="">Choose...</option>
-                  <option>BALTIMORE</option>
-                  <option>JACKSONVILLE</option>
-                  <option>PROVIDENCE</option>
-                  <option>FREEPORT</option>
-                  <option>WILMINGTON</option>
-                  <option>BRUNSWICK</option>
-                  <option>NEWARK</option>
+                  {editForm.requestType === "Container" ? (
+                    <>
+                      <option>NEW YORK</option>
+                      <option>SAVANNAH</option>
+                      <option>LONG BEACH</option>
+                      <option>HOUSTON</option>
+                    </>
+                  ) : (
+                    <>
+                      <option>BALTIMORE</option>
+                      <option>JACKSONVILLE</option>
+                      <option>PROVIDENCE</option>
+                      <option>FREEPORT</option>
+                      <option>WILMINGTON</option>
+                      <option>BRUNSWICK</option>
+                      <option>NEWARK</option>
+                    </>
+                  )}
                 </select>
               </label>
               <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
@@ -2689,7 +2785,7 @@ export default function OrderDetails() {
                 <select value={editForm.pod||""} onChange={e => {
                   const pod = e.target.value;
                   const lineMap = { LAGOS: "SALLAUM", COTONOU: "SALLAUM", LOME: "SALLAUM", TEMA: "ACL" };
-                  const line = lineMap[pod] || "";
+                  const line = editForm.requestType !== "Container" ? (lineMap[pod] || "") : "";
                   setEditForm(f => ({ ...f, pod, ...(line ? { shippingLine: line } : {}) }));
                 }}
                   style={{ display:"block", width:"100%", marginTop:4 }}>
@@ -2708,7 +2804,41 @@ export default function OrderDetails() {
                 <input value={editForm.bookingNumber||""} onChange={e=>setEditForm(f=>({...f,bookingNumber:e.target.value}))}
                   style={{ display:"block", width:"100%", marginTop:4 }} />
               </label>
-              {(editForm.requestType || order.requestType) === "Container" && (
+
+              {/* Container-only fields */}
+              {editForm.requestType === "Container" && (
+                <label style={{ fontSize: 12, color: "var(--text-secondary)", gridColumn:"1 / -1" }}>
+                  Container Size
+                  <div style={{ display:"flex", gap:8, marginTop:6, flexWrap:"wrap" }}>
+                    {["FULL 40' HC","CONSOLIDATED SPOT","20'"].map(sz => {
+                      const sel = editForm.containerSize === sz;
+                      // Find matching rate for live price preview
+                      const pol  = (editForm.pol||"").toUpperCase();
+                      const line = (editForm.shippingLine||"").toUpperCase();
+                      const rate = oceanRates.find(r =>
+                        r.requestType === "CONTAINER" && r.pol === pol && r.containerSize === sz && r.shippingLine === line
+                      ) || oceanRates.find(r =>
+                        r.requestType === "CONTAINER" && r.pol === pol && r.containerSize === sz
+                      );
+                      return (
+                        <button key={sz} type="button"
+                          onClick={() => setEditForm(f => ({ ...f, containerSize: sz }))}
+                          style={{
+                            padding:"7px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600,
+                            border:`1px solid ${sel ? "rgba(52,211,153,0.6)" : "var(--border)"}`,
+                            background: sel ? "rgba(5,150,105,0.15)" : "var(--bg-panel)",
+                            color: sel ? "#34d399" : "var(--text-secondary)",
+                          }}>
+                          {sz}
+                          {rate?.portPrice ? <span style={{ marginLeft:6, fontSize:11, opacity:0.8 }}>${Number(rate.portPrice).toLocaleString()}</span> : null}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </label>
+              )}
+
+              {editForm.requestType === "Container" && (
                 <>
                   <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                     Container #
