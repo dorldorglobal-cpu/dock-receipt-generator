@@ -175,28 +175,26 @@
   white-space: nowrap;
 }
 
-/* Collapse / expand toggle button */
+/* Collapse / expand toggle button — lives inside .sidebar-logo */
+.sidebar-logo {
+  position: relative;
+}
+
 .sidebar-toggle {
   display: flex;
   align-items: center;
-  gap: 6px;
-  margin: 8px 6px 4px;
-  padding: 7px 10px;
-  border-radius: 8px;
+  justify-content: center;
+  margin-left: auto;
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
   border: 1px solid var(--border);
   background: var(--bg-panel);
   color: var(--text-muted);
   cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
   transition: background 0.12s, color 0.12s;
-  width: calc(100% - 12px);
-  box-sizing: border-box;
-}
-
-.sidebar--collapsed .sidebar-toggle {
-  justify-content: center;
-  padding: 7px 0;
+  padding: 0;
 }
 
 .sidebar-toggle:hover {

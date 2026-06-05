@@ -108,7 +108,7 @@ export default function Sidebar() {
     <>
       {/* ── Desktop sidebar ─────────────────────────── */}
       <aside className={`sidebar${collapsed ? " sidebar--collapsed" : ""}`}>
-        {/* Logo */}
+        {/* Logo + collapse toggle */}
         <div className="sidebar-logo">
           <img src={logo} alt="DDG" />
           {!collapsed && (
@@ -117,6 +117,14 @@ export default function Sidebar() {
               <span className="sidebar-logo-sub">Operations Platform</span>
             </div>
           )}
+          <button className="sidebar-toggle" onClick={toggleCollapsed} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              {collapsed
+                ? <path d="M9 18l6-6-6-6" />
+                : <path d="M15 18l-6-6 6-6" />
+              }
+            </svg>
+          </button>
         </div>
 
         {navItems()}
@@ -129,17 +137,6 @@ export default function Sidebar() {
             <span>System online</span>
           </div>
         )}
-
-        {/* Collapse / expand toggle */}
-        <button className="sidebar-toggle" onClick={toggleCollapsed} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-            {collapsed
-              ? <path d="M9 18l6-6-6-6" />   /* chevron right = expand */
-              : <path d="M15 18l-6-6 6-6" />  /* chevron left  = collapse */
-            }
-          </svg>
-          {!collapsed && <span>Collapse</span>}
-        </button>
       </aside>
 
       {/* ── Mobile top bar ──────────────────────────── */}
