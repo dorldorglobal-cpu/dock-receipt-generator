@@ -262,8 +262,18 @@ async function parseAES(filePath) {
       })()
     : lines.findIndex(l => cleanUpper(l) === cleanUpper(consigneeName));
 
-  const consigneeLine1 = consigneeNameIdx !== -1 ? lines[consigneeNameIdx + 1] || "" : "";
-  const consigneeLine2 = consigneeNameIdx !== -1 ? lines[consigneeNameIdx + 2] || "" : "";
+  // Read up to 3 lines after name, skipping AES field labels
+  const isAesLabel = l => /^(\d{1,2}[a-z]?|[a-z])\.\s/i.test(l) || /USPPI|EIN.*IRS|IRS.*EIN|ULTIMATE CONSIGNEE TYPE/i.test(l);
+  const consigneeAddrLines = [];
+  if (consigneeNameIdx !== -1) {
+    for (let j = consigneeNameIdx + 1; j <= Math.min(consigneeNameIdx + 5, lines.length - 1); j++) {
+      const l = lines[j]; if (!l || isAesLabel(l)) break;
+      consigneeAddrLines.push(l);
+      if (consigneeAddrLines.length === 2) break;
+    }
+  }
+  const consigneeLine1 = consigneeAddrLines[0] || "";
+  const consigneeLine2 = consigneeAddrLines[1] || "";
   let combined = `${consigneeLine1} ${consigneeLine2}`.trim();
   combined = combined
     .replace(/ULTIMATE CONSIGNEE TYPE:.*$/i, "")
