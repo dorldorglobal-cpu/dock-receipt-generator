@@ -902,13 +902,10 @@ router.post("/:id/confirm-towing-cost", async (req, res) => {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: "Order not found" });
 
-    // Update this order's towing cost (and sell price if not already set)
-    const existingCharge = Number((order.charges || {}).towingCharge || 0);
+    // Update this order's towing cost only — never touch the sell price (towingCharge)
     order.charges = {
       ...(order.charges || {}),
-      towingCost:   String(towingCost),
-      // If no sell price was ever set, use dispatch cost as the sell price too
-      towingCharge: existingCharge > 0 ? String(existingCharge) : String(towingCost),
+      towingCost: String(towingCost),
     };
     order.markModified("charges");
     addTimeline(order, "Towing Cost Updated", `Towing cost set to $${towingCost} from dispatch sheet.`);
