@@ -1,8 +1,7 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
+import { useState, useEffect } from "react";
 import "./Sidebar.css";
 import logo from "../logo.png";
-
-// ─── Icon Components ────────────────────────────────────────────────────────
 
 const Icon = ({ path, size = 18 }) => (
   <svg className="nav-icon" width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -28,81 +27,163 @@ const icons = {
   schedule: "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
   settings: "M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z",
   ai: "M12 2a2 2 0 012 2c0 .74-.4 1.38-1 1.72V7h1a7 7 0 017 7h1a1 1 0 010 2h-1v1a2 2 0 01-2 2v1a1 1 0 01-2 0v-1H7v1a1 1 0 01-2 0v-1a2 2 0 01-2-2v-1H2a1 1 0 010-2h1a7 7 0 017-7h1V5.72A2 2 0 0110 4a2 2 0 012-2z M9 14a1 1 0 100-2 1 1 0 000 2z M15 14a1 1 0 100-2 1 1 0 000 2z",
+  menu: "M3 12h18 M3 6h18 M3 18h18",
+  close: "M18 6L6 18 M6 6l12 12",
 };
 
-function NavItem({ to, iconKey, label, end = false }) {
+function NavItem({ to, iconKey, label, end = false, collapsed, onClick }) {
   return (
-    <NavLink to={to} end={end}>
+    <NavLink to={to} end={end} onClick={onClick} title={collapsed ? label : undefined}>
       <Icon path={icons[iconKey]} />
-      <span className="nav-label">{label}</span>
+      {!collapsed && <span className="nav-label">{label}</span>}
     </NavLink>
   );
 }
 
 export default function Sidebar() {
+  const [collapsed, setCollapsed] = useState(false);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
+
+  // Close mobile drawer on navigation
+  useEffect(() => { setMobileOpen(false); }, [location.pathname]);
+
+  // Persist collapsed state
+  useEffect(() => {
+    const saved = localStorage.getItem("sidebarCollapsed");
+    if (saved !== null) setCollapsed(saved === "true");
+  }, []);
+  const toggleCollapsed = () => {
+    setCollapsed(c => {
+      localStorage.setItem("sidebarCollapsed", String(!c));
+      return !c;
+    });
+  };
+
+  const navItems = (isMobile = false) => (
+    <>
+      {!isMobile && <div className="sidebar-section-label">Main</div>}
+      <nav className="sidebar-nav">
+        <NavItem to="/" iconKey="dashboard" label="Dashboard" end collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+      </nav>
+
+      {!isMobile && <div className="sidebar-section-label">Orders</div>}
+      <nav className="sidebar-nav">
+        <NavItem to="/orders"     iconKey="orders"      label="All Orders"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/containers" iconKey="container"   label="Containers"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/orders/new" iconKey="createOrder" label="New Order"   collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/customers"  iconKey="customers"   label="Customers"   collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+      </nav>
+
+      {!isMobile && <div className="sidebar-section-label">Operations</div>}
+      <nav className="sidebar-nav">
+        <NavItem to="/dock-receipt"   iconKey="dockReceipt" label="Dock Receipt"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/towing-charges" iconKey="towing"      label="Towing Charges" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/ocean-freight"  iconKey="ocean"       label="Ocean Freight"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/vessel-schedule" iconKey="schedule"   label="Vessel Schedule" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/shipments"      iconKey="shipments"   label="Shipments"      collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+      </nav>
+
+      {!isMobile && <div className="sidebar-section-label">Finance</div>}
+      <nav className="sidebar-nav">
+        <NavItem to="/invoices" iconKey="invoices" label="Invoices" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/expenses" iconKey="expenses" label="Expenses" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/vendors"  iconKey="vendors"  label="Vendors"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/reports"  iconKey="reports"  label="Reports"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+      </nav>
+
+      {!isMobile && <div className="sidebar-section-label">Intelligence</div>}
+      <nav className="sidebar-nav">
+        <NavItem to="/ai" iconKey="ai" label="AI Assistant" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+      </nav>
+
+      {!isMobile && <div className="sidebar-section-label">System</div>}
+      <nav className="sidebar-nav">
+        <NavItem to="/settings" iconKey="settings" label="Settings" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+      </nav>
+    </>
+  );
+
   return (
-    <aside className="sidebar">
-      {/* Logo */}
-      <div className="sidebar-logo">
-        <img src={logo} alt="DDG" />
-        <div className="sidebar-logo-text">
-          <span className="sidebar-logo-name">DDG OPS</span>
-          <span className="sidebar-logo-sub">Operations Platform</span>
+    <>
+      {/* ── Desktop sidebar ─────────────────────────── */}
+      <aside className={`sidebar${collapsed ? " sidebar--collapsed" : ""}`}>
+        {/* Logo */}
+        <div className="sidebar-logo">
+          <img src={logo} alt="DDG" />
+          {!collapsed && (
+            <div className="sidebar-logo-text">
+              <span className="sidebar-logo-name">DDG OPS</span>
+              <span className="sidebar-logo-sub">Operations Platform</span>
+            </div>
+          )}
         </div>
+
+        {navItems()}
+
+        <div className="sidebar-spacer" />
+
+        {!collapsed && (
+          <div className="sidebar-footer">
+            <span className="status-dot" />
+            <span>System online</span>
+          </div>
+        )}
+
+        {/* Collapse / expand toggle */}
+        <button className="sidebar-toggle" onClick={toggleCollapsed} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            {collapsed
+              ? <path d="M9 18l6-6-6-6" />   /* chevron right = expand */
+              : <path d="M15 18l-6-6 6-6" />  /* chevron left  = collapse */
+            }
+          </svg>
+          {!collapsed && <span>Collapse</span>}
+        </button>
+      </aside>
+
+      {/* ── Mobile top bar ──────────────────────────── */}
+      <div className="mobile-topbar">
+        <button className="mobile-menu-btn" onClick={() => setMobileOpen(true)}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+            <path d="M3 12h18 M3 6h18 M3 18h18" />
+          </svg>
+        </button>
+        <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+          <img src={logo} alt="DDG" style={{ width:28, height:28, borderRadius:6, background:"#1a2235", padding:2, objectFit:"contain" }} />
+          <span style={{ fontWeight:700, fontSize:14, color:"var(--text-primary)" }}>DDG OPS</span>
+        </div>
+        <div style={{ width:36 }} />
       </div>
 
-      {/* Main */}
-      <div className="sidebar-section-label">Main</div>
-      <nav className="sidebar-nav">
-        <NavItem to="/" iconKey="dashboard" label="Dashboard" end />
-      </nav>
-
-      {/* Orders */}
-      <div className="sidebar-section-label">Orders</div>
-      <nav className="sidebar-nav">
-        <NavItem to="/orders"      iconKey="orders"      label="All Orders" />
-        <NavItem to="/containers"  iconKey="container"   label="Containers" />
-        <NavItem to="/orders/new"  iconKey="createOrder" label="New Order" />
-        <NavItem to="/customers"   iconKey="customers"   label="Customers" />
-      </nav>
-
-      {/* Operations */}
-      <div className="sidebar-section-label">Operations</div>
-      <nav className="sidebar-nav">
-        <NavItem to="/dock-receipt"    iconKey="dockReceipt" label="Dock Receipt" />
-        <NavItem to="/towing-charges"  iconKey="towing"      label="Towing Charges" />
-        <NavItem to="/ocean-freight"   iconKey="ocean"       label="Ocean Freight" />
-        <NavItem to="/vessel-schedule"  iconKey="schedule"    label="Vessel Schedule" />
-        <NavItem to="/shipments"       iconKey="shipments"   label="Shipments" />
-      </nav>
-
-      {/* Finance */}
-      <div className="sidebar-section-label">Finance</div>
-      <nav className="sidebar-nav">
-        <NavItem to="/invoices"  iconKey="invoices"  label="Invoices" />
-        <NavItem to="/expenses"  iconKey="expenses"  label="Expenses" />
-        <NavItem to="/vendors"   iconKey="vendors"   label="Vendors" />
-        <NavItem to="/reports"   iconKey="reports"   label="Reports" />
-      </nav>
-
-      {/* AI */}
-      <div className="sidebar-section-label">Intelligence</div>
-      <nav className="sidebar-nav">
-        <NavItem to="/ai" iconKey="ai" label="AI Assistant" />
-      </nav>
-
-      {/* Settings */}
-      <div className="sidebar-section-label">System</div>
-      <nav className="sidebar-nav">
-        <NavItem to="/settings" iconKey="settings" label="Settings" />
-      </nav>
-
-      <div className="sidebar-spacer" />
-
-      <div className="sidebar-footer">
-        <span className="status-dot" />
-        <span>System online</span>
-      </div>
-    </aside>
+      {/* ── Mobile drawer overlay ───────────────────── */}
+      {mobileOpen && (
+        <div className="mobile-overlay" onClick={() => setMobileOpen(false)}>
+          <div className="mobile-drawer" onClick={e => e.stopPropagation()}>
+            <div className="mobile-drawer-header">
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <img src={logo} alt="DDG" style={{ width:30, height:30, borderRadius:7, background:"#1a2235", padding:3, objectFit:"contain" }} />
+                <div>
+                  <div style={{ fontWeight:700, fontSize:13, color:"var(--text-primary)" }}>DDG OPS</div>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.05em" }}>Operations Platform</div>
+                </div>
+              </div>
+              <button className="mobile-close-btn" onClick={() => setMobileOpen(false)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                  <path d="M18 6L6 18 M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+            <div className="mobile-drawer-nav">
+              {navItems(true)}
+            </div>
+            <div className="mobile-drawer-footer">
+              <span className="status-dot" />
+              <span>System online</span>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }

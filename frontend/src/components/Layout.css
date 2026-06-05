@@ -14,7 +14,12 @@
 }
 
 @media (max-width: 768px) {
+  .app-layout {
+    flex-direction: column;
+  }
+
   .main-content {
-    padding: 16px;
+    padding: 70px 14px 24px; /* 70px top = 52px topbar + 18px gap */
+    overflow-x: hidden;
   }
 }
