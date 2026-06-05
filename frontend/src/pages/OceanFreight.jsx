@@ -183,7 +183,7 @@ export default function OceanFreight() {
               return (
                 <tr key={r._id}>
                   <td style={{ fontWeight:600 }}>{r.shippingLine}</td>
-                  <td>{catBadge(r.category)}</td>
+                  <td>{r.requestType === "CONTAINER" ? <span style={{ color:"var(--text-muted)", fontSize:11 }}>—</span> : catBadge(r.category)}</td>
                   <td>{typeBadge(r.requestType)}</td>
                   <td style={{ fontSize:11, color:"var(--text-muted)" }}>{r.containerSize || "—"}</td>
                   <td>{r.pol}</td>
@@ -225,8 +225,8 @@ export default function OceanFreight() {
             <h2 style={{ marginTop:0 }}>{form._id ? "Edit Rate" : "Add Ocean Freight Rate"}</h2>
             <div className="towing-popup-form">
 
-              {/* Row 1: Line + Category */}
-              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+              {/* Row 1: Line + Category (Category hidden for Container) */}
+              <div style={{ display:"grid", gridTemplateColumns: form.requestType === "CONTAINER" ? "1fr" : "1fr 1fr", gap:10 }}>
                 <label>Shipping Line
                   <select value={form.shippingLine} onChange={e=>{
                     const v=e.target.value;
@@ -243,12 +243,14 @@ export default function OceanFreight() {
                     <optgroup label="Other"><option value="__custom__">+ Add New...</option></optgroup>
                   </select>
                 </label>
-                <label>Category
-                  <select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>
-                    <option value="1">Category 1</option>
-                    <option value="2">Category 2</option>
-                  </select>
-                </label>
+                {form.requestType !== "CONTAINER" && (
+                  <label>Category
+                    <select value={form.category} onChange={e=>setForm({...form,category:e.target.value})}>
+                      <option value="1">Category 1</option>
+                      <option value="2">Category 2</option>
+                    </select>
+                  </label>
+                )}
               </div>
 
               {/* Type */}
