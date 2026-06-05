@@ -201,6 +201,12 @@ export default function OceanFreight() {
                       pol: r.pol||"", pod: r.pod||"",
                       portPrice: r.portPrice||"", cost: r.cost||"", _id: r._id,
                     }); setShowAdd(true); }} style={{ fontSize:10, padding:"3px 6px" }}>Edit</button>
+                    <button onClick={()=>{ setForm({
+                      shippingLine: r.shippingLine||"", category: r.category||"1",
+                      requestType: r.requestType||"", containerSize: r.containerSize||"",
+                      pol: r.pol||"", pod: r.pod||"",
+                      portPrice: r.portPrice||"", cost: r.cost||"",
+                    }); setShowAdd(true); }} style={{ fontSize:10, padding:"3px 6px", background:"rgba(99,102,241,0.15)", color:"#a78bfa", border:"1px solid rgba(167,139,250,0.3)" }}>Dup</button>
                     <button onClick={()=>deleteRow(r._id)} style={{ fontSize:10, padding:"3px 6px" }}>Delete</button>
                   </td>
                 </tr>

@@ -22,6 +22,7 @@ const pricingSchema = new mongoose.Schema(
 
 
     requestType: String,
+    containerSize: String,
     condition: String,
 
 address: String,
