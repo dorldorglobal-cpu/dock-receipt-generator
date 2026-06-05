@@ -1761,4 +1761,16 @@ router.post("/:id/timeline", express.json(), async (req, res) => {
   }
 });
 
+// ── POST /api/orders/set-counter — one-time counter reset ────────────────────
+router.post("/set-counter", async (req, res) => {
+  try {
+    const { seq } = req.body;
+    if (!seq || isNaN(Number(seq))) return res.status(400).json({ error: "seq required" });
+    await Counter.findByIdAndUpdate("orderRef", { $set: { seq: Number(seq) } }, { upsert: true });
+    res.json({ ok: true, seq: Number(seq), nextOrder: Number(seq) + 1 });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
