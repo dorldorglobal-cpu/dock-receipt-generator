@@ -1531,6 +1531,10 @@ export default function OrderDetails() {
             </span>
           </div>
         </div>
+        <div className="dashboard-card">
+          <span>Order Type</span>
+          <strong>{order.requestType || "—"}</strong>
+        </div>
         {/* Sailed Workflow — replaces status card */}
         <div className="dashboard-card" style={{ cursor:"default", gridColumn:"span 2" }}>
           <span style={{ marginBottom:8, display:"block" }}>Sailed Workflow</span>
