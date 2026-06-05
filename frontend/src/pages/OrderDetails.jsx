@@ -1905,7 +1905,7 @@ export default function OrderDetails() {
                   {busy ? "Uploading…" : label}
                 </span>
                 {!busy && (() => {
-                  const autoMap = { "Dispatch":"→ Awaiting Pickup", "Dock Receipt":"→ Picked Up", "Stamped DR":"→ Delivered", "Draft":"→ Waiting to Sail" };
+                  const autoMap = { "Dispatch":"→ Awaiting Pickup", "Dock Receipt":"→ Picked Up", "Stamped DR":"→ Waiting to Sail", "Draft":"→ Sailed" };
                   const hint = autoMap[label];
                   return hint ? <span style={{ fontSize:9, color:"#34d399", opacity:0.8, lineHeight:1 }}>{hint}</span> : null;
                 })()}

@@ -759,10 +759,10 @@ router.post(
 
       // ── Auto status update based on label ───────────────────────────────
       const STATUS_FLOW = {
-        "Dispatch":    { from: ["New Order"],                         to: "Awaiting Pickup" },
-        "Dock Receipt":{ from: ["New Order","Awaiting Pickup","Picked Up"],  to: "Picked Up" },
-        "Stamped DR":  { from: ["New Order","Awaiting Pickup","Picked Up","Delivered"], to: "Delivered" },
-        "Draft":       { from: ["New Order","Awaiting Pickup","Picked Up","Delivered"], to: "Waiting to Sail" },
+        "Dispatch":    { from: ["New Order"],                                                              to: "Awaiting Pickup" },
+        "Dock Receipt":{ from: ["New Order","Awaiting Pickup","Picked Up"],                                to: "Picked Up"       },
+        "Stamped DR":  { from: ["New Order","Awaiting Pickup","Picked Up","Delivered"],                    to: "Waiting to Sail" },
+        "Draft":       { from: ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail"],  to: "Sailed"          },
       };
       const autoStatus = STATUS_FLOW[label];
       if (autoStatus && (autoStatus.from.includes(order.status) || autoStatus.from.length === 0)) {
