@@ -1107,27 +1107,34 @@ async function parseBuyerReceipt(filePath) {
 
   // ── Pass 4: Copart "SOLD THROUGH COPART" anchor ──────────────────────────
   // The Seller column in Copart PDFs always re-prints the physical lot address
-  // directly after "SOLD THROUGH COPART". This is the most reliable extraction
-  // path when the three-column layout confuses the line-scan passes above.
+  // directly after "SOLD THROUGH COPART". Handles split "SOLD THROUGH" / "COPART"
+  // and word-wrapped addresses like "21595 GREENWELL" / "SPRINGS ROAD".
   if (!pickupCity) {
-    const soldIdx = lines.findIndex(l => /SOLD\s+THROUGH\s+COPART/i.test(l));
+    const soldIdx = lines.findIndex((l, i) =>
+      /SOLD\s+THROUGH\s+COPART/i.test(l) ||
+      (/SOLD\s+THROUGH/i.test(l) && /^\s*COPART\s*$/i.test(lines[i + 1] || ""))
+    );
     if (soldIdx >= 0) {
-      for (let j = soldIdx + 1; j < Math.min(soldIdx + 6, lines.length); j++) {
-        const l = lines[j];
-        if (!l || junkLinePat.test(l)) continue;
-        if (/^\d{1,5}\s+[A-Z]/i.test(l) && US_STREET_SUFFIX_RX.test(l)) {
-          pickupAddress = cleanUpper(l);
-          for (let k = j + 1; k < Math.min(j + 4, lines.length); k++) {
-            const parsed = tryParseCSZ(lines[k]);
-            if (parsed) {
-              pickupCity  = parsed.city;
-              pickupState = parsed.state;
-              pickupZip   = parsed.zip;
-              break;
-            }
-          }
-          if (pickupCity) break;
-        }
+      // Collect up to 8 lines after anchor, skipping bare "COPART" line
+      const chunk = lines.slice(soldIdx + 1, soldIdx + 10)
+        .filter(l => !/^\s*COPART\s*$/i.test(l));
+
+      // Join adjacent lines to re-assemble word-wrapped address + CSZ
+      // "21595 GREENWELL" + "SPRINGS ROAD" + ", GREENWELL SPRINGS" + "LA70739"
+      // → "21595 GREENWELL SPRINGS ROAD , GREENWELL SPRINGS LA70739"
+      const joined = chunk.join(" ").replace(/\s+/g, " ");
+
+      // Regex: number + street name (possibly wrapped) + street type, then city, then state+zip
+      // Handles both "LA 70739" (space) and "LA70739" (no space)
+      const ST = '(?:ROAD|RD|STREET|ST|AVENUE|AVE|BOULEVARD|BLVD|DRIVE|DR|LANE|LN|WAY|HIGHWAY|HWY|COURT|CT|PLACE|PL|PKWY|PARKWAY)';
+      const m = joined.match(new RegExp(
+        `(\\d{1,5}\\s+[A-Z][A-Z0-9 ]+?\\s+${ST})[,\\s]+([A-Z][A-Z .]{1,30}?)\\s*,?\\s*([A-Z]{2})\\s*(\\d{5})`, 'i'
+      ));
+      if (m && US_STATES.has(m[3].toUpperCase())) {
+        pickupAddress = cleanUpper(m[1].trim());
+        pickupCity    = cleanUpper(m[2].replace(/[,\s]+$/, "").trim());
+        pickupState   = m[3].toUpperCase();
+        pickupZip     = m[4];
       }
     }
   }
