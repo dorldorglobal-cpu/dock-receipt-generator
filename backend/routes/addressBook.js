@@ -88,6 +88,23 @@ router.put("/:id", async (req, res) => {
   }
 });
 
+// ── PATCH /api/address-book/:id/add-buyer — append buyer account name ────────
+router.patch("/:id/add-buyer", async (req, res) => {
+  try {
+    const { buyerName } = req.body;
+    if (!buyerName?.trim()) return res.status(400).json({ error: "buyerName required" });
+    const entry = await AddressBook.findByIdAndUpdate(
+      req.params.id,
+      { $addToSet: { buyerAccounts: buyerName.trim() } },
+      { new: true }
+    );
+    if (!entry) return res.status(404).json({ error: "Not found" });
+    res.json(entry);
+  } catch (err) {
+    res.status(500).json({ error: "Failed to add buyer account" });
+  }
+});
+
 // ── GET /api/address-book/lookup-buyer?name=GOLDEN+NOOR ──────────────────────
 // Returns the customer that owns this buyer account name
 router.get("/lookup-buyer", async (req, res) => {

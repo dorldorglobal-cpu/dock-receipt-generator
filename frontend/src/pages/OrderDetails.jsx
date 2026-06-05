@@ -1700,6 +1700,15 @@ export default function OrderDetails() {
             <span style={{ fontSize: 22, fontWeight: 800, color: "var(--accent)",
               letterSpacing: "0.03em" }}>{order.pod || "—"}</span>
           </div>
+          {(order.consigneeName || order.buyerName) && (
+            <p style={{ margin: "0 0 8px", fontSize: 13 }}>
+              <strong>Consignee / Buyer:</strong>{" "}
+              {order.consigneeName || order.buyerName}
+              {order.consigneeName && order.buyerName && order.consigneeName !== order.buyerName && (
+                <span style={{ color: "var(--text-muted)", marginLeft: 6, fontSize: 12 }}>({order.buyerName})</span>
+              )}
+            </p>
+          )}
           <p style={{ margin: "0 0 4px", fontSize: 13 }}><strong>Line:</strong> {order.shippingLine || "—"}</p>
           <p style={{ margin: "0 0 4px", fontSize: 13 }}><strong>Booking #:</strong> {order.bookingNumber || "—"}</p>
           {order.requestType === "Container" && (

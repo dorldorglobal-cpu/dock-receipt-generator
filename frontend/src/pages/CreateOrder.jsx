@@ -30,6 +30,10 @@ export default function CreateOrder() {
 
   // ── New customer contact popup ─────────────────────────────────────────
   const [newCustPopup, setNewCustPopup]     = useState(null); // { name, phone, email, defaultPod }
+  const [custChoice, setCustChoice]         = useState(null); // null | "new" | "existing"
+  const [custSearch, setCustSearch]         = useState("");
+  const [custSearchResults, setCustSearchResults] = useState([]);
+  const [custSearchLoading, setCustSearchLoading] = useState(false);
 
   const [form, setForm] = useState({
     customerName: "",
@@ -1625,18 +1629,129 @@ export default function CreateOrder() {
       )}
 
       {newCustPopup && (
-        <div className="modal-backdrop" onClick={() => setNewCustPopup(null)}>
-          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 440 }}>
+        <div className="modal-backdrop" onClick={() => { setNewCustPopup(null); setCustChoice(null); setCustSearch(""); }}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 460 }}>
             <div style={{ marginBottom: 4, fontSize: 11, fontWeight: 700, letterSpacing: 1,
               textTransform: "uppercase", color: "var(--accent)" }}>
-              {newCustPopup.isExisting ? "Customer Found" : "New Customer"}
+              {newCustPopup.isExisting ? "Customer Found" : "New Buyer Name"}
             </div>
             <h2 style={{ margin: "0 0 6px" }}>{newCustPopup.name}</h2>
-            <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0, marginBottom: 18 }}>
-              {newCustPopup.isExisting
-                ? "No shipping destination saved for this customer yet. Set it now so future orders auto-fill."
-                : "New customer — add their contact info and shipping destination so future orders auto-fill."}
-            </p>
+
+            {/* Choice screen for truly new customers */}
+            {!newCustPopup.isExisting && !custChoice && (
+              <>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0, marginBottom: 18 }}>
+                  This buyer name isn't in the address book. What would you like to do?
+                </p>
+                <div style={{ display:"flex", gap:10, marginBottom:8 }}>
+                  <button type="button" onClick={() => setCustChoice("new")}
+                    style={{ flex:1, padding:"12px 0", borderRadius:8, border:"none",
+                      background:"#059669", color:"#fff", cursor:"pointer", fontWeight:700, fontSize:13 }}>
+                    ➕ New Customer
+                  </button>
+                  <button type="button" onClick={async () => {
+                    setCustChoice("existing");
+                    setCustSearch("");
+                    setCustSearchLoading(true);
+                    const res = await fetch(`${API}/api/address-book?type=customer`);
+                    const data = await res.json();
+                    setCustSearchResults(Array.isArray(data) ? data : []);
+                    setCustSearchLoading(false);
+                  }}
+                    style={{ flex:1, padding:"12px 0", borderRadius:8, border:"none",
+                      background:"#2563eb", color:"#fff", cursor:"pointer", fontWeight:700, fontSize:13 }}>
+                    🔗 Add to Existing Customer
+                  </button>
+                </div>
+                <button type="button" onClick={() => { setNewCustPopup(null); setCustChoice(null); }}
+                  style={{ width:"100%", padding:"8px 0", borderRadius:8, border:"1px solid var(--border)",
+                    background:"var(--bg-panel)", color:"var(--text-muted)", cursor:"pointer", fontSize:12 }}>
+                  Skip for Now
+                </button>
+              </>
+            )}
+
+            {/* Add to existing customer — searchable picker */}
+            {!newCustPopup.isExisting && custChoice === "existing" && (
+              <>
+                <p style={{ fontSize:13, color:"var(--text-muted)", marginTop:0, marginBottom:12 }}>
+                  Search for the customer to link <strong>{newCustPopup.name}</strong> to:
+                </p>
+                <input
+                  autoFocus
+                  placeholder="Search customers…"
+                  value={custSearch}
+                  onChange={e => setCustSearch(e.target.value)}
+                  style={{ width:"100%", marginBottom:10, boxSizing:"border-box" }}
+                />
+                <div style={{ maxHeight:260, overflowY:"auto", display:"flex", flexDirection:"column", gap:4, marginBottom:12 }}>
+                  {custSearchLoading && <div style={{ fontSize:13, color:"var(--text-muted)", padding:8 }}>Loading…</div>}
+                  {!custSearchLoading && custSearchResults
+                    .filter(c => !custSearch || (c.companyName||"").toLowerCase().includes(custSearch.toLowerCase()))
+                    .map(c => (
+                      <button key={c._id} type="button"
+                        onClick={async () => {
+                          // Append buyer name to this customer
+                          await fetch(`${API}/api/address-book/${c._id}/add-buyer`, {
+                            method: "PATCH",
+                            headers: { "Content-Type": "application/json" },
+                            body: JSON.stringify({ buyerName: newCustPopup.name }),
+                          });
+                          // Update form with this customer's info
+                          const pod  = c.defaultPod || "";
+                          const line = podToShippingLine(pod);
+                          setForm(prev => ({
+                            ...prev,
+                            customerName:  c.companyName || prev.customerName,
+                            customerPhone: c.phone       || prev.customerPhone,
+                            customerEmail: c.email       || prev.customerEmail,
+                            buyerName:     newCustPopup.name,
+                            ...(pod  ? { pod }                : {}),
+                            ...(line ? { shippingLine: line } : {}),
+                          }));
+                          if (pod) {
+                            try {
+                              const rates = await fetch(`${API}/api/pricing?type=towing`).then(r => r.json());
+                              const cityN = normCity(form.pickupCity || "");
+                              const match = rates.find(r => r.port && normCity(r.city) === cityN) ||
+                                rates.find(r => r.port && r.name && cityN && normCity(r.name).includes(cityN));
+                              const port = match?.port || (form.pickupState && stateToPort[form.pickupState.toUpperCase()]);
+                              if (port) await handlePolChange(port.toUpperCase(), line);
+                            } catch {}
+                          }
+                          setNewCustPopup(null); setCustChoice(null); setCustSearch("");
+                        }}
+                        style={{
+                          textAlign:"left", padding:"10px 14px", borderRadius:8, cursor:"pointer",
+                          border:"1px solid var(--border)", background:"var(--bg-panel)",
+                          color:"var(--text-primary)", fontSize:13,
+                        }}>
+                        <strong>{c.companyName}</strong>
+                        {c.defaultPod && <span style={{ marginLeft:8, fontSize:11, color:"var(--text-muted)" }}>{c.defaultPod}</span>}
+                        {(c.buyerAccounts||[]).length > 0 && (
+                          <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>
+                            Buyers: {(c.buyerAccounts).join(", ")}
+                          </div>
+                        )}
+                      </button>
+                    ))
+                  }
+                </div>
+                <button type="button" onClick={() => setCustChoice(null)}
+                  style={{ fontSize:12, color:"var(--text-muted)", background:"none", border:"none", cursor:"pointer", textDecoration:"underline" }}>
+                  ← Back
+                </button>
+              </>
+            )}
+
+            {/* New customer form OR existing customer update */}
+            {(newCustPopup.isExisting || custChoice === "new") && (
+              <>
+                <p style={{ fontSize: 13, color: "var(--text-muted)", marginTop: 0, marginBottom: 18 }}>
+                  {newCustPopup.isExisting
+                    ? "No shipping destination saved for this customer yet. Set it now so future orders auto-fill."
+                    : "Add contact info and shipping destination so future orders auto-fill."}
+                </p>
 
             <label style={{ display: "block", marginBottom: 12 }}>
               Phone / WhatsApp
@@ -1717,15 +1832,17 @@ export default function CreateOrder() {
                     if (port) await handlePolChange(port.toUpperCase(), line);
                   } catch (e) { console.error("Delivery lookup failed", e); }
                 }
-                setNewCustPopup(null);
+                setNewCustPopup(null); setCustChoice(null);
               }}>
                 Save Contact Info
               </button>
-              <button onClick={() => setNewCustPopup(null)}
+              <button onClick={() => { setNewCustPopup(null); setCustChoice(null); }}
                 style={{ background: "var(--bg-panel)", color: "var(--text-muted)" }}>
                 Skip for Now
               </button>
             </div>
+            </>
+            )}{/* end new/existing form */}
           </div>
         </div>
       )}

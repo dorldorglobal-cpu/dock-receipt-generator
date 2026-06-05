@@ -224,6 +224,17 @@ function OrdersDrawer({ customer, onClose }) {
               {customer.phone && <span style={{ marginLeft: 12 }}>📞 {customer.phone}</span>}
               {customer.email && <span style={{ marginLeft: 12 }}>✉️ {customer.email}</span>}
             </div>
+            {(customer.buyerAccounts || []).length > 0 && (
+              <div style={{ marginTop: 6, display: "flex", gap: 6, flexWrap: "wrap" }}>
+                {customer.buyerAccounts.map(b => (
+                  <span key={b} style={{
+                    fontSize: 11, padding: "2px 8px", borderRadius: 12,
+                    background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)",
+                    color: "#a78bfa", fontWeight: 500,
+                  }}>{b}</span>
+                ))}
+              </div>
+            )}
           </div>
           <button onClick={onClose} style={{ fontSize: 18, background: "none", border: "none",
             color: "var(--text-muted)", cursor: "pointer" }}>✕</button>
