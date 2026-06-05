@@ -1222,6 +1222,12 @@ mongoose
     }).then(() => console.log("[counter] orderRef counter ready"))
       .catch(e => console.warn("[counter] counter init failed:", e.message));
 
+    // Remove junk address book entries that cause wrong customer matches
+    const AddressBook = require("./models/AddressBook");
+    AddressBook.deleteMany({ companyName: { $in: ["PHYSICAL", "ADDRESS OF LOT", "SELLER"] } })
+      .then(r => { if (r.deletedCount) console.log(`[cleanup] Removed ${r.deletedCount} junk address book entries`); })
+      .catch(() => {});
+
     app.listen(4000, () => {
       console.log("Server running on port 4000");
 

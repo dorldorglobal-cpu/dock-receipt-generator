@@ -762,17 +762,19 @@ async function parseBuyerReceipt(filePath) {
   let customerNameLineIdx = -1;
 
   const memberHeaderIdx = lines.findIndex(l => /MEMBER:\s*\d+/i.test(l));
-  // Sub-header: "LOT: SELLER:" or "LOT#: ... SELLER:" etc.
+  // Sub-header: "LOT: SELLER:", "ADDRESS OF LOT:", "ADDRESS OF LOT: SELLER:" etc.
+  // Also catches when the PDF splits "PHYSICAL" and "ADDRESS OF LOT:" onto separate lines
   const lotSellerIdx = lines.findIndex(
     (l, i) => i > (memberHeaderIdx >= 0 ? memberHeaderIdx : 0) &&
-              (/LOT.*SELLER/i.test(l) || /^LOT:/i.test(l))
+              (/LOT.*SELLER/i.test(l) || /^LOT:/i.test(l) || /ADDRESS\s+OF\s+LOT/i.test(l))
   );
   const searchFrom = lotSellerIdx >= 0 ? lotSellerIdx + 1
                    : memberHeaderIdx >= 0 ? memberHeaderIdx + 1
                    : 0;
 
   // Skip lines that are headers/junk, digits-only, or look like auction/insurance names
-  const skipNamePat = /PHYSICAL ADDRESS|LOT[:#]?|SELLER:|COPART|IAAI|INSURANCE|NATIONWIDE|STATE FARM|GEICO|PROGRESSIVE|ALLSTATE|Sales Receipt|Bill of Sale|^\d+$/i;
+  // NOTE: \bPHYSICAL\b catches "PHYSICAL" alone (when PDF splits it from "ADDRESS OF LOT:")
+  const skipNamePat = /\bPHYSICAL\b|ADDRESS\s+OF\s+LOT|LOT[:#]?|SELLER:|COPART|IAAI|INSURANCE|NATIONWIDE|STATE FARM|GEICO|PROGRESSIVE|ALLSTATE|Sales Receipt|Bill of Sale|^\d+$/i;
 
   for (let i = searchFrom; i < Math.min(searchFrom + 12, lines.length); i++) {
     const l = lines[i];
