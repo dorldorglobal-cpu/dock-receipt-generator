@@ -249,6 +249,7 @@ export default function OrderDetails() {
   const voyageContainerRef = useRef(null);
 
   const [showCosts, setShowCosts] = useState(false);
+  const [showPnl, setShowPnl] = useState(false);
   const [charges, setCharges] = useState(defaultCharges);
 
   const [emailNote, setEmailNote]           = useState("");
@@ -2429,7 +2430,14 @@ export default function OrderDetails() {
 
         return (
           <section className="form-section" style={{ gridColumn:"1 / -1" }}>
-            <h2 style={{ margin:"0 0 16px" }}>P&amp;L Summary</h2>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: showPnl ? 16 : 0, cursor:"pointer" }}
+              onClick={() => setShowPnl(p => !p)}>
+              <h2 style={{ margin:0 }}>P&amp;L Summary</h2>
+              <span style={{ fontSize:11, color:"var(--text-muted)", userSelect:"none" }}>
+                {showPnl ? "▲ Collapse" : "▼ Expand"}
+              </span>
+            </div>
+            {!showPnl ? null : <>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:20 }}>
 
               {/* Accrual */}
@@ -2513,6 +2521,7 @@ export default function OrderDetails() {
               </div>
 
             </div>
+            </>}
           </section>
         );
       })()}
