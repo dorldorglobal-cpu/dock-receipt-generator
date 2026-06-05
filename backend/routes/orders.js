@@ -4,11 +4,37 @@ const Expense = require("../models/Expense");
 const Pricing = require("../models/Pricing");
 const Counter = require("../models/Counter");
 const multer = require("multer");
-const { parseAES, parseDispatch, parseBuyerReceipt } = require("../utils/parseOrderDocs");
+const { parseAES, parseDispatch } = require("../utils/parseOrderDocs");
 const AddressBook = require("../models/AddressBook");
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
+const os = require("os");
+const { execFile } = require("child_process");
+
+// ── Parse buyer receipt via pdfplumber Python script ──────────────────────────
+function parseBuyerReceiptPython(filePath) {
+  return new Promise((resolve, reject) => {
+    const scriptPath = path.join(__dirname, "..", "parse_buyer_receipt.py");
+    const tryExec = (cmd) => {
+      execFile(cmd, [scriptPath, filePath], { timeout: 30000 }, (err, stdout, stderr) => {
+        if (err) {
+          if (cmd === "python" && (err.code === "ENOENT" || (stderr || "").includes("not found"))) {
+            return tryExec("python3");
+          }
+          return reject(new Error(`Buyer receipt parse error: ${stderr || err.message}`));
+        }
+        let result;
+        try { result = JSON.parse(stdout); } catch {
+          return reject(new Error(`Bad JSON from buyer receipt parser: ${stdout.slice(0, 200)}`));
+        }
+        if (result.error) return reject(new Error(result.error));
+        resolve(result);
+      });
+    };
+    tryExec("python");
+  });
+}
 
 const {
   drive,
@@ -201,191 +227,36 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    let parsed = await parseBuyerReceipt(req.file.path);
-    const fileBuffer = fs.readFileSync(req.file.path);
-    fs.unlink(req.file.path, () => {});
-
-    // ── If regex parser returned little/nothing (or missing pickup), fall back to AI ──
-    const pdfParse2 = require("pdf-parse");
-    const rawText   = (await pdfParse2(fileBuffer)).text;
-    const isCopartDoc = /copart/i.test(rawText);
-    // Always run enhanced parser for Copart; for others only if pickup missing
-    const needsEnhanced = isCopartDoc || !parsed?.pickupState;
-    if (needsEnhanced) {
-      try {
-        const Groq = require("groq-sdk");
-        const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-        const text = rawText;
-        const isCopart = isCopartDoc;
-        if (isCopart) {
-          // VIN
-          const vinMatch  = text.match(/VIN:\s*([A-HJ-NPR-Z0-9]{17})/i);
-          // Vehicle line: "VEHICLE:2020 MERCEDES-BENZ GLE 350 4MATIC BLUE Phy"
-          const vehLine   = text.match(/VEHICLE:\s*(.+?)(?:Phy Yard|Keys:|$)/im);
-          let year="", make="", model="", color="";
-          if (vehLine) {
-            const vl = vehLine[1].trim();
-            const COLORS = ["BLACK","WHITE","BLUE","RED","SILVER","GRAY","GREY","GREEN","BROWN","GOLD","ORANGE","YELLOW","PURPLE","BEIGE","MAROON","BURGUNDY","TAN","CREAM","PINK","TEAL"];
-            const colorFound = COLORS.find(c => vl.toUpperCase().includes(c));
-            const colorIdx = colorFound ? vl.toUpperCase().lastIndexOf(colorFound) : vl.length;
-            const beforeColor = vl.slice(0, colorIdx).trim();
-            const yearMatch = beforeColor.match(/^(\d{4})\s+/);
-            if (yearMatch) {
-              year = yearMatch[1];
-              const rest = beforeColor.slice(yearMatch[0].length).trim();
-              // Make = first word(s) before a number or 3+ word model
-              const makeMatch = rest.match(/^([A-Z][A-Z\-]+(?:\s[A-Z][A-Z\-]+)?)\s+(.+)$/i);
-              if (makeMatch) { make = makeMatch[1].trim(); model = makeMatch[2].trim(); }
-              else { make = rest; }
-            }
-            color = colorFound || "";
-          }
-          // Lot number
-          const lotMatch   = text.match(/LOT#:\s*(\d+)/i);
-          // Sale price
-          const priceMatch = text.match(/Sale Price\s*\$?([\d,]+\.?\d*)/i);
-          // Buyer/member name — line after "SELLER:" that has company keywords
-          const memberMatch = text.match(/SELLER:\s*[\r\n]+\s*([A-Z][^\r\n]{3,80}(?:LTD|LLC|INC|CORP|LIMITED|ENTERPRISES|INTERNATIONAL|VENTURES|GLOBAL|MOTORS|TRADING|GROUP)[^\r\n]*)/i);
-
-          // Pickup: look for US address pattern — "NNN STREET\nCITYSTATE ZIP" (merged by PDF)
-          // Copart merges city+state+zip: "NORTH BILLERICAMA01862"
-          let pickupAddress="", pickupCity="", pickupState="", pickupZip="", pickupName="Copart";
-          // Find US street addresses — number + street name containing a suffix keyword
-          const streetMatches = [...text.matchAll(/(\d+[A-Z]?\s+[^\r\n]+?(?:STREET|AVENUE|ROAD|DRIVE|BLVD|BOULEVARD|LANE|HIGHWAY|HWY)\b[^\r\n]*)/gi)];
-          if (streetMatches.length) {
-            // Use the last street address found
-            pickupAddress = streetMatches[streetMatches.length - 1][1].trim();
-            // City+state+zip — Copart merges them: "NORTH BILLERICAMA" then zip on next line
-            const afterAddr = text.slice(streetMatches[streetMatches.length - 1].index + streetMatches[streetMatches.length - 1][0].length, streetMatches[streetMatches.length - 1].index + 400);
-            // Grab first all-caps line after the street (city+state merged or separate)
-            const cityLineMatch = afterAddr.match(/[\r\n,\s]+([A-Z][A-Z\s,]+[A-Z])/);
-            if (cityLineMatch) {
-              const raw = cityLineMatch[1].trim().replace(/^,\s*/, "");
-              // Check if zip is embedded at end: "NORTH BILLERICAMA01862"
-              const zipEmbedded = raw.match(/^([A-Z][A-Z\s]+?)([A-Z]{2})(\d{5})$/);
-              if (zipEmbedded) {
-                pickupCity  = zipEmbedded[1].trim();
-                pickupState = zipEmbedded[2];
-                pickupZip   = zipEmbedded[3];
-              } else {
-                // State is last 2 chars of city line, zip is next line
-                pickupState = raw.slice(-2);
-                pickupCity  = raw.slice(0, -2).trim().replace(/[,\s]+$/, "");
-                const zipMatch = afterAddr.match(/[\r\n,\s]+(\d{5})/);
-                if (zipMatch) pickupZip = zipMatch[1];
-              }
-            }
-          }
-          // For Copart, pickup name is always "Copart" — Danny's Auto Sales is the seller, not the yard
-          pickupName = "Copart";
-
-          // ── Buyer/consignee address extraction ──────────────────────────
-          // The member's address block (foreign) appears right after the member name.
-          // Lines: name → address lines → "CITY, COUNTRY_CODE"
-          // Collect non-US lines between member name and the physical lot address.
-          let consigneeName = parsed.customerName || "";
-          let consigneeAddress = "", consigneeCity = "", consigneeCountry = "";
-
-          const countryCodeMap = {
-            GH: "GHANA", NG: "NIGERIA", BJ: "BENIN", TG: "TOGO",
-            SN: "SENEGAL", CI: "IVORY COAST", SL: "SIERRA LEONE",
-            LR: "LIBERIA", GM: "GAMBIA", GN: "GUINEA",
-          };
-
-          // Find member name line in raw text lines
-          const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-          const memberNameIdx = consigneeName
-            ? rawLines.findIndex(l => l.toUpperCase().includes(consigneeName.toUpperCase()))
-            : -1;
-
-          if (memberNameIdx >= 0) {
-            const addrLines = [];
-            for (let ai = memberNameIdx + 1; ai < Math.min(memberNameIdx + 8, rawLines.length); ai++) {
-              const al = rawLines[ai];
-              // Stop at US physical address or junk lines
-              if (/^\*{1,2}\s*\d/.test(al)) break; // "** 304 NJ ROUTE 68"
-              if (/PHYSICAL\s+ADDRESS|SELLER:|SOLD\s+THROUGH|COPART/i.test(al)) break;
-              if (/^LOT[#:]|^VEHICLE:|^VIN:/i.test(al)) break;
-              addrLines.push(al);
-            }
-
-            // Last line often ends with ", GH" or similar country code
-            if (addrLines.length > 0) {
-              const lastLine = addrLines[addrLines.length - 1];
-              const countryMatch = lastLine.match(/,?\s*([A-Z]{2})\s*$/);
-              if (countryMatch && countryCodeMap[countryMatch[1]]) {
-                consigneeCountry = countryCodeMap[countryMatch[1]];
-                // City is the part before the country code
-                consigneeCity = lastLine.replace(/,?\s*[A-Z]{2}\s*$/, "").replace(/,\s*$/, "").trim().toUpperCase();
-                consigneeAddress = addrLines.slice(0, -1).join(", ").toUpperCase();
-              } else {
-                consigneeAddress = addrLines.join(", ").toUpperCase();
-              }
-            }
-          }
-
-          parsed = {
-            // Preserve customerName from regex parser (already correctly found KAISER CARS etc.)
-            // Only fall back to memberMatch if regex parser found nothing
-            customerName: parsed.customerName || memberMatch?.[1]?.trim() || "",
-            vin:          vinMatch?.[1]             || "",
-            year, make, model, color,
-            lotNumber:    lotMatch?.[1]             || "",
-            bidAmount:    priceMatch ? parseFloat(priceMatch[1].replace(/,/g,"")) : 0,
-            pickupName, pickupAddress, pickupCity, pickupState, pickupZip,
-            consigneeName, consigneeAddress, consigneeCity, consigneeCountry,
-          };
-        }
-
-        // ── Generic AI fallback for non-Copart or if Copart regex missed key fields ──
-        if (!parsed.vin || !parsed.pickupState) {
-          const aiRes = await groq.chat.completions.create({
-            model: "llama-3.3-70b-versatile",
-            messages: [
-              { role: "system", content: `You are a logistics document parser for auto export. Extract from this buyer receipt/bill of sale.
-${isCopart ? `This is a COPART document. Key patterns:
-- VEHICLE line: "VEHICLE:YEAR MAKE MODEL COLOR" — extract year, make, model, color from this exact line
-- VIN: appears after "VIN:" label
-- LOT#: appears after "LOT#:" label
-- PHYSICAL ADDRESS OF LOT: the yard/seller address — extract as pickupAddress, pickupCity, pickupState, pickupZip
-- The BUYER/MEMBER company name appears after "SELLER:" in the first section (before the US address)
-- pickupName: the seller yard name (e.g. "Danny's Auto Sales")` : ""}
-Return ONLY JSON with: customerName, year, make, model, vin, color, mileage, lotNumber, bidAmount, pickupName, pickupAddress, pickupCity, pickupState, pickupZip` },
-              { role: "user", content: `Document:\n\n${text.slice(0, 6000)}` },
-            ],
-            response_format: { type: "json_object" },
-            temperature: 0.1,
-          });
-          const aiParsed = JSON.parse(aiRes.choices[0].message.content);
-          // Merge: AI fills any gaps left by regex
-          parsed = { ...aiParsed, ...Object.fromEntries(Object.entries(parsed).filter(([,v]) => v)) };
-        }
-      } catch (aiErr) {
-        console.error("AI buyer receipt fallback failed:", aiErr.message);
-      }
+    // ── Parse via pdfplumber Python script ─────────────────────────────────
+    let parsed;
+    try {
+      parsed = await parseBuyerReceiptPython(req.file.path);
+    } catch (pyErr) {
+      console.error("Python buyer receipt parser failed:", pyErr.message);
+      return res.status(500).json({ error: `PDF parse failed: ${pyErr.message}` });
+    } finally {
+      fs.unlink(req.file.path, () => {});
     }
 
-    // ── Customer lookup ─────────────────────────────────────────────────────
+    // ── Customer lookup — exact match only (no fuzzy word search) ──────────
     let customerFound = null;
     if (parsed.customerName) {
-      const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const esc  = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const name = parsed.customerName.trim();
-      const normalize = (s) => s.replace(/[-_,.']/g, " ").replace(/\s+/g, " ").trim();
-      const variants = [...new Set([name, normalize(name), name.replace(/\s+/g, "-")])].map(esc);
+      const norm = s => s.replace(/[-_,.']/g, " ").replace(/\s+/g, " ").trim();
+
+      // Exact match first
       customerFound = await AddressBook.findOne({
-        $or: variants.map(v => ({ companyName: { $regex: v, $options: "i" } })),
+        companyName: { $regex: `^${esc(name)}$`, $options: "i" },
       });
+      // Normalized exact match
       if (!customerFound) {
-        const words = normalize(name).split(" ").filter(w => w.length > 3);
-        if (words.length) {
-          customerFound = await AddressBook.findOne({
-            companyName: { $regex: words.slice(0, 2).map(esc).join(".*"), $options: "i" }
-          });
-        }
+        customerFound = await AddressBook.findOne({
+          companyName: { $regex: `^${esc(norm(name))}$`, $options: "i" },
+        });
       }
     }
 
-    // Apply RORO delivery logic if pod is known
     const result = { ...parsed, customerFound: !!customerFound, customerRecord: customerFound || null };
     if (customerFound?.defaultPod) result.pod = result.pod || customerFound.defaultPod;
     applyRoroDelivery(result);
