@@ -1558,9 +1558,13 @@ router.get("/:id/dr-payload", async (req, res) => {
         const files = await listFilesInFolder(order.driveFolderId);
         const pdfs  = files.filter(f => (f.name || "").toLowerCase().endsWith(".pdf"));
 
+        // Ensure temp dir exists (gitignored, may not exist on fresh Render deploy)
+        const tempDir = path.join(__dirname, "..", "temp");
+        if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir, { recursive: true });
+
         for (const file of pdfs) {
           const name     = file.name.toLowerCase();
-          const tempPath = path.join(__dirname, "..", "temp", `dr_${file.id}.pdf`);
+          const tempPath = path.join(tempDir, `dr_${file.id}.pdf`);
           try {
             await downloadDriveFile(file.id, tempPath);
             if (name.includes("aes")) {

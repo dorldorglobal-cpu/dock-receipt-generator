@@ -14,7 +14,8 @@ ddg-operations-platform-*.json
 
 # Uploads (user files, not code)
 backend/uploads/
-backend/temp/
+backend/temp/*
+!backend/temp/.gitkeep
 backend/__pycache__/
 
 # Build output
