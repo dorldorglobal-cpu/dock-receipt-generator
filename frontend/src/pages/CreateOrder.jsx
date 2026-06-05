@@ -407,7 +407,7 @@ export default function CreateOrder() {
     return "";
   };
 
-  const suggestDeliveryFromPickupCity = async (city, shippingLineHint, state) => {
+  const suggestDeliveryFromPickupCity = async (city, shippingLineHint, state, podOverride) => {
     if (!city && !state) return;
     try {
       const res = await fetch(`${API}/api/pricing?type=towing`);
@@ -420,7 +420,8 @@ export default function CreateOrder() {
 
       const port = match?.port || (state && stateToPort[state.toUpperCase()]);
       if (port) {
-        const lineHint = getShippingLineForPort(port, form.pod) || shippingLineHint;
+        const pod = podOverride || form.pod;
+        const lineHint = shippingLineHint || getShippingLineForPort(port, pod);
         handlePolChange(port.toUpperCase(), lineHint);
       }
     } catch (err) {
@@ -471,7 +472,14 @@ export default function CreateOrder() {
         const r2 = await fetch(
           `${API}/api/address-book?search=${encodeURIComponent(polValue)}&type=port`
         ).then(r => r.json());
-        if (Array.isArray(r2) && r2.length) picked = r2[0];
+        if (Array.isArray(r2) && r2.length) {
+          // If we know the shipping line, exclude terminals belonging to the other line
+          const OPPOSITE = line.toUpperCase() === "SALLAUM" ? "ACL" : line.toUpperCase() === "ACL" ? "SALLAUM" : null;
+          const filtered = OPPOSITE
+            ? r2.filter(e => !(e.companyName || "").toUpperCase().includes(OPPOSITE))
+            : r2;
+          picked = filtered[0] || r2[0];
+        }
       }
 
       if (picked) {
@@ -563,7 +571,7 @@ export default function CreateOrder() {
 
     if (data.vin && data.vin.length === 17) decodeVin(data.vin);
     if (type !== "Container" && (data.pickupCity || data.pickupState)) {
-      suggestDeliveryFromPickupCity(data.pickupCity, effectiveLine, data.pickupState);
+      suggestDeliveryFromPickupCity(data.pickupCity, effectiveLine, data.pickupState, effectivePod);
     }
   };
 
