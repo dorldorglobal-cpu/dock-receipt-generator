@@ -95,10 +95,22 @@ def extract_vehicle(veh_text):
 
 
 # ── Copart parser ─────────────────────────────────────────────────────────────
+# Uses text anchors rather than x-coordinate column splitting,
+# because column boundaries vary across Copart PDF variants.
+#
+# Copart text order (after pdfplumber plain-text extraction):
+#   MEMBER: 322714 PHYSICAL
+#   ADDRESS OF LOT: SELLER:
+#   KAISER CARS                ← customer name (first non-junk line after headers)
+#   GA-574-5038, ...           ← foreign address lines
+#   NORTH LEGON ACCRA, GH      ← city + country code (last foreign line)
+#   ** 304 NJ ROUTE 68         ← lot address starts here (** prefix or plain US street)
+#   JOBSTOWN NJ 08041
+#   A Z GLOBAL / SOLD THROUGH COPART ...  ← seller (ignored)
 
 def parse_copart(page):
     full_text = page.extract_text() or ''
-    words     = page.extract_words(x_tolerance=3, y_tolerance=3)
+    lines = [l.strip() for l in full_text.split('\n') if l.strip()]
 
     # ── VIN ──────────────────────────────────────────────────────────────────
     vin = find_vin(full_text)
@@ -116,35 +128,50 @@ def parse_copart(page):
     lot_number = lot_m.group(1) if lot_m else ''
     value      = price_m.group(1).replace(',', '') if price_m else ''
 
-    # ── Split page into left / middle columns by x-coordinate ────────────────
-    page_width     = page.width
-    left_boundary  = page_width * 0.33   # LEFT  col: member/consignee
-    right_boundary = page_width * 0.65   # RIGHT col: seller (ignored)
-
-    left_words   = [w for w in words if w['x1'] < left_boundary]
-    middle_words = [w for w in words if w['x0'] >= left_boundary and w['x1'] < right_boundary]
-
-    left_lines   = group_rows(left_words)
-    middle_lines = group_rows(middle_words)
-
-    # ── Customer name + consignee address (LEFT column) ───────────────────────
-    SKIP_PAT = re.compile(
-        r'MEMBER:|Ramp\s+Weight|Max\.\s+(Width|Height)|Page\s+\d|'
-        r'Sales\s+Receipt|Bill\s+of\s+Sale|PHYSICAL|SELLER:|LOT[#:]',
+    # ── Locate anchor lines ───────────────────────────────────────────────────
+    # Header lines to skip when looking for customer name
+    HEADER_PAT = re.compile(
+        r'^MEMBER:\s*\d+|^ADDRESS\s+OF\s+LOT|^SELLER:|^PHYSICAL\s+ADDRESS|'
+        r'^Ramp\s+Weight|^Max\.\s+(Width|Height)|^Page\s+\d|^Sales\s+Receipt|'
+        r'^Bill\s+of\s+Sale|^PHYSICAL$|^LOT[#:]|^VEHICLE:|^VIN:|^Charges',
         re.I)
-    addr_lines = [l for l in left_lines if not SKIP_PAT.search(l) and len(l.strip()) > 2]
 
-    customer_name     = ''
-    consignee_address = ''
-    consignee_city    = ''
-    consignee_country = ''
+    # Member header: "MEMBER: 322714 PHYSICAL" or "MEMBER: 322714"
+    member_idx = next((i for i, l in enumerate(lines)
+                       if re.search(r'MEMBER:\s*\d+', l, re.I)), -1)
 
-    if addr_lines:
-        customer_name = addr_lines[0].strip()
-        foreign = addr_lines[1:]
+    # Lot address marker: line starting with "**" digits or plain US street
+    # after the member block
+    search_start = member_idx + 1 if member_idx >= 0 else 0
+    lot_addr_idx = -1
+    for i in range(search_start, len(lines)):
+        l = lines[i]
+        if re.match(r'^\*+\s*\d', l):          # "** 304 NJ ROUTE 68"
+            lot_addr_idx = i; break
+        if (re.match(r'^\d{1,5}\s+[A-Z]', l) and
+                US_SUFFIX_RE.search(l) and
+                i > search_start + 1):          # plain street after customer block
+            lot_addr_idx = i; break
+
+    # ── Customer name + consignee address ─────────────────────────────────────
+    customer_name = consignee_address = consignee_city = consignee_country = ''
+
+    scan_end = lot_addr_idx if lot_addr_idx >= 0 else min(search_start + 12, len(lines))
+    candidate_lines = []
+    for i in range(search_start, scan_end):
+        l = lines[i]
+        if HEADER_PAT.search(l):
+            continue
+        if len(l) < 2:
+            continue
+        candidate_lines.append(l)
+
+    if candidate_lines:
+        customer_name = candidate_lines[0].strip()
+        foreign = candidate_lines[1:]
         if foreign:
-            last   = foreign[-1]
-            cc_m   = re.search(r',?\s*([A-Z]{2})\s*$', last)
+            last = foreign[-1]
+            cc_m = re.search(r',?\s*([A-Z]{2})\s*$', last)
             if cc_m and cc_m.group(1) in COUNTRY_MAP:
                 consignee_country = COUNTRY_MAP[cc_m.group(1)]
                 consignee_city    = re.sub(r',?\s*[A-Z]{2}\s*$', '', last).strip().upper()
@@ -152,23 +179,23 @@ def parse_copart(page):
             else:
                 consignee_address = ', '.join(l.strip().upper() for l in foreign)
 
-    # ── Pickup address (MIDDLE column) ────────────────────────────────────────
+    # ── Pickup address (lot address block) ────────────────────────────────────
     pickup_address = pickup_city = pickup_state = pickup_zip = ''
-    pickup_name    = 'COPART'
+    pickup_name = 'COPART'
 
-    for i, line in enumerate(middle_lines):
-        line = line.strip()
-        if re.match(r'^\*+', line) or not line:
-            continue
-        if re.match(r'^\d{1,5}\s+[A-Z]', line, re.I) and US_SUFFIX_RE.search(line):
-            pickup_address = line.upper()
-            # Look for city/state/zip in next few lines
-            for j in range(i + 1, min(i + 5, len(middle_lines))):
-                parsed = try_parse_city_state_zip(middle_lines[j])
-                if parsed:
-                    pickup_city, pickup_state, pickup_zip = parsed
-                    break
-            break
+    if lot_addr_idx >= 0:
+        # Strip leading asterisks from lot address line
+        raw_addr = re.sub(r'^\*+\s*', '', lines[lot_addr_idx]).strip()
+        if US_SUFFIX_RE.search(raw_addr) or re.match(r'^\d{1,5}\s+[A-Z]', raw_addr, re.I):
+            pickup_address = raw_addr.upper()
+        # Scan next few lines for city/state/zip
+        for j in range(lot_addr_idx + 1, min(lot_addr_idx + 5, len(lines))):
+            l = lines[j].strip()
+            if re.match(r'^\*+', l): continue   # skip "**This is a sub lot"
+            parsed = try_parse_city_state_zip(l)
+            if parsed:
+                pickup_city, pickup_state, pickup_zip = parsed
+                break
 
     if pickup_city:
         pickup_name = f'COPART {pickup_city} {pickup_state}'.strip()
