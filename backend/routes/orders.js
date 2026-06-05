@@ -279,13 +279,61 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
           // For Copart, pickup name is always "Copart" — Danny's Auto Sales is the seller, not the yard
           pickupName = "Copart";
 
+          // ── Buyer/consignee address extraction ──────────────────────────
+          // The member's address block (foreign) appears right after the member name.
+          // Lines: name → address lines → "CITY, COUNTRY_CODE"
+          // Collect non-US lines between member name and the physical lot address.
+          let consigneeName = parsed.customerName || "";
+          let consigneeAddress = "", consigneeCity = "", consigneeCountry = "";
+
+          const countryCodeMap = {
+            GH: "GHANA", NG: "NIGERIA", BJ: "BENIN", TG: "TOGO",
+            SN: "SENEGAL", CI: "IVORY COAST", SL: "SIERRA LEONE",
+            LR: "LIBERIA", GM: "GAMBIA", GN: "GUINEA",
+          };
+
+          // Find member name line in raw text lines
+          const rawLines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+          const memberNameIdx = consigneeName
+            ? rawLines.findIndex(l => l.toUpperCase().includes(consigneeName.toUpperCase()))
+            : -1;
+
+          if (memberNameIdx >= 0) {
+            const addrLines = [];
+            for (let ai = memberNameIdx + 1; ai < Math.min(memberNameIdx + 8, rawLines.length); ai++) {
+              const al = rawLines[ai];
+              // Stop at US physical address or junk lines
+              if (/^\*{1,2}\s*\d/.test(al)) break; // "** 304 NJ ROUTE 68"
+              if (/PHYSICAL\s+ADDRESS|SELLER:|SOLD\s+THROUGH|COPART/i.test(al)) break;
+              if (/^LOT[#:]|^VEHICLE:|^VIN:/i.test(al)) break;
+              addrLines.push(al);
+            }
+
+            // Last line often ends with ", GH" or similar country code
+            if (addrLines.length > 0) {
+              const lastLine = addrLines[addrLines.length - 1];
+              const countryMatch = lastLine.match(/,?\s*([A-Z]{2})\s*$/);
+              if (countryMatch && countryCodeMap[countryMatch[1]]) {
+                consigneeCountry = countryCodeMap[countryMatch[1]];
+                // City is the part before the country code
+                consigneeCity = lastLine.replace(/,?\s*[A-Z]{2}\s*$/, "").replace(/,\s*$/, "").trim().toUpperCase();
+                consigneeAddress = addrLines.slice(0, -1).join(", ").toUpperCase();
+              } else {
+                consigneeAddress = addrLines.join(", ").toUpperCase();
+              }
+            }
+          }
+
           parsed = {
-            customerName: memberMatch?.[1]?.trim() || "",
+            // Preserve customerName from regex parser (already correctly found KAISER CARS etc.)
+            // Only fall back to memberMatch if regex parser found nothing
+            customerName: parsed.customerName || memberMatch?.[1]?.trim() || "",
             vin:          vinMatch?.[1]             || "",
             year, make, model, color,
             lotNumber:    lotMatch?.[1]             || "",
             bidAmount:    priceMatch ? parseFloat(priceMatch[1].replace(/,/g,"")) : 0,
             pickupName, pickupAddress, pickupCity, pickupState, pickupZip,
+            consigneeName, consigneeAddress, consigneeCity, consigneeCountry,
           };
         }
 

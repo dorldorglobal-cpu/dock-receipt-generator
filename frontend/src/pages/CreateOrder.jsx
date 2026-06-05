@@ -552,8 +552,11 @@ export default function CreateOrder() {
         customerPhone: rec?.phone        || data.customerPhone || prev.customerPhone,
         customerEmail: rec?.email        || data.customerEmail || prev.customerEmail,
         buyerName:     data.buyerName    || prev.buyerName,
-        // Buyer / Consignee — buyer name from receipt goes here too
-        consigneeName: data.buyerName || data.customerName || prev.consigneeName,
+        // Buyer / Consignee — fill from parsed receipt address block
+        consigneeName:    data.consigneeName    || data.buyerName || data.customerName || prev.consigneeName,
+        consigneeAddress: data.consigneeAddress || prev.consigneeAddress,
+        consigneeCity:    data.consigneeCity    || prev.consigneeCity,
+        consigneeCountry: data.consigneeCountry || prev.consigneeCountry,
         // Vehicle
         vin:       data.vin       || prev.vin,
         year:      data.year      || prev.year,
