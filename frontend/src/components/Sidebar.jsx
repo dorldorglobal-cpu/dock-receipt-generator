@@ -109,22 +109,29 @@ export default function Sidebar() {
       {/* ── Desktop sidebar ─────────────────────────── */}
       <aside className={`sidebar${collapsed ? " sidebar--collapsed" : ""}`}>
         {/* Logo + collapse toggle */}
-        <div className="sidebar-logo">
-          <img src={logo} alt="DDG" />
-          {!collapsed && (
-            <div className="sidebar-logo-text">
-              <span className="sidebar-logo-name">DDG OPS</span>
-              <span className="sidebar-logo-sub">Operations Platform</span>
-            </div>
+        <div className={`sidebar-logo${collapsed ? " sidebar-logo--collapsed" : ""}`}>
+          {collapsed ? (
+            /* When collapsed: whole header is the expand button */
+            <button className="sidebar-toggle-collapsed" onClick={toggleCollapsed} title="Expand sidebar">
+              <img src={logo} alt="DDG" style={{ width:28, height:28, borderRadius:6, background:"#1a2235", padding:3, objectFit:"contain" }} />
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M9 18l6-6-6-6" />
+              </svg>
+            </button>
+          ) : (
+            <>
+              <img src={logo} alt="DDG" />
+              <div className="sidebar-logo-text">
+                <span className="sidebar-logo-name">DDG OPS</span>
+                <span className="sidebar-logo-sub">Operations Platform</span>
+              </div>
+              <button className="sidebar-toggle" onClick={toggleCollapsed} title="Collapse sidebar">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M15 18l-6-6 6-6" />
+                </svg>
+              </button>
+            </>
           )}
-          <button className="sidebar-toggle" onClick={toggleCollapsed} title={collapsed ? "Expand sidebar" : "Collapse sidebar"}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              {collapsed
-                ? <path d="M9 18l6-6-6-6" />
-                : <path d="M15 18l-6-6 6-6" />
-              }
-            </svg>
-          </button>
         </div>
 
         {navItems()}

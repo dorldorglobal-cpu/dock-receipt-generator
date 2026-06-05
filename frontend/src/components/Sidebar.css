@@ -175,11 +175,37 @@
   white-space: nowrap;
 }
 
-/* Collapse / expand toggle button — lives inside .sidebar-logo */
-.sidebar-logo {
-  position: relative;
+/* Collapsed logo area */
+.sidebar-logo--collapsed {
+  padding: 0;
+  border-bottom: 1px solid var(--sidebar-border);
+  margin-bottom: 10px;
+  justify-content: center;
 }
 
+/* Full-width expand button shown when collapsed */
+.sidebar-toggle-collapsed {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  padding: 14px 0;
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: var(--text-muted);
+  transition: background 0.12s, color 0.12s;
+  border-radius: 0;
+}
+
+.sidebar-toggle-collapsed:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Collapse button (in expanded header) */
 .sidebar-toggle {
   display: flex;
   align-items: center;
