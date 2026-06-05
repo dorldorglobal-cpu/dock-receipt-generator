@@ -28,6 +28,9 @@ export default function CreateOrder() {
   const [popupContainerSize, setPopupContainerSize] = useState("");
   const [popupWarehouse, setPopupWarehouse] = useState(null);
 
+  // ── Order number lock ─────────────────────────────────────────────────
+  const [refLocked, setRefLocked]           = useState(true);
+
   // ── New customer contact popup ─────────────────────────────────────────
   const [newCustPopup, setNewCustPopup]     = useState(null); // { name, phone, email, defaultPod }
   const [custChoice, setCustChoice]         = useState(null); // null | "new" | "existing"
@@ -767,7 +770,7 @@ export default function CreateOrder() {
 
         {/* ── Order Number ─────────────────────────────────────────────── */}
         <section className="form-section" style={{ paddingBottom: 12 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
             <div>
               <label style={{ fontSize: 11, color: "var(--text-secondary)", fontWeight: 600, textTransform: "uppercase", letterSpacing: 1, display: "block", marginBottom: 6 }}>
                 Order Number
@@ -776,14 +779,18 @@ export default function CreateOrder() {
                 <input
                   type="text"
                   value={manualRef}
-                  onChange={e => setManualRef(e.target.value)}
+                  readOnly={refLocked}
+                  onChange={e => !refLocked && setManualRef(e.target.value)}
                   style={{
                     width: 130, padding: "8px 12px", borderRadius: 8, fontSize: 20, fontWeight: 700,
-                    background: "var(--bg-input)", border: "2px solid #1a6ef7",
-                    color: "#60a5fa", outline: "none", textAlign: "center",
+                    background: refLocked ? "var(--bg-panel)" : "var(--bg-input)",
+                    border: `2px solid ${refLocked ? "var(--border)" : "#1a6ef7"}`,
+                    color: refLocked ? "var(--text-muted)" : "#60a5fa",
+                    outline: "none", textAlign: "center",
+                    cursor: refLocked ? "default" : "text",
                   }}
                 />
-                {manualRef !== nextRef && (
+                {!refLocked && manualRef !== nextRef && (
                   <button type="button" onClick={() => setManualRef(nextRef)}
                     style={{ fontSize: 11, color: "var(--text-secondary)", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
                     Reset to {nextRef}
@@ -791,9 +798,31 @@ export default function CreateOrder() {
                 )}
               </div>
               <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 4 }}>
-                Auto-generated · editable if needed
+                {refLocked ? "🔒 Auto-generated" : "✏️ Custom — type your old order number"}
               </div>
             </div>
+            {/* Add Old Order button */}
+            {refLocked ? (
+              <button type="button"
+                onClick={() => { setRefLocked(false); setManualRef(""); }}
+                style={{
+                  padding: "8px 14px", borderRadius: 8, border: "1px solid rgba(251,191,36,0.4)",
+                  background: "rgba(251,191,36,0.08)", color: "#fbbf24",
+                  cursor: "pointer", fontSize: 12, fontWeight: 600, marginTop: 4,
+                }}>
+                📦 Add Old Order
+              </button>
+            ) : (
+              <button type="button"
+                onClick={() => { setRefLocked(true); setManualRef(nextRef); }}
+                style={{
+                  padding: "8px 14px", borderRadius: 8, border: "1px solid var(--border)",
+                  background: "var(--bg-panel)", color: "var(--text-muted)",
+                  cursor: "pointer", fontSize: 12, marginTop: 4,
+                }}>
+                ← Use Auto Number
+              </button>
+            )}
           </div>
         </section>
 

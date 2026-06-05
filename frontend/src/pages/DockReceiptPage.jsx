@@ -106,6 +106,7 @@ export default function DockReceiptPage() {
   const [createdOrder, setCreatedOrder]   = useState(null); // { orderId, refNumber } after creation
   const [savingFiles, setSavingFiles]     = useState(false);
   const [filesSaved, setFilesSaved]       = useState(false);
+  const [drRequestType, setDrRequestType] = useState("RORO"); // for create-order from DR
   const [sendModal, setSendModal]       = useState(null); // { pdfBase64, pdfName }
   const [sendTo, setSendTo]             = useState("");
   const [sendTrucker, setSendTrucker]   = useState("");
@@ -194,7 +195,7 @@ export default function DockReceiptPage() {
     const shippingLine = podLine[(r.portOfDischarge || "").toUpperCase()] || "";
 
     return {
-      requestType:      "RORO",
+      requestType:      drRequestType,
       vin:              (r.vin              || "").toUpperCase(),
       year, make, model,
       vehicleYearMakeModel: r.vehicleYearMakeModel || "",
@@ -628,13 +629,25 @@ export default function DockReceiptPage() {
                     </button>
                   </>
                 ) : (
-                  <button
-                    onClick={createOrderFromDR}
-                    disabled={creatingOrder}
-                    style={{ padding: "6px 16px", borderRadius: 7, border: "none", cursor: creatingOrder ? "not-allowed" : "pointer",
-                      background: "#1a6ef7", color: "#fff", fontWeight: 600, fontSize: 12 }}>
-                    {creatingOrder ? "Creating…" : "📋 Create Order"}
-                  </button>
+                  <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                    {/* RORO / Container toggle */}
+                    {["RORO","Container"].map(t => (
+                      <button key={t} type="button" onClick={() => setDrRequestType(t)}
+                        style={{
+                          padding:"4px 10px", borderRadius:6, cursor:"pointer", fontSize:11, fontWeight:600, border:"none",
+                          background: drRequestType===t ? (t==="Container"?"#2563eb":"#059669") : "var(--bg-panel)",
+                          color: drRequestType===t ? "#fff" : "var(--text-muted)",
+                          outline: drRequestType===t ? "none" : "1px solid var(--border)",
+                        }}>{t}</button>
+                    ))}
+                    <button
+                      onClick={createOrderFromDR}
+                      disabled={creatingOrder}
+                      style={{ padding: "6px 16px", borderRadius: 7, border: "none", cursor: creatingOrder ? "not-allowed" : "pointer",
+                        background: "#1a6ef7", color: "#fff", fontWeight: 600, fontSize: 12 }}>
+                      {creatingOrder ? "Creating…" : "📋 Create Order"}
+                    </button>
+                  </div>
                 )}
                 {createdOrder && (
                   <button
