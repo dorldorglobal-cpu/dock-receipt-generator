@@ -6,21 +6,29 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const TABS = [
   { label: "All",              value: "all",              color: "#8b949e" },
   { label: "New Order",        value: "New Order",        color: "#60a5fa" },
-  { label: "Dispatched",       value: "Dispatched",       color: "#a78bfa" },
+  { label: "Awaiting Pickup",  value: "Awaiting Pickup",  color: "#f97316" },
+  { label: "Picked Up",        value: "Picked Up",        color: "#60a5fa" },
+  { label: "Delivered",        value: "Delivered",        color: "#a78bfa" },
   { label: "Waiting to Sail",  value: "Waiting to Sail",  color: "#fbbf24" },
   { label: "Sailed",           value: "Sailed",           color: "#34d399" },
   { label: "Arrived",          value: "Arrived",          color: "#4ade80" },
+  { label: "Paid",             value: "Paid",             color: "#86efac" },
   { label: "Completed",        value: "Completed",        color: "#94a3b8" },
+  { label: "Problem / Hold",   value: "Problem / Hold",   color: "#f87171" },
 ];
 
 const STATUS_COLORS = {
-  "New Order":       { bg: "rgba(96,165,250,0.12)",  border: "rgba(96,165,250,0.35)",  text: "#60a5fa" },
+  "New Order":       { bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.35)", text: "#9ca3af" },
+  "Awaiting Pickup": { bg: "rgba(249,115,22,0.12)",  border: "rgba(249,115,22,0.35)",  text: "#f97316" },
+  "Picked Up":       { bg: "rgba(96,165,250,0.12)",  border: "rgba(96,165,250,0.35)",  text: "#60a5fa" },
+  "Delivered":       { bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.35)", text: "#a78bfa" },
   "Dispatched":      { bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.35)", text: "#a78bfa" },
   "Waiting to Sail": { bg: "rgba(251,191,36,0.12)",  border: "rgba(251,191,36,0.35)",  text: "#fbbf24" },
   "Sailed":          { bg: "rgba(52,211,153,0.12)",  border: "rgba(52,211,153,0.35)",  text: "#34d399" },
   "Arrived":         { bg: "rgba(74,222,128,0.12)",  border: "rgba(74,222,128,0.35)",  text: "#4ade80" },
+  "Paid":            { bg: "rgba(22,163,74,0.12)",   border: "rgba(22,163,74,0.35)",   text: "#4ade80" },
   "Completed":       { bg: "rgba(148,163,184,0.12)", border: "rgba(148,163,184,0.35)", text: "#94a3b8" },
-  "Paid":            { bg: "rgba(148,163,184,0.12)", border: "rgba(148,163,184,0.35)", text: "#94a3b8" },
+  "Problem / Hold":  { bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.35)",   text: "#f87171" },
 };
 
 export default function Orders() {
@@ -32,6 +40,7 @@ export default function Orders() {
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]       = useState(false);
   const [refSort, setRefSort]         = useState("desc"); // "desc" = newest first
+  const [updatingStatus, setUpdatingStatus] = useState(null); // orderId being updated
   const navigate = useNavigate();
 
   useEffect(() => { fetchOrders(); }, []);
@@ -219,11 +228,34 @@ export default function Orders() {
                   {o.voyage && <small style={{ color: "var(--text-secondary)" }}>{o.voyage}</small>}
                   {shippingLine(o) && <div style={{ fontSize: 11, color: "var(--text-secondary)", marginTop: 2 }}>{shippingLine(o)}</div>}
                 </td>
-                <td>
-                  <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20,
-                    background: sc.bg, border: `1px solid ${sc.border}`, color: sc.text }}>
-                    {o.status}
-                  </span>
+                <td onClick={e => e.stopPropagation()}>
+                  <select
+                    value={o.status || "New Order"}
+                    disabled={updatingStatus === o._id}
+                    onChange={async e => {
+                      const newStatus = e.target.value;
+                      setUpdatingStatus(o._id);
+                      try {
+                        await fetch(`${API}/api/orders/${o._id}`, {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ status: newStatus }),
+                        });
+                        setOrders(prev => prev.map(x => x._id === o._id ? { ...x, status: newStatus } : x));
+                      } catch {}
+                      setUpdatingStatus(null);
+                    }}
+                    style={{
+                      fontSize: 11, fontWeight: 600, padding: "3px 8px", borderRadius: 20,
+                      background: sc.bg, border: `1px solid ${sc.border}`, color: sc.text,
+                      cursor: "pointer", appearance: "none", WebkitAppearance: "none",
+                      paddingRight: 20, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E")`,
+                      backgroundRepeat: "no-repeat", backgroundPosition: "right 6px center",
+                    }}>
+                    {["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail","Sailed","Arrived","Paid","Completed","Problem / Hold"].map(s => (
+                      <option key={s} value={s}>{s}</option>
+                    ))}
+                  </select>
                 </td>
                 <td style={{ textAlign: "center", whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
                   <button title="Edit" onClick={() => navigate(`/orders/${o._id}`)}
