@@ -105,8 +105,9 @@ function CustomerForm({ form, setForm }) {
         </div>
         <textarea
           value={(form.buyerAccounts || []).join("\n")}
-          onChange={e => setForm(f => ({ ...f, buyerAccounts: e.target.value.split("\n").map(s => s.trim()).filter(Boolean) }))}
-          rows={3}
+          onChange={e => setForm(f => ({ ...f, buyerAccounts: e.target.value.split("\n") }))}
+          onBlur={e => setForm(f => ({ ...f, buyerAccounts: e.target.value.split("\n").map(s => s.trim()).filter(Boolean) }))}
+          rows={4}
           placeholder={"GOLDEN NOOR INTERNATIONAL LTD\nANOTHER AUCTION ACCOUNT"}
           style={{ resize: "vertical", fontFamily: "inherit", fontSize: 13 }}
         />
