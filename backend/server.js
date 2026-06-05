@@ -6,6 +6,7 @@ const pdfParse = require("pdf-parse");
 const XLSX = require("xlsx");
 const fs = require("fs");
 const path = require("path");
+const os = require("os");
 const { PDFDocument: PDFLibDocument, StandardFonts, rgb } = require("pdf-lib");
 const nodemailer = require("nodemailer");
 const pricingRoutes = require("./routes/pricing");
@@ -145,10 +146,21 @@ app.post("/api/customer-statement", async (req, res) => {
     const { customerName } = req.body;
     if (!customerName) return res.status(400).json({ error: "customerName required" });
 
-    const Order = require("./models/Order");
+    const Order   = require("./models/Order");
+    const Invoice = require("./models/Invoice");
     const orders = await Order.find({
       customerName: { $regex: `^${customerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }
     }).sort({ createdAt: -1 }).lean();
+
+    // Fetch invoices for this customer's orders — only invoiced amounts count as "owed"
+    const orderIds = orders.map(o => String(o._id));
+    const invoices = await Invoice.find({ orderId: { $in: orderIds } }).lean();
+    const invoiceByOrder = {};
+    for (const inv of invoices) {
+      const oid = String(inv.orderId);
+      if (!invoiceByOrder[oid]) invoiceByOrder[oid] = [];
+      invoiceByOrder[oid].push(inv);
+    }
 
     const { PDFDocument: PDFLib, StandardFonts, rgb } = require("pdf-lib");
     const pdfDoc = await PDFLib.create();
@@ -193,10 +205,18 @@ app.post("/api/customer-statement", async (req, res) => {
 
     // ── Summary totals ────────────────────────────────────────────────────────
     const fmt = (n) => `$${Number(n).toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}`;
-    const orderTotal = (o) => Object.values(o.charges || {}).reduce((s, v) => s + Number(v || 0), 0);
+    // Only count invoiced amounts — orders without an invoice show $0
+    const invoicedTotal = (o) => {
+      const invs = invoiceByOrder[String(o._id)] || [];
+      return invs.reduce((s, inv) => s + Number(inv.total || 0), 0);
+    };
+    const isPaid = (o) => {
+      const invs = invoiceByOrder[String(o._id)] || [];
+      return invs.length > 0 && invs.every(inv => inv.status === "paid");
+    };
 
-    const totalBilled = orders.reduce((s, o) => s + orderTotal(o), 0);
-    const totalPaid   = orders.filter(o => o.status === "Completed").reduce((s, o) => s + orderTotal(o), 0);
+    const totalBilled = orders.reduce((s, o) => s + invoicedTotal(o), 0);
+    const totalPaid   = orders.filter(o => isPaid(o)).reduce((s, o) => s + invoicedTotal(o), 0);
     const stillOwed   = totalBilled - totalPaid;
 
     // Four summary boxes across the page
@@ -238,7 +258,7 @@ app.post("/api/customer-statement", async (req, res) => {
       const pol      = safe((o.pol || "?").slice(0, 9));
       const pod      = safe((o.pod || "?").slice(0, 9));
       const route    = `${pol} > ${pod}`;
-      const rowAmt   = orderTotal(o);
+      const rowAmt   = invoicedTotal(o);
       const ageDays  = Math.floor((Date.now() - new Date(o.createdAt)) / 86400000);
       const ageLabel = ageDays === 0 ? "Today" : `${ageDays}d`;
       const ageClr   = ageDays <= 30 ? rgb(0.15,0.7,0.4) : ageDays <= 60 ? rgb(0.9,0.55,0.1) : rgb(0.85,0.2,0.2);
@@ -754,8 +774,18 @@ app.post("/upload", upload.any(), async (req, res) => {
     const aesText = (await pdfParse(aesFile.buffer)).text;
     const dispatchText = dispatchFile ? (await pdfParse(dispatchFile.buffer)).text : "";
 
-    const aesData = parseAes(aesText);
-    const dispatchData = dispatchText ? parseDispatch(dispatchText) : {};
+    // Use the same improved parser as the Orders upload flow
+    const { parseAES: parseAESFromDocs, parseDispatch: parseDispatchFromDocs } = require("./utils/parseOrderDocs");
+    const aesTmp  = path.join(os.tmpdir(), `aes-dr-${Date.now()}.pdf`);
+    fs.writeFileSync(aesTmp, aesFile.buffer);
+    const aesData = await parseAESFromDocs(aesTmp).finally(() => fs.unlink(aesTmp, () => {}));
+
+    let dispatchData = {};
+    if (dispatchFile) {
+      const dispTmp = path.join(os.tmpdir(), `dis-dr-${Date.now()}.pdf`);
+      fs.writeFileSync(dispTmp, dispatchFile.buffer);
+      dispatchData = await parseDispatchFromDocs(dispTmp).finally(() => fs.unlink(dispTmp, () => {}));
+    }
 
     const forcedAesWeightMatch = aesText
       .toUpperCase()
