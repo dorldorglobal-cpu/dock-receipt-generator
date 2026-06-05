@@ -262,12 +262,17 @@ async function parseAES(filePath) {
       })()
     : lines.findIndex(l => cleanUpper(l) === cleanUpper(consigneeName));
 
-  // Read up to 3 lines after name, skipping AES field labels
-  const isAesLabel = l => /^(\d{1,2}[a-z]?|[a-z])\.\s/i.test(l) || /USPPI|EIN.*IRS|IRS.*EIN|ULTIMATE CONSIGNEE TYPE/i.test(l);
+  // Read up to 5 lines after name, skipping AES field labels AND US domestic addresses
+  // (US addresses bleed in from the right-column USPPI block due to two-column interleaving)
+  const US_STATE_ZIP = /\b(?:AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\s+\d{5}/i;
+  const isAesLabel = l =>
+    /^(\d{1,2}[a-z]?|[a-z])\.\s/i.test(l) ||
+    /USPPI|EIN.*IRS|IRS.*EIN|ULTIMATE CONSIGNEE TYPE/i.test(l) ||
+    US_STATE_ZIP.test(l);   // skip USPPI US address lines bleeding in from right column
   const consigneeAddrLines = [];
   if (consigneeNameIdx !== -1) {
-    for (let j = consigneeNameIdx + 1; j <= Math.min(consigneeNameIdx + 5, lines.length - 1); j++) {
-      const l = lines[j]; if (!l || isAesLabel(l)) break;
+    for (let j = consigneeNameIdx + 1; j <= Math.min(consigneeNameIdx + 8, lines.length - 1); j++) {
+      const l = lines[j]; if (!l || isAesLabel(l)) continue; // skip, don't break — may resume after US line
       consigneeAddrLines.push(l);
       if (consigneeAddrLines.length === 2) break;
     }
