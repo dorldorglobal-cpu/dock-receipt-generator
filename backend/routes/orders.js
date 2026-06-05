@@ -4,37 +4,11 @@ const Expense = require("../models/Expense");
 const Pricing = require("../models/Pricing");
 const Counter = require("../models/Counter");
 const multer = require("multer");
-const { parseAES, parseDispatch } = require("../utils/parseOrderDocs");
+const { parseAES, parseDispatch, parseBuyerReceipt } = require("../utils/parseOrderDocs");
 const AddressBook = require("../models/AddressBook");
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
-const os = require("os");
-const { execFile } = require("child_process");
-
-// ── Parse buyer receipt via pdfplumber Python script ──────────────────────────
-function parseBuyerReceiptPython(filePath) {
-  return new Promise((resolve, reject) => {
-    const scriptPath = path.join(__dirname, "..", "parse_buyer_receipt.py");
-    const tryExec = (cmd) => {
-      execFile(cmd, [scriptPath, filePath], { timeout: 30000 }, (err, stdout, stderr) => {
-        if (err) {
-          if (cmd === "python" && (err.code === "ENOENT" || (stderr || "").includes("not found"))) {
-            return tryExec("python3");
-          }
-          return reject(new Error(`Buyer receipt parse error: ${stderr || err.message}`));
-        }
-        let result;
-        try { result = JSON.parse(stdout); } catch {
-          return reject(new Error(`Bad JSON from buyer receipt parser: ${stdout.slice(0, 200)}`));
-        }
-        if (result.error) return reject(new Error(result.error));
-        resolve(result);
-      });
-    };
-    tryExec("python");
-  });
-}
 
 const {
   drive,
@@ -227,29 +201,64 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No file uploaded" });
 
-    // ── Parse via pdfplumber Python script ─────────────────────────────────
-    let parsed;
-    try {
-      parsed = await parseBuyerReceiptPython(req.file.path);
-    } catch (pyErr) {
-      console.error("Python buyer receipt parser failed:", pyErr.message);
-      return res.status(500).json({ error: `PDF parse failed: ${pyErr.message}` });
-    } finally {
-      fs.unlink(req.file.path, () => {});
+    // ── JS parser (Copart + IAA regex) ────────────────────────────────────
+    let parsed = await parseBuyerReceipt(req.file.path);
+    const fileBuffer = fs.readFileSync(req.file.path);
+    fs.unlink(req.file.path, () => {});
+
+    // ── Copart: extract consignee address from the member block ────────────
+    const pdfParse2 = require("pdf-parse");
+    const rawText   = (await pdfParse2(fileBuffer)).text;
+
+    if (/copart/i.test(rawText)) {
+      const rawLines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+      // Customer name already extracted correctly by parseBuyerReceipt
+      // Extract the foreign consignee address block that follows it
+      const COUNTRY_CODES = {
+        GH:"GHANA", NG:"NIGERIA", BJ:"BENIN", TG:"TOGO", SN:"SENEGAL",
+        CI:"IVORY COAST", SL:"SIERRA LEONE", LR:"LIBERIA", GM:"GAMBIA",
+        GN:"GUINEA", CM:"CAMEROON", AO:"ANGOLA", ML:"MALI",
+      };
+
+      const custName = (parsed.customerName || "").toUpperCase();
+      const custIdx  = custName
+        ? rawLines.findIndex(l => l.toUpperCase() === custName)
+        : -1;
+
+      if (custIdx >= 0) {
+        const foreign = [];
+        for (let i = custIdx + 1; i < Math.min(custIdx + 8, rawLines.length); i++) {
+          const l = rawLines[i];
+          if (/^\*+\s*\d/.test(l)) break;            // "** 304 NJ ROUTE 68"
+          if (/PHYSICAL|SELLER:|SOLD\s+THROUGH|COPART|^LOT[#:]|^VEHICLE:|^VIN:/i.test(l)) break;
+          foreign.push(l);
+        }
+        if (foreign.length) {
+          const last = foreign[foreign.length - 1];
+          const cc   = last.match(/,?\s*([A-Z]{2})\s*$/);
+          if (cc && COUNTRY_CODES[cc[1]]) {
+            parsed.consigneeName    = parsed.customerName;
+            parsed.consigneeCountry = COUNTRY_CODES[cc[1]];
+            parsed.consigneeCity    = last.replace(/,?\s*[A-Z]{2}\s*$/, "").replace(/,\s*$/, "").trim().toUpperCase();
+            parsed.consigneeAddress = foreign.slice(0, -1).join(", ").toUpperCase();
+          } else {
+            parsed.consigneeName    = parsed.customerName;
+            parsed.consigneeAddress = foreign.join(", ").toUpperCase();
+          }
+        }
+      }
     }
 
-    // ── Customer lookup — exact match only (no fuzzy word search) ──────────
+    // ── Customer lookup — exact match only ─────────────────────────────────
     let customerFound = null;
     if (parsed.customerName) {
       const esc  = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
       const name = parsed.customerName.trim();
       const norm = s => s.replace(/[-_,.']/g, " ").replace(/\s+/g, " ").trim();
-
-      // Exact match first
       customerFound = await AddressBook.findOne({
         companyName: { $regex: `^${esc(name)}$`, $options: "i" },
       });
-      // Normalized exact match
       if (!customerFound) {
         customerFound = await AddressBook.findOne({
           companyName: { $regex: `^${esc(norm(name))}$`, $options: "i" },
