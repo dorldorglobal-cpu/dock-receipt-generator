@@ -737,9 +737,133 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
 //   "4007 ADMIRAL PEARY HWY"         ← pickup address (MIDDLE col)
 //   "EBENSBURG PA 15931"             ← pickup city/state/zip
 //   "NATIONWIDE INSURANCE"           ← seller (RIGHT col, ignore)
+// ── DOR L'DOR Order Request Form parser ───────────────────────────────────────
+// Handles the internal "ORDER DETAILS" PDF format with labelled fields:
+// MODE OF SHIPPING, VEHICLE INFO, VIN, LOCATION, BUYER LOT, DESTINATION,
+// PREFERRED SHIPPING LINE, IMPORTER/CUSTOMER, CONSIGNEE DETAILS, TOWING QUOTE
+function parseOrderRequestForm(text) {
+  const lines = text.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+
+  const field = (label) => {
+    // Match "LABEL    value" on same line, or value on next non-empty line
+    const re = new RegExp(label + "[:\\s]+(.+)", "i");
+    for (const l of lines) {
+      const m = l.match(re);
+      if (m) return m[1].trim();
+    }
+    // Try next-line style
+    const idx = lines.findIndex(l => new RegExp("^" + label + "\\s*$", "i").test(l));
+    if (idx >= 0 && lines[idx + 1]) return lines[idx + 1].trim();
+    return "";
+  };
+
+  // Vehicle: "2016 HYUNDAI SONATA SE"
+  const vehicleRaw = field("VEHICLE INFO");
+  let year = "", make = "", model = "";
+  if (vehicleRaw) {
+    const vm = vehicleRaw.match(/^(\d{4})\s+(\S+)\s+(.+)$/);
+    if (vm) { year = vm[1]; make = vm[2]; model = vm[3]; }
+  }
+
+  // VIN
+  const vin = findVin(text) || field("VIN");
+
+  // Location → pickup address  e.g. "6089 HIGHWAY 20 LOGANVILLE GA 30052"
+  const locationRaw = field("LOCATION");
+  let pickupAddress = "", pickupCity = "", pickupState = "", pickupZip = "";
+  if (locationRaw) {
+    // Try "CITY STATE ZIP" at end
+    const addrM = locationRaw.match(/^(.+?)\s+([A-Z]{2})\s*(\d{5}(?:-\d{4})?)$/i);
+    if (addrM) {
+      // Walk backwards to find city — last all-alpha word group before state
+      const withoutStatZip = addrM[1].trim();
+      const cityM = withoutStatZip.match(/^(.+)\s+([A-Z][a-zA-Z\s]+)$/);
+      pickupAddress   = withoutStatZip;
+      pickupState     = addrM[2].toUpperCase();
+      pickupZip       = addrM[3];
+      // Extract city as last word(s) before state
+      const parts = withoutStatZip.split(/\s+/);
+      // Find where numeric street address ends — city is usually last 1-2 caps words
+      const numEnd = parts.findIndex((p, i) => i > 0 && /^[A-Z][a-z]/.test(p));
+      pickupCity = parts.slice(numEnd >= 0 ? numEnd : -1).join(" ").toUpperCase();
+    } else {
+      pickupAddress = locationRaw;
+    }
+  }
+
+  // Lot number
+  const lotNumber = field("BUYER LOT") || field("LOT");
+
+  // Destination → POD
+  const pod = (field("DESTINATION") || "").toUpperCase();
+
+  // Preferred shipping line
+  const shippingLine = (field("PREFERRED SHIPPING LINE") || "").toUpperCase();
+
+  // Mode of shipping → requestType
+  const modeRaw = field("MODE OF SHIPPING");
+  const requestType = /container/i.test(modeRaw) ? "Container" : /roro/i.test(modeRaw) ? "RORO" : "";
+
+  // Importer / Customer block
+  // Lines after "IMPORTER / CUSTOMER" until "CONSIGNEE DETAILS"
+  let customerName = "", customerPhone = "", customerEmail = "", customerCountry = "";
+  const importerIdx = lines.findIndex(l => /IMPORTER\s*[\/|]\s*CUSTOMER/i.test(l));
+  const consigneeIdx = lines.findIndex(l => /CONSIGNEE\s+DETAILS/i.test(l));
+  if (importerIdx >= 0) {
+    const block = lines.slice(importerIdx + 1, consigneeIdx > importerIdx ? consigneeIdx : importerIdx + 10);
+    for (const l of block) {
+      const nm = l.match(/^Name:\s*(.+)/i);        if (nm) customerName    = nm[1].trim();
+      const ph = l.match(/^Contact:\s*(.+)/i);     if (ph) customerPhone   = ph[1].trim();
+      const em = l.match(/^Email:\s*(.+)/i);       if (em) customerEmail   = em[1].trim();
+      const co = l.match(/^Country:\s*(.+)/i);     if (co) customerCountry = co[1].trim().toUpperCase();
+    }
+  }
+
+  // Consignee block
+  let consigneeName = "", consigneeAddress = "", consigneeCity = "";
+  const notifyIdx = lines.findIndex(l => /NOTIFY\s+PARTY/i.test(l));
+  if (consigneeIdx >= 0) {
+    const block = lines.slice(consigneeIdx + 1, notifyIdx > consigneeIdx ? notifyIdx : consigneeIdx + 10);
+    for (const l of block) {
+      const nm = l.match(/^Name:\s*(.+)/i);        if (nm) consigneeName    = nm[1].trim();
+      const ad = l.match(/^Residential:\s*(.+)/i); if (ad) consigneeAddress = ad[1].trim();
+      const ci = l.match(/^Postal:\s*(.+)/i);      if (ci) consigneeCity    = ci[1].trim();
+    }
+  }
+
+  // Towing quote
+  const towingRaw = field("TOWING QUOTE");
+  const towingM   = towingRaw.match(/[\d,]+(?:\.\d+)?/);
+  const towingQuote = towingM ? towingM[0].replace(/,/g, "") : "";
+
+  return {
+    requestType,
+    year, make, model, vin,
+    lotNumber,
+    pickupLocation: locationRaw,
+    pickupAddress, pickupCity, pickupState, pickupZip,
+    pod,
+    shippingLine,
+    customerName,
+    customerPhone,
+    customerEmail,
+    consigneeName,
+    consigneeAddress,
+    consigneeCity,
+    consigneeCountry: customerCountry || "GHANA",
+    towingQuote,   // caller can use this to pre-fill towing charge
+    _source: "order-request-form",
+  };
+}
+
 async function parseBuyerReceipt(filePath) {
   const text = await parsePdfFile(filePath);
   const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
+
+  // ── Route to Order Request Form parser if this is a DOR L'DOR internal form ──
+  if (/ORDER\s+DETAILS/i.test(text) && /MODE\s+OF\s+SHIPPING/i.test(text) && /IMPORTER/i.test(text)) {
+    return parseOrderRequestForm(text);
+  }
 
   const vin = findVin(text);
   const vehicle = extractVehicleData(text);

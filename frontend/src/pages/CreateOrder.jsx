@@ -646,19 +646,21 @@ export default function CreateOrder() {
         make:      data.make      || prev.make,
         model:     data.model     || prev.model,
         lotNumber: data.lotNumber || prev.lotNumber,
-        pickupLocation: data.pickupName    || data.pickupLocation || prev.pickupLocation,
+        pickupLocation: data.pickupLocation || data.pickupName || prev.pickupLocation,
         pickupName:     data.pickupName    || prev.pickupName,
         pickupAddress:  data.pickupAddress || prev.pickupAddress,
         pickupCity:     data.pickupCity    || prev.pickupCity,
         pickupState:    data.pickupState   || prev.pickupState,
         pickupZip:      data.pickupZip     || prev.pickupZip,
-        ...(podFromCustomer                    ? { pod: podFromCustomer } : {}),
-        ...(podToShippingLine(podFromCustomer) ? { shippingLine: podToShippingLine(podFromCustomer) } : {}),
+        ...(data.requestType                   ? { requestType:  data.requestType  } : {}),
+        ...(data.pod || podFromCustomer        ? { pod:          data.pod || podFromCustomer } : {}),
+        ...(data.shippingLine                  ? { shippingLine: data.shippingLine } : podToShippingLine(podFromCustomer) ? { shippingLine: podToShippingLine(podFromCustomer) } : {}),
+        ...(data.towingQuote                   ? { towingCharge: data.towingQuote  } : {}),
       }));
 
       if (data.vin && data.vin.length === 17) decodeVin(data.vin);
-      if ((data.pickupCity || data.pickupState) && form.requestType === "RORO") {
-        suggestDeliveryFromPickupCity(data.pickupCity, podToShippingLine(podFromCustomer), data.pickupState);
+      if ((data.pickupCity || data.pickupState) && data.requestType !== "Container") {
+        suggestDeliveryFromPickupCity(data.pickupCity, data.shippingLine || podToShippingLine(podFromCustomer), data.pickupState);
       }
     } catch (err) {
       setOrfResult({ error: err.message });
