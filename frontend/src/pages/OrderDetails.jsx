@@ -1802,16 +1802,16 @@ export default function OrderDetails() {
         {/* ── Labeled upload zones ── */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(105px, 1fr))", gap:8, marginBottom:16 }}>
           {[
-            { label:"AES",                icon:"📋" },
-            { label:"Dispatch",           icon:"🚛" },
-            { label:"Order Request Form", icon:"📋" },
             { label:"Buyer Receipt",      icon:"🧾" },
             { label:"Email",              icon:"📧" },
-            { label:"Title",        icon:"📜" },
-            { label:"Draft",        icon:"📝" },
-            { label:"Rated Draft",  icon:"🧮" },
-            { label:"Dock Receipt", icon:"🚢" },
-            { label:"Other",        icon:"📎" },
+            { label:"Order Request Form", icon:"📋" },
+            { label:"Dispatch",           icon:"🚛" },
+            { label:"Title",              icon:"📜" },
+            { label:"AES",                icon:"📋" },
+            { label:"Dock Receipt",       icon:"🚢" },
+            { label:"Draft",              icon:"📝" },
+            { label:"Rated Draft",        icon:"🧮" },
+            { label:"Other",              icon:"📎" },
           ].map(({ label, icon }) => {
             const busy = (uploadingLabels[label] || 0) > 0;
             const drag = draggingLabel === label;
