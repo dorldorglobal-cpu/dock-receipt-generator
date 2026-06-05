@@ -539,6 +539,17 @@ export default function Customers() {
                   {c.contactName && (
                     <div style={{ fontSize: 11, color: "var(--text-muted)" }}>{c.contactName}</div>
                   )}
+                  {(c.buyerAccounts || []).length > 0 && (
+                    <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:3 }}>
+                      {c.buyerAccounts.map(b => (
+                        <span key={b} style={{
+                          fontSize: 10, padding: "1px 6px", borderRadius: 10,
+                          background: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.3)",
+                          color: "#a78bfa", fontWeight: 500, whiteSpace: "nowrap",
+                        }}>{b}</span>
+                      ))}
+                    </div>
+                  )}
                 </td>
 
                 {/* Phone */}
