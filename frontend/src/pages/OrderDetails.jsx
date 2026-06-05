@@ -1591,7 +1591,7 @@ export default function OrderDetails() {
           {order.customerPhone && <p style={{ margin: "0 0 4px", fontSize: 13 }}>📞 {order.customerPhone}</p>}
           {order.customerEmail && <p style={{ margin: "0 0 10px", fontSize: 13 }}>✉️ {order.customerEmail}</p>}
           {/* Source / Office tag */}
-          <div style={{ marginTop: 8 }}>
+          <div style={{ marginTop: 8, marginBottom: 8 }}>
             <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>SOURCE / OFFICE</label>
             <select
               value={order.source || ""}
@@ -1607,6 +1607,32 @@ export default function OrderDetails() {
               <option value="USA OFFICE">🇺🇸 USA Office</option>
               <option value="GHANA OFFICE">🇬🇭 Ghana Office</option>
             </select>
+          </div>
+          {/* Order Type — change inline */}
+          <div>
+            <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>ORDER TYPE</label>
+            <div style={{ display:"flex", gap:6 }}>
+              {["RORO","Container"].map(t => {
+                const active = (order.requestType || "RORO") === t;
+                return (
+                  <button key={t} type="button"
+                    onClick={async () => {
+                      await fetch(`${API}/api/orders/${id}`, {
+                        method:"PUT", headers:{"Content-Type":"application/json"},
+                        body: JSON.stringify({ requestType: t }),
+                      });
+                      fetchOrder();
+                    }}
+                    style={{
+                      flex:1, padding:"5px 0", borderRadius:6, cursor:"pointer", fontWeight:600,
+                      fontSize:12, border:"none",
+                      background: active ? (t==="Container" ? "#2563eb" : "#059669") : "var(--bg-panel)",
+                      color: active ? "#fff" : "var(--text-muted)",
+                      outline: active ? "none" : "1px solid var(--border)",
+                    }}>{t}</button>
+                );
+              })}
+            </div>
           </div>
         </section>
 

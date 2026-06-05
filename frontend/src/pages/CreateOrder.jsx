@@ -22,6 +22,12 @@ export default function CreateOrder() {
   const [orfFile, setOrfFile]               = useState(null);
   const orfInputRef = useRef(null);
 
+  // ── Parse confirmation popup ───────────────────────────────────────────
+  const [parsePopup, setParsePopup]         = useState(null); // { data, file, label }
+  const [popupType, setPopupType]           = useState("RORO");
+  const [popupContainerSize, setPopupContainerSize] = useState("");
+  const [popupWarehouse, setPopupWarehouse] = useState(null);
+
   // ── New customer contact popup ─────────────────────────────────────────
   const [newCustPopup, setNewCustPopup]     = useState(null); // { name, phone, email, defaultPod }
 
@@ -499,10 +505,72 @@ export default function CreateOrder() {
   };
 
 
+  // ── Shared: open confirmation popup after parse ────────────────────────
+  const openParsePopup = (data, file, label) => {
+    const detectedType = data.requestType === "Container" ? "Container" : "RORO";
+    setPopupType(detectedType);
+    setPopupContainerSize(data.containerSize || "");
+    setPopupWarehouse(null);
+    setParsePopup({ data, file, label });
+  };
+
+  // ── Shared: apply parsed data to form (called on popup confirm) ────────
+  const applyParsedData = (data, type, containerSize, warehouse) => {
+    const rec = data.customerRecord;
+    const podFromCustomer = rec?.defaultPod || countryToPod(rec?.country);
+    const effectivePod  = data.pod || podFromCustomer || "";
+    const effectiveLine = type === "Container" && data.shippingLine
+      ? data.shippingLine
+      : podToShippingLine(podFromCustomer) || data.shippingLine || "";
+
+    setForm(prev => ({
+      ...prev,
+      requestType:      type,
+      customerName:     rec?.companyName  || data.customerName  || prev.customerName,
+      customerPhone:    rec?.phone        || data.customerPhone || prev.customerPhone,
+      customerEmail:    rec?.email        || data.customerEmail || prev.customerEmail,
+      buyerName:        data.buyerName    || prev.buyerName,
+      consigneeName:    data.consigneeName    || data.buyerName || data.customerName || prev.consigneeName,
+      consigneeAddress: data.consigneeAddress || prev.consigneeAddress,
+      consigneeCity:    data.consigneeCity    || prev.consigneeCity,
+      consigneeCountry: data.consigneeCountry || prev.consigneeCountry,
+      vin:       data.vin       || prev.vin,
+      year:      data.year      || prev.year,
+      make:      data.make      || prev.make,
+      model:     data.model     || prev.model,
+      lotNumber: data.lotNumber || prev.lotNumber,
+      pickupLocation: data.pickupLocation || data.pickupName || prev.pickupLocation,
+      pickupName:     data.pickupName    || prev.pickupName,
+      pickupAddress:  data.pickupAddress || prev.pickupAddress,
+      pickupCity:     data.pickupCity    || prev.pickupCity,
+      pickupState:    data.pickupState   || prev.pickupState,
+      pickupZip:      data.pickupZip     || prev.pickupZip,
+      pod:            effectivePod       || prev.pod,
+      shippingLine:   effectiveLine      || prev.shippingLine,
+      ...(data.towingQuote ? { towingCharge: data.towingQuote } : {}),
+      // Container-specific
+      containerSize: containerSize || prev.containerSize || "",
+      ...(warehouse ? {
+        deliveryLocation: warehouse.name,
+        deliveryName:     warehouse.name,
+        deliveryAddress:  warehouse.address,
+        deliveryCity:     warehouse.city,
+        deliveryState:    warehouse.state,
+        deliveryZip:      warehouse.zip,
+        pol:              warehouse.pol,
+      } : {}),
+    }));
+
+    if (data.vin && data.vin.length === 17) decodeVin(data.vin);
+    if (type !== "Container" && (data.pickupCity || data.pickupState)) {
+      suggestDeliveryFromPickupCity(data.pickupCity, effectiveLine, data.pickupState);
+    }
+  };
+
   // ── Buyer Receipt handler ──────────────────────────────────────────────
   const handleBuyerReceiptFile = async (file) => {
     if (!file) return;
-    setBrFile(file);          // keep file reference for upload after order creation
+    setBrFile(file);
     setBrParsing(true);
     setBrResult(null);
     setBrCustomerFound(null);
@@ -535,60 +603,7 @@ export default function CreateOrder() {
 
       setBrResult(data);
       setBrCustomerFound(data.customerFound);
-
-      // Pop up for new customers OR existing customers with no defaultPod saved yet
-      const rec = data.customerRecord;
-      if (data.customerName && (!data.customerFound || (data.customerFound && !rec?.defaultPod))) {
-        setNewCustPopup({
-          name:       rec?.companyName || data.customerName,
-          phone:      rec?.phone       || data.customerPhone || "",
-          email:      rec?.email       || data.customerEmail || "",
-          defaultPod: rec?.defaultPod  || "",
-          isExisting: !!data.customerFound,
-          recordId:   rec?._id || null,
-        });
-      }
-
-      // Auto-fill form fields from parsed receipt
-      // Use stored defaultPod first (set when customer was first added), fall back to country
-      const podFromCustomer = rec?.defaultPod || countryToPod(rec?.country);
-      setForm((prev) => ({
-        ...prev,
-        // Customer info — use stored record when found, fall back to parsed PDF data
-        customerName:  rec?.companyName  || data.customerName  || prev.customerName,
-        customerPhone: rec?.phone        || data.customerPhone || prev.customerPhone,
-        customerEmail: rec?.email        || data.customerEmail || prev.customerEmail,
-        buyerName:     data.buyerName    || prev.buyerName,
-        // Buyer / Consignee — fill from parsed receipt address block
-        consigneeName:    data.consigneeName    || data.buyerName || data.customerName || prev.consigneeName,
-        consigneeAddress: data.consigneeAddress || prev.consigneeAddress,
-        consigneeCity:    data.consigneeCity    || prev.consigneeCity,
-        consigneeCountry: data.consigneeCountry || prev.consigneeCountry,
-        // Vehicle
-        vin:       data.vin       || prev.vin,
-        year:      data.year      || prev.year,
-        make:      data.make      || prev.make,
-        model:     data.model     || prev.model,
-        lotNumber: data.lotNumber || prev.lotNumber,
-        // Pickup
-        pickupLocation: data.pickupName    || data.pickupLocation || prev.pickupLocation,
-        pickupName:     data.pickupName    || prev.pickupName,
-        pickupAddress:  data.pickupAddress || prev.pickupAddress,
-        pickupCity:     data.pickupCity    || prev.pickupCity,
-        pickupState:    data.pickupState   || prev.pickupState,
-        pickupZip:      data.pickupZip     || prev.pickupZip,
-        // Default POD + shipping line from customer's country (only when found in address book)
-        ...(podFromCustomer                      ? { pod:          podFromCustomer                      } : {}),
-        ...(podToShippingLine(podFromCustomer)   ? { shippingLine: podToShippingLine(podFromCustomer)   } : {}),
-      }));
-
-      // Decode VIN if we got one
-      if (data.vin && data.vin.length === 17) decodeVin(data.vin);
-
-      // Auto-suggest delivery port from towing charges (RORO only)
-      if ((data.pickupCity || data.pickupState) && form.requestType === "RORO") {
-        suggestDeliveryFromPickupCity(data.pickupCity, podToShippingLine(podFromCustomer), data.pickupState);
-      }
+      openParsePopup(data, file, "Buyer Receipt");
     } catch (err) {
       console.error("Buyer receipt parse error:", err);
       setBrResult({ error: err.message });
@@ -627,41 +642,7 @@ export default function CreateOrder() {
       }
 
       setOrfResult(data);
-
-      const rec = data.customerRecord;
-      const podFromCustomer = rec?.defaultPod || countryToPod(rec?.country);
-      // Order Request Form overrides everything — apply to form
-      setForm((prev) => ({
-        ...prev,
-        customerName:     rec?.companyName  || data.customerName  || prev.customerName,
-        customerPhone:    rec?.phone        || data.customerPhone || prev.customerPhone,
-        customerEmail:    rec?.email        || data.customerEmail || prev.customerEmail,
-        buyerName:        data.buyerName    || prev.buyerName,
-        consigneeName:    data.consigneeName    || data.buyerName || data.customerName || prev.consigneeName,
-        consigneeAddress: data.consigneeAddress || prev.consigneeAddress,
-        consigneeCity:    data.consigneeCity    || prev.consigneeCity,
-        consigneeCountry: data.consigneeCountry || prev.consigneeCountry,
-        vin:       data.vin       || prev.vin,
-        year:      data.year      || prev.year,
-        make:      data.make      || prev.make,
-        model:     data.model     || prev.model,
-        lotNumber: data.lotNumber || prev.lotNumber,
-        pickupLocation: data.pickupLocation || data.pickupName || prev.pickupLocation,
-        pickupName:     data.pickupName    || prev.pickupName,
-        pickupAddress:  data.pickupAddress || prev.pickupAddress,
-        pickupCity:     data.pickupCity    || prev.pickupCity,
-        pickupState:    data.pickupState   || prev.pickupState,
-        pickupZip:      data.pickupZip     || prev.pickupZip,
-        ...(data.requestType                   ? { requestType:  data.requestType  } : {}),
-        ...(data.pod || podFromCustomer        ? { pod:          data.pod || podFromCustomer } : {}),
-        ...(data.shippingLine                  ? { shippingLine: data.shippingLine } : podToShippingLine(podFromCustomer) ? { shippingLine: podToShippingLine(podFromCustomer) } : {}),
-        ...(data.towingQuote                   ? { towingCharge: data.towingQuote  } : {}),
-      }));
-
-      if (data.vin && data.vin.length === 17) decodeVin(data.vin);
-      if ((data.pickupCity || data.pickupState) && data.requestType !== "Container") {
-        suggestDeliveryFromPickupCity(data.pickupCity, data.shippingLine || podToShippingLine(podFromCustomer), data.pickupState);
-      }
+      openParsePopup(data, file, "Order Request Form");
     } catch (err) {
       setOrfResult({ error: err.message });
     } finally {
@@ -731,9 +712,25 @@ export default function CreateOrder() {
       </div>
 
       <div className="dashboard-grid">
-        <div className="dashboard-card">
-          <span>Order Type</span>
-          <strong>{form.requestType}</strong>
+        <div className="dashboard-card" style={{ cursor:"default" }}>
+          <span style={{ marginBottom:8, display:"block" }}>Order Type</span>
+          <div style={{ display:"flex", gap:8 }}>
+            {["RORO","Container"].map(t => (
+              <button key={t} type="button"
+                onClick={() => update("requestType", t)}
+                style={{
+                  flex:1, padding:"7px 0", borderRadius:8, cursor:"pointer",
+                  fontWeight:700, fontSize:13, border:"none",
+                  background: form.requestType === t
+                    ? (t === "Container" ? "#2563eb" : "#059669")
+                    : "var(--bg-panel)",
+                  color: form.requestType === t ? "#fff" : "var(--text-muted)",
+                  outline: form.requestType === t ? "none" : "1px solid var(--border)",
+                }}>
+                {t}
+              </button>
+            ))}
+          </div>
         </div>
 
         <div className="dashboard-card">
@@ -1517,6 +1514,108 @@ export default function CreateOrder() {
       </form>
 
       {/* ── New Customer Contact Popup ─────────────────────────────────── */}
+      {/* ── Parse Confirmation Popup ──────────────────────── */}
+      {parsePopup && (
+        <div className="modal-backdrop" onClick={() => setParsePopup(null)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 500 }}>
+            <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:1, color:"var(--accent)", marginBottom:4 }}>
+              Parsed from {parsePopup.label}
+            </div>
+            <h2 style={{ margin:"0 0 16px" }}>Confirm &amp; Apply</h2>
+
+            {/* RORO / Container toggle */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>Shipping Mode</div>
+              <div style={{ display:"flex", gap:8 }}>
+                {["RORO","Container"].map(t => (
+                  <button key={t} type="button" onClick={() => { setPopupType(t); setPopupContainerSize(""); setPopupWarehouse(null); }}
+                    style={{
+                      flex:1, padding:"9px 0", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14, border:"none",
+                      background: popupType === t ? (t==="Container" ? "#2563eb" : "#059669") : "var(--bg-panel)",
+                      color: popupType === t ? "#fff" : "var(--text-muted)",
+                      outline: popupType === t ? "none" : "1px solid var(--border)",
+                    }}>{t}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Container extras */}
+            {popupType === "Container" && (
+              <>
+                <div style={{ marginBottom:14 }}>
+                  <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>Container Size</div>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {["FULL 40' HC","CONSOLIDATED SPOT","20'"].map(sz => (
+                      <button key={sz} type="button" onClick={() => setPopupContainerSize(sz)}
+                        style={{
+                          padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600, border:"none",
+                          background: popupContainerSize===sz ? "rgba(5,150,105,0.2)" : "var(--bg-panel)",
+                          color: popupContainerSize===sz ? "#34d399" : "var(--text-muted)",
+                          outline: popupContainerSize===sz ? "1px solid #34d399" : "1px solid var(--border)",
+                        }}>{sz}</button>
+                    ))}
+                  </div>
+                </div>
+                <div style={{ marginBottom:16 }}>
+                  <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>Warehouse / Delivery</div>
+                  <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                    {[
+                      { name:"EZ CARGO",            pol:"NEW YORK",   address:"3220 Bordentown Avenue", city:"Old Bridge",  state:"NJ", zip:"08857" },
+                      { name:"SAVANNAH AUTO EXPORT", pol:"SAVANNAH",   address:"109A Barrow Dr",         city:"Pooler",      state:"GA", zip:"31322" },
+                      { name:"ISHIP",               pol:"HOUSTON",    address:"9324 Tavenor Ln",        city:"Houston",     state:"TX", zip:"77075" },
+                      { name:"CEDARS EXPRESS",       pol:"LONG BEACH", address:"19070 S Reyes Ave",      city:"Compton",     state:"CA", zip:"90221" },
+                    ].map(wh => {
+                      const sel = popupWarehouse?.name === wh.name;
+                      return (
+                        <button key={wh.name} type="button" onClick={() => setPopupWarehouse(sel ? null : wh)}
+                          style={{
+                            padding:"6px 14px", borderRadius:8, cursor:"pointer", fontSize:12, fontWeight:600, border:"none",
+                            background: sel ? "rgba(37,99,235,0.2)" : "var(--bg-panel)",
+                            color: sel ? "#60a5fa" : "var(--text-muted)",
+                            outline: sel ? "1px solid #60a5fa" : "1px solid var(--border)",
+                          }}>
+                          {wh.name}
+                          <span style={{ fontSize:10, opacity:0.7, marginLeft:4 }}>({wh.pol})</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Parsed data summary */}
+            <div style={{ background:"var(--bg-panel)", borderRadius:8, padding:"12px 14px", fontSize:12,
+              border:"1px solid var(--border)", marginBottom:18, display:"flex", flexDirection:"column", gap:4 }}>
+              {parsePopup.data.customerName && <div><span style={{ color:"var(--text-muted)" }}>Customer: </span><strong>{parsePopup.data.customerName}</strong></div>}
+              {parsePopup.data.vin          && <div><span style={{ color:"var(--text-muted)" }}>VIN: </span><strong style={{ fontFamily:"monospace" }}>{parsePopup.data.vin}</strong></div>}
+              {(parsePopup.data.year||parsePopup.data.make) && <div><span style={{ color:"var(--text-muted)" }}>Vehicle: </span><strong>{[parsePopup.data.year,parsePopup.data.make,parsePopup.data.model].filter(Boolean).join(" ")}</strong></div>}
+              {parsePopup.data.pickupLocation && <div><span style={{ color:"var(--text-muted)" }}>Pickup: </span><strong>{parsePopup.data.pickupLocation}</strong></div>}
+              {parsePopup.data.pod           && <div><span style={{ color:"var(--text-muted)" }}>Destination: </span><strong>{parsePopup.data.pod}</strong></div>}
+              {parsePopup.data.shippingLine  && <div><span style={{ color:"var(--text-muted)" }}>Shipping Line: </span><strong>{parsePopup.data.shippingLine}</strong></div>}
+              {parsePopup.data.towingQuote   && <div><span style={{ color:"var(--text-muted)" }}>Towing Quote: </span><strong style={{ color:"#34d399" }}>${parsePopup.data.towingQuote}</strong></div>}
+            </div>
+
+            <div style={{ display:"flex", gap:10 }}>
+              <button type="button"
+                onClick={() => {
+                  applyParsedData(parsePopup.data, popupType, popupContainerSize, popupWarehouse);
+                  setParsePopup(null);
+                }}
+                style={{ flex:1, padding:"10px 0", borderRadius:8, border:"none",
+                  background:"#059669", color:"#fff", cursor:"pointer", fontWeight:700, fontSize:14 }}>
+                ✓ Apply to Order
+              </button>
+              <button type="button" onClick={() => setParsePopup(null)}
+                style={{ padding:"10px 18px", borderRadius:8, border:"1px solid var(--border)",
+                  background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {newCustPopup && (
         <div className="modal-backdrop" onClick={() => setNewCustPopup(null)}>
           <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 440 }}>
