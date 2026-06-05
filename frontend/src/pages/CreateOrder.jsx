@@ -1154,6 +1154,7 @@ export default function CreateOrder() {
               />
             </label>
 
+            {form.requestType === "Container" && (
             <label>
               Shipping Line
               <select
@@ -1163,15 +1164,23 @@ export default function CreateOrder() {
                 }
               >
                 <option value="">Choose...</option>
-                <option>ACL</option>
-                <option>SALLAUM</option>
+                <option>OOCL</option>
+                <option>MAERSK</option>
+                <option>HAPAG LLOYD</option>
+                <option>ARKAS</option>
+                <option>MSC</option>
+                <option>CMA CGM</option>
               </select>
             </label>
+            )}
 
             <label style={{ gridColumn: "1 / -1" }}>
               Port of Loading
               <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginTop: 6 }}>
-                {["BALTIMORE","JACKSONVILLE","PROVIDENCE","FREEPORT","WILMINGTON","BRUNSWICK","NEWARK"].map(p => (
+                {(form.requestType === "Container"
+                  ? ["NEW YORK","SAVANNAH","LONG BEACH","HOUSTON"]
+                  : ["BALTIMORE","JACKSONVILLE","PROVIDENCE","FREEPORT","WILMINGTON","BRUNSWICK","NEWARK"]
+                ).map(p => (
                   <button key={p} type="button" onClick={() => handlePolChange(p)}
                     style={{
                       padding: "5px 13px", borderRadius: 20, cursor: "pointer", fontSize: 12,
