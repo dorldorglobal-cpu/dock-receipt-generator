@@ -323,6 +323,7 @@ export default function OrderDetails() {
   };
   const [showNoteEdit, setShowNoteEdit] = useState(false);
   const [noteText, setNoteText] = useState("");
+  const [holdNote, setHoldNote] = useState("");
 
   const [towingVerify, setTowingVerify] = useState(null);
   // { dispatchCost, currentCost, pickupCity, pol }
@@ -398,6 +399,7 @@ export default function OrderDetails() {
     setOrder(data);
     fetchBills(data.refNumber);
     setNoteText(data.notes || "");
+    setHoldNote(data.holdNote || "");
     setEmailNote(data.emailNote || "");
     const currentCharges = { ...defaultCharges, ...(data.charges || {}) };
     setCharges(currentCharges);
@@ -1442,6 +1444,29 @@ export default function OrderDetails() {
             <span style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)",
               pointerEvents:"none", color:statusStyle(order.status).color, fontSize:14 }}>▼</span>
           </div>
+          {order.status === "Problem / Hold" && (
+            <textarea
+              value={holdNote}
+              onChange={e => setHoldNote(e.target.value)}
+              onBlur={async e => {
+                await fetch(`${API}/api/orders/${id}`, {
+                  method: "PUT",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ holdNote: e.target.value }),
+                });
+                fetchOrder();
+              }}
+              placeholder="Describe the issue…"
+              rows={2}
+              style={{
+                width: "100%", boxSizing: "border-box", marginTop: 6,
+                padding: "8px 12px", borderRadius: 8, fontSize: 12,
+                border: "1px solid rgba(248,113,113,0.4)",
+                background: "rgba(220,38,38,0.08)", color: "#fca5a5",
+                resize: "vertical", outline: "none",
+              }}
+            />
+          )}
         </div>
       </div>
 

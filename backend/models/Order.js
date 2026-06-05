@@ -94,6 +94,7 @@ const orderSchema = new mongoose.Schema(
     voyageFolderName: String,
 
     notes: String,
+    holdNote: { type: String, default: "" },  // problem/hold issue description
     emailNote: { type: String, default: "" }, // copy of buyer receipt email
     source: { type: String, default: "" }, // e.g. "GHANA OFFICE", "DIRECT"
 
