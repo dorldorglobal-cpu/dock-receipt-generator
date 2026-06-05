@@ -1295,6 +1295,36 @@ mongoose
           .then(() => console.log("[keep-alive] ping ok"))
           .catch(err => console.warn("[keep-alive] ping failed:", err.message));
       }, 14 * 60 * 1000);
+
+      // ── Arrival date checker — runs every hour ────────────────────────
+      // When an order's arrivalDate has passed and status is Waiting to Sail or Sailed → Arrived
+      const checkArrivals = async () => {
+        try {
+          const Order = require("./models/Order");
+          const today = new Date();
+          today.setHours(0, 0, 0, 0);
+          const candidates = await Order.find({
+            status: { $in: ["Waiting to Sail", "Sailed"] },
+            arrivalDate: { $exists: true, $ne: "" },
+          });
+          let updated = 0;
+          for (const o of candidates) {
+            const d = new Date(o.arrivalDate);
+            if (!isNaN(d) && d <= today) {
+              o.status = "Arrived";
+              o.timeline = o.timeline || [];
+              o.timeline.push({ action: "Status Changed", details: `Auto-updated to "Arrived" — arrival date ${o.arrivalDate} reached.`, createdAt: new Date() });
+              await o.save();
+              updated++;
+            }
+          }
+          if (updated) console.log(`[arrivals] Auto-marked ${updated} order(s) as Arrived`);
+        } catch (e) {
+          console.warn("[arrivals] check failed:", e.message);
+        }
+      };
+      checkArrivals(); // run once on startup
+      setInterval(checkArrivals, 60 * 60 * 1000); // then every hour
     });
   })
   .catch((err) => {

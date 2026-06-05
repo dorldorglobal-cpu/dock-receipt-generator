@@ -1809,6 +1809,7 @@ export default function OrderDetails() {
             { label:"Title",              icon:"📜" },
             { label:"AES",                icon:"📋" },
             { label:"Dock Receipt",       icon:"🚢" },
+            { label:"Stamped DR",         icon:"📌" },
             { label:"Draft",              icon:"📝" },
             { label:"Rated Draft",        icon:"🧮" },
             { label:"Other",              icon:"📎" },
@@ -1840,6 +1841,11 @@ export default function OrderDetails() {
                 <span style={{ fontSize:11, fontWeight:600, color:"var(--text-secondary)", lineHeight:1.2 }}>
                   {busy ? "Uploading…" : label}
                 </span>
+                {!busy && (() => {
+                  const autoMap = { "Dispatch":"→ Awaiting Pickup", "Dock Receipt":"→ Picked Up", "Stamped DR":"→ Delivered", "Draft":"→ Waiting to Sail" };
+                  const hint = autoMap[label];
+                  return hint ? <span style={{ fontSize:9, color:"#34d399", opacity:0.8, lineHeight:1 }}>{hint}</span> : null;
+                })()}
               </div>
             );
           })}

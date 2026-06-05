@@ -757,6 +757,21 @@ router.post(
         );
       }
 
+      // ── Auto status update based on label ───────────────────────────────
+      const STATUS_FLOW = {
+        "Dispatch":    { from: ["New Order"],                         to: "Awaiting Pickup" },
+        "Dock Receipt":{ from: ["New Order","Awaiting Pickup","Picked Up"],  to: "Picked Up" },
+        "Stamped DR":  { from: ["New Order","Awaiting Pickup","Picked Up","Delivered"], to: "Delivered" },
+        "Draft":       { from: ["New Order","Awaiting Pickup","Picked Up","Delivered"], to: "Waiting to Sail" },
+      };
+      const autoStatus = STATUS_FLOW[label];
+      if (autoStatus && (autoStatus.from.includes(order.status) || autoStatus.from.length === 0)) {
+        const prevStatus = order.status;
+        order.status = autoStatus.to;
+        addTimeline(order, "Status Changed",
+          `Auto-updated from "${prevStatus}" to "${autoStatus.to}" on ${label} upload.`);
+      }
+
       // Clean up temp file
       try { fs.unlinkSync(req.file.path); } catch (_) {}
 
