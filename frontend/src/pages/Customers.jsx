@@ -10,7 +10,7 @@ function statusColor(s) {
     "Arrived":           "#22d3ee",
     "Paid":              "#4ade80",
     "Completed":         "#86efac",
-    "Delivered to Port": "#a78bfa",
+    "Delivered": "#a78bfa",
     "Waiting to Sail":   "#fb923c",
     "Picked Up":         "#60a5fa",
     "Awaiting Pickup":   "#fbbf24",

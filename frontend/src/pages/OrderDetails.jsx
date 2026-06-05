@@ -1261,7 +1261,7 @@ export default function OrderDetails() {
       "New Order":         { bg:"rgba(107,114,128,0.18)", color:"#9ca3af", border:"rgba(107,114,128,0.35)" },
       "Awaiting Pickup":   { bg:"rgba(217,119,6,0.18)",   color:"#fbbf24", border:"rgba(251,191,36,0.35)" },
       "Picked Up":         { bg:"rgba(37,99,235,0.18)",   color:"#60a5fa", border:"rgba(96,165,250,0.35)" },
-      "Delivered to Port": { bg:"rgba(124,58,237,0.18)",  color:"#a78bfa", border:"rgba(167,139,250,0.35)" },
+      "Delivered": { bg:"rgba(124,58,237,0.18)",  color:"#a78bfa", border:"rgba(167,139,250,0.35)" },
       "Waiting to Sail":   { bg:"rgba(234,88,12,0.18)",   color:"#fb923c", border:"rgba(251,146,60,0.35)" },
       "Sailed":            { bg:"rgba(5,150,105,0.18)",   color:"#34d399", border:"rgba(52,211,153,0.35)" },
       "Arrived":           { bg:"rgba(8,145,178,0.18)",   color:"#22d3ee", border:"rgba(34,211,238,0.35)" },
@@ -1368,7 +1368,7 @@ export default function OrderDetails() {
               <option>New Order</option>
               <option>Awaiting Pickup</option>
               <option>Picked Up</option>
-              <option>Delivered to Port</option>
+              <option>Delivered</option>
               <option>Waiting to Sail</option>
               <option>Sailed</option>
               <option>Arrived</option>
