@@ -8,7 +8,9 @@ function fmt(n) {
   return "$" + num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 }
 
-const POLS = ["JACKSONVILLE","BALTIMORE","DAVISVILLE","PROVIDENCE","FREEPORT","WILMINGTON","BRUNSWICK","NEWARK"];
+const RORO_POLS = ["JACKSONVILLE","BALTIMORE","DAVISVILLE","PROVIDENCE","FREEPORT","WILMINGTON","BRUNSWICK","NEWARK"];
+const CONTAINER_POLS = ["NEW YORK","SAVANNAH","LONG BEACH","HOUSTON"];
+const POLS = [...RORO_POLS, ...CONTAINER_POLS];
 const PODS = ["LAGOS","TEMA","COTONOU","LOME","DAKAR","DURBAN","ABIDJAN"];
 const LINES = ["ACL","SALLAUM","CMA CGM","COSCO","HAPAG LLOYD","MAERSK","MSC","OOCL"];
 
@@ -22,7 +24,7 @@ export default function OceanFreight() {
   const [showAdd, setShowAdd] = useState(false);
   const [populating, setPopulating] = useState(false);
 
-  const blank = { shippingLine:"", category:"1", requestType:"", pol:"", pod:"", portPrice:"", cost:"" };
+  const blank = { shippingLine:"", category:"1", requestType:"", containerSize:"", pol:"", pod:"", portPrice:"", cost:"" };
   const [form, setForm] = useState(blank);
 
   useEffect(() => { fetchRows(); }, []);
@@ -40,14 +42,15 @@ export default function OceanFreight() {
         method: form._id ? "PUT" : "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          type:         "ocean",
-          shippingLine: form.shippingLine.toUpperCase(),
-          category:     form.category || "1",
-          requestType:  form.requestType,
-          pol:          form.pol.toUpperCase(),
-          pod:          form.pod.toUpperCase(),
-          portPrice:    Number(form.portPrice || 0),
-          cost:         Number(form.cost      || 0),
+          type:          "ocean",
+          shippingLine:  form.shippingLine.toUpperCase(),
+          category:      form.category || "1",
+          requestType:   form.requestType,
+          containerSize: form.containerSize || "",
+          pol:           form.pol.toUpperCase(),
+          pod:           form.pod.toUpperCase(),
+          portPrice:     Number(form.portPrice || 0),
+          cost:          Number(form.cost      || 0),
         }),
       }
     );
@@ -163,6 +166,7 @@ export default function OceanFreight() {
               <th>Line</th>
               <th>Cat</th>
               <th>Type</th>
+              <th>Size</th>
               <th>POL</th>
               <th>POD</th>
               <th style={{ color:"var(--accent)" }}>Price</th>
@@ -181,6 +185,7 @@ export default function OceanFreight() {
                   <td style={{ fontWeight:600 }}>{r.shippingLine}</td>
                   <td>{catBadge(r.category)}</td>
                   <td>{typeBadge(r.requestType)}</td>
+                  <td style={{ fontSize:11, color:"var(--text-muted)" }}>{r.containerSize || "—"}</td>
                   <td>{r.pol}</td>
                   <td>{r.pod}</td>
                   <td style={{ fontWeight:600, color:"var(--accent)" }}>{fmt(price)}</td>
@@ -192,7 +197,8 @@ export default function OceanFreight() {
                   <td style={{ display:"flex", gap:4 }}>
                     <button onClick={()=>{ setForm({
                       shippingLine: r.shippingLine||"", category: r.category||"1",
-                      requestType: r.requestType||"", pol: r.pol||"", pod: r.pod||"",
+                      requestType: r.requestType||"", containerSize: r.containerSize||"",
+                      pol: r.pol||"", pod: r.pod||"",
                       portPrice: r.portPrice||"", cost: r.cost||"", _id: r._id,
                     }); setShowAdd(true); }} style={{ fontSize:10, padding:"3px 6px" }}>Edit</button>
                     <button onClick={()=>deleteRow(r._id)} style={{ fontSize:10, padding:"3px 6px" }}>Delete</button>
@@ -201,7 +207,7 @@ export default function OceanFreight() {
               );
             })}
             {visibleRows.length===0 && (
-              <tr><td colSpan="9">No ocean freight rates found.</td></tr>
+              <tr><td colSpan="10">No ocean freight rates found.</td></tr>
             )}
           </tbody>
         </table>
@@ -241,19 +247,31 @@ export default function OceanFreight() {
 
               {/* Type */}
               <label>Type
-                <select value={form.requestType} onChange={e=>setForm({...form,requestType:e.target.value})}>
+                <select value={form.requestType} onChange={e=>setForm({...form,requestType:e.target.value,containerSize:"",pol:""})}>
                   <option value="">Select type...</option>
                   <option>RORO</option>
                   <option>CONTAINER</option>
                 </select>
               </label>
 
+              {/* Container Size — only for CONTAINER */}
+              {form.requestType === "CONTAINER" && (
+                <label>Container Size
+                  <select value={form.containerSize} onChange={e=>setForm({...form,containerSize:e.target.value})}>
+                    <option value="">Select size...</option>
+                    <option>FULL 40' HC</option>
+                    <option>CONSOLIDATED SPOT</option>
+                    <option>20'</option>
+                  </select>
+                </label>
+              )}
+
               {/* POL + POD */}
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
                 <label>Port of Loading (POL)
                   <select value={form.pol} onChange={e=>setForm({...form,pol:e.target.value})}>
                     <option value="">Select POL...</option>
-                    {POLS.map(p=><option key={p}>{p}</option>)}
+                    {(form.requestType === "CONTAINER" ? CONTAINER_POLS : RORO_POLS).map(p=><option key={p}>{p}</option>)}
                   </select>
                 </label>
                 <label>Port of Discharge (POD)
