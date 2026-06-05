@@ -160,6 +160,69 @@ function DropZone({ label, file, setFile, existingUrl, existingName, onRemoveExi
   );
 }
 
+// ── Inline address search for edit modal ─────────────────────────────────────
+function LocationSearch({ label, value, onChange, onSelect }) {
+  const [results, setResults] = useState([]);
+  const [open, setOpen] = useState(false);
+  const ref = useRef(null);
+
+  useEffect(() => {
+    const handler = e => { if (ref.current && !ref.current.contains(e.target)) setOpen(false); };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  const search = async (q) => {
+    onChange(q);
+    if (q.length < 2) { setResults([]); setOpen(false); return; }
+    try {
+      const res = await fetch(`${API}/api/address-book?search=${encodeURIComponent(q)}`);
+      const data = await res.json();
+      setResults(Array.isArray(data) ? data.slice(0, 8) : []);
+      setOpen(true);
+    } catch { setResults([]); }
+  };
+
+  return (
+    <div ref={ref} style={{ position:"relative" }}>
+      <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+        {label}
+        <input
+          value={value}
+          onChange={e => search(e.target.value)}
+          onFocus={() => value.length >= 2 && open && results.length && setOpen(true)}
+          placeholder="Type to search address book…"
+          style={{ display:"block", width:"100%", marginTop:4, boxSizing:"border-box" }}
+        />
+      </label>
+      {open && results.length > 0 && (
+        <div style={{
+          position:"absolute", zIndex:50, top:"100%", left:0, right:0,
+          background:"var(--bg-elevated)", border:"1px solid var(--border)",
+          borderRadius:10, boxShadow:"0 8px 24px rgba(0,0,0,0.3)",
+          maxHeight:220, overflowY:"auto",
+        }}>
+          {results.map(item => (
+            <div key={item._id}
+              onMouseDown={() => { onSelect(item); setOpen(false); setResults([]); }}
+              style={{ padding:"9px 12px", cursor:"pointer", borderBottom:"1px solid var(--border-muted)" }}
+              onMouseEnter={e=>e.currentTarget.style.background="var(--bg-hover)"}
+              onMouseLeave={e=>e.currentTarget.style.background="transparent"}
+            >
+              <div style={{ fontWeight:600, fontSize:13, color:"var(--text-primary)" }}>{item.companyName}</div>
+              {(item.address||item.city) && (
+                <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>
+                  {[item.address, item.city, item.state].filter(Boolean).join(", ")}
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -2737,13 +2800,25 @@ export default function OrderDetails() {
               letterSpacing: "0.07em", color: "var(--text-muted)", marginBottom: 8 }}>
               Locations
             </p>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 16 }}>
-              {[["pickupLocation","Pickup Location"],["deliveryLocation","Delivery / Port Location"]].map(([k,lbl])=>(
-                <label key={k} style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                  {lbl}
-                  <input value={editForm[k]||""} onChange={e=>setEditForm(f=>({...f,[k]:e.target.value}))}
-                    style={{ display:"block", width:"100%", marginTop:4 }} />
-                </label>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 16 }}>
+              {[
+                { label:"Pickup Location", field:"pickupLocation", addrFields:{ name:"pickupName", address:"pickupAddress", city:"pickupCity", state:"pickupState", zip:"pickupZip" } },
+                { label:"Delivery / Port Location", field:"deliveryLocation", addrFields:{ name:"deliveryName", address:"deliveryAddress", city:"deliveryCity", state:"deliveryState", zip:"deliveryZip" } },
+              ].map(({ label: lbl, field, addrFields }) => (
+                <LocationSearch key={field}
+                  label={lbl}
+                  value={editForm[field]||""}
+                  onChange={v => setEditForm(f=>({...f,[field]:v}))}
+                  onSelect={item => setEditForm(f=>({
+                    ...f,
+                    [field]: item.companyName||"",
+                    [addrFields.name]:    item.companyName||"",
+                    [addrFields.address]: item.address||"",
+                    [addrFields.city]:    item.city||"",
+                    [addrFields.state]:   item.state||"",
+                    [addrFields.zip]:     item.postalCode||"",
+                  }))}
+                />
               ))}
             </div>
 
