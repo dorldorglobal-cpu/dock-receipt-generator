@@ -1213,6 +1213,15 @@ mongoose
   .then(() => {
     console.log("MongoDB Connected");
 
+    // ── Ensure order counter is at least 13793 (next order = 13794) ──
+    const Counter = require("./models/Counter");
+    Counter.findById("orderRef").then(c => {
+      if (!c || c.seq < 13793) {
+        return Counter.findByIdAndUpdate("orderRef", { $set: { seq: 13793 } }, { upsert: true });
+      }
+    }).then(() => console.log("[counter] orderRef counter ready"))
+      .catch(e => console.warn("[counter] counter init failed:", e.message));
+
     app.listen(4000, () => {
       console.log("Server running on port 4000");
 
