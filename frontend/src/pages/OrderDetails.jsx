@@ -1875,7 +1875,7 @@ export default function OrderDetails() {
               };
 
               return (
-                <tr key={f.id} onClick={() => setDocPreview({ name: f.name, url: f.webViewLink })}
+                <tr key={f.id} onClick={() => setDocPreview({ name: f.name, url: f.webViewLink, label })}
                   style={{ cursor: "pointer" }}>
                   <td>{f.name}</td>
                   <td>
@@ -3816,7 +3816,22 @@ export default function OrderDetails() {
               <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {docPreview.name}
               </span>
-              <div style={{ display: "flex", gap: 10, flexShrink: 0 }}>
+              <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+                {/* PIN badge — shown when previewing Buyer Receipt and order has a PIN */}
+                {docPreview.label === "Buyer Receipt" && order.pin && (
+                  <button
+                    onClick={() => navigator.clipboard?.writeText(order.pin).then(() => setMessage("PIN copied!"))}
+                    title="Click to copy PIN"
+                    style={{
+                      display: "flex", alignItems: "center", gap: 6,
+                      padding: "5px 12px", borderRadius: 8,
+                      background: "rgba(251,191,36,0.15)", border: "1px solid rgba(251,191,36,0.4)",
+                      color: "#fbbf24", cursor: "pointer", fontSize: 13, fontWeight: 700,
+                      fontFamily: "monospace", letterSpacing: "0.06em",
+                    }}>
+                    🔑 PIN: {order.pin}
+                  </button>
+                )}
                 <a href={docPreview.url} target="_blank" rel="noreferrer"
                   style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>
                   ↗ Open in new tab
