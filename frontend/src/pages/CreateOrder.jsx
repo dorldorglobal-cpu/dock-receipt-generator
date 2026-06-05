@@ -826,7 +826,7 @@ export default function CreateOrder() {
           </div>
         </section>
 
-        {/* ── Upload Zones: Order Request Form + Buyer Receipt ─────────── */}
+        {/* ── Upload Zones: Buyer Receipt + Order Request Form ─────────── */}
         <section className="form-section" style={{ paddingBottom: 0 }}>
           <h2 style={{ marginBottom: 10 }}>Auto-Fill Documents</h2>
           <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -6, marginBottom: 12 }}>
@@ -834,33 +834,7 @@ export default function CreateOrder() {
           </p>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
 
-            {/* Order Request Form */}
-            <div>
-              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>📋 Order Request Form</div>
-              <div
-                onDragOver={(e) => { e.preventDefault(); setOrfDragging(true); }}
-                onDragLeave={() => setOrfDragging(false)}
-                onDrop={(e) => { e.preventDefault(); setOrfDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleOrderRequestFile(f); }}
-                onClick={() => orfInputRef.current?.click()}
-                style={{
-                  border: `2px dashed ${orfDragging ? "var(--accent)" : orfFile ? "#34d399" : "var(--border)"}`,
-                  borderRadius: 10, padding: "16px 12px", textAlign: "center", cursor: "pointer",
-                  background: orfDragging ? "rgba(99,102,241,0.07)" : orfFile ? "rgba(52,211,153,0.05)" : "var(--bg-panel)",
-                  color: "var(--text-secondary)", fontSize: 12, transition: "all 0.15s",
-                }}>
-                {orfParsing ? "⏳ Parsing…" : orfFile ? `✅ ${orfFile.name}` : "Drop Order Request Form PDF here"}
-                <input ref={orfInputRef} type="file" accept=".pdf" style={{ display: "none" }}
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOrderRequestFile(f); e.target.value = ""; }} />
-              </div>
-              {orfResult && !orfResult.error && (
-                <div style={{ marginTop: 6, fontSize: 11, color: "#34d399" }}>
-                  ✅ Parsed · {orfResult.customerName || ""} {orfResult.vin ? `· VIN: ${orfResult.vin}` : ""}
-                </div>
-              )}
-              {orfResult?.error && <div style={{ marginTop: 6, fontSize: 11, color: "#f87171" }}>❌ {orfResult.error}</div>}
-            </div>
-
-            {/* Buyer Receipt */}
+            {/* Buyer Receipt — LEFT */}
             <div>
               <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>🧾 Buyer Receipt</div>
           <div
@@ -900,67 +874,43 @@ export default function CreateOrder() {
               }}
             />
           </div>
-
-          {/* Parsed success strip */}
           {brResult && !brResult.error && (
-            <div style={{
-              background: "rgba(16,185,129,0.12)",
-              border: "1px solid rgba(16,185,129,0.35)",
-              borderRadius: 8,
-              padding: "10px 14px",
-              fontSize: 13,
-              color: "#6ee7b7",
-              marginBottom: 8,
-              display: "flex",
-              gap: 16,
-              flexWrap: "wrap",
-            }}>
-              <span>✅ Parsed</span>
-              {brResult.customerName && <span><strong>Customer:</strong> {brResult.customerName}</span>}
-              {brResult.vin          && <span><strong>VIN:</strong> {brResult.vin}</span>}
-              {brResult.pickupName   && <span><strong>Pickup:</strong> {brResult.pickupName}{brResult.pickupCity ? `, ${brResult.pickupCity}` : ""}</span>}
+            <div style={{ marginTop: 6, fontSize: 11, color: "#34d399" }}>
+              ✅ Parsed · {brResult.customerName || ""} {brResult.vin ? `· VIN: ${brResult.vin}` : ""}
             </div>
           )}
-
-          {/* Parse error */}
-          {brResult?.error && (
-            <div style={{
-              background: "rgba(239,68,68,0.1)",
-              border: "1px solid rgba(239,68,68,0.3)",
-              borderRadius: 8,
-              padding: "10px 14px",
-              fontSize: 13,
-              color: "#fca5a5",
-              marginBottom: 8,
-            }}>
-              ❌ Parse error: {brResult.error}
-            </div>
-          )}
-
-          {/* Customer NOT found — small reminder (popup already fired) */}
+          {brResult?.error && <div style={{ marginTop: 6, fontSize: 11, color: "#f87171" }}>❌ {brResult.error}</div>}
           {brCustomerFound === false && brResult?.customerName && !newCustPopup && (
-            <div style={{
-              background: "rgba(245,158,11,0.10)",
-              border: "1px solid rgba(245,158,11,0.35)",
-              borderRadius: 8, padding: "10px 14px", fontSize: 13,
-              color: "#fcd34d", marginBottom: 8,
-            }}>
-              ⚠️ New customer — will be added to address book on save.
-            </div>
+            <div style={{ marginTop: 4, fontSize: 11, color: "#fcd34d" }}>⚠️ New customer detected</div>
           )}
+            </div>
 
-          {/* Customer FOUND confirmation */}
-          {brCustomerFound === true && brResult?.customerName && (
-            <div style={{
-              background: "rgba(99,102,241,0.1)",
-              border: "1px solid rgba(99,102,241,0.3)",
-              borderRadius: 8, padding: "10px 14px", fontSize: 13,
-              color: "#a5b4fc", marginBottom: 8,
-            }}>
-              ✔ Customer "{brResult.customerName}" found in address book — contact info auto-filled.
+            {/* Order Request Form — RIGHT */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>📋 Order Request Form</div>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setOrfDragging(true); }}
+                onDragLeave={() => setOrfDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setOrfDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleOrderRequestFile(f); }}
+                onClick={() => orfInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${orfDragging ? "var(--accent)" : orfFile ? "#34d399" : "var(--border)"}`,
+                  borderRadius: 10, padding: "16px 12px", textAlign: "center", cursor: "pointer",
+                  background: orfDragging ? "rgba(99,102,241,0.07)" : orfFile ? "rgba(52,211,153,0.05)" : "var(--bg-panel)",
+                  color: "var(--text-secondary)", fontSize: 12, transition: "all 0.15s",
+                }}>
+                {orfParsing ? "⏳ Parsing…" : orfFile ? `✅ ${orfFile.name}` : "Drop Order Request Form PDF here"}
+                <input ref={orfInputRef} type="file" accept=".pdf" style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOrderRequestFile(f); e.target.value = ""; }} />
+              </div>
+              {orfResult && !orfResult.error && (
+                <div style={{ marginTop: 6, fontSize: 11, color: "#34d399" }}>
+                  ✅ Parsed · {orfResult.customerName || ""} {orfResult.vin ? `· VIN: ${orfResult.vin}` : ""}
+                </div>
+              )}
+              {orfResult?.error && <div style={{ marginTop: 6, fontSize: 11, color: "#f87171" }}>❌ {orfResult.error}</div>}
             </div>
-          )}
-            </div>{/* end Buyer Receipt column */}
+
           </div>{/* end grid */}
         </section>
 

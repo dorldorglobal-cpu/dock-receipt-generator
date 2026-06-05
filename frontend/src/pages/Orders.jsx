@@ -31,6 +31,7 @@ export default function Orders() {
   const [typeFilter, setTypeFilter]   = useState("all");
   const [deleteTarget, setDeleteTarget] = useState(null);
   const [deleting, setDeleting]       = useState(false);
+  const [refSort, setRefSort]         = useState("desc"); // "desc" = newest first
   const navigate = useNavigate();
 
   useEffect(() => { fetchOrders(); }, []);
@@ -66,6 +67,9 @@ export default function Orders() {
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
     const matchType    = typeFilter === "all" || (o.requestType || "").toLowerCase() === typeFilter.toLowerCase();
     return matchSearch && matchTab && matchSource && matchType;
+  }).sort((a, b) => {
+    const n = v => Number(String(v.refNumber || "0").replace(/\D/g, "")) || 0;
+    return refSort === "asc" ? n(a) - n(b) : n(b) - n(a);
   });
 
   const shippingLine = (o) => {
@@ -159,7 +163,10 @@ export default function Orders() {
       <table className="orders-table">
         <thead>
           <tr>
-            <th>Ref #</th>
+            <th style={{ cursor:"pointer", userSelect:"none", whiteSpace:"nowrap" }}
+                onClick={() => setRefSort(s => s === "desc" ? "asc" : "desc")}>
+              Ref # <span style={{ fontSize:12 }}>{refSort === "desc" ? "↓" : "↑"}</span>
+            </th>
             <th>Customer</th>
             <th>Vehicle</th>
             <th>Route</th>
