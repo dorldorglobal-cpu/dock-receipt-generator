@@ -1944,9 +1944,20 @@ export default function OrderDetails() {
                     <tr style={{ borderBottom:"1px solid var(--border)" }}>
                       <td style={{ padding:"5px 8px" }}>
                         <div style={{ fontWeight:600 }}>Towing</div>
-                        {order.pickupLocation && order.deliveryLocation && (
+                        {(order.pickupLocation || order.pickupCity) && (
                           <div style={{ fontSize:10, color:"var(--text-muted)", marginTop:1 }}>
-                            {order.pickupLocation} → {order.deliveryLocation}
+                            {(() => {
+                              const loc = order.pickupLocation || "";
+                              const city = order.pickupCity || "";
+                              const state = order.pickupState || "";
+                              // Build "COPART JOBSTOWN, NJ" style label
+                              const cityState = [city, state].filter(Boolean).join(", ");
+                              const full = loc && cityState && !loc.toUpperCase().includes(city.toUpperCase())
+                                ? `${loc} — ${cityState}`
+                                : loc || cityState;
+                              return full;
+                            })()}
+                            {order.deliveryLocation ? ` → ${order.deliveryLocation}` : ""}
                           </div>
                         )}
                       </td>
