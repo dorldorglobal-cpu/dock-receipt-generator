@@ -15,6 +15,13 @@ export default function CreateOrder() {
   const [brCustomerFound, setBrCustomerFound] = useState(null); // true/false/null
   const brInputRef = useRef(null);
 
+  // ── Order Request Form parsing ─────────────────────────────────────────
+  const [orfDragging, setOrfDragging]       = useState(false);
+  const [orfParsing, setOrfParsing]         = useState(false);
+  const [orfResult, setOrfResult]           = useState(null);
+  const [orfFile, setOrfFile]               = useState(null);
+  const orfInputRef = useRef(null);
+
   // ── New customer contact popup ─────────────────────────────────────────
   const [newCustPopup, setNewCustPopup]     = useState(null); // { name, phone, email, defaultPod }
 
@@ -590,6 +597,77 @@ export default function CreateOrder() {
     }
   };
 
+  // ── Order Request Form handler — same parse endpoint, takes priority if both uploaded ──
+  const handleOrderRequestFile = async (file) => {
+    if (!file) return;
+    setOrfFile(file);
+    setOrfParsing(true);
+    setOrfResult(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API}/api/orders/parse-buyer-receipt`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Parse failed");
+
+      // Same customer lookup as buyer receipt
+      if (data.customerName) {
+        try {
+          const buyerLookup = await fetch(`${API}/api/address-book/lookup-buyer?name=${encodeURIComponent(data.customerName)}`);
+          const buyerData = await buyerLookup.json();
+          if (buyerData.customer) {
+            data.buyerName     = data.customerName;
+            data.customerName  = buyerData.customer.companyName;
+            data.customerPhone = data.customerPhone || buyerData.customer.phone || "";
+            data.customerEmail = data.customerEmail || buyerData.customer.email || "";
+            data.customerRecord = buyerData.customer;
+            data.customerFound  = true;
+          }
+        } catch {}
+      }
+
+      setOrfResult(data);
+
+      const rec = data.customerRecord;
+      const podFromCustomer = rec?.defaultPod || countryToPod(rec?.country);
+      // Order Request Form overrides everything — apply to form
+      setForm((prev) => ({
+        ...prev,
+        customerName:     rec?.companyName  || data.customerName  || prev.customerName,
+        customerPhone:    rec?.phone        || data.customerPhone || prev.customerPhone,
+        customerEmail:    rec?.email        || data.customerEmail || prev.customerEmail,
+        buyerName:        data.buyerName    || prev.buyerName,
+        consigneeName:    data.consigneeName    || data.buyerName || data.customerName || prev.consigneeName,
+        consigneeAddress: data.consigneeAddress || prev.consigneeAddress,
+        consigneeCity:    data.consigneeCity    || prev.consigneeCity,
+        consigneeCountry: data.consigneeCountry || prev.consigneeCountry,
+        vin:       data.vin       || prev.vin,
+        year:      data.year      || prev.year,
+        make:      data.make      || prev.make,
+        model:     data.model     || prev.model,
+        lotNumber: data.lotNumber || prev.lotNumber,
+        pickupLocation: data.pickupName    || data.pickupLocation || prev.pickupLocation,
+        pickupName:     data.pickupName    || prev.pickupName,
+        pickupAddress:  data.pickupAddress || prev.pickupAddress,
+        pickupCity:     data.pickupCity    || prev.pickupCity,
+        pickupState:    data.pickupState   || prev.pickupState,
+        pickupZip:      data.pickupZip     || prev.pickupZip,
+        ...(podFromCustomer                    ? { pod: podFromCustomer } : {}),
+        ...(podToShippingLine(podFromCustomer) ? { shippingLine: podToShippingLine(podFromCustomer) } : {}),
+      }));
+
+      if (data.vin && data.vin.length === 17) decodeVin(data.vin);
+      if ((data.pickupCity || data.pickupState) && form.requestType === "RORO") {
+        suggestDeliveryFromPickupCity(data.pickupCity, podToShippingLine(podFromCustomer), data.pickupState);
+      }
+    } catch (err) {
+      setOrfResult({ error: err.message });
+    } finally {
+      setOrfParsing(false);
+    }
+  };
+
+
   const submitOrder = async (e) => {
     e.preventDefault();
 
@@ -615,24 +693,26 @@ export default function CreateOrder() {
       return;
     }
 
-    // If buyer receipt was uploaded during parsing, save it to the order documents now
-    if (brFile && data._id) {
-      setMessage(`✅ Order ${data.refNumber} created — uploading buyer receipt…`);
-      try {
-        const fd = new FormData();
-        fd.append("file",  brFile);
-        fd.append("label", "Buyer Receipt");
-        const upRes = await fetch(`${API}/api/orders/${data._id}/upload-drive`, {
-          method: "POST",
-          body:   fd,
-        });
-        if (!upRes.ok) throw new Error("Upload returned " + upRes.status);
-        setMessage(`✅ Order ${data.refNumber} created — buyer receipt saved to documents.`);
-      } catch (upErr) {
-        console.error("Buyer receipt upload failed:", upErr);
-        setMessage(`✅ Order ${data.refNumber} created — buyer receipt upload failed (add it manually in the order).`);
+    // Upload buyer receipt and/or order request form
+    const filesToUpload = [
+      ...(brFile  ? [{ file: brFile,  label: "Buyer Receipt"       }] : []),
+      ...(orfFile ? [{ file: orfFile, label: "Order Request Form"  }] : []),
+    ];
+    if (filesToUpload.length && data._id) {
+      setMessage(`✅ Order ${data.refNumber} created — uploading documents…`);
+      for (const { file, label } of filesToUpload) {
+        try {
+          const fd = new FormData();
+          fd.append("file",  file);
+          fd.append("label", label);
+          await fetch(`${API}/api/orders/${data._id}/upload-drive`, { method: "POST", body: fd });
+        } catch (upErr) {
+          console.error(`${label} upload failed:`, upErr);
+        }
       }
+      setMessage(`✅ Order ${data.refNumber} created — documents saved.`);
       setBrFile(null);
+      setOrfFile(null);
     } else {
       setMessage(`✅ Order created. Ref #${data.refNumber}`);
     }
@@ -706,9 +786,43 @@ export default function CreateOrder() {
           </div>
         </section>
 
-        {/* ── Buyer Receipt Drop Zone ───────────────────────────────────── */}
+        {/* ── Upload Zones: Order Request Form + Buyer Receipt ─────────── */}
         <section className="form-section" style={{ paddingBottom: 0 }}>
-          <h2 style={{ marginBottom: 10 }}>Buyer Receipt (Auto-Fill)</h2>
+          <h2 style={{ marginBottom: 10 }}>Auto-Fill Documents</h2>
+          <p style={{ fontSize: 12, color: "var(--text-muted)", marginTop: -6, marginBottom: 12 }}>
+            Upload one or both. If both uploaded, <strong>Order Request Form takes priority</strong> for parsing.
+          </p>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
+
+            {/* Order Request Form */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>📋 Order Request Form</div>
+              <div
+                onDragOver={(e) => { e.preventDefault(); setOrfDragging(true); }}
+                onDragLeave={() => setOrfDragging(false)}
+                onDrop={(e) => { e.preventDefault(); setOrfDragging(false); const f = e.dataTransfer.files?.[0]; if (f) handleOrderRequestFile(f); }}
+                onClick={() => orfInputRef.current?.click()}
+                style={{
+                  border: `2px dashed ${orfDragging ? "var(--accent)" : orfFile ? "#34d399" : "var(--border)"}`,
+                  borderRadius: 10, padding: "16px 12px", textAlign: "center", cursor: "pointer",
+                  background: orfDragging ? "rgba(99,102,241,0.07)" : orfFile ? "rgba(52,211,153,0.05)" : "var(--bg-panel)",
+                  color: "var(--text-secondary)", fontSize: 12, transition: "all 0.15s",
+                }}>
+                {orfParsing ? "⏳ Parsing…" : orfFile ? `✅ ${orfFile.name}` : "Drop Order Request Form PDF here"}
+                <input ref={orfInputRef} type="file" accept=".pdf" style={{ display: "none" }}
+                  onChange={(e) => { const f = e.target.files?.[0]; if (f) handleOrderRequestFile(f); e.target.value = ""; }} />
+              </div>
+              {orfResult && !orfResult.error && (
+                <div style={{ marginTop: 6, fontSize: 11, color: "#34d399" }}>
+                  ✅ Parsed · {orfResult.customerName || ""} {orfResult.vin ? `· VIN: ${orfResult.vin}` : ""}
+                </div>
+              )}
+              {orfResult?.error && <div style={{ marginTop: 6, fontSize: 11, color: "#f87171" }}>❌ {orfResult.error}</div>}
+            </div>
+
+            {/* Buyer Receipt */}
+            <div>
+              <div style={{ fontSize: 11, fontWeight: 700, color: "var(--text-muted)", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: 6 }}>🧾 Buyer Receipt</div>
           <div
             onDragOver={(e) => { e.preventDefault(); setBrDragging(true); }}
             onDragLeave={() => setBrDragging(false)}
@@ -720,21 +834,20 @@ export default function CreateOrder() {
             }}
             onClick={() => brInputRef.current?.click()}
             style={{
-              border: `2px dashed ${brDragging ? "var(--accent)" : "var(--border)"}`,
+              border: `2px dashed ${brDragging ? "var(--accent)" : brFile ? "#34d399" : "var(--border)"}`,
               borderRadius: 10,
-              padding: "18px 20px",
+              padding: "16px 12px",
               textAlign: "center",
               cursor: "pointer",
-              background: brDragging ? "rgba(99,102,241,0.07)" : "var(--bg-panel)",
+              background: brDragging ? "rgba(99,102,241,0.07)" : brFile ? "rgba(52,211,153,0.05)" : "var(--bg-panel)",
               color: "var(--text-secondary)",
-              fontSize: 13,
+              fontSize: 12,
               transition: "all 0.15s",
-              marginBottom: 10,
             }}
           >
             {brParsing
               ? "⏳ Parsing buyer receipt…"
-              : "📄 Drop Buyer Receipt PDF here or click to upload — auto-fills customer, VIN & pickup"}
+              : brFile ? `✅ ${brFile.name}` : "Drop Buyer Receipt PDF here"}
             <input
               ref={brInputRef}
               type="file"
@@ -801,15 +914,14 @@ export default function CreateOrder() {
             <div style={{
               background: "rgba(99,102,241,0.1)",
               border: "1px solid rgba(99,102,241,0.3)",
-              borderRadius: 8,
-              padding: "10px 14px",
-              fontSize: 13,
-              color: "#a5b4fc",
-              marginBottom: 8,
+              borderRadius: 8, padding: "10px 14px", fontSize: 13,
+              color: "#a5b4fc", marginBottom: 8,
             }}>
               ✔ Customer "{brResult.customerName}" found in address book — contact info auto-filled.
             </div>
           )}
+            </div>{/* end Buyer Receipt column */}
+          </div>{/* end grid */}
         </section>
 
         <section className="form-section">

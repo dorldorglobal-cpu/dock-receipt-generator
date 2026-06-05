@@ -1510,8 +1510,8 @@ export default function OrderDetails() {
       {/* ── Dashboard Cards ──────────────────────────── */}
       <div className="dashboard-grid">
         <div className="dashboard-card">
-          <span>Order Type</span>
-          <strong>{order.requestType}</strong>
+          <span>Customer</span>
+          <strong className="small">{order.customerName || "—"}</strong>
         </div>
         <div className="dashboard-card">
           <span>Request Date</span>
@@ -1574,10 +1574,6 @@ export default function OrderDetails() {
             </button>
           </div>
         </div>
-        <div className="dashboard-card">
-          <span>Processed By</span>
-          <strong className="small">{order.processedBy || "—"}</strong>
-        </div>
       </div>
 
       {/* ── Info Panels ─────────────────────────────── */}
@@ -1607,6 +1603,57 @@ export default function OrderDetails() {
               <option value="USA OFFICE">🇺🇸 USA Office</option>
               <option value="GHANA OFFICE">🇬🇭 Ghana Office</option>
             </select>
+          </div>
+        </section>
+
+        {/* Pickup & Delivery + Costs */}
+        <section className="form-section">
+          <h2>Pickup &amp; Delivery</h2>
+          <p style={{ margin: "0 0 4px", fontSize: 13 }}>
+            <strong>Pickup:</strong> {order.pickupLocation || "—"}
+          </p>
+          <p style={{ margin: "0 0 12px", fontSize: 13 }}>
+            <strong>Delivery:</strong> {order.deliveryLocation || "—"}
+          </p>
+          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: 1, minWidth: 110, padding: "10px 14px", borderRadius: 9,
+              background: "var(--bg-panel)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase",
+                letterSpacing: "0.06em", marginBottom: 4 }}>Towing</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+                ${Number(charges.towingCharge || 0).toLocaleString(undefined,
+                  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+            <div style={{ flex: 1, minWidth: 110, padding: "10px 14px", borderRadius: 9,
+              background: "var(--bg-panel)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase",
+                letterSpacing: "0.06em", marginBottom: 4 }}>Ocean Freight</div>
+              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+                ${Number(charges.oceanFreight || 0).toLocaleString(undefined,
+                  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* Vehicle */}
+        <section className="form-section">
+          <h2>Vehicle</h2>
+          <p style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+            {[order.year, order.make, order.model].filter(Boolean).join(" ") || "—"}
+          </p>
+          <p style={{ margin: "0 0 10px", fontFamily: "monospace", fontSize: 13,
+            color: "var(--text-muted)", letterSpacing: "0.05em" }}>{order.vin || "—"}</p>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500,
+              background: "var(--bg-panel)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+              {order.condition || "—"}
+            </span>
+            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500,
+              background: "var(--bg-panel)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
+              Title: {order.titleStatus || "—"}
+            </span>
           </div>
         </section>
 
@@ -1661,7 +1708,6 @@ export default function OrderDetails() {
                 style={{ width:"100%", padding:"5px 8px", borderRadius:6, fontSize:13,
                   border:"1px solid var(--border)", background:"var(--bg-input)", color:"var(--text-primary)" }}>
                 <option value="">Select vessel…</option>
-                {/* Always include the current vessel even if not in schedule list */}
                 {order.vessel && !scheduleVessels.includes(order.vessel) && (
                   <option value={order.vessel}>{order.vessel}</option>
                 )}
@@ -1693,57 +1739,6 @@ export default function OrderDetails() {
             </div>
           </div>
         </section>
-
-        {/* Vehicle */}
-        <section className="form-section">
-          <h2>Vehicle</h2>
-          <p style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
-            {[order.year, order.make, order.model].filter(Boolean).join(" ") || "—"}
-          </p>
-          <p style={{ margin: "0 0 10px", fontFamily: "monospace", fontSize: 13,
-            color: "var(--text-muted)", letterSpacing: "0.05em" }}>{order.vin || "—"}</p>
-          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500,
-              background: "var(--bg-panel)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
-              {order.condition || "—"}
-            </span>
-            <span style={{ padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 500,
-              background: "var(--bg-panel)", border: "1px solid var(--border)", color: "var(--text-secondary)" }}>
-              Title: {order.titleStatus || "—"}
-            </span>
-          </div>
-        </section>
-
-        {/* Pickup & Delivery + Costs */}
-        <section className="form-section">
-          <h2>Pickup &amp; Delivery</h2>
-          <p style={{ margin: "0 0 4px", fontSize: 13 }}>
-            <strong>Pickup:</strong> {order.pickupLocation || "—"}
-          </p>
-          <p style={{ margin: "0 0 12px", fontSize: 13 }}>
-            <strong>Delivery:</strong> {order.deliveryLocation || "—"}
-          </p>
-          <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ flex: 1, minWidth: 110, padding: "10px 14px", borderRadius: 9,
-              background: "var(--bg-panel)", border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase",
-                letterSpacing: "0.06em", marginBottom: 4 }}>Towing</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
-                ${Number(charges.towingCharge || 0).toLocaleString(undefined,
-                  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-            <div style={{ flex: 1, minWidth: 110, padding: "10px 14px", borderRadius: 9,
-              background: "var(--bg-panel)", border: "1px solid var(--border)" }}>
-              <div style={{ fontSize: 11, color: "var(--text-muted)", textTransform: "uppercase",
-                letterSpacing: "0.06em", marginBottom: 4 }}>Ocean Freight</div>
-              <div style={{ fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
-                ${Number(charges.oceanFreight || 0).toLocaleString(undefined,
-                  { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-              </div>
-            </div>
-          </div>
-        </section>
       </div>
 
       {/* ── Documents ───────────────────────────────── */}
@@ -1768,10 +1763,11 @@ export default function OrderDetails() {
         {/* ── Labeled upload zones ── */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(105px, 1fr))", gap:8, marginBottom:16 }}>
           {[
-            { label:"AES",          icon:"📋" },
-            { label:"Dispatch",     icon:"🚛" },
-            { label:"Buyer Receipt",icon:"🧾" },
-            { label:"Email",        icon:"📧" },
+            { label:"AES",                icon:"📋" },
+            { label:"Dispatch",           icon:"🚛" },
+            { label:"Order Request Form", icon:"📋" },
+            { label:"Buyer Receipt",      icon:"🧾" },
+            { label:"Email",              icon:"📧" },
             { label:"Title",        icon:"📜" },
             { label:"Draft",        icon:"📝" },
             { label:"Rated Draft",  icon:"🧮" },
@@ -2550,6 +2546,19 @@ export default function OrderDetails() {
               border: "1px solid var(--border-muted)" }}>{order.notes}</p>
           : <p style={{ margin: 0, fontSize: 13, color: "var(--text-muted)" }}>No notes yet.</p>
         }
+        {/* Order type + processed by — small, below notes */}
+        <div style={{ marginTop: 10, display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {order.requestType && (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Type: <strong style={{ color: "var(--text-secondary)" }}>{order.requestType}</strong>
+            </span>
+          )}
+          {order.processedBy && (
+            <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+              Processed by: <strong style={{ color: "var(--text-secondary)" }}>{order.processedBy}</strong>
+            </span>
+          )}
+        </div>
       </section>
 
       <section className="form-section">
