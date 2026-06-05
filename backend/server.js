@@ -26,6 +26,27 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // ── Health check (used by keep-alive self-ping) ──
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+
+// ── Google Drive file proxy — streams file directly to browser (enables copy/paste in PDF viewer) ──
+app.get("/api/drive-proxy/:fileId", async (req, res) => {
+  try {
+    const { drive } = require("./googleDrive");
+    const { fileId } = req.params;
+    // Get file metadata for mime type + name
+    const meta = await drive.files.get({ fileId, fields: "name,mimeType" });
+    const mime = meta.data.mimeType || "application/pdf";
+    const name = meta.data.name || "document";
+    // Stream file content
+    const file = await drive.files.get({ fileId, alt: "media" }, { responseType: "stream" });
+    res.setHeader("Content-Type", mime);
+    res.setHeader("Content-Disposition", `inline; filename="${name}"`);
+    res.setHeader("Cache-Control", "private, max-age=300");
+    file.data.pipe(res);
+  } catch (err) {
+    console.error("[drive-proxy] error:", err.message);
+    res.status(500).json({ error: "Failed to proxy Drive file" });
+  }
+});
 app.use("/api/pricing", pricingRoutes);
 app.use("/api/schedule", scheduleRoutes);
 

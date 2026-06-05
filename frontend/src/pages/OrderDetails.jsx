@@ -3791,13 +3791,12 @@ export default function OrderDetails() {
             <iframe
               src={(() => {
                 const m = docPreview.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                // Use /view instead of /preview so text selection & copy/paste work
-                return m ? `https://drive.google.com/file/d/${m[1]}/view?usp=sharing` : docPreview.url;
+                // Proxy through backend — avoids Google auth wall and enables copy/paste
+                return m ? `${API}/api/drive-proxy/${m[1]}` : docPreview.url;
               })()}
               style={{ flex: 1, border: "none", width: "100%" }}
               title={docPreview.name}
-              allow="autoplay; clipboard-read; clipboard-write"
-              sandbox="allow-same-origin allow-scripts allow-popups allow-forms allow-top-navigation"
+              allow="autoplay"
             />
           </div>
         </div>
