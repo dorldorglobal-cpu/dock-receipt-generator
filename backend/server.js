@@ -28,6 +28,62 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // ── Health check (used by keep-alive self-ping) ──
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
+// ── Manual trigger: GET /api/test-new-order-alert ─────────────────────────
+// Hit this URL to immediately send the undispatched-orders alert email.
+// Remove or password-protect this route once you've confirmed it works.
+app.get("/api/test-new-order-alert", async (req, res) => {
+  try {
+    const Order = require("./models/Order");
+    const nodemailer = require("nodemailer");
+    const orders = await Order.find({ status: "New Order" }).sort({ createdAt: 1 }).lean();
+    if (!orders.length) {
+      return res.json({ sent: false, message: "No New Order vehicles found — nothing to send." });
+    }
+    const testMailer = nodemailer.createTransport({
+      service: "gmail",
+      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
+    });
+    const rows = orders.map(o => {
+      const ymm  = [o.year, o.make, o.model].filter(Boolean).join(" ") || "—";
+      const vin  = o.vin || "—";
+      const ref  = o.refNumber || "—";
+      const days = Math.floor((Date.now() - new Date(o.createdAt)) / 86400000);
+      return `<tr>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${ref}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${o.customerName || "—"}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${ymm}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee">${vin}</td>
+        <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">${days}d</td>
+      </tr>`;
+    }).join("");
+    const html = `
+      <h2 style="font-family:sans-serif;color:#c0392b">⚠️ ${orders.length} Vehicle(s) Not Yet Dispatched</h2>
+      <p style="font-family:sans-serif"><em>(TEST EMAIL — sent manually)</em></p>
+      <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;width:100%">
+        <thead>
+          <tr style="background:#f4f4f4">
+            <th style="padding:8px 10px;text-align:left">Ref #</th>
+            <th style="padding:8px 10px;text-align:left">Customer</th>
+            <th style="padding:8px 10px;text-align:left">Vehicle</th>
+            <th style="padding:8px 10px;text-align:left">VIN</th>
+            <th style="padding:8px 10px;text-align:center">Age</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    `;
+    await testMailer.sendMail({
+      from: process.env.GMAIL_USER,
+      to:   process.env.ALERT_EMAIL || process.env.GMAIL_USER,
+      subject: `[TEST] ${orders.length} Undispatched Order(s) — ${new Date().toLocaleDateString()}`,
+      html,
+    });
+    res.json({ sent: true, count: orders.length, to: process.env.ALERT_EMAIL || process.env.GMAIL_USER });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Google Drive file proxy — streams file directly to browser (enables copy/paste in PDF viewer) ──
 app.get("/api/drive-proxy/:fileId", async (req, res) => {
   try {
