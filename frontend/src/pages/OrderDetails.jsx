@@ -1708,14 +1708,36 @@ export default function OrderDetails() {
                     onClick={async () => {
                       if (active) return; // already this type
                       const clearFields = t === "Container"
-                        // switching to Container → clear RORO vessel/schedule fields
                         ? { requestType: t, vessel: "", voyage: "", sailDate: "", cutoffDate: "", arrivalDate: "" }
-                        // switching to RORO → clear Container-specific fields
                         : { requestType: t, containerNumber: "", sealNumber: "" };
                       await fetch(`${API}/api/orders/${id}`, {
                         method:"PUT", headers:{"Content-Type":"application/json"},
                         body: JSON.stringify(clearFields),
                       });
+
+                      // Re-price ocean freight when switching to Container
+                      if (t === "Container" && order.containerSize && order.pol) {
+                        const pol  = order.pol.toUpperCase();
+                        const size = order.containerSize;
+                        const line = (order.shippingLine || "").toUpperCase();
+                        const match =
+                          oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol && r.containerSize === size && r.shippingLine === line) ||
+                          oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol && r.containerSize === size) ||
+                          oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol);
+                        if (match?.portPrice) {
+                          const newCharges = {
+                            ...charges,
+                            oceanFreight: String(match.portPrice),
+                            ...(match.cost ? { oceanCost: String(match.cost) } : {}),
+                          };
+                          setCharges(newCharges);
+                          await fetch(`${API}/api/orders/${id}`, {
+                            method:"PUT", headers:{"Content-Type":"application/json"},
+                            body: JSON.stringify({ charges: newCharges }),
+                          });
+                        }
+                      }
+
                       fetchOrder();
                     }}
                     style={{

@@ -732,7 +732,31 @@ export default function CreateOrder() {
           <div style={{ display:"flex", gap:8 }}>
             {["RORO","Container"].map(t => (
               <button key={t} type="button"
-                onClick={() => update("requestType", t)}
+                onClick={() => {
+                  update("requestType", t);
+                  if (t === "Container" && form.pickupState) {
+                    // Switch delivery to nearest container warehouse
+                    const wh = nearestWarehouse(form.pickupState);
+                    if (wh) {
+                      setForm(prev => ({
+                        ...prev,
+                        requestType:     t,
+                        deliveryLocation: wh.name,
+                        deliveryName:     wh.name,
+                        deliveryAddress:  wh.address,
+                        deliveryCity:     wh.city,
+                        deliveryState:    wh.state,
+                        deliveryZip:      wh.zip,
+                        pol:              wh.pol || prev.pol,
+                        // clear RORO vessel fields
+                        vessel: "", voyage: "", sailDate: "", cutoffDate: "", arrivalDate: "",
+                      }));
+                    }
+                  } else if (t === "RORO" && (form.pickupCity || form.pickupState)) {
+                    // Switch delivery back to nearest RORO port
+                    suggestDeliveryFromPickupCity(form.pickupCity, "", form.pickupState);
+                  }
+                }}
                 style={{
                   flex:1, padding:"7px 0", borderRadius:8, cursor:"pointer",
                   fontWeight:700, fontSize:13, border:"none",
@@ -1045,8 +1069,25 @@ export default function CreateOrder() {
                 value={form.requestType}
                 onChange={(e) => {
                   const newType = e.target.value;
+                  if (newType === "Container" && form.pickupState) {
+                    const wh = nearestWarehouse(form.pickupState);
+                    if (wh) {
+                      setForm(prev => ({
+                        ...prev,
+                        requestType:      newType,
+                        deliveryLocation: wh.name,
+                        deliveryName:     wh.name,
+                        deliveryAddress:  wh.address,
+                        deliveryCity:     wh.city,
+                        deliveryState:    wh.state,
+                        deliveryZip:      wh.zip,
+                        pol:              wh.pol || prev.pol,
+                        vessel: "", voyage: "", sailDate: "", cutoffDate: "", arrivalDate: "",
+                      }));
+                      return;
+                    }
+                  }
                   update("requestType", newType);
-                  // If switching to RORO and pickup city is already known, suggest delivery
                   if (newType === "RORO" && (form.pickupCity || form.pickupState)) {
                     suggestDeliveryFromPickupCity(form.pickupCity, "", form.pickupState);
                   }
