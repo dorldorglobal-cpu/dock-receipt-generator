@@ -1261,7 +1261,7 @@ async function getGmailAccessToken() {
 // POST /api/send-email  { to, subject, body, pdfBase64, pdfName }
 app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) => {
   try {
-    const { to, subject, body, pdfBase64, pdfName } = req.body;
+    const { to, subject, body, pdfBase64, pdfName, cc } = req.body;
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
     const accessToken = await getGmailAccessToken();
@@ -1272,6 +1272,7 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     const mimeLines = [
       `From: ${from}`,
       `To: ${to}`,
+      ...(cc ? [`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`] : []),
       `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
       `MIME-Version: 1.0`,
       `Content-Type: multipart/mixed; boundary="${boundary}"`,

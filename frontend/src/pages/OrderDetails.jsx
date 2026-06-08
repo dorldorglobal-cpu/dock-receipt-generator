@@ -368,6 +368,12 @@ export default function OrderDetails() {
   const [drSending,    setDrSending]    = useState(false);
   const [lastDrBase64, setLastDrBase64] = useState(null); // cached after last generation
 
+  // Sallaum nonrunner/forklift notify popup
+  const [sallaumNotify,        setSallaumNotify]        = useState(false);
+  const [sallaumNotifySubject, setSallaumNotifySubject] = useState("");
+  const [sallaumNotifyBody,    setSallaumNotifyBody]    = useState("");
+  const [sallaumSending,       setSallaumSending]       = useState(false);
+
   useEffect(() => {
     fetchOrder();
     fetchVoyages();
@@ -1173,6 +1179,24 @@ export default function OrderDetails() {
     setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${payload.vehicleYearMakeModel || ""} VIN: ${(payload.vin || order.vin || "").slice(-6)}`);
     setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${payload.vin || order.vin || ""}\nVessel: ${payload.vessel || ""} | Voyage: ${payload.voyage || ""}\nPort of Loading: ${payload.portOfLoading || ""}\n\nRegards,\nDDG OPS`);
 
+    // If Sallaum + Nonrunner or Forklift → open Sallaum notify popup at the same time
+    const condition  = (payload.condition  || order.condition  || "").toLowerCase();
+    const isSallaum  = (order.shippingLine || payload.shippingLine || "").toUpperCase().includes("SALLAUM");
+    const needsNotify = isSallaum && (condition === "nonrunner" || condition === "forklift");
+    if (needsNotify) {
+      const condLabel = condition === "forklift" ? "Forklift" : "Non-Runner";
+      const ref  = (order.refNumber || "").replace(/^DDG-/i, "");
+      const ymm  = payload.vehicleYearMakeModel || [order.year, order.make, order.model].filter(Boolean).join(" ");
+      const vin  = payload.vin || order.vin || "";
+      setSallaumNotifySubject(`${ref} ${condLabel} Request – ${ymm} VIN: ${vin.slice(-6)}`);
+      setSallaumNotifyBody(
+        `Dear Sallaum Team,\n\nPlease be advised that the following vehicle requires ${condLabel} handling:\n\n` +
+        `Ref#: ${ref}\nVehicle: ${ymm}\nVIN: ${vin}\nVessel: ${payload.vessel || order.vessel || ""}\nVoyage: ${payload.voyage || order.voyage || ""}\nPort of Loading: ${payload.pol || order.pol || ""}\n\n` +
+        `Kindly update this booking to reflect the ${condLabel} status and advise on any additional requirements.\n\nThank you,\nDDG OPS`
+      );
+      setSallaumNotify(true);
+    }
+
     setMessage("Dock Receipt generated & uploaded");
     } catch (err) {
       console.error("generateDockReceipt error:", err);
@@ -1226,6 +1250,35 @@ export default function OrderDetails() {
       setMessage("❌ Failed to send DR: " + msg);
     } finally {
       setDrSending(false);
+    }
+  };
+
+  const sendSallaumNotify = async () => {
+    setSallaumSending(true);
+    try {
+      const res = await fetch(`${API}/api/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to:      "Frontdesk@sallaumlines.us",
+          cc:      "Office@sallaumlines.us",
+          subject: sallaumNotifySubject,
+          body:    sallaumNotifyBody,
+        }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
+      await fetch(`${API}/api/orders/${id}/timeline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "Sallaum Notified", details: `Non-Runner/Forklift request sent to Sallaum` }),
+      });
+      fetchOrder();
+      setSallaumNotify(false);
+      setMessage("✅ Sallaum notified successfully");
+    } catch (e) {
+      setMessage("❌ Failed to notify Sallaum: " + e.message);
+    } finally {
+      setSallaumSending(false);
     }
   };
 
@@ -1533,6 +1586,20 @@ export default function OrderDetails() {
           setDrSendTrucker("");
           setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${ymm} VIN: ${vin.slice(-6)}`);
           setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${vin}\nVessel: ${base.vessel||""} | Voyage: ${base.voyage||""}\nPort of Loading: ${base.pol||base.portOfLoading||""}\n\nRegards,\nDor Ldor Global`);
+          // Sallaum non-runner/forklift notify
+          const cond2 = (order.condition || "").toLowerCase();
+          const isSallaum2 = (order.shippingLine || "").toUpperCase().includes("SALLAUM");
+          if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift")) {
+            const condLabel2 = cond2 === "forklift" ? "Forklift" : "Non-Runner";
+            const ref2 = (order.refNumber || "").replace(/^DDG-/i, "");
+            setSallaumNotifySubject(`${ref2} ${condLabel2} Request – ${ymm} VIN: ${vin.slice(-6)}`);
+            setSallaumNotifyBody(
+              `Dear Sallaum Team,\n\nPlease be advised that the following vehicle requires ${condLabel2} handling:\n\n` +
+              `Ref#: ${ref2}\nVehicle: ${ymm}\nVIN: ${vin}\nVessel: ${base.vessel||""}\nVoyage: ${base.voyage||""}\nPort of Loading: ${base.pol||""}\n\n` +
+              `Kindly update this booking to reflect the ${condLabel2} status and advise on any additional requirements.\n\nThank you,\nDDG OPS`
+            );
+            setSallaumNotify(true);
+          }
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
           ✉️ Send DR
         </button>
@@ -3903,9 +3970,9 @@ export default function OrderDetails() {
         </div>
       )}
 
-      {/* ── DR Send Modal ── */}
+      {/* ── DR Send Modal (+ optional Sallaum notify side by side) ── */}
       {drSendModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}>
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", gap:16, flexWrap:"wrap", padding:16 }}>
           <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
             <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Dock Receipt</h3>
             {[
@@ -3931,6 +3998,33 @@ export default function OrderDetails() {
               </button>
             </div>
           </div>
+
+          {/* ── Sallaum Non-Runner / Forklift notify card (side by side) ── */}
+          {sallaumNotify && (
+            <div style={{ background:"#1c2130", border:"1px solid #f97316", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
+              <h3 style={{ margin:"0 0 4px", color:"#f97316" }}>🚢 Notify Sallaum</h3>
+              <p style={{ margin:"0 0 16px", fontSize:12, color:"#8b949e" }}>
+                To: <strong style={{color:"#e6edf3"}}>Frontdesk@sallaumlines.us</strong>
+                &nbsp;· CC: <strong style={{color:"#e6edf3"}}>Office@sallaumlines.us</strong>
+              </p>
+              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+                Subject
+                <input value={sallaumNotifySubject} onChange={e => setSallaumNotifySubject(e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+                Message
+                <textarea value={sallaumNotifyBody} onChange={e => setSallaumNotifyBody(e.target.value)} rows={8}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+              </label>
+              <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+                <button onClick={() => setSallaumNotify(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
+                <button onClick={sendSallaumNotify} disabled={sallaumSending} style={{ padding:"8px 20px", background:"#f97316", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                  {sallaumSending ? "Sending…" : "Send to Sallaum"}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
