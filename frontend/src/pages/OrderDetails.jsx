@@ -1706,9 +1706,15 @@ export default function OrderDetails() {
                 return (
                   <button key={t} type="button"
                     onClick={async () => {
+                      if (active) return; // already this type
+                      const clearFields = t === "Container"
+                        // switching to Container → clear RORO vessel/schedule fields
+                        ? { requestType: t, vessel: "", voyage: "", sailDate: "", cutoffDate: "", arrivalDate: "" }
+                        // switching to RORO → clear Container-specific fields
+                        : { requestType: t, containerNumber: "", sealNumber: "" };
                       await fetch(`${API}/api/orders/${id}`, {
                         method:"PUT", headers:{"Content-Type":"application/json"},
-                        body: JSON.stringify({ requestType: t }),
+                        body: JSON.stringify(clearFields),
                       });
                       fetchOrder();
                     }}
