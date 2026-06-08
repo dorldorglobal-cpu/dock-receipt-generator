@@ -3329,6 +3329,17 @@ export default function OrderDetails() {
             setDrPayload(finalPayload);
             setDrWeightOverride(finalPayload.weightKgs || "");
             setShowDrEdit(false);
+            // Save condition + titleStatus back to the order so they persist
+            const orderUpdates = {};
+            if (finalPayload.condition)   orderUpdates.condition   = finalPayload.condition;
+            if (finalPayload.titleStatus) orderUpdates.titleStatus = finalPayload.titleStatus;
+            if (Object.keys(orderUpdates).length) {
+              fetch(`${API}/api/orders/${id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(orderUpdates),
+              }).then(() => fetchOrder()).catch(() => {});
+            }
           }}
           onClose={() => setShowDrEdit(false)}
         />
