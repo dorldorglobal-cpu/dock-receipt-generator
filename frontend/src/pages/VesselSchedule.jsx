@@ -128,7 +128,11 @@ export default function VesselSchedule() {
     try {
       const res  = await fetch(`${API}/api/schedule/update-from-pdfs`, { method:"POST", body:fd });
       const data = await res.json();
-      setResult(data);
+      const uploadedNames = {
+        sallaum: sallaumFile?.name || null,
+        acl:     aclFile?.name     || null,
+      };
+      setResult({ ...data, uploadedNames });
       if (data.success) { fetchSchedule(); setSallaumFile(null); setAclFile(null); }
     } catch (e) {
       setResult({ error: e.message });
@@ -295,6 +299,13 @@ export default function VesselSchedule() {
               {result.success ? (
                 <>
                   <div style={{ fontWeight:700, color:"#22c55e", marginBottom:6 }}>✅ Schedule Updated Successfully</div>
+                  {(result.uploadedNames?.sallaum || result.uploadedNames?.acl) && (
+                    <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>
+                      {result.uploadedNames.sallaum && <span>📄 {result.uploadedNames.sallaum}</span>}
+                      {result.uploadedNames.sallaum && result.uploadedNames.acl && <span> &nbsp;·&nbsp; </span>}
+                      {result.uploadedNames.acl     && <span>📄 {result.uploadedNames.acl}</span>}
+                    </div>
+                  )}
                   <div style={{ fontSize:13, color:"var(--text-secondary)" }}>
                     {result.sallaum > 0 && <span>🚢 Sallaum: <strong>{result.sallaum}</strong> rows &nbsp;·&nbsp; </span>}
                     {result.acl     > 0 && <span>🛳️ ACL: <strong>{result.acl}</strong> rows</span>}
