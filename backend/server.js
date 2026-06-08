@@ -1382,7 +1382,7 @@ mongoose
       checkArrivals(); // run once on startup
       setInterval(checkArrivals, 60 * 60 * 1000); // then every hour
 
-      // ── Daily "New Order" alert — fires every day at 8:00 AM ─────────────
+      // ── Daily "New Order" alert — fires every day at 8:00 AM Eastern ──────
       const sendNewOrderAlert = async () => {
         try {
           const Order = require("./models/Order");
@@ -1435,19 +1435,19 @@ mongoose
         }
       };
 
-      // Schedule to run at 8:00 AM daily
-      const msUntil8AM = () => {
+      // Schedule to run at 12:00 PM UTC = 8:00 AM Eastern Time (EDT, UTC-4)
+      const msUntil8amEastern = () => {
         const now  = new Date();
         const next = new Date(now);
-        next.setHours(8, 0, 0, 0);
-        if (next <= now) next.setDate(next.getDate() + 1);
+        next.setUTCHours(12, 0, 0, 0); // noon UTC = 8 AM EDT
+        if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
         return next - now;
       };
       setTimeout(() => {
         sendNewOrderAlert();
         setInterval(sendNewOrderAlert, 24 * 60 * 60 * 1000);
-      }, msUntil8AM());
-      console.log(`[new-order-alert] Scheduled — first run in ${Math.round(msUntil8AM()/60000)} min`);
+      }, msUntil8amEastern());
+      console.log(`[new-order-alert] Scheduled — first run in ${Math.round(msUntil8amEastern()/60000)} min (8 AM Eastern)`);
     });
   })
   .catch((err) => {
