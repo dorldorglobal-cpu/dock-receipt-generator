@@ -205,8 +205,13 @@ export default function Orders() {
                   )}
                 </td>
                 <td>
-                  <div>{o.customerName}</div>
-                  <small>{o.customerPhone}</small>
+                  <div style={{ fontWeight: 600 }}>{o.customerName}</div>
+                  {o.customerPhone && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 2 }}>📞 {o.customerPhone}</div>
+                  )}
+                  {o.customerEmail && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>✉️ {o.customerEmail}</div>
+                  )}
                   {o.source && (
                     <div style={{ marginTop: 3 }}>
                       <span style={{ fontSize: 10, fontWeight: 700, padding: "1px 6px", borderRadius: 10,
