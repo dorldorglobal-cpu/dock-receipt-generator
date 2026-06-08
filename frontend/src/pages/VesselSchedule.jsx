@@ -106,9 +106,18 @@ export default function VesselSchedule() {
   const [sallaumFile, setSallaumFile] = useState(null);
   const [aclFile, setAclFile]         = useState(null);
   const [uploading, setUploading]     = useState(false);
-  const [result, setResult]           = useState(null);  // { success, deleted, added, error }
+  const [result, setResult]           = useState(null);
+  const [lastUpdate, setLastUpdate]   = useState(null); // { sallaum, acl } from DB
 
-  useEffect(() => { fetchSchedule(); }, []);
+  useEffect(() => { fetchSchedule(); fetchLastUpdate(); }, []);
+
+  const fetchLastUpdate = async () => {
+    try {
+      const res  = await fetch(`${API}/api/schedule/last-update`);
+      const data = await res.json();
+      setLastUpdate(data);
+    } catch {}
+  };
 
   const fetchSchedule = async () => {
     setLoading(true);
@@ -133,7 +142,7 @@ export default function VesselSchedule() {
         acl:     aclFile?.name     || null,
       };
       setResult({ ...data, uploadedNames });
-      if (data.success) { fetchSchedule(); setSallaumFile(null); setAclFile(null); }
+      if (data.success) { fetchSchedule(); fetchLastUpdate(); setSallaumFile(null); setAclFile(null); }
     } catch (e) {
       setResult({ error: e.message });
     }
@@ -258,6 +267,34 @@ export default function VesselSchedule() {
             Upload the latest PDF schedules from Sallaum and ACL. The system will parse both files,
             remove old voyages, and add the new ones automatically.
           </p>
+
+          {/* Last upload info — persists across page visits */}
+          {lastUpdate && (lastUpdate.sallaum || lastUpdate.acl) && (
+            <div style={{
+              marginBottom:20, padding:"12px 16px", borderRadius:10,
+              background:"rgba(34,197,94,0.07)", border:"1px solid rgba(34,197,94,0.25)",
+            }}>
+              <div style={{ fontWeight:700, color:"#22c55e", fontSize:13, marginBottom:6 }}>
+                ✅ Schedule Last Updated
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                {lastUpdate.sallaum && (
+                  <div style={{ fontSize:12, color:"var(--text-secondary)" }}>
+                    🚢 <strong>Sallaum:</strong> 📄 {lastUpdate.sallaum.fileName}
+                    &nbsp;·&nbsp; {lastUpdate.sallaum.rows} rows
+                    &nbsp;·&nbsp; {new Date(lastUpdate.sallaum.updatedAt).toLocaleString()}
+                  </div>
+                )}
+                {lastUpdate.acl && (
+                  <div style={{ fontSize:12, color:"var(--text-secondary)" }}>
+                    🛳️ <strong>ACL:</strong> 📄 {lastUpdate.acl.fileName}
+                    &nbsp;·&nbsp; {lastUpdate.acl.rows} rows
+                    &nbsp;·&nbsp; {new Date(lastUpdate.acl.updatedAt).toLocaleString()}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Drop zones */}
           <div style={{ display:"flex", gap:16, flexWrap:"wrap", marginBottom:24 }}>

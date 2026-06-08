@@ -3,11 +3,22 @@ const router = express.Router();
 const pdfParse = require("pdf-parse");
 const XLSX = require("xlsx");
 const multer = require("multer");
+const mongoose = require("mongoose");
 const ScheduleRow = require("../models/Schedule");
 const { execFile } = require("child_process");
 const os   = require("os");
 const path = require("path");
 const fs   = require("fs");
+
+// ── Lightweight meta doc: tracks last upload per carrier ─────────────────────
+const scheduleMetaSchema = new mongoose.Schema({
+  key:       { type: String, unique: true }, // e.g. "sallaum" | "acl"
+  fileName:  String,
+  rows:      Number,
+  updatedAt: { type: Date, default: Date.now },
+}, { collection: "schedulemeta" });
+const ScheduleMeta = mongoose.models.ScheduleMeta
+  || mongoose.model("ScheduleMeta", scheduleMetaSchema);
 
 // multer: store uploads in memory so we can access req.file.buffer
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -1236,6 +1247,11 @@ router.post("/update-from-pdfs", uploadTwo.fields([
         await ScheduleRow.deleteMany({ carrier: "SALLAUM" });
         await ScheduleRow.insertMany(rows);
         sallaumRows = rows.length;
+        await ScheduleMeta.findOneAndUpdate(
+          { key: "sallaum" },
+          { fileName: req.files.sallaum[0].originalname, rows: sallaumRows, updatedAt: new Date() },
+          { upsert: true, new: true }
+        );
       }
     }
 
@@ -1247,6 +1263,11 @@ router.post("/update-from-pdfs", uploadTwo.fields([
         await ScheduleRow.deleteMany({ carrier: "ACL" });
         await ScheduleRow.insertMany(rows);
         aclRows = rows.length;
+        await ScheduleMeta.findOneAndUpdate(
+          { key: "acl" },
+          { fileName: req.files.acl[0].originalname, rows: aclRows, updatedAt: new Date() },
+          { upsert: true, new: true }
+        );
       }
     }
 
@@ -1259,6 +1280,19 @@ router.post("/update-from-pdfs", uploadTwo.fields([
   } catch (err) {
     console.error("[update-from-pdfs]", err);
     res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/schedule/last-update — returns last upload info for each carrier
+router.get("/last-update", async (req, res) => {
+  try {
+    const [sallaum, acl] = await Promise.all([
+      ScheduleMeta.findOne({ key: "sallaum" }).lean(),
+      ScheduleMeta.findOne({ key: "acl" }).lean(),
+    ]);
+    res.json({ sallaum: sallaum || null, acl: acl || null });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 
