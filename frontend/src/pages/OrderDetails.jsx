@@ -1184,16 +1184,12 @@ export default function OrderDetails() {
     const isSallaum  = (order.shippingLine || payload.shippingLine || "").toUpperCase().includes("SALLAUM");
     const needsNotify = isSallaum && (condition === "nonrunner" || condition === "forklift");
     if (needsNotify) {
-      const condLabel = condition === "forklift" ? "Forklift" : "Non-Runner";
-      const ref  = (order.refNumber || "").replace(/^DDG-/i, "");
+      const condLabel = condition === "forklift" ? "Forklift" : "Nonrunner";
+      const booking = payload.bookingNumber || order.bookingNumber || "";
       const ymm  = payload.vehicleYearMakeModel || [order.year, order.make, order.model].filter(Boolean).join(" ");
       const vin  = payload.vin || order.vin || "";
-      setSallaumNotifySubject(`${ref} ${condLabel} Request – ${ymm} VIN: ${vin.slice(-6)}`);
-      setSallaumNotifyBody(
-        `Dear Sallaum Team,\n\nPlease be advised that the following vehicle requires ${condLabel} handling:\n\n` +
-        `Ref#: ${ref}\nVehicle: ${ymm}\nVIN: ${vin}\nVessel: ${payload.vessel || order.vessel || ""}\nVoyage: ${payload.voyage || order.voyage || ""}\nPort of Loading: ${payload.pol || order.pol || ""}\n\n` +
-        `Kindly update this booking to reflect the ${condLabel} status and advise on any additional requirements.\n\nThank you,\nDDG OPS`
-      );
+      setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)}`);
+      setSallaumNotifyBody(`Please update to ${condLabel}.`);
       setSallaumNotify(true);
     }
 
@@ -1590,14 +1586,10 @@ export default function OrderDetails() {
           const cond2 = (order.condition || "").toLowerCase();
           const isSallaum2 = (order.shippingLine || "").toUpperCase().includes("SALLAUM");
           if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift")) {
-            const condLabel2 = cond2 === "forklift" ? "Forklift" : "Non-Runner";
-            const ref2 = (order.refNumber || "").replace(/^DDG-/i, "");
-            setSallaumNotifySubject(`${ref2} ${condLabel2} Request – ${ymm} VIN: ${vin.slice(-6)}`);
-            setSallaumNotifyBody(
-              `Dear Sallaum Team,\n\nPlease be advised that the following vehicle requires ${condLabel2} handling:\n\n` +
-              `Ref#: ${ref2}\nVehicle: ${ymm}\nVIN: ${vin}\nVessel: ${base.vessel||""}\nVoyage: ${base.voyage||""}\nPort of Loading: ${base.pol||""}\n\n` +
-              `Kindly update this booking to reflect the ${condLabel2} status and advise on any additional requirements.\n\nThank you,\nDDG OPS`
-            );
+            const condLabel2 = cond2 === "forklift" ? "Forklift" : "Nonrunner";
+            const booking2 = order.bookingNumber || "";
+            setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)}`);
+            setSallaumNotifyBody(`Please update to ${condLabel2}.`);
             setSallaumNotify(true);
           }
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
