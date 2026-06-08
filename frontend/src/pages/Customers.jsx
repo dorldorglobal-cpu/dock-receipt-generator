@@ -351,17 +351,26 @@ export default function Customers() {
   };
 
   // ── Duplicate detection ──────────────────────────────────────────────────────
+  // Normalize name: lowercase, collapse spaces, expand common abbreviations
+  const normName = (s) => (s || "").trim().toLowerCase()
+    .replace(/\blimited\b/g, "ltd")
+    .replace(/\bincorporated\b/g, "inc")
+    .replace(/\bcompany\b/g, "co")
+    .replace(/[-_.]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
   const nameCount = {};
   customers.forEach(c => {
-    const k = (c.companyName || "").trim().toLowerCase();
+    const k = normName(c.companyName);
     nameCount[k] = (nameCount[k] || 0) + 1;
   });
-  const isDup = (c) => nameCount[(c.companyName || "").trim().toLowerCase()] > 1;
+  const isDup = (c) => nameCount[normName(c.companyName)] > 1;
   const dupCount = Object.values(nameCount).filter(n => n > 1).reduce((s, n) => s + n, 0);
 
   const openMerge = (c) => {
-    const key = (c.companyName || "").trim().toLowerCase();
-    const group = customers.filter(x => (x.companyName || "").trim().toLowerCase() === key);
+    const key = normName(c.companyName);
+    const group = customers.filter(x => normName(x.companyName) === key);
     setMerging({ group, keepId: group[0]._id });
   };
 
