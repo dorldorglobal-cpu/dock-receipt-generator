@@ -1255,7 +1255,7 @@ export default function OrderDetails() {
       const booking = payload.bookingNumber || order.bookingNumber || "";
       const ymm  = payload.vehicleYearMakeModel || [order.year, order.make, order.model].filter(Boolean).join(" ");
       const vin  = payload.vin || order.vin || "";
-      setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)}`);
+      setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)} ${condLabel.toUpperCase()}`);
       setSallaumNotifyBody(`Please update to ${condLabel}.`);
       setSallaumNotify(true);
     }
@@ -1655,7 +1655,7 @@ export default function OrderDetails() {
           if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift")) {
             const condLabel2 = cond2 === "forklift" ? "Forklift" : "Nonrunner";
             const booking2 = order.bookingNumber || "";
-            setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)}`);
+            setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)} ${condLabel2.toUpperCase()}`);
             setSallaumNotifyBody(`Please update to ${condLabel2}.`);
             setSallaumNotify(true);
           }
@@ -4064,9 +4064,9 @@ export default function OrderDetails() {
         </div>
       )}
 
-      {/* ── DR Send Modal (+ optional Sallaum notify side by side) ── */}
+      {/* ── DR Send Modal ── */}
       {drSendModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", gap:16, flexWrap:"wrap", padding:16 }}>
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
             <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Dock Receipt</h3>
             {[
@@ -4092,33 +4092,35 @@ export default function OrderDetails() {
               </button>
             </div>
           </div>
+        </div>
+      )}
 
-          {/* ── Sallaum Non-Runner / Forklift notify card (side by side) ── */}
-          {sallaumNotify && (
-            <div style={{ background:"#1c2130", border:"1px solid #f97316", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
-              <h3 style={{ margin:"0 0 4px", color:"#f97316" }}>🚢 Notify Sallaum</h3>
-              <p style={{ margin:"0 0 16px", fontSize:12, color:"#8b949e" }}>
-                To: <strong style={{color:"#e6edf3"}}>Frontdesk@sallaumlines.us</strong>
-                &nbsp;· CC: <strong style={{color:"#e6edf3"}}>Office@sallaumlines.us</strong>
-              </p>
-              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
-                Subject
-                <input value={sallaumNotifySubject} onChange={e => setSallaumNotifySubject(e.target.value)}
-                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
-              </label>
-              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
-                Message
-                <textarea value={sallaumNotifyBody} onChange={e => setSallaumNotifyBody(e.target.value)} rows={8}
-                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
-              </label>
-              <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-                <button onClick={() => setSallaumNotify(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
-                <button onClick={sendSallaumNotify} disabled={sallaumSending} style={{ padding:"8px 20px", background:"#f97316", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
-                  {sallaumSending ? "Sending…" : "Send to Sallaum"}
-                </button>
-              </div>
+      {/* ── Sallaum Non-Runner / Forklift notify — independent popup ── */}
+      {sallaumNotify && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2001, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#1c2130", border:"1px solid #f97316", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 4px", color:"#f97316" }}>🚢 Notify Sallaum</h3>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"#8b949e" }}>
+              To: <strong style={{color:"#e6edf3"}}>Frontdesk@sallaumlines.us</strong>
+              &nbsp;· CC: <strong style={{color:"#e6edf3"}}>Office@sallaumlines.us</strong>
+            </p>
+            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+              Subject
+              <input value={sallaumNotifySubject} onChange={e => setSallaumNotifySubject(e.target.value)}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+            </label>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+              Message
+              <textarea value={sallaumNotifyBody} onChange={e => setSallaumNotifyBody(e.target.value)} rows={8}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+            </label>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setSallaumNotify(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
+              <button onClick={sendSallaumNotify} disabled={sallaumSending} style={{ padding:"8px 20px", background:"#f97316", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                {sallaumSending ? "Sending…" : "Send to Sallaum"}
+              </button>
             </div>
-          )}
+          </div>
         </div>
       )}
 
