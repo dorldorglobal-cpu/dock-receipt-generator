@@ -3,6 +3,21 @@ import { useParams, useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
+// ── DR field option lists ─────────────────────────────────────────────────────
+const POL_OPTIONS = ["JACKSONVILLE","BALTIMORE","BRUNSWICK","FREEPORT","DAVISVILLE","WILMINGTON","NEWARK","PROVIDENCE"];
+const POD_OPTIONS = ["LAGOS","TEMA","COTONOU","LOME","DAKAR","ABIDJAN","ACCRA","BANJUL","CONAKRY","FREETOWN","MONROVIA","NOUAKCHOTT"];
+const TERMINAL_MAP = {
+  "SALLAUM|JACKSONVILLE": { name:"SALLAUM TERMINAL",           address:"9828 HECKSCHER DR",   city:"JACKSONVILLE", state:"FL", zip:"32226" },
+  "SALLAUM|BALTIMORE":    { name:"SALLAUM LINES TERMINAL",     address:"2001 FRANKFURST AVE", city:"BALTIMORE",    state:"MD", zip:"21226" },
+  "SALLAUM|BRUNSWICK":    { name:"SALLAUM TERMINAL BRUNSWICK", address:"",                    city:"BRUNSWICK",    state:"GA", zip:"31525" },
+  "SALLAUM|FREEPORT":     { name:"SALLAUM TERMINAL FREEPORT",  address:"",                    city:"FREEPORT",     state:"TX", zip:"77541" },
+  "SALLAUM|DAVISVILLE":   { name:"SALLAUM TERMINAL DAVISVILLE",address:"",                    city:"DAVISVILLE",   state:"RI", zip:"02852" },
+  "ACL|JACKSONVILLE":     { name:"ACL / GRIMALDI JACKSONVILLE",address:"8878 WESTPORT RD",    city:"JACKSONVILLE", state:"FL", zip:"32219" },
+  "ACL|BALTIMORE":        { name:"ACL / GRIMALDI BALTIMORE",   address:"2001 FRANKFURST AVE", city:"BALTIMORE",    state:"MD", zip:"21226" },
+  "ACL|BRUNSWICK":        { name:"ACL / GRIMALDI BRUNSWICK",   address:"",                    city:"BRUNSWICK",    state:"GA", zip:"31525" },
+  "ACL|FREEPORT":         { name:"ACL / GRIMALDI FREEPORT",    address:"",                    city:"FREEPORT",     state:"TX", zip:"77541" },
+};
+
 // defaultSell = fixed sell price pre-fill; hasDesc = show description sub-input
 const feeRows = [
   ["nonRunnerFee",        "Non-runner Fee",                { defaultSell: 400  }],
@@ -1149,6 +1164,10 @@ export default function OrderDetails() {
     }
 
     const base = overridePayload || drPayload || order;
+    const polKey  = (base.pol || base.portOfLoading || "").toUpperCase();
+    const lineKey = (base.shippingLine || "").toUpperCase().includes("ACL") ? "ACL" : "SALLAUM";
+    const terminalKey = `${lineKey}|${polKey}`;
+    const terminalDefaults = TERMINAL_MAP[terminalKey] || {};
     const payload = {
       ...base,
       referenceNumber: base.refNumber || base.referenceNumber,
@@ -1157,8 +1176,13 @@ export default function OrderDetails() {
         `${base.year || ""} ${base.make || ""} ${base.model || ""}`.trim(),
       portOfLoading: base.pol || base.portOfLoading || "",
       portOfDischarge: base.pod || base.portOfDischarge || "",
-      // Apply manual weight override if set
       weightKgs: drWeightOverride || base.weightKgs || "",
+      // Auto-default terminal from shipping line + POL if not already set
+      deliveryName:    base.deliveryName    || terminalDefaults.name    || base.deliveryLocation || "",
+      deliveryAddress: base.deliveryAddress || terminalDefaults.address || "",
+      deliveryCity:    base.deliveryCity    || terminalDefaults.city    || "",
+      deliveryState:   base.deliveryState   || terminalDefaults.state   || "",
+      deliveryZip:     base.deliveryZip     || terminalDefaults.zip     || "",
     };
 
     const res = await fetch(`${API}/generate-pdf`, {
@@ -3444,6 +3468,7 @@ export default function OrderDetails() {
         <DrEditModal
           form={drEditForm}
           onFormChange={setDrEditForm}
+          vessels={scheduleVessels}
           onApply={(finalPayload) => {
             setDrPayload(finalPayload);
             setDrWeightOverride(finalPayload.weightKgs || "");
@@ -4190,7 +4215,7 @@ function DrField({ label, children }) {
   );
 }
 
-function DrEditModal({ form, onFormChange, onApply, onClose }) {
+function DrEditModal({ form, onFormChange, onApply, onClose, vessels = [] }) {
   const set = (k, v) => onFormChange(prev => ({ ...prev, [k]: v }));
 
   const DATE_KEYS = ["sailDate", "arrivalDate", "cutoffDate"];
@@ -4216,6 +4241,31 @@ function DrEditModal({ form, onFormChange, onApply, onClose }) {
       {opts.map(o => <option key={o}>{o}</option>)}
     </select>
   );
+  // ac = autocomplete input with datalist + optional onChange side-effect
+  const ac = (k, ph, options, onPick) => (
+    <>
+      <input value={form[k] || ""} placeholder={ph} list={`dl-${k}`}
+        onChange={e => { set(k, e.target.value); if (onPick) onPick(e.target.value); }}
+        style={IS} />
+      <datalist id={`dl-${k}`}>
+        {options.map(o => <option key={o} value={o} />)}
+      </datalist>
+    </>
+  );
+
+  // When POL or shippingLine changes, auto-fill terminal delivery fields
+  const applyTerminal = (pol, line) => {
+    const key = `${(line||"").toUpperCase().includes("ACL") ? "ACL" : "SALLAUM"}|${(pol||"").toUpperCase()}`;
+    const t = TERMINAL_MAP[key];
+    if (t) onFormChange(prev => ({
+      ...prev,
+      deliveryName:    t.name,
+      deliveryAddress: t.address,
+      deliveryCity:    t.city,
+      deliveryState:   t.state,
+      deliveryZip:     t.zip,
+    }));
+  };
 
   return (
     <div className="modal-backdrop" onClick={onClose}>
@@ -4228,7 +4278,7 @@ function DrEditModal({ form, onFormChange, onApply, onClose }) {
           <DrField label="Port Cutoff">{inp("cutoffDate", "", "date")}</DrField>
           <DrField label="Est. Sail Date">{inp("sailDate", "", "date")}</DrField>
           <DrField label="Est. Arrival Date">{inp("arrivalDate", "", "date")}</DrField>
-          <DrField label="Vessel / Carrier">{inp("vessel", "e.g. GLOVIS SUNLIGHT")}</DrField>
+          <DrField label="Vessel / Carrier">{ac("vessel", "e.g. GLOVIS SUNLIGHT", vessels)}</DrField>
           <DrField label="Voyage">{inp("voyage", "e.g. V.001")}</DrField>
 
           <DrSection title="Booking & AES" />
@@ -4238,8 +4288,8 @@ function DrEditModal({ form, onFormChange, onApply, onClose }) {
           <DrField label="Weight (KGS)">{inp("weightKgs", "e.g. 1802", "number")}</DrField>
 
           <DrSection title="Ports" />
-          <DrField label="Port of Loading">{inp("pol", "e.g. JACKSONVILLE")}</DrField>
-          <DrField label="Port of Discharge">{inp("pod", "e.g. LAGOS")}</DrField>
+          <DrField label="Port of Loading">{ac("pol", "e.g. JACKSONVILLE", POL_OPTIONS, v => applyTerminal(v, form.shippingLine))}</DrField>
+          <DrField label="Port of Discharge">{ac("pod", "e.g. LAGOS", POD_OPTIONS)}</DrField>
           <DrField label="Loading Pier / Terminal">{inp("loadingTerminal", "e.g. SALLAUM TERMINAL")}</DrField>
 
           <DrSection title="Vehicle" />
@@ -4263,13 +4313,13 @@ function DrEditModal({ form, onFormChange, onApply, onClose }) {
           <DrField label="Country">{inp("consigneeCountry", "Country")}</DrField>
 
           <DrSection title="Empty Pick Up" />
-          <DrField label="Name">{inp("pickupName", "Auction / location name")}</DrField>
+          <DrField label="Name">{ac("pickupName", "Auction / location name", ["COPART","IAAI","MANHEIM","ADESA","OPENLANE"].map(n => n))}</DrField>
           <DrField label="Address">{inp("pickupAddress", "Street address")}</DrField>
           <DrField label="City">{inp("pickupCity", "City")}</DrField>
           <DrField label="State">{inp("pickupState", "State")}</DrField>
 
           <DrSection title="Return / Delivery" />
-          <DrField label="Name">{inp("deliveryName", "Port / terminal name")}</DrField>
+          <DrField label="Name">{ac("deliveryName", "Port / terminal name", Object.values(TERMINAL_MAP).map(t => t.name))}</DrField>
           <DrField label="Address">{inp("deliveryAddress", "Street address")}</DrField>
           <DrField label="City">{inp("deliveryCity", "City")}</DrField>
           <DrField label="State">{inp("deliveryState", "State")}</DrField>
