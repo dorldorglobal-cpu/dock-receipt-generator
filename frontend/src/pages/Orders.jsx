@@ -179,6 +179,7 @@ export default function Orders() {
             <th>Customer</th>
             <th style={{ whiteSpace:"nowrap" }}>Req. Date</th>
             <th>Vehicle</th>
+            <th>P/U</th>
             <th>Route</th>
             <th>Vessel</th>
             <th>Status</th>
@@ -230,6 +231,9 @@ export default function Orders() {
                 <td>
                   <div style={{ color: "var(--text-primary)" }}>{o.year} {o.make} {o.model}</div>
                   <small style={{ color: "var(--text-primary)", opacity: 0.7 }}>{o.vin}</small>
+                </td>
+                <td style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                  {o.pickupLocation || o.pickupCity || "—"}
                 </td>
                 <td>{o.pol} → {o.pod}</td>
                 <td>
