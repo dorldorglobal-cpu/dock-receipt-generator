@@ -6,17 +6,8 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 // ── DR field option lists ─────────────────────────────────────────────────────
 const POL_OPTIONS = ["JACKSONVILLE","BALTIMORE","BRUNSWICK","FREEPORT","DAVISVILLE","WILMINGTON","NEWARK","PROVIDENCE"];
 const POD_OPTIONS = ["LAGOS","TEMA","COTONOU","LOME","DAKAR","ABIDJAN","ACCRA","BANJUL","CONAKRY","FREETOWN","MONROVIA","NOUAKCHOTT"];
-const TERMINAL_MAP = {
-  "SALLAUM|JACKSONVILLE": { name:"SALLAUM TERMINAL",           address:"9828 HECKSCHER DR",   city:"JACKSONVILLE", state:"FL", zip:"32226" },
-  "SALLAUM|BALTIMORE":    { name:"SALLAUM LINES TERMINAL",     address:"2001 FRANKFURST AVE", city:"BALTIMORE",    state:"MD", zip:"21226" },
-  "SALLAUM|BRUNSWICK":    { name:"SALLAUM TERMINAL BRUNSWICK", address:"",                    city:"BRUNSWICK",    state:"GA", zip:"31525" },
-  "SALLAUM|FREEPORT":     { name:"SALLAUM TERMINAL FREEPORT",  address:"",                    city:"FREEPORT",     state:"TX", zip:"77541" },
-  "SALLAUM|DAVISVILLE":   { name:"SALLAUM TERMINAL DAVISVILLE",address:"",                    city:"DAVISVILLE",   state:"RI", zip:"02852" },
-  "ACL|JACKSONVILLE":     { name:"ACL / GRIMALDI JACKSONVILLE",address:"8878 WESTPORT RD",    city:"JACKSONVILLE", state:"FL", zip:"32219" },
-  "ACL|BALTIMORE":        { name:"ACL / GRIMALDI BALTIMORE",   address:"2001 FRANKFURST AVE", city:"BALTIMORE",    state:"MD", zip:"21226" },
-  "ACL|BRUNSWICK":        { name:"ACL / GRIMALDI BRUNSWICK",   address:"",                    city:"BRUNSWICK",    state:"GA", zip:"31525" },
-  "ACL|FREEPORT":         { name:"ACL / GRIMALDI FREEPORT",    address:"",                    city:"FREEPORT",     state:"TX", zip:"77541" },
-};
+// TERMINAL_MAP is built dynamically from address book — see drPortEntries state
+const TERMINAL_MAP = {}; // fallback empty — real data comes from address book
 
 // defaultSell = fixed sell price pre-fill; hasDesc = show description sub-input
 const feeRows = [
@@ -256,6 +247,7 @@ export default function OrderDetails() {
   const [oceanRates,        setOceanRates]        = useState([]);
   const [customerList,      setCustomerList]      = useState([]);
   const [customerSearch,    setCustomerSearch]    = useState("");
+  const [drPortEntries,     setDrPortEntries]     = useState([]); // address book ports for DR dropdowns
 
   const [voyages, setVoyages] = useState([]);
   const [voyageSearch, setVoyageSearch] = useState("");
@@ -1060,6 +1052,10 @@ export default function OrderDetails() {
     fetch(`${API}/api/customers?limit=500`)
       .then(r => r.json()).then(d => setCustomerList(Array.isArray(d) ? d : (d.customers || [])))
       .catch(() => {});
+    // Load port/terminal entries from address book for DR dropdowns
+    fetch(`${API}/api/address-book?type=port`)
+      .then(r => r.json()).then(d => setDrPortEntries(Array.isArray(d) ? d : []))
+      .catch(() => {});
     setCustomerSearch("");
     setShowEdit(true);
   };
@@ -1165,9 +1161,17 @@ export default function OrderDetails() {
 
     const base = overridePayload || drPayload || order;
     const polKey  = (base.pol || base.portOfLoading || "").toUpperCase();
-    const lineKey = (base.shippingLine || "").toUpperCase().includes("ACL") ? "ACL" : "SALLAUM";
-    const terminalKey = `${lineKey}|${polKey}`;
-    const terminalDefaults = TERMINAL_MAP[terminalKey] || {};
+    const lineKey = (base.shippingLine || "").toUpperCase();
+    // Look up terminal from address book port entries
+    const termEntry = drPortEntries.find(p => {
+      const name = (p.companyName || "").toUpperCase();
+      const city = (p.city || "").toUpperCase();
+      return (name.includes(polKey) || city.includes(polKey)) &&
+             (lineKey ? name.includes(lineKey.includes("ACL") ? "ACL" : "SALLAUM") : true);
+    });
+    const terminalDefaults = termEntry
+      ? { name: termEntry.companyName, address: termEntry.address, city: termEntry.city, state: termEntry.state, zip: termEntry.postalCode }
+      : {};
     const payload = {
       ...base,
       referenceNumber: base.refNumber || base.referenceNumber,
@@ -3469,6 +3473,7 @@ export default function OrderDetails() {
           form={drEditForm}
           onFormChange={setDrEditForm}
           vessels={scheduleVessels}
+          portEntries={drPortEntries}
           onApply={(finalPayload) => {
             setDrPayload(finalPayload);
             setDrWeightOverride(finalPayload.weightKgs || "");
@@ -4215,7 +4220,7 @@ function DrField({ label, children }) {
   );
 }
 
-function DrEditModal({ form, onFormChange, onApply, onClose, vessels = [] }) {
+function DrEditModal({ form, onFormChange, onApply, onClose, vessels = [], portEntries = [] }) {
   const set = (k, v) => onFormChange(prev => ({ ...prev, [k]: v }));
 
   const DATE_KEYS = ["sailDate", "arrivalDate", "cutoffDate"];
@@ -4253,17 +4258,30 @@ function DrEditModal({ form, onFormChange, onApply, onClose, vessels = [] }) {
     </>
   );
 
-  // When POL or shippingLine changes, auto-fill terminal delivery fields
+  // Find matching port entry from address book by shipping line + POL
+  const findPort = (pol, line) => {
+    if (!portEntries.length) return null;
+    const polUp  = (pol  || "").toUpperCase();
+    const lineUp = (line || "").toUpperCase();
+    return portEntries.find(p => {
+      const name = (p.companyName || "").toUpperCase();
+      const city = (p.city || "").toUpperCase();
+      const matchesPol  = name.includes(polUp) || city.includes(polUp) || polUp === "";
+      const matchesLine = name.includes(lineUp) || lineUp === "";
+      return matchesPol && matchesLine;
+    }) || null;
+  };
+
+  // When POL changes, auto-fill terminal delivery fields from address book
   const applyTerminal = (pol, line) => {
-    const key = `${(line||"").toUpperCase().includes("ACL") ? "ACL" : "SALLAUM"}|${(pol||"").toUpperCase()}`;
-    const t = TERMINAL_MAP[key];
+    const t = findPort(pol, line);
     if (t) onFormChange(prev => ({
       ...prev,
-      deliveryName:    t.name,
-      deliveryAddress: t.address,
-      deliveryCity:    t.city,
-      deliveryState:   t.state,
-      deliveryZip:     t.zip,
+      deliveryName:    t.companyName || prev.deliveryName,
+      deliveryAddress: t.address     || prev.deliveryAddress,
+      deliveryCity:    t.city        || prev.deliveryCity,
+      deliveryState:   t.state       || prev.deliveryState,
+      deliveryZip:     t.postalCode  || prev.deliveryZip,
     }));
   };
 
@@ -4319,7 +4337,10 @@ function DrEditModal({ form, onFormChange, onApply, onClose, vessels = [] }) {
           <DrField label="State">{inp("pickupState", "State")}</DrField>
 
           <DrSection title="Return / Delivery" />
-          <DrField label="Name">{ac("deliveryName", "Port / terminal name", Object.values(TERMINAL_MAP).map(t => t.name))}</DrField>
+          <DrField label="Name">{ac("deliveryName", "Port / terminal name", portEntries.map(p => p.companyName).filter(Boolean), v => {
+            const t = portEntries.find(p => p.companyName === v);
+            if (t) onFormChange(prev => ({ ...prev, deliveryName: t.companyName, deliveryAddress: t.address||"", deliveryCity: t.city||"", deliveryState: t.state||"", deliveryZip: t.postalCode||"" }));
+          })}</DrField>
           <DrField label="Address">{inp("deliveryAddress", "Street address")}</DrField>
           <DrField label="City">{inp("deliveryCity", "City")}</DrField>
           <DrField label="State">{inp("deliveryState", "State")}</DrField>
