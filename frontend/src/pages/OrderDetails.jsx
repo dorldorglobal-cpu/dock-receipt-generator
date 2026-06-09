@@ -239,6 +239,8 @@ export default function OrderDetails() {
   const [oceanEditForm,     setOceanEditForm]     = useState({ pol:"", pod:"", shippingLine:"", sell:"", cost:"", category:"1" });
   const [oceanLooking,      setOceanLooking]      = useState(false);
   const [oceanRates,        setOceanRates]        = useState([]);
+  const [customerList,      setCustomerList]      = useState([]);
+  const [customerSearch,    setCustomerSearch]    = useState("");
 
   const [voyages, setVoyages] = useState([]);
   const [voyageSearch, setVoyageSearch] = useState("");
@@ -1039,6 +1041,11 @@ export default function OrderDetails() {
     // Pre-load ocean rates for Container auto-price lookup
     fetch(`${API}/api/pricing?type=ocean`)
       .then(r => r.json()).then(setOceanRates).catch(() => {});
+    // Load customer list for dropdown
+    fetch(`${API}/api/customers?limit=500`)
+      .then(r => r.json()).then(d => setCustomerList(Array.isArray(d) ? d : (d.customers || [])))
+      .catch(() => {});
+    setCustomerSearch("");
     setShowEdit(true);
   };
 
@@ -1070,6 +1077,26 @@ export default function OrderDetails() {
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ charges: newCharges }),
         });
+      }
+    }
+
+    // If customer changed AND buyer name exists → add buyerName to that customer's buyerAccounts
+    const buyerName = (editForm.buyerName || order.buyerName || "").trim();
+    const newCustomerName = (editForm.customerName || "").trim();
+    const oldCustomerName = (order.customerName || "").trim();
+    if (buyerName && newCustomerName && newCustomerName !== oldCustomerName) {
+      const matchedCustomer = customerList.find(c =>
+        (c.companyName || "").trim().toLowerCase() === newCustomerName.toLowerCase()
+      );
+      if (matchedCustomer) {
+        const existing = matchedCustomer.buyerAccounts || [];
+        if (!existing.map(b => b.toLowerCase()).includes(buyerName.toLowerCase())) {
+          fetch(`${API}/api/customers/${matchedCustomer._id}`, {
+            method: "PUT",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ buyerAccounts: [...existing, buyerName] }),
+          }).catch(() => {});
+        }
       }
     }
 
@@ -2859,7 +2886,27 @@ export default function OrderDetails() {
               Customer
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-              {[["customerName","Customer (Billing)"],["buyerName","Buyer Account (Receipt)"],["contactName","Contact Name"],["customerPhone","Phone / WhatsApp"],["customerEmail","Email"]].map(([k,lbl])=>(
+              {/* Customer dropdown with search */}
+              <label style={{ fontSize: 12, color: "var(--text-secondary)", gridColumn: "1 / -1" }}>
+                Customer (Billing)
+                <input
+                  value={customerSearch !== "" ? customerSearch : (editForm.customerName || "")}
+                  onChange={e => {
+                    setCustomerSearch(e.target.value);
+                    setEditForm(f => ({ ...f, customerName: e.target.value }));
+                  }}
+                  placeholder="Type to search customers…"
+                  list="customer-list-options"
+                  style={{ display:"block", width:"100%", marginTop:4 }}
+                />
+                <datalist id="customer-list-options">
+                  {customerList
+                    .filter(c => !customerSearch || (c.companyName||"").toLowerCase().includes(customerSearch.toLowerCase()))
+                    .slice(0, 50)
+                    .map(c => <option key={c._id} value={c.companyName} />)}
+                </datalist>
+              </label>
+              {[["buyerName","Buyer Account (Receipt)"],["contactName","Contact Name"],["customerPhone","Phone / WhatsApp"],["customerEmail","Email"]].map(([k,lbl])=>(
                 <label key={k} style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                   {lbl}
                   <input value={editForm[k]||""} onChange={e=>setEditForm(f=>({...f,[k]:e.target.value}))}
