@@ -177,6 +177,7 @@ export default function Orders() {
               Ref # <span style={{ fontSize:12 }}>{refSort === "desc" ? "↓" : "↑"}</span>
             </th>
             <th>Customer</th>
+            <th style={{ whiteSpace:"nowrap" }}>Req. Date</th>
             <th>Vehicle</th>
             <th>Route</th>
             <th>Vessel</th>
@@ -222,6 +223,9 @@ export default function Orders() {
                       </span>
                     </div>
                   )}
+                </td>
+                <td style={{ fontSize: 11, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  {o.requestDate ? new Date(o.requestDate).toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"numeric" }) : "—"}
                 </td>
                 <td>
                   <div style={{ color: "var(--text-primary)" }}>{o.year} {o.make} {o.model}</div>
