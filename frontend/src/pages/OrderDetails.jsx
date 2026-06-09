@@ -1267,9 +1267,22 @@ export default function OrderDetails() {
     }
   };
 
+  // Parse one or more emails from a string — handles:
+  //   "a@b.com, c@d.com"
+  //   "Name <a@b.com>, Other Name <c@d.com>"
+  const parseEmails = (str) => {
+    if (!str) return [];
+    return str.split(/[,;]+/).map(s => {
+      const angle = s.match(/<([^>]+)>/);
+      return (angle ? angle[1] : s).trim();
+    }).filter(e => e.includes("@"));
+  };
+
   const sendDrEmail = async () => {
     if (!drSendModal) return;
-    const recipients = [drSendTo, drSendTrucker].map(e => e.trim()).filter(Boolean);
+    const toList     = parseEmails(drSendTo);
+    const truckerList = parseEmails(drSendTrucker);
+    const recipients = [...toList, ...truckerList];
     if (!recipients.length) return alert("Enter at least one email address.");
     setDrSending(true);
     try {
@@ -4070,7 +4083,7 @@ export default function OrderDetails() {
           <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
             <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Dock Receipt</h3>
             {[
-              { label:"Customer Email", value: drSendTo, set: setDrSendTo, placeholder:"customer@example.com" },
+              { label:"Customer Email (separate multiple with commas)", value: drSendTo, set: setDrSendTo, placeholder:"a@b.com, Name <c@d.com>, ..." },
               { label:"Trucker Email (optional)", value: drSendTrucker, set: setDrSendTrucker, placeholder:"trucker@example.com" },
               { label:"Subject", value: drSendSubject, set: setDrSendSubject, placeholder:"Subject" },
             ].map(({ label, value, set, placeholder }) => (
