@@ -99,6 +99,10 @@ function CustomerForm({ form, setForm }) {
         </select>
       </label>
       <label style={{ gridColumn: "1 / -1" }}>
+        Consignee
+        <input {...inp("consignee")} placeholder="Default consignee name" />
+      </label>
+      <label style={{ gridColumn: "1 / -1" }}>
         Buyer Accounts (auction names that belong to this customer)
         <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 6 }}>
           One per line — e.g. GOLDEN NOOR INTERNATIONAL LTD
@@ -172,6 +176,7 @@ function EditModal({ customer, onSave, onClose }) {
     overdue:      customer.overdue      || "",
     notes:        customer.notes        || "",
     defaultPod:     customer.defaultPod   || "",
+    consignee:      customer.consignee    || "",
     buyerAccounts:  customer.buyerAccounts || [],
   });
   const [saving, setSaving] = useState(false);
@@ -518,6 +523,7 @@ export default function Customers() {
               <th>Phone</th>
               <th>Email</th>
               <th>Country</th>
+              <th>Consignee</th>
               <SortTh k="orderCount">Orders</SortTh>
               <SortTh k="lastOrder">Last Order</SortTh>
               <th>Last Status</th>
@@ -574,6 +580,9 @@ export default function Customers() {
 
                 {/* Country */}
                 <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{c.country || "—"}</td>
+
+                {/* Consignee */}
+                <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>{c.consignee || <span style={{ color:"var(--text-muted)" }}>—</span>}</td>
 
                 {/* Order count */}
                 <td>
