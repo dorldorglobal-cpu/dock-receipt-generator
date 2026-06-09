@@ -1165,7 +1165,15 @@ export default function OrderDetails() {
 
     const base = overridePayload || drPayload || order;
     const polKey  = (base.pol || base.portOfLoading || "").toUpperCase();
-    const lineRaw = (base.shippingLine || "").toUpperCase();
+
+    // Derive shipping line from booking number prefix first — this is the ground truth.
+    // If booking starts with ACL/GLL → ACL. SLSE/SLS → Sallaum.
+    // Falls back to shippingLine field if no booking prefix match.
+    const bookingUp = (base.bookingNumber || "").toUpperCase().trim();
+    const lineFromBooking =
+      bookingUp.startsWith("ACL") || bookingUp.startsWith("GLL") ? "ACL" :
+      bookingUp.startsWith("SLSE") || bookingUp.startsWith("SLS") ? "SALLAUM" : "";
+    const lineRaw = lineFromBooking || (base.shippingLine || "").toUpperCase();
     const lineKey = lineRaw.includes("ACL") ? "ACL" : lineRaw.includes("SALLAUM") ? "SALLAUM" : "";
 
     // Always look up the correct terminal from address book by shippingLine + POL
@@ -1185,6 +1193,8 @@ export default function OrderDetails() {
       portOfLoading:   base.pol || base.portOfLoading || "",
       portOfDischarge: base.pod || base.portOfDischarge || "",
       weightKgs:       drWeightOverride || base.weightKgs || "",
+      // Keep shippingLine consistent with booking number
+      shippingLine:    lineFromBooking || base.shippingLine || "",
       // Terminal: address book match by line+POL wins over anything stored
       ...(termEntry ? {
         deliveryName:    termEntry.companyName || "",
