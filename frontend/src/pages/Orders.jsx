@@ -70,7 +70,7 @@ export default function Orders() {
   }
 
   const filtered = orders.filter(o => {
-    const text = `${o.refNumber} ${o.customerName} ${o.vin} ${o.make} ${o.model}`.toLowerCase();
+    const text = `${o.refNumber} ${o.customerName} ${o.vin} ${o.make} ${o.model} ${o.lotNumber || ""}`.toLowerCase();
     const matchSearch  = text.includes(search.toLowerCase());
     const matchTab     = activeTab === "all" || o.status === activeTab;
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
@@ -130,7 +130,7 @@ export default function Orders() {
 
       {/* Toolbar */}
       <div className="orders-toolbar">
-        <input placeholder="Search ref, VIN, customer…" value={search}
+        <input placeholder="Search ref, VIN, customer, lot#…" value={search}
           onChange={e => setSearch(e.target.value)} />
 
         {/* Shipment type filter */}
