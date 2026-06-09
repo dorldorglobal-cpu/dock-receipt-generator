@@ -1239,9 +1239,20 @@ export default function OrderDetails() {
     // Cache base64 for Send DR button
     setLastDrBase64(base64);
 
-    // Open send modal
+    // Open send modal — look up customer's current email fresh so any updates to the
+    // customer record are reflected (e.g. multiple recipients stored on customer)
     setDrSendModal({ pdfBase64: base64, pdfName });
-    setDrSendTo(order.customerEmail || "");
+    let freshEmail = order.customerEmail || "";
+    if (order.customerName) {
+      try {
+        const cRes = await fetch(`${API}/api/customers?search=${encodeURIComponent(order.customerName)}`);
+        const cData = await cRes.json();
+        const match = (Array.isArray(cData) ? cData : (cData.customers || []))
+          .find(c => (c.companyName||"").toLowerCase() === (order.customerName||"").toLowerCase());
+        if (match?.email) freshEmail = match.email;
+      } catch {}
+    }
+    setDrSendTo(freshEmail);
     setDrSendTrucker("");
     setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${payload.vehicleYearMakeModel || ""} VIN: ${(payload.vin || order.vin || "").slice(-6)}`);
     setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${payload.vin || order.vin || ""}\nVessel: ${payload.vessel || ""} | Voyage: ${payload.voyage || ""}\nPort of Loading: ${payload.portOfLoading || ""}\n\nRegards,\nDDG OPS`);
@@ -1658,7 +1669,17 @@ export default function OrderDetails() {
             }
           }
           setDrSendModal({ pdfBase64: b64, pdfName });
-          setDrSendTo(order.customerEmail || "");
+          let freshEmail2 = order.customerEmail || "";
+          if (order.customerName) {
+            try {
+              const cRes2 = await fetch(`${API}/api/customers?search=${encodeURIComponent(order.customerName)}`);
+              const cData2 = await cRes2.json();
+              const match2 = (Array.isArray(cData2) ? cData2 : (cData2.customers || []))
+                .find(c => (c.companyName||"").toLowerCase() === (order.customerName||"").toLowerCase());
+              if (match2?.email) freshEmail2 = match2.email;
+            } catch {}
+          }
+          setDrSendTo(freshEmail2);
           setDrSendTrucker("");
           setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${ymm} VIN: ${vin.slice(-6)}`);
           setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${vin}\nVessel: ${base.vessel||""} | Voyage: ${base.voyage||""}\nPort of Loading: ${base.pol||base.portOfLoading||""}\n\nRegards,\nDor Ldor Global`);
