@@ -2886,14 +2886,27 @@ export default function OrderDetails() {
               Customer
             </p>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 16 }}>
-              {/* Customer dropdown with search */}
+              {/* Customer dropdown with search — auto-fills all customer fields on match */}
               <label style={{ fontSize: 12, color: "var(--text-secondary)", gridColumn: "1 / -1" }}>
                 Customer (Billing)
                 <input
                   value={customerSearch !== "" ? customerSearch : (editForm.customerName || "")}
                   onChange={e => {
-                    setCustomerSearch(e.target.value);
-                    setEditForm(f => ({ ...f, customerName: e.target.value }));
+                    const val = e.target.value;
+                    setCustomerSearch(val);
+                    setEditForm(f => ({ ...f, customerName: val }));
+                    // Auto-fill all customer details when exact match found
+                    const match = customerList.find(c => (c.companyName||"").toLowerCase() === val.toLowerCase());
+                    if (match) {
+                      setEditForm(f => ({
+                        ...f,
+                        customerName:  match.companyName  || f.customerName,
+                        contactName:   match.contactName  || "",
+                        customerPhone: match.phone        || "",
+                        customerEmail: match.email        || "",
+                      }));
+                      setCustomerSearch("");
+                    }
                   }}
                   placeholder="Type to search customers…"
                   list="customer-list-options"
