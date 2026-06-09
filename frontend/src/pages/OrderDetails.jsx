@@ -388,6 +388,10 @@ export default function OrderDetails() {
     fetchVoyages();
     fetchBillVendors();
     fetchOrderInvoices();
+    // Load port/terminal entries from address book on mount so DR generation always has them
+    fetch(`${API}/api/address-book?type=port`)
+      .then(r => r.json()).then(d => setDrPortEntries(Array.isArray(d) ? d : []))
+      .catch(() => {});
   }, []);
 
   const fetchOrderInvoices = async () => {
@@ -1161,32 +1165,40 @@ export default function OrderDetails() {
 
     const base = overridePayload || drPayload || order;
     const polKey  = (base.pol || base.portOfLoading || "").toUpperCase();
-    const lineKey = (base.shippingLine || "").toUpperCase();
-    // Look up terminal from address book port entries
-    const termEntry = drPortEntries.find(p => {
+    const lineRaw = (base.shippingLine || "").toUpperCase();
+    const lineKey = lineRaw.includes("ACL") ? "ACL" : lineRaw.includes("SALLAUM") ? "SALLAUM" : "";
+
+    // Always look up the correct terminal from address book by shippingLine + POL
+    // This prevents stale stored delivery fields from showing the wrong carrier terminal
+    const termEntry = lineKey && polKey ? drPortEntries.find(p => {
       const name = (p.companyName || "").toUpperCase();
-      const city = (p.city || "").toUpperCase();
-      return (name.includes(polKey) || city.includes(polKey)) &&
-             (lineKey ? name.includes(lineKey.includes("ACL") ? "ACL" : "SALLAUM") : true);
-    });
-    const terminalDefaults = termEntry
-      ? { name: termEntry.companyName, address: termEntry.address, city: termEntry.city, state: termEntry.state, zip: termEntry.postalCode }
-      : {};
+      const city = (p.city        || "").toUpperCase();
+      return name.includes(lineKey) && (name.includes(polKey) || city.includes(polKey));
+    }) : null;
+
     const payload = {
       ...base,
       referenceNumber: base.refNumber || base.referenceNumber,
       vehicleYearMakeModel:
         base.vehicleYearMakeModel ||
         `${base.year || ""} ${base.make || ""} ${base.model || ""}`.trim(),
-      portOfLoading: base.pol || base.portOfLoading || "",
+      portOfLoading:   base.pol || base.portOfLoading || "",
       portOfDischarge: base.pod || base.portOfDischarge || "",
-      weightKgs: drWeightOverride || base.weightKgs || "",
-      // Auto-default terminal from shipping line + POL if not already set
-      deliveryName:    base.deliveryName    || terminalDefaults.name    || base.deliveryLocation || "",
-      deliveryAddress: base.deliveryAddress || terminalDefaults.address || "",
-      deliveryCity:    base.deliveryCity    || terminalDefaults.city    || "",
-      deliveryState:   base.deliveryState   || terminalDefaults.state   || "",
-      deliveryZip:     base.deliveryZip     || terminalDefaults.zip     || "",
+      weightKgs:       drWeightOverride || base.weightKgs || "",
+      // Terminal: address book match by line+POL wins over anything stored
+      ...(termEntry ? {
+        deliveryName:    termEntry.companyName || "",
+        deliveryAddress: termEntry.address     || "",
+        deliveryCity:    termEntry.city        || "",
+        deliveryState:   termEntry.state       || "",
+        deliveryZip:     termEntry.postalCode  || "",
+      } : {
+        deliveryName:    base.deliveryName    || base.deliveryLocation || "",
+        deliveryAddress: base.deliveryAddress || "",
+        deliveryCity:    base.deliveryCity    || "",
+        deliveryState:   base.deliveryState   || "",
+        deliveryZip:     base.deliveryZip     || "",
+      }),
     };
 
     const res = await fetch(`${API}/generate-pdf`, {
