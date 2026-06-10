@@ -2177,7 +2177,7 @@ export default function OrderDetails() {
               };
 
               return (
-                <tr key={f.id} onClick={() => setDocPreview({ name: f.name, url: f.webViewLink, label })}
+                <tr key={f.id} onClick={() => setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label })}
                   style={{ cursor: "pointer" }}>
                   <td>{f.name}</td>
                   <td>
@@ -4199,9 +4199,35 @@ export default function OrderDetails() {
       )}
 
       {/* ── Doc Preview Popup ── */}
-      {docPreview && (
+      {docPreview && (() => {
+        const previewIndex = driveFiles.findIndex(f => f.id === docPreview.id);
+        const hasPrev = previewIndex > 0;
+        const hasNext = previewIndex < driveFiles.length - 1;
+        const goTo = (idx) => {
+          const f = driveFiles[idx];
+          if (f) setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label: f.label });
+        };
+        return (
         <div className="modal-backdrop" onClick={() => setDocPreview(null)}
           style={{ zIndex: 1000 }}>
+          {/* Prev arrow */}
+          {hasPrev && (
+            <button onClick={e => { e.stopPropagation(); goTo(previewIndex - 1); }}
+              style={{ position:"fixed", left:12, top:"50%", transform:"translateY(-50%)", zIndex:1001,
+                background:"rgba(0,0,0,0.6)", border:"none", borderRadius:"50%", width:44, height:44,
+                color:"#fff", fontSize:22, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              ‹
+            </button>
+          )}
+          {/* Next arrow */}
+          {hasNext && (
+            <button onClick={e => { e.stopPropagation(); goTo(previewIndex + 1); }}
+              style={{ position:"fixed", right:12, top:"50%", transform:"translateY(-50%)", zIndex:1001,
+                background:"rgba(0,0,0,0.6)", border:"none", borderRadius:"50%", width:44, height:44,
+                color:"#fff", fontSize:22, cursor:"pointer", display:"flex", alignItems:"center", justifyContent:"center" }}>
+              ›
+            </button>
+          )}
           <div onClick={e => e.stopPropagation()}
             style={{
               background: "var(--bg-card)", borderRadius: 12, overflow: "hidden",
@@ -4211,6 +4237,7 @@ export default function OrderDetails() {
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between",
               padding: "10px 16px", borderBottom: "1px solid var(--border)", flexShrink: 0 }}>
               <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-primary)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {previewIndex >= 0 && <span style={{ color:"var(--text-muted)", marginRight:8, fontSize:11 }}>{previewIndex + 1} / {driveFiles.length}</span>}
                 {docPreview.name}
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
@@ -4251,7 +4278,8 @@ export default function OrderDetails() {
             />
           </div>
         </div>
-      )}
+        );
+      })()}
     </div>
   );
 }
