@@ -400,17 +400,29 @@ export default function OrderDetails() {
       .then(async ({ accessToken }) => {
         if (!accessToken) return;
         const headers = { Authorization: `Bearer ${accessToken}` };
-        const [savedRes, otherRes] = await Promise.all([
-          fetch("https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000", { headers }),
-          fetch("https://people.googleapis.com/v1/otherContacts?readMask=names,emailAddresses&pageSize=1000", { headers }),
-        ]);
-        const [savedData, otherData] = await Promise.all([savedRes.json(), otherRes.json()]);
         const toContacts = (list) => (list || [])
           .filter(p => p.emailAddresses?.length)
           .map(p => ({ name: p.names?.[0]?.displayName || "", emails: p.emailAddresses.map(e => e.value) }))
           .filter(c => c.emails.length);
-        const all = [...toContacts(savedData.connections), ...toContacts(otherData.otherContacts)];
-        console.log("[Contacts] saved:", savedData.connections?.length, "other:", otherData.otherContacts?.length, "total with email:", all.length);
+
+        // Fetch all pages of saved contacts
+        const fetchAllPages = async (baseUrl, listKey) => {
+          let all = [], pageToken = null;
+          do {
+            const url = baseUrl + (pageToken ? `&pageToken=${pageToken}` : "");
+            const data = await fetch(url, { headers }).then(r => r.json());
+            all = all.concat(toContacts(data[listKey]));
+            pageToken = data.nextPageToken || null;
+          } while (pageToken);
+          return all;
+        };
+
+        const [saved, other] = await Promise.all([
+          fetchAllPages("https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000", "connections"),
+          fetchAllPages("https://people.googleapis.com/v1/otherContacts?readMask=names,emailAddresses&pageSize=1000", "otherContacts"),
+        ]);
+        const all = [...saved, ...other];
+        console.log("[Contacts] saved:", saved.length, "other:", other.length, "total:", all.length);
         setGoogleContacts(all);
       })
       .catch(err => console.error("[Contacts error]", err));
