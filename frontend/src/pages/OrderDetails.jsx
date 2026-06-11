@@ -394,9 +394,28 @@ export default function OrderDetails() {
     fetch(`${API}/api/address-book?type=port`)
       .then(r => r.json()).then(d => setDrPortEntries(Array.isArray(d) ? d : []))
       .catch(() => {});
-    // Load Google contacts for email autocomplete
-    fetch(`${API}/api/google-contacts`)
-      .then(r => r.json()).then(d => setGoogleContacts(Array.isArray(d) ? d : []))
+    // Load Google contacts for email autocomplete (fetched client-side to avoid server network restrictions)
+    fetch(`${API}/api/google-access-token`)
+      .then(r => r.json())
+      .then(({ accessToken }) => {
+        if (!accessToken) return;
+        return fetch(
+          "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000",
+          { headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+      })
+      .then(r => r?.json())
+      .then(data => {
+        if (!data?.connections) return;
+        const contacts = data.connections
+          .filter(p => p.emailAddresses?.length)
+          .map(p => ({
+            name: p.names?.[0]?.displayName || "",
+            emails: p.emailAddresses.map(e => e.value),
+          }))
+          .filter(c => c.emails.length);
+        setGoogleContacts(contacts);
+      })
       .catch(() => {});
   }, []);
 
