@@ -426,6 +426,7 @@ export default function OrderDetails() {
         setGoogleContacts(all);
       })
       .catch(err => console.error("[Contacts error]", err));
+    return () => { document.title = "DOR LDOR GLOBAL OPS"; };
   }, []);
 
   const fetchOrderInvoices = async () => {
@@ -451,6 +452,7 @@ export default function OrderDetails() {
     const data = await res.json();
 
     setOrder(data);
+    document.title = `${data.refNumber || "Order"} | DOR LDOR GLOBAL OPS`;
     fetchBills(data.refNumber);
     setNoteText(data.notes || "");
     setHoldNote(data.holdNote || "");
