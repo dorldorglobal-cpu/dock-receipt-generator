@@ -410,9 +410,10 @@ export default function OrderDetails() {
           .map(p => ({ name: p.names?.[0]?.displayName || "", emails: p.emailAddresses.map(e => e.value) }))
           .filter(c => c.emails.length);
         const all = [...toContacts(savedData.connections), ...toContacts(otherData.otherContacts)];
+        console.log("[Contacts] saved:", savedData.connections?.length, "other:", otherData.otherContacts?.length, "total with email:", all.length);
         setGoogleContacts(all);
       })
-      .catch(() => {});
+      .catch(err => console.error("[Contacts error]", err));
   }, []);
 
   const fetchOrderInvoices = async () => {
