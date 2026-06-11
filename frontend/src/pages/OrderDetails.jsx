@@ -397,24 +397,20 @@ export default function OrderDetails() {
     // Load Google contacts for email autocomplete (fetched client-side to avoid server network restrictions)
     fetch(`${API}/api/google-access-token`)
       .then(r => r.json())
-      .then(({ accessToken }) => {
+      .then(async ({ accessToken }) => {
         if (!accessToken) return;
-        return fetch(
-          "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000",
-          { headers: { Authorization: `Bearer ${accessToken}` } }
-        );
-      })
-      .then(r => r?.json())
-      .then(data => {
-        if (!data?.connections) return;
-        const contacts = data.connections
+        const headers = { Authorization: `Bearer ${accessToken}` };
+        const [savedRes, otherRes] = await Promise.all([
+          fetch("https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000", { headers }),
+          fetch("https://people.googleapis.com/v1/otherContacts?readMask=names,emailAddresses&pageSize=1000", { headers }),
+        ]);
+        const [savedData, otherData] = await Promise.all([savedRes.json(), otherRes.json()]);
+        const toContacts = (list) => (list || [])
           .filter(p => p.emailAddresses?.length)
-          .map(p => ({
-            name: p.names?.[0]?.displayName || "",
-            emails: p.emailAddresses.map(e => e.value),
-          }))
+          .map(p => ({ name: p.names?.[0]?.displayName || "", emails: p.emailAddresses.map(e => e.value) }))
           .filter(c => c.emails.length);
-        setGoogleContacts(contacts);
+        const all = [...toContacts(savedData.connections), ...toContacts(otherData.otherContacts)];
+        setGoogleContacts(all);
       })
       .catch(() => {});
   }, []);
