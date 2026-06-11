@@ -1258,6 +1258,30 @@ async function getGmailAccessToken() {
   return data.access_token;
 }
 
+// GET /api/google-contacts
+app.get("/api/google-contacts", async (req, res) => {
+  try {
+    const accessToken = await getGmailAccessToken();
+    const resp = await fetch(
+      "https://people.googleapis.com/v1/people/me/connections?personFields=names,emailAddresses&pageSize=1000",
+      { headers: { Authorization: `Bearer ${accessToken}` } }
+    );
+    const data = await resp.json();
+    if (!resp.ok) throw new Error(data.error?.message || "Failed to fetch contacts");
+    const contacts = (data.connections || [])
+      .filter(p => p.emailAddresses?.length)
+      .map(p => ({
+        name: p.names?.[0]?.displayName || "",
+        emails: p.emailAddresses.map(e => e.value),
+      }))
+      .filter(c => c.emails.length);
+    res.json(contacts);
+  } catch (err) {
+    console.error("Contacts error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // POST /api/send-email  { to, subject, body, pdfBase64, pdfName }
 app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) => {
   try {

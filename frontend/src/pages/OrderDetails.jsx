@@ -377,6 +377,8 @@ export default function OrderDetails() {
   const [drSending,    setDrSending]    = useState(false);
   const [lastDrBase64, setLastDrBase64] = useState(null); // cached after last generation
 
+  const [googleContacts, setGoogleContacts] = useState([]);
+
   // Sallaum nonrunner/forklift notify popup
   const [sallaumNotify,        setSallaumNotify]        = useState(false);
   const [sallaumNotifySubject, setSallaumNotifySubject] = useState("");
@@ -391,6 +393,10 @@ export default function OrderDetails() {
     // Load port/terminal entries from address book on mount so DR generation always has them
     fetch(`${API}/api/address-book?type=port`)
       .then(r => r.json()).then(d => setDrPortEntries(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    // Load Google contacts for email autocomplete
+    fetch(`${API}/api/google-contacts`)
+      .then(r => r.json()).then(d => setGoogleContacts(Array.isArray(d) ? d : []))
       .catch(() => {});
   }, []);
 
@@ -4113,14 +4119,20 @@ export default function OrderDetails() {
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
             <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Dock Receipt</h3>
+            <datalist id="contacts-list">
+              {googleContacts.flatMap(c => c.emails.map(e => (
+                <option key={`${c.name}-${e}`} value={e} label={c.name} />
+              )))}
+            </datalist>
             {[
-              { label:"Customer Email (separate multiple with commas)", value: drSendTo, set: setDrSendTo, placeholder:"a@b.com, Name <c@d.com>, ..." },
-              { label:"Trucker Email (optional)", value: drSendTrucker, set: setDrSendTrucker, placeholder:"trucker@example.com" },
+              { label:"Customer Email (separate multiple with commas)", value: drSendTo, set: setDrSendTo, placeholder:"a@b.com, Name <c@d.com>, ...", list:"contacts-list" },
+              { label:"Trucker Email (optional)", value: drSendTrucker, set: setDrSendTrucker, placeholder:"trucker@example.com", list:"contacts-list" },
               { label:"Subject", value: drSendSubject, set: setDrSendSubject, placeholder:"Subject" },
-            ].map(({ label, value, set, placeholder }) => (
+            ].map(({ label, value, set, placeholder, list }) => (
               <label key={label} style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
                 {label}
                 <input value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
+                  list={list}
                   style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
               </label>
             ))}
