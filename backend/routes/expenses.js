@@ -1330,35 +1330,16 @@ router.post("/parse-storage-url", express.json(), async (req, res) => {
 
     // Fetch from Google Drive proxy
     const Order = require("../models/Order");
-    let buffer;
-    if (url.startsWith("http://localhost") || url.includes("/api/drive-proxy")) {
-      const urlPath = new URL(url).pathname;
-      const baseUploads = path.join(__dirname, "../uploads");
-      const filePath = path.join(baseUploads, ...urlPath.replace(/^\/uploads\//, "").split("/").map(decodeURIComponent));
-      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found" });
-      buffer = fs.readFileSync(filePath);
-    } else {
-      // Google Drive — fetch via drive proxy
-      const driveIdMatch = url.match(/\/d\/([^/]+)/) || url.match(/id=([^&]+)/);
-      if (!driveIdMatch) return res.status(400).json({ error: "Cannot resolve file URL" });
-      const driveId = driveIdMatch[1];
-      const tokenRes = await fetch(`https://oauth2.googleapis.com/token`, {
-        method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: [
-          `client_id=${encodeURIComponent(process.env.GMAIL_CLIENT_ID)}`,
-          `client_secret=${encodeURIComponent(process.env.GMAIL_CLIENT_SECRET)}`,
-          `refresh_token=${encodeURIComponent(process.env.GMAIL_REFRESH_TOKEN)}`,
-          `grant_type=refresh_token`,
-        ].join("&"),
-      });
-      const tokenData = await tokenRes.json();
-      if (!tokenData.access_token) throw new Error("Could not get access token");
-      const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`, {
-        headers: { Authorization: `Bearer ${tokenData.access_token}` },
-      });
-      buffer = Buffer.from(await fileRes.arrayBuffer());
-    }
+    const { drive } = require("../googleDrive");
+
+    // Extract Drive file ID from the webViewLink
+    const driveIdMatch = url.match(/\/d\/([^/?]+)/) || url.match(/[?&]id=([^&]+)/);
+    if (!driveIdMatch) return res.status(400).json({ error: "Cannot resolve Drive file ID from URL" });
+    const driveId = driveIdMatch[1];
+
+    // Use the existing Drive client (same one used by the proxy endpoint)
+    const fileRes = await drive.files.get({ fileId: driveId, alt: "media" }, { responseType: "arraybuffer" });
+    const buffer = Buffer.from(fileRes.data);
 
     const pdfParse = require("pdf-parse");
     const { text } = await pdfParse(buffer);
