@@ -379,6 +379,7 @@ export default function OrderDetails() {
 
   const [googleContacts, setGoogleContacts] = useState([]);
   const [storageConfirm, setStorageConfirm] = useState(null); // { parsed, file }
+  const [storageSellPrice, setStorageSellPrice] = useState("");
 
   // Sallaum nonrunner/forklift notify popup
   const [sallaumNotify,        setSallaumNotify]        = useState(false);
@@ -2208,6 +2209,7 @@ export default function OrderDetails() {
                   const data = await res.json();
                   if (!res.ok) throw new Error(data.error || "Parse failed");
                   setMessage("");
+                  setStorageSellPrice("");
                   setStorageConfirm({ parsed: data, file: f });
                 } catch(e) {
                   alert("Failed: " + e.message);
@@ -4262,8 +4264,29 @@ export default function OrderDetails() {
           if (parsed.yard) body.append("notes", `Sale Yard: ${parsed.yard}`);
           const res = await fetch(`${API}/api/expenses`, { method: "POST", body });
           if (!res.ok) throw new Error("Failed to create expense");
+
+          // Add to invoice if sell price provided
+          const sellAmt = parseFloat(storageSellPrice);
+          if (sellAmt > 0) {
+            const newItem = { description: `Storage Fee${parsed.lotNumber ? ` – Lot ${parsed.lotNumber}` : ""}`, amount: sellAmt };
+            const invoicePayload = { items: [...(orderInvoices[0]?.items || []), newItem] };
+            if (orderInvoices.length > 0) {
+              await fetch(`${API}/api/invoices/${orderInvoices[0]._id}`, {
+                method: "PUT", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(invoicePayload),
+              });
+            } else {
+              await fetch(`${API}/api/invoices`, {
+                method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ orderId: order._id, ...invoicePayload }),
+              });
+            }
+            fetchOrderInvoices();
+          }
+
           setStorageConfirm(null);
-          setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}.`);
+          setStorageSellPrice("");
+          setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}${sellAmt > 0 ? " · added to invoice" : ""}.`);
           fetchBills(order.refNumber);
         };
         return (
@@ -4286,6 +4309,19 @@ export default function OrderDetails() {
                   </div>
                 ))}
               </div>
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+                Sell Price (adds to customer invoice — leave blank to skip)
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                  <span style={{ color:"#e6edf3" }}>$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={storageSellPrice}
+                    onChange={e => setStorageSellPrice(e.target.value)}
+                    placeholder="0.00"
+                    style={{ flex:1, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13 }}
+                  />
+                </div>
+              </label>
               <p style={{ margin:"0 0 18px", fontSize:13, color:"#8b949e" }}>Mark this bill as <strong style={{color:"#34d399"}}>PAID</strong>? (You usually pay with credit card)</p>
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
                 <button onClick={() => setStorageConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
