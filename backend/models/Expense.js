@@ -4,6 +4,7 @@ const CATEGORIES = [
   "Towing / Transport",
   "Ocean Freight",
   "Port / Terminal Fees",
+  "Storage Fees",
   "Loaders & Warehouses",
   "Software",
   "Legal Fees",

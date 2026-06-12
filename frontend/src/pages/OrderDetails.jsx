@@ -4244,7 +4244,7 @@ export default function OrderDetails() {
         const { parsed } = storageConfirm;
         const submitStorageBill = async (markPaid) => {
           const body = new FormData();
-          body.append("category", "Storage");
+          body.append("category", "Storage Fees");
           body.append("description", `Storage Fee – ${order.refNumber}${parsed.lotNumber ? ` (Lot ${parsed.lotNumber})` : ""}`);
           body.append("vendor", parsed.vendor || "Copart");
           body.append("amount", parsed.amount || 0);
