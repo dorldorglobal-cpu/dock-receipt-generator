@@ -378,6 +378,7 @@ export default function OrderDetails() {
   const [lastDrBase64, setLastDrBase64] = useState(null); // cached after last generation
 
   const [googleContacts, setGoogleContacts] = useState([]);
+  const [storageConfirm, setStorageConfirm] = useState(null); // { parsed, file }
 
   // Sallaum nonrunner/forklift notify popup
   const [sallaumNotify,        setSallaumNotify]        = useState(false);
@@ -2199,32 +2200,15 @@ export default function OrderDetails() {
               const createStorageBill = async () => {
                 try {
                   setMessage("Parsing storage receipt...");
-                  const res = await fetch(`${API}/api/expenses/parse-dispatch-url`, {
+                  const res = await fetch(`${API}/api/expenses/parse-storage-url`, {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
                   });
                   const data = await res.json();
                   if (!res.ok) throw new Error(data.error || "Parse failed");
-                  const row = Array.isArray(data) ? data[0] : data;
-                  const amount = row.total || 0;
-                  const markPaid = window.confirm(
-                    `Storage receipt parsed.\nAmount: $${amount.toFixed(2)}\n\nMark as PAID (credit card)?`
-                  );
-                  const body = new FormData();
-                  body.append("category", "Storage");
-                  body.append("description", `Storage Fee – ${order.refNumber}`);
-                  body.append("vendor", "");
-                  body.append("amount", amount);
-                  body.append("date", new Date().toISOString().slice(0, 10));
-                  body.append("orderId", order._id);
-                  body.append("orderRef", order.refNumber);
-                  body.append("status", markPaid ? "paid" : "unpaid");
-                  if (markPaid) body.append("paidDate", new Date().toISOString().slice(0, 10));
-                  if (row.notes) body.append("notes", row.notes);
-                  const createRes = await fetch(`${API}/api/expenses`, { method: "POST", body });
-                  if (!createRes.ok) throw new Error("Failed to create expense");
-                  setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}.`);
+                  setMessage("");
+                  setStorageConfirm({ parsed: data, file: f });
                 } catch(e) {
                   alert("Failed: " + e.message);
                   setMessage("❌ " + e.message);
@@ -4254,6 +4238,56 @@ export default function OrderDetails() {
           </div>
         </div>
       )}
+
+      {/* ── Storage Bill Confirm Modal ── */}
+      {storageConfirm && (() => {
+        const { parsed } = storageConfirm;
+        const submitStorageBill = async (markPaid) => {
+          const body = new FormData();
+          body.append("category", "Storage");
+          body.append("description", `Storage Fee – ${order.refNumber}${parsed.lotNumber ? ` (Lot ${parsed.lotNumber})` : ""}`);
+          body.append("vendor", parsed.vendor || "Copart");
+          body.append("amount", parsed.amount || 0);
+          body.append("date", parsed.date ? new Date(parsed.date).toISOString().slice(0,10) : new Date().toISOString().slice(0,10));
+          body.append("orderId", order._id);
+          body.append("orderRef", order.refNumber);
+          body.append("status", markPaid ? "paid" : "unpaid");
+          if (markPaid) body.append("paidDate", new Date().toISOString().slice(0,10));
+          if (parsed.yard) body.append("notes", `Sale Yard: ${parsed.yard}`);
+          const res = await fetch(`${API}/api/expenses`, { method: "POST", body });
+          if (!res.ok) throw new Error("Failed to create expense");
+          setStorageConfirm(null);
+          setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}.`);
+        };
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
+              <h3 style={{ margin:"0 0 16px", color:"#e6edf3" }}>🏬 Storage Receipt Parsed</h3>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 16px", marginBottom:20, fontSize:13 }}>
+                {[
+                  ["Vendor", parsed.vendor],
+                  ["Amount", parsed.amount ? `$${parsed.amount.toFixed(2)}` : "—"],
+                  ["Lot #", parsed.lotNumber || "—"],
+                  ["Date", parsed.date || "—"],
+                  ["Vehicle", parsed.ymm || "—"],
+                  ["Yard", parsed.yard || "—"],
+                ].map(([k,v]) => (
+                  <div key={k}>
+                    <div style={{ fontSize:11, color:"#8b949e" }}>{k}</div>
+                    <div style={{ color:"#e6edf3", fontWeight:600 }}>{v}</div>
+                  </div>
+                ))}
+              </div>
+              <p style={{ margin:"0 0 18px", fontSize:13, color:"#8b949e" }}>Mark this bill as <strong style={{color:"#34d399"}}>PAID</strong>? (You usually pay with credit card)</p>
+              <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+                <button onClick={() => setStorageConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+                <button onClick={() => submitStorageBill(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#e6edf3", cursor:"pointer" }}>Save Unpaid</button>
+                <button onClick={() => submitStorageBill(true)} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Mark Paid</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* ── Invoice Send Modal ── */}
       {invoiceSendModal && (

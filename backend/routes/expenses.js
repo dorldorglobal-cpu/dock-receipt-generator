@@ -1322,6 +1322,83 @@ router.post("/apply-misc", express.json(), async (req, res) => {
   }
 });
 
+// ── POST /api/expenses/parse-storage-url — parse Copart/auction storage receipt ──
+router.post("/parse-storage-url", express.json(), async (req, res) => {
+  try {
+    const { url, filename, orderRef, orderId } = req.body;
+    if (!url) return res.status(400).json({ error: "url required" });
+
+    // Fetch from Google Drive proxy
+    const Order = require("../models/Order");
+    let buffer;
+    if (url.startsWith("http://localhost") || url.includes("/api/drive-proxy")) {
+      const urlPath = new URL(url).pathname;
+      const baseUploads = path.join(__dirname, "../uploads");
+      const filePath = path.join(baseUploads, ...urlPath.replace(/^\/uploads\//, "").split("/").map(decodeURIComponent));
+      if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found" });
+      buffer = fs.readFileSync(filePath);
+    } else {
+      // Google Drive — fetch via drive proxy
+      const driveIdMatch = url.match(/\/d\/([^/]+)/) || url.match(/id=([^&]+)/);
+      if (!driveIdMatch) return res.status(400).json({ error: "Cannot resolve file URL" });
+      const driveId = driveIdMatch[1];
+      const tokenRes = await fetch(`https://oauth2.googleapis.com/token`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: [
+          `client_id=${encodeURIComponent(process.env.GMAIL_CLIENT_ID)}`,
+          `client_secret=${encodeURIComponent(process.env.GMAIL_CLIENT_SECRET)}`,
+          `refresh_token=${encodeURIComponent(process.env.GMAIL_REFRESH_TOKEN)}`,
+          `grant_type=refresh_token`,
+        ].join("&"),
+      });
+      const tokenData = await tokenRes.json();
+      if (!tokenData.access_token) throw new Error("Could not get access token");
+      const fileRes = await fetch(`https://www.googleapis.com/drive/v3/files/${driveId}?alt=media`, {
+        headers: { Authorization: `Bearer ${tokenData.access_token}` },
+      });
+      buffer = Buffer.from(await fileRes.arrayBuffer());
+    }
+
+    const pdfParse = require("pdf-parse");
+    const { text } = await pdfParse(buffer);
+
+    // Parse Copart-style storage receipt
+    const amountMatch = text.match(/\$([\d,]+(?:\.\d{2})?)\s*USD/i);
+    const amount = amountMatch ? parseFloat(amountMatch[1].replace(/,/g, "")) : 0;
+
+    const lotMatch = text.match(/Invoice\s*\/\s*lot\s*#\s*[:\-]?\s*(\d+)/i);
+    const lotNumber = lotMatch?.[1] || "";
+
+    const dateMatch = text.match(/Date\s+submitted\s*[:\-]?\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    const date = dateMatch?.[1] || "";
+
+    const ymmMatch = text.match(/(\d{4})\s+([A-Z][A-Z0-9a-z]+)\s+([A-Z0-9a-z ]+?)(?:\n|Sale yard|$)/m);
+    const ymm = ymmMatch ? `${ymmMatch[1]} ${ymmMatch[2]} ${ymmMatch[3].trim()}` : "";
+
+    const yardMatch = text.match(/Sale\s+yard\s*[:\-]?\s*([^\n]+)/i);
+    const yard = yardMatch?.[1]?.trim() || "";
+
+    const vendor = text.toLowerCase().includes("copart") ? "Copart" :
+                   text.toLowerCase().includes("iaai") ? "IAAI" : "Auction";
+
+    // Try to match order
+    let matchedOrder = null;
+    if (orderId) {
+      matchedOrder = await Order.findById(orderId).select("refNumber _id").lean();
+    }
+
+    res.json({
+      amount, lotNumber, date, ymm, yard, vendor,
+      orderId:  matchedOrder?._id  || orderId  || null,
+      orderRef: matchedOrder?.refNumber || orderRef || "",
+    });
+  } catch (err) {
+    console.error("parse-storage-url error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── DELETE /api/expenses/:id ──────────────────────────────────────────────────
 router.delete("/:id", async (req, res) => {
   try {
