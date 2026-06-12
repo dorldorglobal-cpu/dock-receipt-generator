@@ -2135,6 +2135,7 @@ export default function OrderDetails() {
             { label:"Stamped DR",         icon:"📌" },
             { label:"Draft",              icon:"📝" },
             { label:"Rated Draft",        icon:"🧮" },
+            { label:"Storage Paid",       icon:"🏬" },
             { label:"Other",              icon:"📎" },
           ].map(({ label, icon }) => {
             const busy = (uploadingLabels[label] || 0) > 0;
@@ -2193,6 +2194,42 @@ export default function OrderDetails() {
               const label = match?.label || "Document";
               const isDispatch    = label === "Dispatch";
               const isRatedDraft  = label === "Rated Draft";
+              const isStoragePaid = label === "Storage Paid";
+
+              const createStorageBill = async () => {
+                try {
+                  setMessage("Parsing storage receipt...");
+                  const res = await fetch(`${API}/api/expenses/parse-dispatch-url`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
+                  });
+                  const data = await res.json();
+                  if (!res.ok) throw new Error(data.error || "Parse failed");
+                  const row = Array.isArray(data) ? data[0] : data;
+                  const amount = row.total || 0;
+                  const markPaid = window.confirm(
+                    `Storage receipt parsed.\nAmount: $${amount.toFixed(2)}\n\nMark as PAID (credit card)?`
+                  );
+                  const body = new FormData();
+                  body.append("category", "Storage");
+                  body.append("description", `Storage Fee – ${order.refNumber}`);
+                  body.append("vendor", "");
+                  body.append("amount", amount);
+                  body.append("date", new Date().toISOString().slice(0, 10));
+                  body.append("orderId", order._id);
+                  body.append("orderRef", order.refNumber);
+                  body.append("status", markPaid ? "paid" : "unpaid");
+                  if (markPaid) body.append("paidDate", new Date().toISOString().slice(0, 10));
+                  if (row.notes) body.append("notes", row.notes);
+                  const createRes = await fetch(`${API}/api/expenses`, { method: "POST", body });
+                  if (!createRes.ok) throw new Error("Failed to create expense");
+                  setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}.`);
+                } catch(e) {
+                  alert("Failed: " + e.message);
+                  setMessage("❌ " + e.message);
+                }
+              };
 
               const createBillFromDoc = async (docLabel) => {
                 try {
@@ -2241,6 +2278,14 @@ export default function OrderDetails() {
                         onClick={() => createBillFromDoc("Rated Draft")}
                         style={{ background:"none", border:"none", cursor:"pointer", color:"#fbbf24", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                         🧮 Create Bill from Rated Draft
+                      </button>
+                    )}
+                    {isStoragePaid && (
+                      <button
+                        title="Create Bill from Storage Receipt"
+                        onClick={e => { e.stopPropagation(); createStorageBill(); }}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:"#34d399", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                        🏬 Create Bill from Storage Receipt
                       </button>
                     )}
                     <a href={f.webViewLink} download onClick={e => e.stopPropagation()}
