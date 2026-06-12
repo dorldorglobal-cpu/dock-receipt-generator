@@ -1382,10 +1382,22 @@ router.post("/parse-storage-url", express.json(), async (req, res) => {
     const vendor = text.toLowerCase().includes("copart") ? "Copart" :
                    text.toLowerCase().includes("iaai") ? "IAAI" : "Auction";
 
-    // Try to match order
+    // Try to match order: 1) by orderId passed in, 2) by ref# in filename, 3) by lot number
     let matchedOrder = null;
     if (orderId) {
       matchedOrder = await Order.findById(orderId).select("refNumber _id").lean();
+    }
+    if (!matchedOrder && filename) {
+      // Extract leading number from filename e.g. "13809 storage paid.pdf" → "13809"
+      const refFromName = (filename || "").match(/^(\d+)/);
+      if (refFromName) {
+        matchedOrder = await Order.findOne({
+          refNumber: { $regex: refFromName[1], $options: "i" }
+        }).select("refNumber _id").lean();
+      }
+    }
+    if (!matchedOrder && lotNumber) {
+      matchedOrder = await Order.findOne({ lotNumber }).select("refNumber _id").lean();
     }
 
     res.json({

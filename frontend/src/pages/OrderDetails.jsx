@@ -4249,8 +4249,8 @@ export default function OrderDetails() {
           body.append("vendor", parsed.vendor || "Copart");
           body.append("amount", parsed.amount || 0);
           body.append("date", parsed.date ? new Date(parsed.date).toISOString().slice(0,10) : new Date().toISOString().slice(0,10));
-          body.append("orderId", order._id);
-          body.append("orderRef", order.refNumber);
+          body.append("orderId", parsed.orderId || order._id);
+          body.append("orderRef", parsed.orderRef || order.refNumber);
           body.append("status", markPaid ? "paid" : "unpaid");
           if (markPaid) body.append("paidDate", new Date().toISOString().slice(0,10));
           if (parsed.yard) body.append("notes", `Sale Yard: ${parsed.yard}`);
@@ -4268,6 +4268,7 @@ export default function OrderDetails() {
                   ["Vendor", parsed.vendor],
                   ["Amount", parsed.amount ? `$${parsed.amount.toFixed(2)}` : "—"],
                   ["Lot #", parsed.lotNumber || "—"],
+                  ["Order #", parsed.orderRef || order.refNumber],
                   ["Date", parsed.date || "—"],
                   ["Vehicle", parsed.ymm || "—"],
                   ["Yard", parsed.yard || "—"],
