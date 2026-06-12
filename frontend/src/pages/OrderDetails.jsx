@@ -2248,14 +2248,17 @@ export default function OrderDetails() {
                   <td>{f.modifiedTime ? new Date(f.modifiedTime).toLocaleString() : ""}</td>
                   <td><a href={f.webViewLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>↗ Open</a></td>
                   <td style={{ display:"flex", gap:6, alignItems:"center" }}>
-                    {isDispatch && (
-                      <button
-                        title="Create Bill from Dispatch"
-                        onClick={() => createBillFromDoc("Dispatch")}
-                        style={{ background:"none", border:"none", cursor:"pointer", color:"#60a5fa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
-                        📋 Create Bill from Dispatch
-                      </button>
-                    )}
+                    {isDispatch && (() => {
+                      const hasDispatchBill = bills.some(b => /towing|transport/i.test(b.category) && b.orderRef === order.refNumber);
+                      return (
+                        <button
+                          title="Create Bill from Dispatch"
+                          onClick={() => createBillFromDoc("Dispatch")}
+                          style={{ background:"none", border:"none", cursor:"pointer", color: hasDispatchBill ? "#34d399" : "#60a5fa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          {hasDispatchBill ? "✅ Bill Created" : "📋 Create Bill from Dispatch"}
+                        </button>
+                      );
+                    })()}
                     {isRatedDraft && (
                       <button
                         title="Create Bill from Rated Draft"
@@ -2264,14 +2267,17 @@ export default function OrderDetails() {
                         🧮 Create Bill from Rated Draft
                       </button>
                     )}
-                    {isStoragePaid && (
-                      <button
-                        title="Create Bill from Storage Receipt"
-                        onClick={e => { e.stopPropagation(); createStorageBill(); }}
-                        style={{ background:"none", border:"none", cursor:"pointer", color:"#34d399", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
-                        🏬 Create Bill from Storage Receipt
-                      </button>
-                    )}
+                    {isStoragePaid && (() => {
+                      const hasStorageBill = bills.some(b => /storage/i.test(b.category) && b.orderRef === order.refNumber);
+                      return (
+                        <button
+                          title="Create Bill from Storage Receipt"
+                          onClick={e => { e.stopPropagation(); createStorageBill(); }}
+                          style={{ background:"none", border:"none", cursor:"pointer", color: hasStorageBill ? "#34d399" : "#a78bfa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          {hasStorageBill ? "✅ Bill Created" : "🏬 Create Bill from Storage Receipt"}
+                        </button>
+                      );
+                    })()}
                     <a href={f.webViewLink} download onClick={e => e.stopPropagation()}
                       style={{ background:"none", border:"1px solid var(--border)", borderRadius:5,
                         color:"var(--text-secondary)", fontSize:11, padding:"3px 9px",
@@ -4258,6 +4264,7 @@ export default function OrderDetails() {
           if (!res.ok) throw new Error("Failed to create expense");
           setStorageConfirm(null);
           setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}.`);
+          fetchBills(order.refNumber);
         };
         return (
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
