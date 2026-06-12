@@ -4269,17 +4269,23 @@ export default function OrderDetails() {
           const sellAmt = parseFloat(storageSellPrice);
           if (sellAmt > 0) {
             const newItem = { description: `Storage Fee${parsed.lotNumber ? ` – Lot ${parsed.lotNumber}` : ""}`, amount: sellAmt };
-            const invoicePayload = { items: [...(orderInvoices[0]?.items || []), newItem] };
+            const existingItems = (orderInvoices[0]?.items || []).map(i => ({ description: i.description, amount: Number(i.amount || 0) }));
+            const invoicePayload = { items: [...existingItems, newItem] };
+            let invRes;
             if (orderInvoices.length > 0) {
-              await fetch(`${API}/api/invoices/${orderInvoices[0]._id}`, {
+              invRes = await fetch(`${API}/api/invoices/${orderInvoices[0]._id}`, {
                 method: "PUT", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify(invoicePayload),
               });
             } else {
-              await fetch(`${API}/api/invoices`, {
+              invRes = await fetch(`${API}/api/invoices`, {
                 method: "POST", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ orderId: order._id, ...invoicePayload }),
               });
+            }
+            if (!invRes.ok) {
+              const d = await invRes.json();
+              throw new Error("Invoice update failed: " + (d.error || invRes.status));
             }
             fetchOrderInvoices();
           }
