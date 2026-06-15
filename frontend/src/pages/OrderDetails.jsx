@@ -4356,34 +4356,52 @@ export default function OrderDetails() {
       })()}
 
       {/* ── Invoice Send Modal ── */}
-      {invoiceSendModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Invoice #{invoiceSendModal.invoiceNumber}</h3>
-            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
-              Customer Email
-              <input value={invSendTo} onChange={e => setInvSendTo(e.target.value)} placeholder="customer@example.com"
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
-            </label>
-            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
-              Subject
-              <input value={invSubject} onChange={e => setInvSubject(e.target.value)}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
-            </label>
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
-              Message
-              <textarea value={invBody} onChange={e => setInvBody(e.target.value)} rows={5}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
-            </label>
-            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setInvoiceSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
-              <button onClick={sendInvoiceEmail} disabled={invSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
-                {invSending ? "Sending…" : "Send Invoice"}
-              </button>
+      {invoiceSendModal && (() => {
+        const hasDraft = (order.files || []).some(f => (f.label || "").toLowerCase() === "draft");
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}>
+            <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
+              <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Invoice #{invoiceSendModal.invoiceNumber}</h3>
+
+              {/* Attachments preview */}
+              <div style={{ marginBottom:16, padding:"10px 14px", background:"#0d1117", borderRadius:8, border:"1px solid #2a3245" }}>
+                <div style={{ fontSize:11, color:"#8b949e", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:8 }}>Attachments</div>
+                <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"#e6edf3" }}>
+                    <span style={{ color:"#34d399" }}>📄</span> Invoice-{invoiceSendModal.invoiceNumber}.pdf
+                  </div>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color: hasDraft ? "#e6edf3" : "#f87171" }}>
+                    <span>{hasDraft ? "📝" : "⚠️"}</span>
+                    {hasDraft ? "Draft.pdf" : "Draft — not uploaded on this order"}
+                  </div>
+                </div>
+              </div>
+
+              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+                Customer Email
+                <input value={invSendTo} onChange={e => setInvSendTo(e.target.value)} placeholder="customer@example.com"
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+                Subject
+                <input value={invSubject} onChange={e => setInvSubject(e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+                Message
+                <textarea value={invBody} onChange={e => setInvBody(e.target.value)} rows={5}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+              </label>
+              <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+                <button onClick={() => setInvoiceSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
+                <button onClick={sendInvoiceEmail} disabled={invSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                  {invSending ? "Sending…" : "Send Invoice"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* ── Doc Preview Popup ── */}
       {docPreview && (() => {
