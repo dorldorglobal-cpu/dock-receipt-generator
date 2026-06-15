@@ -566,7 +566,7 @@ router.post("/:id/send", async (req, res) => {
     ];
 
     if (order?.files?.length) {
-      const draftFile = order.files.find(f => (f.label || "").toLowerCase() === "draft");
+      const draftFile = order.files.find(f => (f.label || "").toLowerCase() === "draft" && (f.label || "").toLowerCase() !== "rated draft");
       if (draftFile?.driveFileId) {
         try {
           const fs = require("fs");

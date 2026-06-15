@@ -815,7 +815,7 @@ export default function OrderDetails() {
       items.length ? items : [{ description: "", amount: "0.00" }]
     );
 
-    setInvoiceDueDate("");
+    setInvoiceDueDate(order?.arrivalDate ? order.arrivalDate.slice(0, 10) : "");
     setInvoiceNotes("");
     setShowInvoice(true);
   };
@@ -1470,8 +1470,23 @@ export default function OrderDetails() {
       const base64 = btoa(bin);
       setInvoiceSendModal({ invoiceId: inv._id, pdfBase64: base64, pdfName: `Invoice-${inv.invoiceNumber}.pdf`, invoiceNumber: inv.invoiceNumber });
       setInvSendTo(order?.customerEmail || "");
-      setInvSubject(`Invoice #${inv.invoiceNumber} — ${order?.refNumber || ""}`);
-      setInvBody(`Dear Customer,\n\nPlease find your invoice attached.\n\nInvoice #${inv.invoiceNumber}\n\nThank you for your business.\n\nRegards,\nDDG OPS`);
+
+      const ymm = [order?.year, order?.make, order?.model].filter(Boolean).join(" ");
+      const last6 = (order?.vin || "").slice(-6);
+      const etaDisplay = order?.arrivalDate ? new Date(order.arrivalDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+
+      setInvSubject(`Invoice #${inv.invoiceNumber} — ${ymm}${last6 ? ` (${last6})` : ""}`);
+      setInvBody(
+        `Dear ${order?.customerName || "Customer"},\n\n` +
+        `Please find your invoice attached for the following vehicle:\n\n` +
+        `Vehicle: ${ymm || "—"}\n` +
+        `VIN: ${order?.vin || "—"}\n` +
+        `Booking #: ${order?.bookingNumber || "—"}\n` +
+        `Vessel / Voyage: ${[order?.vessel, order?.voyage].filter(Boolean).join(" / ") || "—"}\n` +
+        `ETA: ${etaDisplay || "—"}\n\n` +
+        `Payment is due by: ${etaDisplay || "the vessel's ETA"}\n\n` +
+        `Thank you for your business.\n\nRegards,\nDDG Global Operations`
+      );
     } catch (e) {
       setMessage("Invoice generation failed");
     }
