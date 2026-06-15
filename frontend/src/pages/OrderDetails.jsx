@@ -1474,8 +1474,9 @@ export default function OrderDetails() {
       const ymm = [order?.year, order?.make, order?.model].filter(Boolean).join(" ");
       const last6 = (order?.vin || "").slice(-6);
       const etaDisplay = order?.arrivalDate ? new Date(order.arrivalDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+      const dueDateDisplay = order?.arrivalDate ? new Date(order.arrivalDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
 
-      setInvSubject(`Invoice #${inv.invoiceNumber} — ${ymm}${last6 ? ` (${last6})` : ""}`);
+      setInvSubject(`Invoice #${inv.invoiceNumber} — ${ymm}${last6 ? ` ${last6}` : ""}`);
       setInvBody(
         `Dear ${order?.customerName || "Customer"},\n\n` +
         `Please find your invoice attached for the following vehicle:\n\n` +
@@ -1484,7 +1485,7 @@ export default function OrderDetails() {
         `Booking #: ${order?.bookingNumber || "—"}\n` +
         `Vessel / Voyage: ${[order?.vessel, order?.voyage].filter(Boolean).join(" / ") || "—"}\n` +
         `ETA: ${etaDisplay || "—"}\n\n` +
-        `Payment is due by: ${etaDisplay || "the vessel's ETA"}\n\n` +
+        `Payment Due: ${dueDateDisplay || "Upon receipt"}\n\n` +
         `Thank you for your business.\n\nRegards,\nDDG Global Operations`
       );
     } catch (e) {

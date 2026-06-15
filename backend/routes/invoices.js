@@ -74,11 +74,12 @@ router.post("/", async (req, res) => {
       total,
       notes:         notes || "",
       dueDate:       (() => {
-        if (order.sailDate) {
-          const sail = new Date(order.sailDate);
-          if (!isNaN(sail)) { sail.setDate(sail.getDate() - 3); return sail; }
+        if (dueDate) return new Date(dueDate);
+        if (order.arrivalDate) {
+          const arr = new Date(order.arrivalDate);
+          if (!isNaN(arr)) return arr;
         }
-        return dueDate ? new Date(dueDate) : null;
+        return null;
       })(),
       status:        "draft",
     });
@@ -160,13 +161,13 @@ router.put("/:id", async (req, res) => {
     const { items, notes, dueDate } = req.body;
     const total = (items || []).reduce((s, i) => s + Number(i.amount || 0), 0);
 
-    // Recalculate due date from order's sail date if available
+    // Use user-passed dueDate; fall back to order arrivalDate
     const existingInv = await Invoice.findById(req.params.id).lean();
-    const linkedOrder = existingInv?.orderId ? await Order.findById(existingInv.orderId).select("sailDate").lean() : null;
+    const linkedOrder = existingInv?.orderId ? await Order.findById(existingInv.orderId).select("arrivalDate").lean() : null;
     let computedDueDate = dueDate ? new Date(dueDate) : null;
-    if (linkedOrder?.sailDate) {
-      const sail = new Date(linkedOrder.sailDate);
-      if (!isNaN(sail)) { sail.setDate(sail.getDate() - 3); computedDueDate = sail; }
+    if (!computedDueDate && linkedOrder?.arrivalDate) {
+      const arr = new Date(linkedOrder.arrivalDate);
+      if (!isNaN(arr)) computedDueDate = arr;
     }
 
     const inv = await Invoice.findByIdAndUpdate(
@@ -566,7 +567,9 @@ router.post("/:id/send", async (req, res) => {
     ];
 
     if (order?.files?.length) {
-      const draftFile = order.files.find(f => (f.label || "").toLowerCase() === "draft" && (f.label || "").toLowerCase() !== "rated draft");
+      console.log("[Invoice Send] order files:", order.files.map(f => ({ label: f.label, driveFileId: f.driveFileId })));
+      const draftFile = order.files.find(f => (f.label || "").toLowerCase() === "draft");
+      console.log("[Invoice Send] draftFile:", draftFile ? draftFile.label : "NOT FOUND");
       if (draftFile?.driveFileId) {
         try {
           const fs = require("fs");
