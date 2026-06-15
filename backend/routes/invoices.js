@@ -587,23 +587,45 @@ router.post("/:id/send", async (req, res) => {
       }
     }
 
-    // ── 3. Send email ─────────────────────────────────────────────────────────
-    const nodemailer = require("nodemailer");
-    const mailer = nodemailer.createTransport({
-      host: "smtp.gmail.com",
-      port: 587,
-      family: 4,
-      secure: false,
-      auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
-    });
+    // ── 3. Send via Gmail API (same path as DR send) ─────────────────────────
+    const { getGmailAccessToken } = require("../utils/gmail");
+    const accessToken = await getGmailAccessToken();
+    const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+    const boundary = "DDG_INV_" + Date.now();
 
-    await mailer.sendMail({
-      from: `DDG OPS <${process.env.GMAIL_USER}>`,
-      to,
-      subject: subject || `Invoice ${inv.invoiceNumber}`,
-      text: body || "",
-      attachments,
+    const mimeLines = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject || `Invoice ${inv.invoiceNumber}`).toString("base64")}?=`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      ``,
+      body || "",
+    ];
+
+    for (const att of attachments) {
+      mimeLines.push(
+        `--${boundary}`,
+        `Content-Type: application/pdf; name="${att.filename}"`,
+        `Content-Transfer-Encoding: base64`,
+        `Content-Disposition: attachment; filename="${att.filename}"`,
+        ``,
+        att.content,
+      );
+    }
+    mimeLines.push(`--${boundary}--`);
+
+    const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+    const gmailResp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+      method: "POST",
+      headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ raw }),
     });
+    const gmailResult = await gmailResp.json();
+    if (!gmailResp.ok) throw new Error(gmailResult.error?.message || `Gmail API error ${gmailResp.status}`);
 
     // Mark invoice as sent
     await Invoice.findByIdAndUpdate(req.params.id, { status: "Sent", sentAt: new Date() });
