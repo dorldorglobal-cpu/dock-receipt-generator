@@ -103,6 +103,13 @@ function CustomerForm({ form, setForm }) {
         <input {...inp("consignee")} placeholder="Default consignee name" />
       </label>
       <label style={{ gridColumn: "1 / -1" }}>
+        Default Office (Source)
+        <select {...inp("defaultOffice")} style={{ marginTop: 4 }}>
+          <option value="USA OFFICE">🇺🇸 USA Office</option>
+          <option value="GHANA OFFICE">🇬🇭 Ghana Office</option>
+        </select>
+      </label>
+      <label style={{ gridColumn: "1 / -1" }}>
         Buyer Accounts (auction names that belong to this customer)
         <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 6 }}>
           One per line — e.g. GOLDEN NOOR INTERNATIONAL LTD
@@ -178,6 +185,7 @@ function EditModal({ customer, onSave, onClose }) {
     defaultPod:     customer.defaultPod   || "",
     consignee:      customer.consignee    || "",
     buyerAccounts:  customer.buyerAccounts || [],
+    defaultOffice:  customer.defaultOffice || "USA OFFICE",
   });
   const [saving, setSaving] = useState(false);
 

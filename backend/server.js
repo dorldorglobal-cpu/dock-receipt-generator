@@ -545,7 +545,7 @@ function parseAes(text) {
   const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
 
   const bookingNumber =
-    clean(text.match(/S3[-\s]?\d+/i)?.[0] || "") ||
+    clean(text.match(/S3-\d+/i)?.[0] || "") ||
     lineAfter(lines, "3. TRANSPORTATION REFERENCE NO.");
 
   const referenceNumber = lineAfter(lines, "14. SHIPMENT REFERENCE NO.");

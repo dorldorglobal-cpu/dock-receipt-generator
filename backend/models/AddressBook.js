@@ -16,6 +16,7 @@ const addressBookSchema = new mongoose.Schema(
     defaultPod: { type: String, default: "" }, // e.g. "LAGOS", "TEMA" — auto-fills POD on new orders
     buyerAccounts: { type: [String], default: [] }, // auction account names that belong to this customer
     consignee: { type: String, default: "" }, // default consignee name for this customer
+    defaultOffice: { type: String, default: "USA OFFICE" }, // "USA OFFICE" or "GHANA OFFICE"
     balance: Number,
     overdue: Number,
   },

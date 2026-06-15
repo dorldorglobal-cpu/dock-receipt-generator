@@ -216,7 +216,7 @@ async function parseAES(filePath) {
   // ───────────────────────────────────────────────────────────────────────
 
   const bookingNumber =
-    clean(text.match(/S3[-\s]?\d+/i)?.[0] || "") ||
+    clean(text.match(/S3-\d+/i)?.[0] || "") ||
     valueAfterLabel("3. TRANSPORTATION REFERENCE NO.");
 
   const referenceNumber = valueAfterLabel("14. SHIPMENT REFERENCE NO.");

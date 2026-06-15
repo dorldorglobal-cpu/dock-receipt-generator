@@ -292,6 +292,7 @@ export default function CreateOrder() {
       customerName:  item.companyName || "",
       customerPhone: item.phone       || "",
       customerEmail: item.email       || "",
+      source:        item.defaultOffice || "USA OFFICE",
       ...(suggestedPod  ? { pod:          suggestedPod  } : {}),
       ...(suggestedLine ? { shippingLine: suggestedLine } : {}),
     }));
@@ -544,6 +545,7 @@ export default function CreateOrder() {
       customerName:     rec?.companyName  || data.customerName  || prev.customerName,
       customerPhone:    rec?.phone        || data.customerPhone || prev.customerPhone,
       customerEmail:    rec?.email        || data.customerEmail || prev.customerEmail,
+      source:           rec?.defaultOffice || "USA OFFICE",
       buyerName:        data.buyerName    || prev.buyerName,
       consigneeName:    data.consigneeName    || data.buyerName || data.customerName || prev.consigneeName,
       consigneeAddress: data.consigneeAddress || prev.consigneeAddress,
@@ -1726,6 +1728,7 @@ export default function CreateOrder() {
                             customerPhone: c.phone       || prev.customerPhone,
                             customerEmail: c.email       || prev.customerEmail,
                             buyerName:     newCustPopup.name,
+                            source:        c.defaultOffice || "USA OFFICE",
                             ...(pod  ? { pod }                : {}),
                             ...(line ? { shippingLine: line } : {}),
                           }));
