@@ -40,7 +40,10 @@ app.get("/api/test-new-order-alert", async (req, res) => {
       return res.json({ sent: false, message: "No New Order vehicles found — nothing to send." });
     }
     const testMailer = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      family: 4,
+      secure: false,
       auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
     });
     const rows = orders.map(o => {
@@ -1225,7 +1228,10 @@ app.post("/api/expenses/parse-dispatch-url", express.json(), async (req, res) =>
 // ================= EMAIL =================
 
 const mailer = nodemailer.createTransport({
-  service: "gmail",
+  host: "smtp.gmail.com",
+  port: 587,
+  family: 4,
+  secure: false,
   auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
   pool: true,          // keep connection alive
   maxConnections: 3,   // allow parallel sends

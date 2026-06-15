@@ -590,7 +590,10 @@ router.post("/:id/send", async (req, res) => {
     // ── 3. Send email ─────────────────────────────────────────────────────────
     const nodemailer = require("nodemailer");
     const mailer = nodemailer.createTransport({
-      service: "gmail",
+      host: "smtp.gmail.com",
+      port: 587,
+      family: 4,
+      secure: false,
       auth: { user: process.env.GMAIL_USER, pass: process.env.GMAIL_PASS },
     });
 
