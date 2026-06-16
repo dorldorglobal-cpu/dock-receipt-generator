@@ -1794,7 +1794,6 @@ export default function Expenses() {
                   <th style={th} onClick={() => toggleSort("vendor")}>Vendor <SortArrow k="vendor" /></th>
                   <th style={{ ...th, textAlign: "right" }} onClick={() => toggleSort("amount")}>Amount <SortArrow k="amount" /></th>
                   <th style={th} onClick={() => toggleSort("status")}>Status <SortArrow k="status" /></th>
-                  <th style={th} onClick={() => toggleSort("category")}>Category <SortArrow k="category" /></th>
                   <th style={th}>Docs</th>
                   <th style={{ ...th, textAlign: "right" }}>Actions</th>
                 </tr>
@@ -1838,7 +1837,8 @@ export default function Expenses() {
                     </td>
 
                     {/* Vendor */}
-                    <td style={{ ...td, color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>
+                    <td style={{ ...td, color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis" }}
+                      title={exp.vendor || ""}>
                       {exp.vendor || "—"}
                       {exp.invoiceNumber && <span style={{ fontSize: 10, color: "#6b7280", marginLeft: 5 }}>#{exp.invoiceNumber}</span>}
                     </td>
@@ -1867,19 +1867,6 @@ export default function Expenses() {
                           Unpaid
                         </span>
                       )}
-                    </td>
-
-                    {/* Category */}
-                    <td style={td}>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600,
-                        background: (CAT_COLORS[exp.category] || "#9ca3af") + "22",
-                        color: CAT_COLORS[exp.category] || "#9ca3af",
-                        whiteSpace: "nowrap",
-                      }}>
-                        {exp.category}
-                      </span>
                     </td>
 
                     {/* Docs — bill + receipt combined */}
