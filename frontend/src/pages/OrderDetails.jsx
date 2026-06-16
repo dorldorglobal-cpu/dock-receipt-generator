@@ -4482,16 +4482,26 @@ export default function OrderDetails() {
                 </button>
               </div>
             </div>
-            <iframe
-              src={(() => {
-                const m = docPreview.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
-                // Proxy through backend — avoids Google auth wall and enables copy/paste
-                return m ? `${API}/api/drive-proxy/${m[1]}` : docPreview.url;
-              })()}
-              style={{ flex: 1, border: "none", width: "100%" }}
-              title={docPreview.name}
-              allow="autoplay"
-            />
+            {(() => {
+              const m = docPreview.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
+              // Proxy through backend — avoids Google auth wall and enables copy/paste
+              const src = m ? `${API}/api/drive-proxy/${m[1]}` : docPreview.url;
+              const isImage = /\.(jpe?g|png|gif|webp|heic|bmp)$/i.test(docPreview.name || "");
+              return isImage ? (
+                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                  background: "#0d1117", overflow: "hidden" }}>
+                  <img src={src} alt={docPreview.name}
+                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                </div>
+              ) : (
+                <iframe
+                  src={src}
+                  style={{ flex: 1, border: "none", width: "100%" }}
+                  title={docPreview.name}
+                  allow="autoplay"
+                />
+              );
+            })()}
           </div>
         </div>
         );
