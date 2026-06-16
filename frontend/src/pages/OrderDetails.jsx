@@ -240,6 +240,9 @@ export default function OrderDetails() {
   const [uploadingLabels,   setUploadingLabels]   = useState({});   // { AES: 1, Dispatch: 0, ... }
   const [draggingLabel,     setDraggingLabel]     = useState(null);
   const [docPreview,        setDocPreview]        = useState(null); // { name, url }
+  const [previewZoom,       setPreviewZoom]       = useState(1);
+  const [previewPan,        setPreviewPan]        = useState({ x: 0, y: 0 });
+  const previewDragRef = useRef(null); // { startX, startY, panX, panY } while dragging
   const [editingFeeKey,     setEditingFeeKey]     = useState(null); // key of fee row being inline-edited
   const [editingInternalRow, setEditingInternalRow] = useState(null); // "towing" | "ocean" | null
   const [oceanEditForm,     setOceanEditForm]     = useState({ pol:"", pod:"", shippingLine:"", sell:"", cost:"", category:"1" });
@@ -4421,8 +4424,23 @@ export default function OrderDetails() {
         const hasNext = previewIndex < driveFiles.length - 1;
         const goTo = (idx) => {
           const f = driveFiles[idx];
-          if (f) setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label: f.label });
+          if (f) { setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label: f.label }); setPreviewZoom(1); setPreviewPan({ x: 0, y: 0 }); }
         };
+        const onWheelZoom = (e) => {
+          e.preventDefault();
+          const delta = e.deltaY < 0 ? 0.2 : -0.2;
+          setPreviewZoom(z => Math.min(5, Math.max(1, z + delta)));
+        };
+        const onDragStart = (e) => {
+          if (previewZoom <= 1) return;
+          previewDragRef.current = { startX: e.clientX, startY: e.clientY, panX: previewPan.x, panY: previewPan.y };
+        };
+        const onDragMove = (e) => {
+          if (!previewDragRef.current) return;
+          const { startX, startY, panX, panY } = previewDragRef.current;
+          setPreviewPan({ x: panX + (e.clientX - startX), y: panY + (e.clientY - startY) });
+        };
+        const onDragEnd = () => { previewDragRef.current = null; };
         return (
         <div className="modal-backdrop" onClick={() => setDocPreview(null)}
           style={{ zIndex: 1000 }}>
@@ -4476,7 +4494,7 @@ export default function OrderDetails() {
                   style={{ fontSize: 12, color: "var(--accent)", textDecoration: "none" }}>
                   ↗ Open in new tab
                 </a>
-                <button onClick={() => setDocPreview(null)}
+                <button onClick={() => { setDocPreview(null); setPreviewZoom(1); setPreviewPan({ x: 0, y: 0 }); }}
                   style={{ background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>
                   ✕
                 </button>
@@ -4488,10 +4506,35 @@ export default function OrderDetails() {
               const src = m ? `${API}/api/drive-proxy/${m[1]}` : docPreview.url;
               const isImage = /\.(jpe?g|png|gif|webp|heic|bmp)$/i.test(docPreview.name || "");
               return isImage ? (
-                <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                  background: "#0d1117", overflow: "hidden" }}>
-                  <img src={src} alt={docPreview.name}
-                    style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} />
+                <div
+                  onWheel={onWheelZoom}
+                  onMouseDown={onDragStart}
+                  onMouseMove={onDragMove}
+                  onMouseUp={onDragEnd}
+                  onMouseLeave={onDragEnd}
+                  style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
+                    background: "#0d1117", overflow: "hidden", position: "relative",
+                    cursor: previewZoom > 1 ? (previewDragRef.current ? "grabbing" : "grab") : "default" }}>
+                  <img src={src} alt={docPreview.name} draggable={false}
+                    style={{
+                      maxWidth: "100%", maxHeight: "100%", objectFit: "contain",
+                      transform: `translate(${previewPan.x}px, ${previewPan.y}px) scale(${previewZoom})`,
+                      transition: previewDragRef.current ? "none" : "transform 0.1s ease-out",
+                      userSelect: "none",
+                    }} />
+                  {previewZoom > 1 && (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setPreviewZoom(1); setPreviewPan({ x: 0, y: 0 }); }}
+                      style={{ position: "absolute", bottom: 14, right: 14, fontSize: 11, padding: "5px 10px",
+                        borderRadius: 6, background: "rgba(0,0,0,0.6)", border: "1px solid rgba(255,255,255,0.2)",
+                        color: "#fff", cursor: "pointer" }}>
+                      Reset zoom
+                    </button>
+                  )}
+                  <span style={{ position: "absolute", bottom: 14, left: 14, fontSize: 11, padding: "5px 10px",
+                    borderRadius: 6, background: "rgba(0,0,0,0.5)", color: "#aaa", pointerEvents: "none" }}>
+                    {Math.round(previewZoom * 100)}% — scroll to zoom, drag to pan
+                  </span>
                 </div>
               ) : (
                 <iframe
