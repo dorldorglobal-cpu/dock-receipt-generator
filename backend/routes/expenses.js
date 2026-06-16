@@ -1422,7 +1422,16 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
     } catch (e) { console.warn("[Payment Proof] Drive upload failed:", e.message); }
 
     const data = await pdfParse(req.file.buffer);
-    const text = data.text;
+    // Strip the repeating page header/footer boilerplate ("Operation Proof",
+    // bank name/address/URL, "Processed by computer | date | Page X of Y").
+    // Without this, a payee block that spans a page break swallows the next
+    // page's header text into whatever field comes right after it.
+    const text = data.text
+      .replace(/Processed by computer\s*\|[^\n]*\|\s*Page\s*\d+\s*of\s*\d+/gi, " ")
+      .replace(/Metropolitan Commercial Bank/gi, " ")
+      .replace(/99 Park Ave,?\s*New York,?\s*NY\s*10016/gi, " ")
+      .replace(/https?:\/\/mcbankny\.com\/?/gi, " ")
+      .replace(/^Operation Proof\s*$/gim, " ");
 
     // Payment date for the whole batch (used as default paidDate)
     const payDateMatch = text.match(/Payment\s*Date\s*([\d]{1,2}\/[\d]{1,2}\/[\d]{4})/i);
@@ -1452,9 +1461,14 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       const addenda    = grab(chunk, "Addenda");
       if (!payeeName || !amount) continue;
 
-      const refMatch = addenda.match(/^(\d{3,8})/);
+      // Addenda formats seen in practice:
+      //   "13798"                     — plain order ref
+      //   "13825 PLUS WRAPPING"       — order ref + note (combined charges)
+      //   "BK 87000667 REF 13315"     — bank's own ref, then our order ref after "REF"
+      //   "S3-29358436 S3-29436152"   — booking number(s) only, no order ref
+      const refMatch = addenda.match(/^(\d{3,8})\b/) || addenda.match(/REF\.?\s*(\d{3,8})\b/i);
       const orderRef = refMatch?.[1] || "";
-      const note      = refMatch ? addenda.slice(refMatch[1].length).trim() : addenda;
+      const note      = addenda; // always show the raw addenda for context
 
       // Find candidate unpaid expenses tied to this order ref
       let candidates = [];

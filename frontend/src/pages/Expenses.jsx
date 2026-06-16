@@ -1490,7 +1490,7 @@ export default function Expenses() {
                             {row.matchType === "already_paid_mismatch" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Amount differs</span>}
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Review</span>}
                             {row.matchType === "none" && !row.createBill && (
-                              <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.payeeName } : r))}
+                              <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? `${r.payeeName} — ${r.note}` : r.payeeName } : r))}
                                 style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
                                 + Create Bill
                               </button>
@@ -1503,6 +1503,10 @@ export default function Expenses() {
                             <td></td>
                             <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid #1a2030" }}>
                               <div style={{ display:"flex", gap:8, alignItems:"center", background:"#0d1117", border:"1px solid #06b6d4", borderRadius:6, padding:"6px 10px" }}>
+                                <label style={{ fontSize:10, color:"#8b949e" }}>Order Ref
+                                  <input value={row.orderRef} placeholder="e.g. 13798" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))}
+                                    style={{ display:"block", width:80, marginTop:2, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"2px 6px", color:"#60a5fa", fontSize:11, boxSizing:"border-box" }} />
+                                </label>
                                 <label style={{ fontSize:10, color:"#8b949e" }}>Category
                                   <select value={row.newCategory} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newCategory:e.target.value}:r))}
                                     style={{ display:"block", marginTop:2, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"2px 6px", color:"#f1f5f9", fontSize:11 }}>
