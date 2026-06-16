@@ -1465,7 +1465,7 @@ export default function Expenses() {
                         <React.Fragment key={i}>
                         <tr style={{ opacity: row.selected ? 1 : 0.5 }}>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2}}>
-                            <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill}
+                            <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill && !row.splitBills}
                               onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked}:r))}/>
                           </td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap",lineHeight:1.2}}>{row.payeeName}</td>
@@ -1489,13 +1489,31 @@ export default function Expenses() {
                             {row.matchType === "already_paid" && <span style={{color:"#60a5fa",fontSize:11}}>ℹ️ Already paid</span>}
                             {row.matchType === "already_paid_mismatch" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Amount differs</span>}
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Review</span>}
-                            {row.matchType === "none" && !row.createBill && (
-                              <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? `${r.payeeName} — ${r.note}` : r.payeeName } : r))}
-                                style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
-                                + Create Bill
-                              </button>
+                            {row.matchType === "none" && !row.createBill && !row.splitBills && (
+                              <div style={{ display:"flex", gap:4 }}>
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? `${r.payeeName} — ${r.note}` : r.payeeName } : r))}
+                                  style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  + Create Bill
+                                </button>
+                                {row.isMultiBooking && (
+                                  <button onClick={() => setProofRows(rs => rs.map((r,j) => {
+                                      if (j !== i) return r;
+                                      const n = r.bookingNumbers.length || 2;
+                                      const each = Math.round((r.amount / n) * 100) / 100;
+                                      return { ...r, splitBills: r.bookingNumbers.map((bn, k) => ({
+                                        orderRef: "", category: "Port / Terminal Fees",
+                                        description: `${r.payeeName} — ${bn}`,
+                                        amount: k === n-1 ? Math.round((r.amount - each*(n-1))*100)/100 : each,
+                                      })) };
+                                    }))}
+                                    style={{ fontSize:10, color:"#fbbf24", border:"1px solid #fbbf24", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                    ✂ Split ({row.bookingNumbers.length})
+                                  </button>
+                                )}
+                              </div>
                             )}
                             {row.matchType === "none" && row.createBill && <span style={{color:"#34d399",fontSize:11}}>📝 New bill</span>}
+                            {row.matchType === "none" && row.splitBills && <span style={{color:"#fbbf24",fontSize:11}}>✂ Split into {row.splitBills.length}</span>}
                           </td>
                         </tr>
                         {row.matchType === "none" && row.createBill && (
@@ -1529,6 +1547,49 @@ export default function Expenses() {
                             </td>
                           </tr>
                         )}
+                        {row.matchType === "none" && row.splitBills && (() => {
+                          const sum = row.splitBills.reduce((s,b)=>s+(Number(b.amount)||0),0);
+                          const balanced = Math.abs(sum - row.amount) < 0.01;
+                          return (
+                          <tr>
+                            <td></td>
+                            <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid #1a2030" }}>
+                              <div style={{ background:"#0d1117", border:`1px solid ${balanced ? "#34d399" : "#fbbf24"}`, borderRadius:6, padding:"8px 10px" }}>
+                                {row.splitBills.map((split, k) => (
+                                  <div key={k} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6 }}>
+                                    <span style={{ fontSize:10, color:"#6b7280", width:14 }}>{k+1}.</span>
+                                    <input value={split.orderRef} placeholder="Order ref" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,orderRef:e.target.value}:s)}:r))}
+                                      style={{ width:80, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#60a5fa", fontSize:11 }} />
+                                    <select value={split.category} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,category:e.target.value}:s)}:r))}
+                                      style={{ background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#f1f5f9", fontSize:11 }}>
+                                      {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
+                                    </select>
+                                    <input value={split.description} placeholder="Description" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,description:e.target.value}:s)}:r))}
+                                      style={{ flex:1, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#f1f5f9", fontSize:11 }} />
+                                    <input type="number" step="0.01" value={split.amount} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,amount:e.target.value}:s)}:r))}
+                                      style={{ width:80, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#34d399", fontSize:11, fontWeight:600 }} />
+                                  </div>
+                                ))}
+                                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6 }}>
+                                  <span style={{ fontSize:11, color: balanced ? "#34d399" : "#fbbf24" }}>
+                                    {balanced ? `✓ Sums to $${row.amount.toFixed(2)}` : `⚠ Sums to $${sum.toFixed(2)} — must equal $${row.amount.toFixed(2)}`}
+                                  </span>
+                                  <div style={{ display:"flex", gap:6 }}>
+                                    <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, selected:true } : r))} disabled={!balanced}
+                                      style={{ fontSize:10, color:"#fff", background: balanced ? "#059669" : "#374151", border:"none", borderRadius:5, padding:"4px 10px", cursor: balanced ? "pointer" : "not-allowed", fontWeight:600 }}>
+                                      ✓ Ready
+                                    </button>
+                                    <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills:null, selected:false } : r))}
+                                      style={{ fontSize:10, color:"#9ca3af", background:"none", border:"1px solid #374151", borderRadius:5, padding:"4px 10px", cursor:"pointer" }}>
+                                      Cancel
+                                    </button>
+                                  </div>
+                                </div>
+                              </div>
+                            </td>
+                          </tr>
+                          );
+                        })()}
                         </React.Fragment>
                       ))}
                     </tbody>
@@ -1541,9 +1602,11 @@ export default function Expenses() {
                       const sel = proofRows.filter(r=>r.selected);
                       const toPay = sel.filter(r=>r.matchedIds?.length).length;
                       const toCreate = sel.filter(r=>r.createBill && !r.matchedIds?.length).length;
+                      const toSplit = sel.filter(r=>r.splitBills?.length).reduce((s,r)=>s+r.splitBills.length, 0);
                       const parts = [];
                       if (toPay) parts.push(`Mark ${toPay} Paid`);
                       if (toCreate) parts.push(`Create ${toCreate} New`);
+                      if (toSplit) parts.push(`Create ${toSplit} Split`);
                       return "✅ " + (parts.join(" & ") || "Apply");
                     })()}
                   </button>

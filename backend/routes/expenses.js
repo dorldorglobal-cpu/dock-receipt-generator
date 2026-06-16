@@ -1470,6 +1470,12 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       const orderRef = refMatch?.[1] || "";
       const note      = addenda; // always show the raw addenda for context
 
+      // Multiple booking numbers (e.g. "S3-29358436 S3-29436152") mean this
+      // single payment covers more than one order — flag it so the UI can
+      // offer a split into one bill per booking instead of one combined bill.
+      const bookingNumbers = [...addenda.matchAll(/S3-\d+/gi)].map(m => m[0]);
+      const isMultiBooking = bookingNumbers.length > 1;
+
       // Find candidate unpaid expenses tied to this order ref
       let candidates = [];
       let matchedIds = [];
@@ -1532,6 +1538,8 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         alreadyPaid,
         matchedIds,
         matchType,
+        bookingNumbers,
+        isMultiBooking,
         selected: matchType === "exact" || matchType === "combined",
       });
     }
@@ -1568,6 +1576,34 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
         );
         updated += result.modifiedCount;
+        continue;
+      }
+
+      // Payment covers multiple orders — create one bill per split line
+      if (row.splitBills?.length) {
+        for (const split of row.splitBills) {
+          if (!split.amount) continue;
+          let orderId = null;
+          if (split.orderRef) {
+            const o = await Order.findOne({ refNumber: { $regex: `^${esc(split.orderRef)}$`, $options: "i" } })
+              .select("_id refNumber").lean();
+            if (o) orderId = o._id;
+          }
+          await Expense.create({
+            category:      split.category || "Port / Terminal Fees",
+            description:   split.description || row.payeeName,
+            vendor:        row.payeeName,
+            amount:        Number(split.amount) || 0,
+            date:          dateObj,
+            orderId,
+            orderRef:      split.orderRef || "",
+            status:        "paid",
+            paidDate:      dateObj,
+            paymentMethod: paymentMethod || "Bank ACH",
+            ...receiptFields,
+          });
+          created++;
+        }
         continue;
       }
 
