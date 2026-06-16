@@ -1464,19 +1464,27 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       if (!payeeName || !amount) continue;
 
       // Addenda formats seen in practice:
-      //   "13798"                     — plain order ref
-      //   "13825 PLUS WRAPPING"       — order ref + note (combined charges)
-      //   "BK 87000667 REF 13315"     — bank's own ref, then our order ref after "REF"
-      //   "S3-29358436 S3-29436152"   — booking number(s) only, no order ref
-      const refMatch = addenda.match(/^(\d{3,8})\b/) || addenda.match(/REF\.?\s*(\d{3,8})\b/i);
+      //   "13798"                       — plain order ref
+      //   "13825 PLUS WRAPPING"         — order ref + note (combined charges)
+      //   "BK 87000667 REF 13315"       — bank's own ref, then our order ref after "REF"
+      //   "BK# 24597256 REF# 13038"     — same, but with "#" after the labels
+      //   "S3-29358436 S3-29436152"     — booking number(s) only, no order ref
+      // Long Addenda values can wrap across a PDF line break, which collapses
+      // to a literal space mid-token after whitespace normalization (e.g.
+      // "S3-29305517" → "S3- 29305517") — tolerate that with \s* and strip it
+      // back out so the stored value is clean.
+      const refMatch = addenda.match(/^(\d{3,8})\b/) || addenda.match(/REF\.?#?:?\s*(\d{3,8})\b/i);
       const orderRef = refMatch?.[1] || "";
       const note      = addenda; // always show the raw addenda for context
 
       // Multiple booking numbers (e.g. "S3-29358436 S3-29436152") or multiple
       // plain order refs (e.g. "13734 13754 13759") mean this single payment
       // covers more than one order — flag it so the UI can offer a split.
-      const bookingNumbers = [...addenda.matchAll(/S3-\d+/gi)].map(m => m[0]);
-      const plainRefs = [...new Set((addenda.match(/\b\d{3,8}\b/g) || []))];
+      const bookingNumbers = [...addenda.matchAll(/S3-\s*\d+/gi)].map(m => m[0].replace(/\s+/g, ""));
+      // Exclude the digits already claimed by booking numbers so they don't
+      // also get picked up as "plain order refs".
+      const addendaSansBookings = addenda.replace(/S3-\s*\d+/gi, " ");
+      const plainRefs = [...new Set((addendaSansBookings.match(/\b\d{3,8}\b/g) || []))];
       const isMultiBooking = bookingNumbers.length > 1 || plainRefs.length > 1;
       // What to pre-fill the Split form with — real order refs are far more
       // useful than booking numbers when we have them.

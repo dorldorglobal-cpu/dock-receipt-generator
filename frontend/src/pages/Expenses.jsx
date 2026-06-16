@@ -1615,8 +1615,17 @@ export default function Expenses() {
                                       style={{ flex:1, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#f1f5f9", fontSize:11 }} />
                                     <input type="number" step="0.01" value={split.amount} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,amount:e.target.value}:s)}:r))}
                                       style={{ width:80, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#34d399", fontSize:11, fontWeight:600 }} />
+                                    <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills: r.splitBills.filter((_,sk)=>sk!==k) } : r))}
+                                      title="Remove this line"
+                                      style={{ fontSize:12, color:"#f87171", background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>
+                                      ✕
+                                    </button>
                                   </div>
                                 ))}
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills: [...r.splitBills, { orderRef:"", category:"Port / Terminal Fees", description:"", amount:"" }] } : r))}
+                                  style={{ fontSize:10, color:"#06b6d4", background:"none", border:"1px dashed #06b6d4", borderRadius:5, padding:"3px 8px", cursor:"pointer", marginBottom:6 }}>
+                                  + Add Line
+                                </button>
                                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6 }}>
                                   <span style={{ fontSize:11, color: balanced ? "#34d399" : "#fbbf24" }}>
                                     {balanced ? `✓ Sums to $${row.amount.toFixed(2)}` : `⚠ Sums to $${sum.toFixed(2)} — must equal $${row.amount.toFixed(2)}`}
