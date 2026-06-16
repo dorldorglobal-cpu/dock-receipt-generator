@@ -497,10 +497,14 @@ export default function Expenses() {
       if (!res.ok) throw new Error(data.error);
       setProofRows(data.rows);
       setProofDriveFile(data.proofFile || null);
-      const needsReview = data.rows.filter(r => r.matchType !== "exact" && r.matchType !== "combined").length;
-      setProofMsg(needsReview > 0
-        ? `⚠ ${needsReview} of ${data.rows.length} payment(s) need manual review.`
-        : `✅ ${data.rows.length} payment(s) auto-matched.`);
+      const alreadyPaidCount = data.rows.filter(r => r.matchType === "already_paid" || r.matchType === "already_paid_mismatch").length;
+      const needsReview = data.rows.filter(r => r.matchType === "review" || r.matchType === "none" || r.matchType === "already_paid_mismatch").length;
+      const autoMatched = data.rows.filter(r => r.matchType === "exact" || r.matchType === "combined").length;
+      const parts = [];
+      if (autoMatched)     parts.push(`✅ ${autoMatched} auto-matched`);
+      if (alreadyPaidCount) parts.push(`already marked paid: ${alreadyPaidCount}`);
+      if (needsReview)     parts.push(`⚠ ${needsReview} need review`);
+      setProofMsg(parts.join(" — ") || "No payments found in this file.");
     } catch (err) { setProofMsg("❌ " + err.message); }
     finally { setProofLoading(false); }
   };
@@ -1467,13 +1471,17 @@ export default function Expenses() {
                           <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",fontSize:12,color:"#9ca3af"}}>
                             {row.matchedIds?.length
                               ? row.candidates.filter(c=>row.matchedIds.includes(c._id)).map(c=>c.description).join(", ")
-                              : row.candidates?.length
-                                ? <span style={{color:"#fbbf24"}}>⚠ {row.candidates.length} candidate(s), amounts don't sum to ${row.amount.toFixed(2)}</span>
-                                : <span style={{color:"#f87171"}}>No unpaid bill found for order #{row.orderRef}</span>}
+                              : row.matchType === "already_paid" || row.matchType === "already_paid_mismatch"
+                                ? row.alreadyPaid?.map(c=>c.description).join(", ")
+                                : row.candidates?.length
+                                  ? <span style={{color:"#fbbf24"}}>⚠ {row.candidates.length} candidate(s), amounts don't sum to ${row.amount.toFixed(2)}</span>
+                                  : <span style={{color:"#f87171"}}>No bill on file for order #{row.orderRef}</span>}
                           </td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
                             {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:12}}>✅ Exact match</span>}
                             {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:12}}>✅ Combined match</span>}
+                            {row.matchType === "already_paid" && <span style={{color:"#60a5fa",fontSize:12}}>ℹ️ Already marked paid</span>}
+                            {row.matchType === "already_paid_mismatch" && <span style={{color:"#fbbf24",fontSize:12}}>⚠ Already paid, amount differs</span>}
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:12}}>⚠ Review</span>}
                             {row.matchType === "none" && <span style={{color:"#f87171",fontSize:12}}>❌ No match</span>}
                           </td>

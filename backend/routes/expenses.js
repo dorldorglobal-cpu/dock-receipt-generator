@@ -1460,11 +1460,21 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       let candidates = [];
       let matchedIds = [];
       let matchType = "none";
+      let alreadyPaid = [];
       if (orderRef) {
         candidates = await Expense.find({
           orderRef: { $regex: `^${esc(orderRef)}$`, $options: "i" },
           status: "unpaid",
         }).select("_id description vendor amount").lean();
+
+        // If nothing unpaid, check whether it was already paid (covers bills
+        // marked paid manually before this proof was uploaded)
+        if (!candidates.length) {
+          alreadyPaid = await Expense.find({
+            orderRef: { $regex: `^${esc(orderRef)}$`, $options: "i" },
+            status: "paid",
+          }).select("_id description vendor amount paidDate").lean();
+        }
 
         if (candidates.length) {
           // 1. Single expense exactly matching the payment amount
@@ -1492,6 +1502,9 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
               matchType = "review"; // candidates exist but none sum to the amount
             }
           }
+        } else if (alreadyPaid.length) {
+          const sumPaid = alreadyPaid.reduce((s, c) => s + c.amount, 0);
+          matchType = Math.abs(sumPaid - amount) < 0.01 ? "already_paid" : "already_paid_mismatch";
         }
       }
 
@@ -1502,6 +1515,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         note,
         batchPaidDate,
         candidates,
+        alreadyPaid,
         matchedIds,
         matchType,
         selected: matchType === "exact" || matchType === "combined",
