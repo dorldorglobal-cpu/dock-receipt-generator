@@ -1539,7 +1539,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         const byBooking = await Expense.find({
           vendor: { $regex: `^${esc(payeeName)}$`, $options: "i" },
           $or: bookingOr,
-        }).select("_id description vendor amount status paidDate receiptFileName").lean();
+        }).select("_id description vendor amount status paidDate receiptFileName orderRef").lean();
 
         if (byBooking.length) {
           const paidOnes   = byBooking.filter(c => c.status === "paid");

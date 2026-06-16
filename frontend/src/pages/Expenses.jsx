@@ -1473,16 +1473,36 @@ export default function Expenses() {
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600,lineHeight:1.2}}>{row.orderRef || "—"}</td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:11,lineHeight:1.2,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#34d399",fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap"}}>${row.amount.toFixed(2)}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",fontSize:11,color:"#9ca3af",lineHeight:1.2,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
-                            {row.matchedIds?.length
-                              ? row.candidates.filter(c=>row.matchedIds.includes(c._id)).map(c=>c.description).join(", ")
-                              : row.matchType === "already_paid" || row.matchType === "already_paid_mismatch"
-                                ? row.alreadyPaid?.map(c=>c.description).join(", ")
-                                : row.candidates?.length
-                                  ? <span style={{color:"#fbbf24"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>
-                                  : row.createBill
-                                    ? <span style={{color:"#34d399"}}>Will create new bill</span>
-                                    : <span style={{color:"#f87171"}}>No bill on file for #{row.orderRef}</span>}
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",fontSize:11,color:"#9ca3af",lineHeight:1.2,maxWidth:260}}>
+                            {(() => {
+                              const list = row.matchedIds?.length
+                                ? row.candidates.filter(c=>row.matchedIds.includes(c._id))
+                                : (row.matchType === "already_paid" || row.matchType === "already_paid_mismatch")
+                                  ? (row.alreadyPaid || [])
+                                  : null;
+                              if (list) {
+                                if (list.length > 1) {
+                                  // Multiple bills (e.g. a split payment) — show each on its own line with its order ref
+                                  return (
+                                    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                                      {list.map(c => (
+                                        <div key={c._id} style={{ display:"flex", gap:6, alignItems:"center", whiteSpace:"nowrap" }}>
+                                          <span style={{ color:"#60a5fa", fontWeight:600 }}>{c.orderRef ? `#${c.orderRef}` : "—"}</span>
+                                          <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>{c.description}</span>
+                                          <span style={{ color: c.status === "paid" ? "#34d399" : "#f87171", fontSize:10 }}>
+                                            {c.status === "paid" ? "✓ paid" : "unpaid"}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+                                  );
+                                }
+                                return <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{list.map(c=>c.description).join(", ")}</span>;
+                              }
+                              if (row.candidates?.length) return <span style={{color:"#fbbf24",whiteSpace:"nowrap"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>;
+                              if (row.createBill) return <span style={{color:"#34d399",whiteSpace:"nowrap"}}>Will create new bill</span>;
+                              return <span style={{color:"#f87171",whiteSpace:"nowrap"}}>No bill on file for #{row.orderRef}</span>;
+                            })()}
                           </td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2,whiteSpace:"nowrap"}}>
                             {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact</span>}
