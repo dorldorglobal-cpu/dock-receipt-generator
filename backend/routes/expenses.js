@@ -1164,6 +1164,50 @@ router.post("/parse-misc", memUpload.array("invoices", 50), async (req, res) => 
         const data = await pdfParse(file.buffer);
         const text = data.text;
 
+        // ── FedEx Transaction Record — dedicated parsing path ──────────────────
+        if (/fedex/i.test(text) && /tracking\s*no\.?/i.test(text)) {
+          const trackingMatch = text.match(/Tracking\s*No\.?:?\s*\n?\s*(\d{10,})/i);
+          const shipDateMatch = text.match(/Ship\s*Date:?\s*\n?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
+          const refMatch      = text.match(/Your\s+reference:?\s*\n?\s*([A-Za-z0-9\-]+)/i);
+          const totalMatch    = text.match(/(?:Estimated\s+Total\s+Cost|Total\s+Cost):?\s*\n?\s*\$?\s*([\d,]+\.\d{2})/i);
+
+          const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
+          let billDate = "";
+          if (shipDateMatch) {
+            const mp = shipDateMatch[1].match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
+            if (mp) billDate = `${months[mp[1].toLowerCase().slice(0,3)]}/${mp[2].padStart(2,'0')}/${mp[3]}`;
+          }
+
+          const orderRef = refMatch?.[1]?.trim() || "";
+          const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
+
+          let order = null;
+          if (orderRef) {
+            order = await Order.findOne({ refNumber: { $regex: `^${esc(orderRef)}$`, $options: "i" } })
+              .select("_id refNumber vin customerName year make model").lean();
+          }
+
+          results.push({
+            fileName:     file.originalname,
+            invoiceNumber: trackingMatch?.[1] || "",
+            billDate,
+            vendor:       "FedEx",
+            total,
+            category:     "Office & Admin",
+            description:  "FedEx Shipping" + (orderRef ? ` — Ref #${orderRef}` : ""),
+            isPaid:       true, // FedEx One Rate is billed to card on file at ship time
+            vin:          "",
+            orderId:      order?._id || null,
+            orderRef:     order?.refNumber || orderRef,
+            customerName: order?.customerName || "",
+            ymm:          order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : "",
+            matched:      !!order,
+            skip:         false,
+            notes:        "",
+          });
+          continue;
+        }
+
         // Invoice number — handles "Invoice #29135Paid", "Invoice Number: 000255", etc.
         const invMatch = text.match(/Invoice\s*#\s*(\d+)/i)
           || text.match(/Invoice\s*(?:Number|No\.?)\s*[:\n\r]\s*([A-Z0-9\-]{3,20})/i)
