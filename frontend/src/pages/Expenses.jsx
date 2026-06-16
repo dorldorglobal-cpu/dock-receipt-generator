@@ -519,8 +519,9 @@ export default function Expenses() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       const parts = [];
-      if (data.updated) parts.push(`${data.updated} bill(s) marked paid`);
-      if (data.created) parts.push(`${data.created} new bill(s) created`);
+      if (data.updated)  parts.push(`${data.updated} bill(s) marked paid`);
+      if (data.created)  parts.push(`${data.created} new bill(s) created`);
+      if (data.attached) parts.push(`proof attached to ${data.attached} bill(s)`);
       setProofMsg(`✅ ${parts.join(", ")}!`);
       setProofRows([]); setProofFile(null); setProofDriveFile(null); fetchAll();
     } catch (err) { setProofMsg("❌ " + err.message); }
@@ -1465,8 +1466,8 @@ export default function Expenses() {
                         <React.Fragment key={i}>
                         <tr style={{ opacity: row.selected ? 1 : 0.5 }}>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2}}>
-                            <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill && !row.splitBills}
-                              onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked}:r))}/>
+                            <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill && !row.splitBills && !row.attachOnly}
+                              onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked, ...(e.target.checked?{}:{attachOnly:false})}:r))}/>
                           </td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap",lineHeight:1.2}}>{row.payeeName}</td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600,lineHeight:1.2}}>{row.orderRef || "—"}</td>
@@ -1486,8 +1487,24 @@ export default function Expenses() {
                           <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2,whiteSpace:"nowrap"}}>
                             {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact</span>}
                             {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:11}}>✅ Combined</span>}
-                            {row.matchType === "already_paid" && <span style={{color:"#60a5fa",fontSize:11}}>ℹ️ Already paid</span>}
-                            {row.matchType === "already_paid_mismatch" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Amount differs</span>}
+                            {(row.matchType === "already_paid" || row.matchType === "already_paid_mismatch") && (
+                              <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                                <span style={{color: row.matchType === "already_paid" ? "#60a5fa" : "#fbbf24", fontSize:11}}>
+                                  {row.matchType === "already_paid" ? "ℹ️ Already paid" : "⚠ Amount differs"}
+                                </span>
+                                {row.alreadyPaid?.some(c=>!c.receiptFileName) && (
+                                  row.selected
+                                    ? <span style={{color:"#34d399",fontSize:10}}>📎 Will attach proof</span>
+                                    : <button onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,attachOnly:true,selected:true}:r))}
+                                        style={{ fontSize:10, color:"#a78bfa", border:"1px solid #a78bfa", borderRadius:5, padding:"1px 6px", background:"none", cursor:"pointer" }}>
+                                        📎 Attach Proof
+                                      </button>
+                                )}
+                                {row.alreadyPaid?.length > 0 && row.alreadyPaid.every(c=>c.receiptFileName) && (
+                                  <span style={{color:"#6b7280",fontSize:10}}>📎 Receipt on file</span>
+                                )}
+                              </div>
+                            )}
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Review</span>}
                             {row.matchType === "none" && !row.createBill && !row.splitBills && (
                               <div style={{ display:"flex", gap:4 }}>
@@ -1603,10 +1620,12 @@ export default function Expenses() {
                       const toPay = sel.filter(r=>r.matchedIds?.length).length;
                       const toCreate = sel.filter(r=>r.createBill && !r.matchedIds?.length).length;
                       const toSplit = sel.filter(r=>r.splitBills?.length).reduce((s,r)=>s+r.splitBills.length, 0);
+                      const toAttach = sel.filter(r=>r.attachOnly).length;
                       const parts = [];
                       if (toPay) parts.push(`Mark ${toPay} Paid`);
                       if (toCreate) parts.push(`Create ${toCreate} New`);
                       if (toSplit) parts.push(`Create ${toSplit} Split`);
+                      if (toAttach) parts.push(`Attach Proof to ${toAttach}`);
                       return "✅ " + (parts.join(" & ") || "Apply");
                     })()}
                   </button>

@@ -1493,7 +1493,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
           alreadyPaid = await Expense.find({
             orderRef: { $regex: `^${esc(orderRef)}$`, $options: "i" },
             status: "paid",
-          }).select("_id description vendor amount paidDate").lean();
+          }).select("_id description vendor amount paidDate receiptFileName").lean();
         }
 
         if (candidates.length) {
@@ -1566,6 +1566,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
 
     let updated = 0;
     let created = 0;
+    let attached = 0;
     for (const row of rows) {
       if (!row.selected) continue;
       const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
@@ -1576,6 +1577,17 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
         );
         updated += result.modifiedCount;
+        continue;
+      }
+
+      // Already marked paid manually — just attach the proof, don't touch status/paidDate
+      if (row.attachOnly && row.alreadyPaid?.length && Object.keys(receiptFields).length) {
+        const ids = row.alreadyPaid.map(c => c._id);
+        const result = await Expense.updateMany(
+          { _id: { $in: ids } },
+          { $set: receiptFields }
+        );
+        attached += result.modifiedCount;
         continue;
       }
 
@@ -1632,7 +1644,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       }
     }
 
-    res.json({ updated, created });
+    res.json({ updated, created, attached });
   } catch (err) {
     console.error("apply-payment-proof error:", err);
     res.status(500).json({ error: err.message });
