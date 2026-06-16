@@ -298,7 +298,7 @@ export default function OrderDetails() {
   // Core: hit the schedule API with any combo of voyageName / vessel params
   const applyScheduleResult = async (params) => {
     const qs = new URLSearchParams(params).toString();
-    const res  = await fetch(`http://localhost:4000/api/schedule/lookup?${qs}`);
+    const res  = await fetch(`${API}/api/schedule/lookup?${qs}`);
     const data = await res.json();
     if (data.found) {
       await fetch(`${API}/api/orders/${id}`, {
