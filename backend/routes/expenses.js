@@ -1528,6 +1528,41 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         }
       }
 
+      // Fallback for multi-booking payments with no plain order ref (e.g. the
+      // ACL "S3-xxxxx" case) — these get split into bills whose description
+      // contains the booking number, so match on vendor + booking number
+      // instead of order ref.
+      if (matchType === "none" && bookingNumbers.length) {
+        const bookingOr = bookingNumbers.map(bn => ({ description: { $regex: esc(bn), $options: "i" } }));
+        const byBooking = await Expense.find({
+          vendor: { $regex: `^${esc(payeeName)}$`, $options: "i" },
+          $or: bookingOr,
+        }).select("_id description vendor amount status paidDate receiptFileName").lean();
+
+        if (byBooking.length) {
+          const paidOnes   = byBooking.filter(c => c.status === "paid");
+          const unpaidOnes = byBooking.filter(c => c.status === "unpaid");
+          const sumPaid    = paidOnes.reduce((s, c) => s + c.amount, 0);
+          const sumUnpaid  = unpaidOnes.reduce((s, c) => s + c.amount, 0);
+
+          if (paidOnes.length && Math.abs(sumPaid - amount) < 0.01 && !unpaidOnes.length) {
+            alreadyPaid = paidOnes;
+            matchType = "already_paid";
+          } else if (unpaidOnes.length) {
+            candidates = unpaidOnes;
+            if (Math.abs(sumUnpaid - amount) < 0.01) {
+              matchedIds = unpaidOnes.map(c => c._id);
+              matchType = unpaidOnes.length === 1 ? "exact" : "combined";
+            } else {
+              matchType = "review";
+            }
+          } else if (paidOnes.length) {
+            alreadyPaid = paidOnes;
+            matchType = "already_paid_mismatch";
+          }
+        }
+      }
+
       rows.push({
         payeeName,
         amount,
