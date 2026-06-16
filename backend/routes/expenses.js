@@ -1166,10 +1166,20 @@ router.post("/parse-misc", memUpload.array("invoices", 50), async (req, res) => 
 
         // ── FedEx Transaction Record — dedicated parsing path ──────────────────
         if (/fedex/i.test(text) && /tracking\s*no\.?/i.test(text)) {
-          const trackingMatch = text.match(/Tracking\s*No\.?:?\s*\n?\s*(\d{10,})/i);
-          const shipDateMatch = text.match(/Ship\s*Date:?\s*\n?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
+          // Header labels and values appear on separate lines:
+          //   TRACKING NO.: SHIP DATE: ESTIMATED TOTAL COST:
+          //   872844321616 Jun 9, 2026 10.95 USD
+          const headerBlock = text.match(
+            /TRACKING\s+NO\.?:?\s*SHIP\s+DATE:?\s*ESTIMATED\s+TOTAL\s+COST:?\s*\n\s*(\d{8,})\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})\s+\$?\s*([\d,]+\.\d{2})/i
+          );
+          const trackingMatch = headerBlock ? [null, headerBlock[1]]
+            : text.match(/Tracking\s*No\.?:?\s*\n?\s*(\d{8,})/i)
+            || text.match(/\b(\d{10,12})\b/);
+          const shipDateMatch = headerBlock ? [null, headerBlock[2]] : text.match(/Ship\s*Date:?\s*\n?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
+          const totalMatch    = headerBlock ? [null, headerBlock[3]]
+            : text.match(/(?:Estimated\s+Total\s+Cost|Total\s+Cost):?\s*\n?\s*\$?\s*([\d,]+\.\d{2})/i)
+            || text.match(/([\d,]+\.\d{2})\s*USD/i);
           const refMatch      = text.match(/Your\s+reference:?\s*\n?\s*([A-Za-z0-9\-]+)/i);
-          const totalMatch    = text.match(/(?:Estimated\s+Total\s+Cost|Total\s+Cost):?\s*\n?\s*\$?\s*([\d,]+\.\d{2})/i);
 
           const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
           let billDate = "";
