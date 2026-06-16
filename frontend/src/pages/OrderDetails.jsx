@@ -815,6 +815,7 @@ export default function OrderDetails() {
       items.length ? items : [{ description: "", amount: "0.00" }]
     );
 
+    // Pre-fill due date from order arrivalDate; schedule lookup happens later in generateInvoicePdf
     setInvoiceDueDate(order?.arrivalDate ? order.arrivalDate.slice(0, 10) : "");
     setInvoiceNotes("");
     setShowInvoice(true);
@@ -1473,8 +1474,18 @@ export default function OrderDetails() {
 
       const ymm = [order?.year, order?.make, order?.model].filter(Boolean).join(" ");
       const last6 = (order?.vin || "").slice(-6);
-      const etaDisplay = order?.arrivalDate ? new Date(order.arrivalDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
-      const dueDateDisplay = order?.arrivalDate ? new Date(order.arrivalDate).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+
+      // Use order arrivalDate, or fall back to schedule lookup
+      let etaRaw = order?.arrivalDate || "";
+      if (!etaRaw && order?.vessel) {
+        try {
+          const qs = new URLSearchParams({ vessel: order.vessel, ...(order.pol ? { pol: order.pol } : {}), ...(order.pod ? { pod: order.pod } : {}) });
+          const sched = await fetch(`${API}/api/schedule/lookup?${qs}`).then(r => r.json());
+          if (sched.found && sched.arrivalDate) etaRaw = sched.arrivalDate;
+        } catch {}
+      }
+      const fmtEta = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
+      const etaDisplay = fmtEta(etaRaw);
 
       setInvSubject(`Invoice #${inv.invoiceNumber} — ${ymm}${last6 ? ` ${last6}` : ""}`);
       setInvBody(
@@ -1485,7 +1496,7 @@ export default function OrderDetails() {
         `Booking #: ${order?.bookingNumber || "—"}\n` +
         `Vessel / Voyage: ${[order?.vessel, order?.voyage].filter(Boolean).join(" / ") || "—"}\n` +
         `ETA: ${etaDisplay || "—"}\n\n` +
-        `Payment Due: ${dueDateDisplay || "Upon receipt"}\n\n` +
+        `Payment Due: ${etaDisplay || "Upon receipt"}\n\n` +
         `Thank you for your business.\n\nRegards,\nDDG Global Operations`
       );
     } catch (e) {
