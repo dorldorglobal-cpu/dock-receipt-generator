@@ -1543,17 +1543,46 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
     } : {};
 
     let updated = 0;
+    let created = 0;
     for (const row of rows) {
-      if (!row.selected || !row.matchedIds?.length) continue;
+      if (!row.selected) continue;
       const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
-      const result = await Expense.updateMany(
-        { _id: { $in: row.matchedIds } },
-        { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
-      );
-      updated += result.modifiedCount;
+
+      if (row.matchedIds?.length) {
+        const result = await Expense.updateMany(
+          { _id: { $in: row.matchedIds } },
+          { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
+        );
+        updated += result.modifiedCount;
+        continue;
+      }
+
+      // No bill on file at all — create one now from the payment proof details
+      if (row.createBill) {
+        let orderId = null;
+        if (row.orderRef) {
+          const o = await Order.findOne({ refNumber: { $regex: `^${esc(row.orderRef)}$`, $options: "i" } })
+            .select("_id refNumber").lean();
+          if (o) orderId = o._id;
+        }
+        await Expense.create({
+          category:      row.newCategory || "Port / Terminal Fees",
+          description:   row.newDescription || row.payeeName,
+          vendor:        row.payeeName,
+          amount:        row.amount,
+          date:          dateObj,
+          orderId,
+          orderRef:      row.orderRef || "",
+          status:        "paid",
+          paidDate:      dateObj,
+          paymentMethod: paymentMethod || "Bank ACH",
+          ...receiptFields,
+        });
+        created++;
+      }
     }
 
-    res.json({ updated });
+    res.json({ updated, created });
   } catch (err) {
     console.error("apply-payment-proof error:", err);
     res.status(500).json({ error: err.message });

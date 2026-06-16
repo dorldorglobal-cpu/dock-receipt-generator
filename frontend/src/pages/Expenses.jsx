@@ -518,7 +518,10 @@ export default function Expenses() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setProofMsg(`✅ ${data.updated} bill(s) marked paid!`);
+      const parts = [];
+      if (data.updated) parts.push(`${data.updated} bill(s) marked paid`);
+      if (data.created) parts.push(`${data.created} new bill(s) created`);
+      setProofMsg(`✅ ${parts.join(", ")}!`);
       setProofRows([]); setProofFile(null); setProofDriveFile(null); fetchAll();
     } catch (err) { setProofMsg("❌ " + err.message); }
     finally { setProofLoading(false); }
@@ -1459,9 +1462,10 @@ export default function Expenses() {
                     <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {proofRows.map((row, i) => (
-                        <tr key={i} style={{ opacity: row.selected ? 1 : 0.5 }}>
+                        <React.Fragment key={i}>
+                        <tr style={{ opacity: row.selected ? 1 : 0.5 }}>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
-                            <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length}
+                            <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill}
                               onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked}:r))}/>
                           </td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap"}}>{row.payeeName}</td>
@@ -1475,7 +1479,9 @@ export default function Expenses() {
                                 ? row.alreadyPaid?.map(c=>c.description).join(", ")
                                 : row.candidates?.length
                                   ? <span style={{color:"#fbbf24"}}>⚠ {row.candidates.length} candidate(s), amounts don't sum to ${row.amount.toFixed(2)}</span>
-                                  : <span style={{color:"#f87171"}}>No bill on file for order #{row.orderRef}</span>}
+                                  : row.createBill
+                                    ? <span style={{color:"#34d399"}}>Will create new bill</span>
+                                    : <span style={{color:"#f87171"}}>No bill on file for order #{row.orderRef}</span>}
                           </td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
                             {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:12}}>✅ Exact match</span>}
@@ -1483,9 +1489,43 @@ export default function Expenses() {
                             {row.matchType === "already_paid" && <span style={{color:"#60a5fa",fontSize:12}}>ℹ️ Already marked paid</span>}
                             {row.matchType === "already_paid_mismatch" && <span style={{color:"#fbbf24",fontSize:12}}>⚠ Already paid, amount differs</span>}
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:12}}>⚠ Review</span>}
-                            {row.matchType === "none" && <span style={{color:"#f87171",fontSize:12}}>❌ No match</span>}
+                            {row.matchType === "none" && !row.createBill && (
+                              <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.payeeName } : r))}
+                                style={{ fontSize:11, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:6, padding:"3px 8px", background:"none", cursor:"pointer" }}>
+                                + Create Bill
+                              </button>
+                            )}
+                            {row.matchType === "none" && row.createBill && <span style={{color:"#34d399",fontSize:12}}>📝 New bill</span>}
                           </td>
                         </tr>
+                        {row.matchType === "none" && row.createBill && (
+                          <tr>
+                            <td></td>
+                            <td colSpan={6} style={{ padding:"6px 10px 14px", borderBottom:"1px solid #1a2030" }}>
+                              <div style={{ display:"flex", gap:10, alignItems:"center", background:"#0d1117", border:"1px solid #06b6d4", borderRadius:8, padding:"10px 14px" }}>
+                                <label style={{ fontSize:11, color:"#8b949e" }}>Category
+                                  <select value={row.newCategory} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newCategory:e.target.value}:r))}
+                                    style={{ display:"block", marginTop:3, background:"#111827", border:"1px solid #374151", borderRadius:6, padding:"4px 8px", color:"#f1f5f9", fontSize:12 }}>
+                                    {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
+                                  </select>
+                                </label>
+                                <label style={{ fontSize:11, color:"#8b949e", flex:1 }}>Description
+                                  <input value={row.newDescription} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newDescription:e.target.value}:r))}
+                                    style={{ display:"block", width:"100%", marginTop:3, background:"#111827", border:"1px solid #374151", borderRadius:6, padding:"4px 8px", color:"#f1f5f9", fontSize:12, boxSizing:"border-box" }} />
+                                </label>
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, selected:true } : r))}
+                                  style={{ fontSize:11, color:"#fff", background:"#059669", border:"none", borderRadius:6, padding:"6px 12px", cursor:"pointer", fontWeight:600, alignSelf:"flex-end" }}>
+                                  ✓ Ready
+                                </button>
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill:false, selected:false } : r))}
+                                  style={{ fontSize:11, color:"#9ca3af", background:"none", border:"1px solid #374151", borderRadius:6, padding:"6px 12px", cursor:"pointer", alignSelf:"flex-end" }}>
+                                  Cancel
+                                </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </React.Fragment>
                       ))}
                     </tbody>
                   </table>
@@ -1493,7 +1533,15 @@ export default function Expenses() {
                 <div style={{marginTop:14,display:"flex",alignItems:"center",gap:16}}>
                   <button onClick={applyProofRows} disabled={proofLoading}
                     style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
-                    {proofLoading?"Applying…":`✅ Mark ${proofRows.filter(r=>r.selected).length} Bill(s) Paid`}
+                    {proofLoading?"Applying…":(() => {
+                      const sel = proofRows.filter(r=>r.selected);
+                      const toPay = sel.filter(r=>r.matchedIds?.length).length;
+                      const toCreate = sel.filter(r=>r.createBill && !r.matchedIds?.length).length;
+                      const parts = [];
+                      if (toPay) parts.push(`Mark ${toPay} Paid`);
+                      if (toCreate) parts.push(`Create ${toCreate} New`);
+                      return "✅ " + (parts.join(" & ") || "Apply");
+                    })()}
                   </button>
                 </div>
               </>
