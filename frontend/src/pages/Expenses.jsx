@@ -915,8 +915,8 @@ export default function Expenses() {
     ? sorted.filter(e => e.status === activeFilter)
     : sorted;
 
-  const th = { padding: "10px 14px", textAlign: "left", color: "#9ca3af", fontSize: 12, fontWeight: 600, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" };
-  const td = { padding: "11px 14px", fontSize: 13, color: "#e2e8f0", borderTop: "1px solid #1e2433" };
+  const th = { padding: "6px 12px", textAlign: "left", color: "#9ca3af", fontSize: 11, fontWeight: 600, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" };
+  const td = { padding: "5px 12px", fontSize: 12, color: "#e2e8f0", borderTop: "1px solid #1e2433", lineHeight: 1.25 };
 
   const SortArrow = ({ k }) => {
     if (sortKey !== k) return <span style={{ color: "#374151", marginLeft: 4 }}>↕</span>;
@@ -1821,26 +1821,26 @@ export default function Expenses() {
 
                     {/* VIN */}
                     <td style={{ ...td }}>
-                      <div style={{ fontFamily: "monospace", fontSize: 12, color: "#94a3b8", letterSpacing: "0.03em" }}
+                      <div style={{ fontFamily: "monospace", fontSize: 11, color: "#94a3b8", letterSpacing: "0.03em" }}
                         title={exp.description}>
                         {exp.vin || exp.orderId?.vin || (exp.description?.match(/[A-HJ-NPR-Z0-9]{17}/) || [])[0] || "—"}
                       </div>
                       {exp.notes && (
-                        <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontSize: 10, color: "#6b7280", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {exp.notes}
                         </div>
                       )}
                     </td>
 
                     {/* Booking # */}
-                    <td style={{ ...td, color: "#a78bfa", fontSize: 12, fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                    <td style={{ ...td, color: "#a78bfa", fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}>
                       {exp.orderId?.bookingNumber || "—"}
                     </td>
 
                     {/* Vendor */}
                     <td style={{ ...td, color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap" }}>
                       {exp.vendor || "—"}
-                      {exp.invoiceNumber && <div style={{ fontSize: 11, color: "#6b7280" }}>#{exp.invoiceNumber}</div>}
+                      {exp.invoiceNumber && <span style={{ fontSize: 10, color: "#6b7280", marginLeft: 5 }}>#{exp.invoiceNumber}</span>}
                     </td>
 
                     {/* Amount */}
@@ -1849,21 +1849,21 @@ export default function Expenses() {
                     </td>
 
                     {/* Status */}
-                    <td style={td}>
+                    <td style={{ ...td, whiteSpace: "nowrap" }}>
                       {exp.status === "paid" ? (
-                        <div>
-                          <span style={{ display: "inline-block", padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600, background: "#34d39922", color: "#34d399" }}>
+                        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
+                          <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#34d39922", color: "#34d399" }}>
                             Paid
                           </span>
                           {exp.paidDate && (
-                            <div style={{ fontSize: 10, color: "#6b7280", marginTop: 2 }}>{fmtDate(exp.paidDate)}</div>
+                            <span style={{ fontSize: 10, color: "#6b7280" }}>{fmtDate(exp.paidDate)}</span>
                           )}
                           {exp.paymentMethod && (
-                            <div style={{ fontSize: 10, color: "#60a5fa", marginTop: 1 }}>{exp.paymentMethod}</div>
+                            <span style={{ fontSize: 10, color: "#60a5fa" }}>{exp.paymentMethod}</span>
                           )}
                         </div>
                       ) : (
-                        <span style={{ display: "inline-block", padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600, background: "#f8717122", color: "#f87171" }}>
+                        <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#f8717122", color: "#f87171" }}>
                           Unpaid
                         </span>
                       )}
@@ -1873,7 +1873,7 @@ export default function Expenses() {
                     <td style={td}>
                       <span style={{
                         display: "inline-flex", alignItems: "center", gap: 5,
-                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600,
                         background: (CAT_COLORS[exp.category] || "#9ca3af") + "22",
                         color: CAT_COLORS[exp.category] || "#9ca3af",
                         whiteSpace: "nowrap",
