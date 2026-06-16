@@ -1311,17 +1311,24 @@ export default function OrderDetails() {
     setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${payload.vehicleYearMakeModel || ""} VIN: ${(payload.vin || order.vin || "").slice(-6)}`);
     setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${payload.vin || order.vin || ""}\nVessel: ${payload.vessel || ""} | Voyage: ${payload.voyage || ""}\nPort of Loading: ${payload.portOfLoading || ""}\n\nRegards,\nDDG OPS`);
 
-    // If Sallaum + Nonrunner or Forklift → open Sallaum notify popup at the same time
+    // If Sallaum + Nonrunner/Forklift/No Title → open Sallaum notify popup at the same time
     const condition  = (payload.condition  || order.condition  || "").toLowerCase();
+    const titleStat   = (payload.titleStatus || order.titleStatus || "").toLowerCase();
     const isSallaum  = (order.shippingLine || payload.shippingLine || "").toUpperCase().includes("SALLAUM");
-    const needsNotify = isSallaum && (condition === "nonrunner" || condition === "forklift");
+    const isNoTitle  = titleStat === "no title";
+    const needsNotify = isSallaum && (condition === "nonrunner" || condition === "forklift" || isNoTitle);
     if (needsNotify) {
-      const condLabel = condition === "forklift" ? "Forklift" : "Nonrunner";
       const booking = payload.bookingNumber || order.bookingNumber || "";
       const ymm  = payload.vehicleYearMakeModel || [order.year, order.make, order.model].filter(Boolean).join(" ");
       const vin  = payload.vin || order.vin || "";
-      setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)} ${condLabel.toUpperCase()}`);
-      setSallaumNotifyBody(`Please update to ${condLabel}.`);
+      if (isNoTitle) {
+        setSallaumNotifySubject(`${booking} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
+        setSallaumNotifyBody(`Please approve no title delivery for this unit.`);
+      } else {
+        const condLabel = condition === "forklift" ? "Forklift" : "Nonrunner";
+        setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)} ${condLabel.toUpperCase()}`);
+        setSallaumNotifyBody(`Please update to ${condLabel}.`);
+      }
       setSallaumNotify(true);
     }
 
@@ -1765,14 +1772,21 @@ export default function OrderDetails() {
           setDrSendTrucker("");
           setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${ymm} VIN: ${vin.slice(-6)}`);
           setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${vin}\nVessel: ${base.vessel||""} | Voyage: ${base.voyage||""}\nPort of Loading: ${base.pol||base.portOfLoading||""}\n\nRegards,\nDor Ldor Global`);
-          // Sallaum non-runner/forklift notify
+          // Sallaum non-runner/forklift/no-title notify
           const cond2 = (order.condition || "").toLowerCase();
+          const titleStat2 = (order.titleStatus || "").toLowerCase();
           const isSallaum2 = (order.shippingLine || "").toUpperCase().includes("SALLAUM");
-          if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift")) {
-            const condLabel2 = cond2 === "forklift" ? "Forklift" : "Nonrunner";
+          const isNoTitle2 = titleStat2 === "no title";
+          if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift" || isNoTitle2)) {
             const booking2 = order.bookingNumber || "";
-            setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)} ${condLabel2.toUpperCase()}`);
-            setSallaumNotifyBody(`Please update to ${condLabel2}.`);
+            if (isNoTitle2) {
+              setSallaumNotifySubject(`${booking2} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
+              setSallaumNotifyBody(`Please approve no title delivery for this unit.`);
+            } else {
+              const condLabel2 = cond2 === "forklift" ? "Forklift" : "Nonrunner";
+              setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)} ${condLabel2.toUpperCase()}`);
+              setSallaumNotifyBody(`Please update to ${condLabel2}.`);
+            }
             setSallaumNotify(true);
           }
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
