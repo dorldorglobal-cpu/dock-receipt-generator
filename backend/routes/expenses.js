@@ -1412,6 +1412,15 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
   try {
     if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
 
+    // Save the proof PDF once — it covers the whole batch, so it lives in the
+    // general Receipts folder and gets linked as the receipt on every bill
+    // it pays, rather than duplicated into each order's own folder.
+    let proofFile = null;
+    try {
+      const driveFile = await uploadFileToDriveExpenses(req.file.buffer, req.file.originalname, "application/pdf", "receipt", null);
+      proofFile = { fname: driveFile.name, driveId: driveFile.id, driveUrl: driveFile.webViewLink };
+    } catch (e) { console.warn("[Payment Proof] Drive upload failed:", e.message); }
+
     const data = await pdfParse(req.file.buffer);
     const text = data.text;
 
@@ -1499,7 +1508,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       });
     }
 
-    res.json({ rows, batchPaidDate, totalPayments: rows.length });
+    res.json({ rows, batchPaidDate, totalPayments: rows.length, proofFile });
   } catch (err) {
     console.error("parse-payment-proof error:", err);
     res.status(500).json({ error: err.message });
@@ -1509,8 +1518,15 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
 // ── POST /api/expenses/apply-payment-proof — mark the matched bills paid ──────
 router.post("/apply-payment-proof", express.json(), async (req, res) => {
   try {
-    const { rows, paymentMethod } = req.body;
+    const { rows, paymentMethod, proofFile } = req.body;
     if (!rows?.length) return res.status(400).json({ error: "No rows provided" });
+
+    const receiptFields = proofFile?.driveId ? {
+      receiptFileName: proofFile.fname || "",
+      receiptDriveId:  proofFile.driveId,
+      receiptDriveUrl: proofFile.driveUrl || "",
+      receiptMime:     "application/pdf",
+    } : {};
 
     let updated = 0;
     for (const row of rows) {
@@ -1518,7 +1534,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
       const result = await Expense.updateMany(
         { _id: { $in: row.matchedIds } },
-        { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH" } }
+        { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
       );
       updated += result.modifiedCount;
     }

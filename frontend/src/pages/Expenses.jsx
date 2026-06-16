@@ -481,13 +481,14 @@ export default function Expenses() {
   };
 
   // ── Payment Proof (bank ACH confirmation) import state ───────────────────────
-  const [proofFile,    setProofFile]    = useState(null);
-  const [proofRows,    setProofRows]    = useState([]);
-  const [proofLoading, setProofLoading] = useState(false);
-  const [proofMsg,     setProofMsg]     = useState("");
+  const [proofFile,        setProofFile]        = useState(null); // the dropped File object
+  const [proofDriveFile,   setProofDriveFile]    = useState(null); // { fname, driveId, driveUrl } once uploaded
+  const [proofRows,        setProofRows]         = useState([]);
+  const [proofLoading,     setProofLoading]      = useState(false);
+  const [proofMsg,         setProofMsg]          = useState("");
 
   const parseProofFile = async (file) => {
-    setProofLoading(true); setProofMsg(""); setProofRows([]);
+    setProofLoading(true); setProofMsg(""); setProofRows([]); setProofDriveFile(null);
     try {
       const fd = new FormData();
       fd.append("proof", file);
@@ -495,6 +496,7 @@ export default function Expenses() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setProofRows(data.rows);
+      setProofDriveFile(data.proofFile || null);
       const needsReview = data.rows.filter(r => r.matchType !== "exact" && r.matchType !== "combined").length;
       setProofMsg(needsReview > 0
         ? `⚠ ${needsReview} of ${data.rows.length} payment(s) need manual review.`
@@ -508,12 +510,12 @@ export default function Expenses() {
     try {
       const res = await fetch(`${API}/api/expenses/apply-payment-proof`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: proofRows, paymentMethod: "Bank ACH" }),
+        body: JSON.stringify({ rows: proofRows, paymentMethod: "Bank ACH", proofFile: proofDriveFile }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setProofMsg(`✅ ${data.updated} bill(s) marked paid!`);
-      setProofRows([]); setProofFile(null); fetchAll();
+      setProofRows([]); setProofFile(null); setProofDriveFile(null); fetchAll();
     } catch (err) { setProofMsg("❌ " + err.message); }
     finally { setProofLoading(false); }
   };
