@@ -405,8 +405,10 @@ router.get("/:id/bill", serveFile("bill"));
 router.delete("/:id/bill", deleteFileRoute("bill"));
 
 // ── Helper: save buffer to Drive and return filename ─────────────────────────
-async function saveUploadedFile(buffer, originalName, mimeType) {
-  const driveFile = await uploadFileToDriveExpenses(buffer, originalName, mimeType || "application/pdf");
+// If orderId is given, the file is saved into that order's own Drive folder;
+// otherwise it falls back to the general Expenses > Bills folder.
+async function saveUploadedFile(buffer, originalName, mimeType, orderId = null) {
+  const driveFile = await uploadFileToDriveExpenses(buffer, originalName, mimeType || "application/pdf", "bill", orderId);
   return { fname: driveFile.name, driveId: driveFile.id, driveUrl: driveFile.webViewLink };
 }
 
@@ -1166,30 +1168,39 @@ router.post("/parse-misc", memUpload.array("invoices", 50), async (req, res) => 
 
         // ── FedEx Transaction Record — dedicated parsing path ──────────────────
         if (/fedex/i.test(text) && /tracking\s*no\.?/i.test(text)) {
-          // Header labels and values appear on separate lines:
+          // Header labels and values appear together, e.g.:
           //   TRACKING NO.: SHIP DATE: ESTIMATED TOTAL COST:
           //   872844321616 Jun 9, 2026 10.95 USD
+          // pdf-parse sometimes drops whitespace, merging the year and amount
+          // (e.g. "202610.95") — anchor the year to exactly 4 digits so the
+          // amount never absorbs it.
           const headerBlock = text.match(
-            /TRACKING\s+NO\.?:?\s*SHIP\s+DATE:?\s*ESTIMATED\s+TOTAL\s+COST:?\s*\n\s*(\d{8,})\s+([A-Za-z]+\s+\d{1,2},?\s+\d{4})\s+\$?\s*([\d,]+\.\d{2})/i
+            /TRACKING\s*NO\.?:?\s*SHIP\s*DATE:?\s*ESTIMATED\s*TOTAL\s*COST:?\s*(\d{8,14})\D*?([A-Za-z]{3,9})\.?\s*(\d{1,2}),?\s*(\d{4})\D{0,3}(\d{1,5}\.\d{2})\s*USD/i
           );
-          const trackingMatch = headerBlock ? [null, headerBlock[1]]
-            : text.match(/Tracking\s*No\.?:?\s*\n?\s*(\d{8,})/i)
-            || text.match(/\b(\d{10,12})\b/);
-          const shipDateMatch = headerBlock ? [null, headerBlock[2]] : text.match(/Ship\s*Date:?\s*\n?\s*([A-Za-z]+\s+\d{1,2},?\s+\d{4})/i);
-          const totalMatch    = headerBlock ? [null, headerBlock[3]]
-            : text.match(/(?:Estimated\s+Total\s+Cost|Total\s+Cost):?\s*\n?\s*\$?\s*([\d,]+\.\d{2})/i)
-            || text.match(/([\d,]+\.\d{2})\s*USD/i);
-          const refMatch      = text.match(/Your\s+reference:?\s*\n?\s*([A-Za-z0-9\-]+)/i);
 
           const months = {jan:'01',feb:'02',mar:'03',apr:'04',may:'05',jun:'06',jul:'07',aug:'08',sep:'09',oct:'10',nov:'11',dec:'12'};
-          let billDate = "";
-          if (shipDateMatch) {
-            const mp = shipDateMatch[1].match(/([A-Za-z]+)\s+(\d{1,2}),?\s+(\d{4})/);
-            if (mp) billDate = `${months[mp[1].toLowerCase().slice(0,3)]}/${mp[2].padStart(2,'0')}/${mp[3]}`;
+          let trackingNo = "", billDate = "", total = 0;
+
+          if (headerBlock) {
+            trackingNo = headerBlock[1];
+            const mon = headerBlock[2].toLowerCase().slice(0, 3);
+            if (months[mon]) billDate = `${months[mon]}/${headerBlock[3].padStart(2, '0')}/${headerBlock[4]}`;
+            total = parseFloat(headerBlock[5]);
+          } else {
+            // Fallbacks if the combined pattern doesn't match
+            const trackMatch = text.match(/Tracking\s*No\.?:?\s*\n?\s*(\d{10,14})/i);
+            trackingNo = trackMatch?.[1] || "";
+            const dateMatch = text.match(/Ship\s*Date:?\s*\n?\s*([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})/i);
+            if (dateMatch) {
+              const mon = dateMatch[1].toLowerCase().slice(0, 3);
+              if (months[mon]) billDate = `${months[mon]}/${dateMatch[2].padStart(2, '0')}/${dateMatch[3]}`;
+            }
+            const totalM = text.match(/([\d,]{1,7}\.\d{2})\s*USD/i);
+            total = totalM ? parseFloat(totalM[1].replace(/,/g, "")) : 0;
           }
 
+          const refMatch  = text.match(/Your\s+reference:?\s*\n?\s*([A-Za-z0-9\-]+)/i);
           const orderRef = refMatch?.[1]?.trim() || "";
-          const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
 
           let order = null;
           if (orderRef) {
@@ -1197,9 +1208,13 @@ router.post("/parse-misc", memUpload.array("invoices", 50), async (req, res) => 
               .select("_id refNumber vin customerName year make model").lean();
           }
 
+          // Save the file to Drive — to the matched order's folder if found, else the general Bills folder
+          let billFile = null;
+          try { billFile = await saveUploadedFile(file.buffer, file.originalname, "application/pdf", order?._id || null); } catch {}
+
           results.push({
             fileName:     file.originalname,
-            invoiceNumber: trackingMatch?.[1] || "",
+            invoiceNumber: trackingNo,
             billDate,
             vendor:       "FedEx",
             total,
@@ -1207,6 +1222,9 @@ router.post("/parse-misc", memUpload.array("invoices", 50), async (req, res) => 
             description:  "FedEx Shipping" + (orderRef ? ` — Ref #${orderRef}` : ""),
             isPaid:       true, // FedEx One Rate is billed to card on file at ship time
             vin:          "",
+            billFileName: billFile?.fname || "",
+            billDriveId:  billFile?.driveId || "",
+            billDriveUrl: billFile?.driveUrl || "",
             orderId:      order?._id || null,
             orderRef:     order?.refNumber || orderRef,
             customerName: order?.customerName || "",
@@ -1299,6 +1317,10 @@ router.post("/parse-misc", memUpload.array("invoices", 50), async (req, res) => 
             .select("_id refNumber vin customerName year make model").lean();
         }
 
+        // Save the file to Drive — to the matched order's folder if found, else the general Bills folder
+        let billFile = null;
+        try { billFile = await saveUploadedFile(file.buffer, file.originalname, "application/pdf", order?._id || null); } catch {}
+
         results.push({
           fileName:     file.originalname,
           invoiceNumber,
@@ -1309,6 +1331,9 @@ router.post("/parse-misc", memUpload.array("invoices", 50), async (req, res) => 
           description,
           isPaid,
           vin:          fullVin || partialVin,
+          billFileName: billFile?.fname || "",
+          billDriveId:  billFile?.driveId || "",
+          billDriveUrl: billFile?.driveUrl || "",
           orderId:      order?._id || null,
           orderRef:     order?.refNumber || "",
           customerName: order?.customerName || "",
@@ -1365,6 +1390,9 @@ router.post("/apply-misc", express.json(), async (req, res) => {
         status:        row.isPaid ? "paid" : "unpaid",
         paidDate:      row.isPaid ? dateObj : null,
         notes:         row.notes || "",
+        billFileName:  row.billFileName || "",
+        billDriveId:   row.billDriveId  || "",
+        billDriveUrl:  row.billDriveUrl || "",
       });
       created++;
     }
