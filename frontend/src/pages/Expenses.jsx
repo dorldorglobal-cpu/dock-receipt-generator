@@ -480,6 +480,44 @@ export default function Expenses() {
     finally { setMiscLoading(false); }
   };
 
+  // ── Payment Proof (bank ACH confirmation) import state ───────────────────────
+  const [proofFile,    setProofFile]    = useState(null);
+  const [proofRows,    setProofRows]    = useState([]);
+  const [proofLoading, setProofLoading] = useState(false);
+  const [proofMsg,     setProofMsg]     = useState("");
+
+  const parseProofFile = async (file) => {
+    setProofLoading(true); setProofMsg(""); setProofRows([]);
+    try {
+      const fd = new FormData();
+      fd.append("proof", file);
+      const res = await fetch(`${API}/api/expenses/parse-payment-proof`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setProofRows(data.rows);
+      const needsReview = data.rows.filter(r => r.matchType !== "exact" && r.matchType !== "combined").length;
+      setProofMsg(needsReview > 0
+        ? `⚠ ${needsReview} of ${data.rows.length} payment(s) need manual review.`
+        : `✅ ${data.rows.length} payment(s) auto-matched.`);
+    } catch (err) { setProofMsg("❌ " + err.message); }
+    finally { setProofLoading(false); }
+  };
+
+  const applyProofRows = async () => {
+    setProofLoading(true);
+    try {
+      const res = await fetch(`${API}/api/expenses/apply-payment-proof`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rows: proofRows, paymentMethod: "Bank ACH" }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error);
+      setProofMsg(`✅ ${data.updated} bill(s) marked paid!`);
+      setProofRows([]); setProofFile(null); fetchAll();
+    } catch (err) { setProofMsg("❌ " + err.message); }
+    finally { setProofLoading(false); }
+  };
+
   // ── Sallaum import state ─────────────────────────────────────────────────────
   const [sallaumFile, setSallaumFile]     = useState(null);
   const [sallaumParsed, setSallaumParsed] = useState(null); // { invoiceNumber, voyage, vessel, pol, pod, rows }
@@ -914,8 +952,8 @@ export default function Expenses() {
       <div style={{ background: "#1e2433", borderRadius: 12, padding: "20px 24px", marginBottom: 24, border: "1px solid #374151" }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 16 }}>📥 Import Bill</div>
 
-        {/* Five dropzones side by side */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 14, marginBottom: 6 }}>
+        {/* Six dropzones side by side */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 6 }}>
 
           {/* Sallaum dropzone */}
           {[
@@ -1004,6 +1042,28 @@ export default function Expenses() {
                 style={{ fontSize: 11, color: "#9ca3af", border: "1px solid #374151", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
                 ✏️ Manual
               </button>
+            </div>
+          </div>
+
+          {/* Payment Proof card */}
+          <div
+            onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#06b6d4"; }}
+            onDragLeave={e => { e.currentTarget.style.borderColor = proofFile ? "#06b6d4" : "#374151"; }}
+            onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#06b6d4"; const files = Array.from(e.dataTransfer.files); if (files.length) { setProofFile(files[0]); parseProofFile(files[0]); } }}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "#111827", border: `2px dashed ${proofFile ? "#06b6d4" : "#374151"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
+            onMouseEnter={e => e.currentTarget.style.borderColor = "#06b6d4"}
+            onMouseLeave={e => e.currentTarget.style.borderColor = proofFile ? "#06b6d4" : "#374151"}>
+            <span style={{ fontSize: 32 }}>{proofLoading ? "⏳" : proofFile ? "✅" : "🏦"}</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>🏦 Payment Proof</span>
+            <span style={{ fontSize: 12, color: proofFile ? "#34d399" : "#6b7280", marginBottom: 4 }}>
+              {proofLoading ? "Parsing…" : proofFile ? proofFile.name : "Drop bank ACH confirmation PDF"}
+            </span>
+            <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
+              <label style={{ fontSize: 11, color: "#06b6d4", border: "1px solid #06b6d4", borderRadius: 6, padding: "3px 10px", cursor: "pointer" }}>
+                📂 Browse
+                <input type="file" accept=".pdf" style={{ display: "none" }}
+                  onChange={e => { const files = Array.from(e.target.files); if (files.length) { setProofFile(files[0]); parseProofFile(files[0]); } }} />
+              </label>
             </div>
           </div>
         </div>
@@ -1374,6 +1434,56 @@ export default function Expenses() {
                   <button onClick={applyMiscBills} disabled={miscLoading}
                     style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                     {miscLoading?"Applying…":`✅ Create ${miscResults.filter(r=>!r.skip&&!r.error).length} Expenses`}
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
+        )}
+
+        {/* ── Payment Proof results ── */}
+        {(proofMsg || proofRows.length > 0) && (
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #374151" }}>
+            <div style={{ fontSize: 13, fontWeight: 700, color: "#06b6d4", marginBottom: 10 }}>🏦 Payment Proof Results</div>
+            {proofMsg && <div style={{ marginBottom: 10, fontSize: 13, color: proofMsg.startsWith("✅") ? "#34d399" : proofMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{proofMsg}</div>}
+            {proofRows.length > 0 && (
+              <>
+                <div style={{ overflowX: "auto" }}>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {proofRows.map((row, i) => (
+                        <tr key={i} style={{ opacity: row.selected ? 1 : 0.5 }}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                            <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length}
+                              onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked}:r))}/>
+                          </td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap"}}>{row.payeeName}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600}}>{row.orderRef || "—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:12}}>{row.note || "—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#34d399",fontWeight:600}}>${row.amount.toFixed(2)}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",fontSize:12,color:"#9ca3af"}}>
+                            {row.matchedIds?.length
+                              ? row.candidates.filter(c=>row.matchedIds.includes(c._id)).map(c=>c.description).join(", ")
+                              : row.candidates?.length
+                                ? <span style={{color:"#fbbf24"}}>⚠ {row.candidates.length} candidate(s), amounts don't sum to ${row.amount.toFixed(2)}</span>
+                                : <span style={{color:"#f87171"}}>No unpaid bill found for order #{row.orderRef}</span>}
+                          </td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                            {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:12}}>✅ Exact match</span>}
+                            {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:12}}>✅ Combined match</span>}
+                            {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:12}}>⚠ Review</span>}
+                            {row.matchType === "none" && <span style={{color:"#f87171",fontSize:12}}>❌ No match</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+                <div style={{marginTop:14,display:"flex",alignItems:"center",gap:16}}>
+                  <button onClick={applyProofRows} disabled={proofLoading}
+                    style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
+                    {proofLoading?"Applying…":`✅ Mark ${proofRows.filter(r=>r.selected).length} Bill(s) Paid`}
                   </button>
                 </div>
               </>

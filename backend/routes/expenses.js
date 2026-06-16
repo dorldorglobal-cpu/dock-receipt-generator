@@ -1405,6 +1405,131 @@ router.post("/apply-misc", express.json(), async (req, res) => {
   }
 });
 
+// ── POST /api/expenses/parse-payment-proof — parse a bank "Operation Proof" /
+//     ACH batch payment confirmation PDF and match each payee line to the
+//     matching unpaid bill(s) on file by order ref (the "Addenda" field).
+router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
+
+    const data = await pdfParse(req.file.buffer);
+    const text = data.text;
+
+    // Payment date for the whole batch (used as default paidDate)
+    const payDateMatch = text.match(/Payment\s*Date\s*([\d]{1,2}\/[\d]{1,2}\/[\d]{4})/i);
+    const batchPaidDate = payDateMatch?.[1] || "";
+
+    const FIELD_BOUNDARY = "(?=Payee Name|Account Number|Amount|Destination Bank Name|Routing Number|Addenda|Recurrence|Payment Date|Total Payments|Authorizations|$)";
+    const grab = (str, label) => {
+      const re = new RegExp(label + "\\s*([\\s\\S]*?)" + FIELD_BOUNDARY, "i");
+      const m = str.match(re);
+      return m ? m[1].replace(/\s+/g, " ").trim() : "";
+    };
+
+    // Split into one chunk per "Payee Name" occurrence
+    const idxs = [];
+    const peRe = /Payee Name/gi;
+    let pm;
+    while ((pm = peRe.exec(text))) idxs.push(pm.index);
+    idxs.push(text.length);
+
+    const rows = [];
+    for (let i = 0; i < idxs.length - 1; i++) {
+      const chunk = text.slice(idxs[i], idxs[i + 1]);
+      const payeeName  = grab(chunk, "Payee Name");
+      const amountStr  = grab(chunk, "Amount");
+      const amountM    = amountStr.match(/([\d,]+\.\d{2})/);
+      const amount     = amountM ? parseFloat(amountM[1].replace(/,/g, "")) : 0;
+      const addenda    = grab(chunk, "Addenda");
+      if (!payeeName || !amount) continue;
+
+      const refMatch = addenda.match(/^(\d{3,8})/);
+      const orderRef = refMatch?.[1] || "";
+      const note      = refMatch ? addenda.slice(refMatch[1].length).trim() : addenda;
+
+      // Find candidate unpaid expenses tied to this order ref
+      let candidates = [];
+      let matchedIds = [];
+      let matchType = "none";
+      if (orderRef) {
+        candidates = await Expense.find({
+          orderRef: { $regex: `^${esc(orderRef)}$`, $options: "i" },
+          status: "unpaid",
+        }).select("_id description vendor amount").lean();
+
+        if (candidates.length) {
+          // 1. Single expense exactly matching the payment amount
+          const exact = candidates.find(c => Math.abs(c.amount - amount) < 0.01);
+          if (exact) {
+            matchedIds = [exact._id];
+            matchType = "exact";
+          } else {
+            // 2. Subset of candidates whose amounts sum to the payment amount
+            //    (covers combined payments, e.g. "PLUS WRAPPING")
+            const n = candidates.length;
+            let found = null;
+            for (let mask = 1; mask < (1 << n) && !found; mask++) {
+              let sum = 0;
+              const subset = [];
+              for (let b = 0; b < n; b++) {
+                if (mask & (1 << b)) { sum += candidates[b].amount; subset.push(candidates[b]); }
+              }
+              if (Math.abs(sum - amount) < 0.01) found = subset;
+            }
+            if (found) {
+              matchedIds = found.map(c => c._id);
+              matchType = "combined";
+            } else {
+              matchType = "review"; // candidates exist but none sum to the amount
+            }
+          }
+        }
+      }
+
+      rows.push({
+        payeeName,
+        amount,
+        orderRef,
+        note,
+        batchPaidDate,
+        candidates,
+        matchedIds,
+        matchType,
+        selected: matchType === "exact" || matchType === "combined",
+      });
+    }
+
+    res.json({ rows, batchPaidDate, totalPayments: rows.length });
+  } catch (err) {
+    console.error("parse-payment-proof error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/expenses/apply-payment-proof — mark the matched bills paid ──────
+router.post("/apply-payment-proof", express.json(), async (req, res) => {
+  try {
+    const { rows, paymentMethod } = req.body;
+    if (!rows?.length) return res.status(400).json({ error: "No rows provided" });
+
+    let updated = 0;
+    for (const row of rows) {
+      if (!row.selected || !row.matchedIds?.length) continue;
+      const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
+      const result = await Expense.updateMany(
+        { _id: { $in: row.matchedIds } },
+        { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH" } }
+      );
+      updated += result.modifiedCount;
+    }
+
+    res.json({ updated });
+  } catch (err) {
+    console.error("apply-payment-proof error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/expenses/parse-storage-url — parse Copart/auction storage receipt ──
 router.post("/parse-storage-url", express.json(), async (req, res) => {
   try {
