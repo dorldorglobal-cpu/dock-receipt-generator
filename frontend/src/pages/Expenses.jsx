@@ -1768,12 +1768,13 @@ export default function Expenses() {
                     />
                   </th>
                   <th style={th} onClick={() => toggleSort("date")}>Date <SortArrow k="date" /></th>
-                  <th style={th} onClick={() => toggleSort("category")}>Category <SortArrow k="category" /></th>
+                  <th style={th}>Order #</th>
                   <th style={th}>VIN</th>
+                  <th style={th}>Booking #</th>
                   <th style={th} onClick={() => toggleSort("vendor")}>Vendor <SortArrow k="vendor" /></th>
                   <th style={{ ...th, textAlign: "right" }} onClick={() => toggleSort("amount")}>Amount <SortArrow k="amount" /></th>
-                  <th style={th}>Order #</th>
                   <th style={th} onClick={() => toggleSort("status")}>Status <SortArrow k="status" /></th>
+                  <th style={th} onClick={() => toggleSort("category")}>Category <SortArrow k="category" /></th>
                   <th style={th}>Docs</th>
                   <th style={{ ...th, textAlign: "right" }}>Actions</th>
                 </tr>
@@ -1793,30 +1794,27 @@ export default function Expenses() {
                     {/* Date */}
                     <td style={td}>{fmtDate(exp.date)}</td>
 
-                    {/* Category */}
-                    <td style={td}>
-                      <span style={{
-                        display: "inline-flex", alignItems: "center", gap: 5,
-                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
-                        background: (CAT_COLORS[exp.category] || "#9ca3af") + "22",
-                        color: CAT_COLORS[exp.category] || "#9ca3af",
-                        whiteSpace: "nowrap",
-                      }}>
-                        {exp.category}
-                      </span>
+                    {/* Order */}
+                    <td style={{ ...td, color: "#60a5fa" }}>
+                      {exp.orderRef ? `#${exp.orderRef}` : "—"}
                     </td>
 
                     {/* VIN */}
                     <td style={{ ...td }}>
                       <div style={{ fontFamily: "monospace", fontSize: 12, color: "#94a3b8", letterSpacing: "0.03em" }}
                         title={exp.description}>
-                        {exp.vin || (exp.description?.match(/[A-HJ-NPR-Z0-9]{17}/) || [])[0] || "—"}
+                        {exp.vin || exp.orderId?.vin || (exp.description?.match(/[A-HJ-NPR-Z0-9]{17}/) || [])[0] || "—"}
                       </div>
                       {exp.notes && (
                         <div style={{ fontSize: 11, color: "#6b7280", marginTop: 2, maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {exp.notes}
                         </div>
                       )}
+                    </td>
+
+                    {/* Booking # */}
+                    <td style={{ ...td, color: "#a78bfa", fontSize: 12, fontFamily: "monospace", whiteSpace: "nowrap" }}>
+                      {exp.orderId?.bookingNumber || "—"}
                     </td>
 
                     {/* Vendor */}
@@ -1828,11 +1826,6 @@ export default function Expenses() {
                     {/* Amount */}
                     <td style={{ ...td, textAlign: "right", fontWeight: 600, color: "#f1f5f9", fontVariantNumeric: "tabular-nums" }}>
                       {fmt$(exp.amount)}
-                    </td>
-
-                    {/* Order */}
-                    <td style={{ ...td, color: "#60a5fa" }}>
-                      {exp.orderRef ? `#${exp.orderRef}` : "—"}
                     </td>
 
                     {/* Status */}
@@ -1854,6 +1847,19 @@ export default function Expenses() {
                           Unpaid
                         </span>
                       )}
+                    </td>
+
+                    {/* Category */}
+                    <td style={td}>
+                      <span style={{
+                        display: "inline-flex", alignItems: "center", gap: 5,
+                        padding: "3px 8px", borderRadius: 5, fontSize: 11, fontWeight: 600,
+                        background: (CAT_COLORS[exp.category] || "#9ca3af") + "22",
+                        color: CAT_COLORS[exp.category] || "#9ca3af",
+                        whiteSpace: "nowrap",
+                      }}>
+                        {exp.category}
+                      </span>
                     </td>
 
                     {/* Docs — bill + receipt combined */}

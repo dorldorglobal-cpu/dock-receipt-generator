@@ -84,7 +84,9 @@ router.get("/", async (req, res) => {
       ];
     }
 
-    const expenses = await Expense.find(q).sort({ date: -1, createdAt: -1 }).lean();
+    const expenses = await Expense.find(q).sort({ date: -1, createdAt: -1 })
+      .populate("orderId", "bookingNumber vin")
+      .lean();
     res.json(expenses);
   } catch (err) {
     console.error("Expenses list error:", err);
