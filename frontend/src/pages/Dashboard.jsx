@@ -10,6 +10,7 @@ const STATUS_CONFIG = {
   "Sailed":          { cls: "badge-sailed",   emoji: "🚢" },
   "Completed":       { cls: "badge-complete", emoji: "✅" },
   "Problem / Hold":  { cls: "badge-problem",  emoji: "⚠️" },
+  "Canceled":        { cls: "badge-default",  emoji: "🚫" },
 };
 
 function StatusBadge({ status }) {
@@ -55,6 +56,7 @@ export default function Dashboard() {
     { label: "Sailed",          value: countStatus("Sailed"),            color: "var(--success)", status: "Sailed" },
     { label: "Completed",       value: countStatus("Completed"),         color: "#4ade80",         status: "Completed" },
     { label: "Problem / Hold",  value: countStatus("Problem / Hold"),    color: "var(--danger)",  status: "Problem / Hold" },
+    { label: "Canceled",        value: countStatus("Canceled"),          color: "#9ca3af",        status: "Canceled" },
   ];
 
   const recent = orders.slice(0, 10);

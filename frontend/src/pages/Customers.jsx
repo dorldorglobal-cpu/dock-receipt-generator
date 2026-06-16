@@ -16,6 +16,7 @@ function statusColor(s) {
     "Awaiting Pickup":   "#fbbf24",
     "New Order":         "#9ca3af",
     "Problem / Hold":    "#f87171",
+    "Canceled":          "#9ca3af",
   };
   return m[s] || "#9ca3af";
 }

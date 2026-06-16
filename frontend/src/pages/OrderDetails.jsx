@@ -1554,6 +1554,7 @@ export default function OrderDetails() {
       "Paid":              { bg:"rgba(22,163,74,0.18)",   color:"#4ade80", border:"rgba(74,222,128,0.35)" },
       "Completed":         { bg:"rgba(21,128,61,0.22)",   color:"#86efac", border:"rgba(134,239,172,0.35)" },
       "Problem / Hold":    { bg:"rgba(220,38,38,0.18)",   color:"#f87171", border:"rgba(248,113,113,0.35)" },
+      "Canceled":          { bg:"rgba(75,85,99,0.25)",    color:"#9ca3af", border:"rgba(156,163,175,0.4)" },
     };
     return map[s] || map["New Order"];
   };
@@ -1661,11 +1662,12 @@ export default function OrderDetails() {
               <option>Paid</option>
               <option>Completed</option>
               <option>Problem / Hold</option>
+              <option>Canceled</option>
             </select>
             <span style={{ position:"absolute", right:14, top:"50%", transform:"translateY(-50%)",
               pointerEvents:"none", color:statusStyle(order.status).color, fontSize:14 }}>▼</span>
           </div>
-          {order.status === "Problem / Hold" && (
+          {(order.status === "Problem / Hold" || order.status === "Canceled") && (
             <textarea
               value={holdNote}
               onChange={e => setHoldNote(e.target.value)}
@@ -1677,7 +1679,7 @@ export default function OrderDetails() {
                 });
                 fetchOrder();
               }}
-              placeholder="Describe the issue…"
+              placeholder={order.status === "Canceled" ? "Why was this canceled, and by whom?" : "Describe the issue…"}
               rows={2}
               style={{
                 width: "100%", boxSizing: "border-box", marginTop: 6,

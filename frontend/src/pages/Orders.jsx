@@ -15,6 +15,7 @@ const TABS = [
   { label: "Paid",             value: "Paid",             color: "#86efac" },
   { label: "Completed",        value: "Completed",        color: "#94a3b8" },
   { label: "Problem / Hold",   value: "Problem / Hold",   color: "#f87171" },
+  { label: "Canceled",         value: "Canceled",         color: "#9ca3af" },
 ];
 
 const STATUS_COLORS = {
@@ -29,6 +30,7 @@ const STATUS_COLORS = {
   "Paid":            { bg: "rgba(22,163,74,0.12)",   border: "rgba(22,163,74,0.35)",   text: "#4ade80" },
   "Completed":       { bg: "rgba(148,163,184,0.12)", border: "rgba(148,163,184,0.35)", text: "#94a3b8" },
   "Problem / Hold":  { bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.35)",   text: "#f87171" },
+  "Canceled":        { bg: "rgba(156,163,175,0.12)", border: "rgba(156,163,175,0.35)", text: "#9ca3af" },
 };
 
 export default function Orders() {
@@ -265,7 +267,7 @@ export default function Orders() {
                       paddingRight: 20, backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6'%3E%3Cpath d='M0 0l5 6 5-6z' fill='%23888'/%3E%3C/svg%3E")`,
                       backgroundRepeat: "no-repeat", backgroundPosition: "right 6px center",
                     }}>
-                    {["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail","Sailed","Arrived","Paid","Completed","Problem / Hold"].map(s => (
+                    {["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail","Sailed","Arrived","Paid","Completed","Problem / Hold","Canceled"].map(s => (
                       <option key={s} value={s}>{s}</option>
                     ))}
                   </select>
