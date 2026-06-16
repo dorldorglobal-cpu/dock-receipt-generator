@@ -27,6 +27,7 @@ const feeRows = [
   ["noTitleDeliveryFee",  "No Title Delivery at Port Fee", { defaultSell: 75   }],
   ["emergencyBafFee",     "Emergency BAF",                 {}],
   ["ctnFee",              "CTN Fee",                       { defaultSell: 75   }],
+  ["dryRunFee",           "Dry Run Fee",                   { defaultSell: 75   }],
   ["miscellaneousFee",    "Miscellaneous Fee",             {}],
 ];
 
@@ -49,6 +50,7 @@ const defaultCharges = {
   noTitleDeliveryFee: "0.00",
   emergencyBafFee: "0.00",
   ctnFee: "0.00",
+  dryRunFee: "0.00",
   miscellaneousFee: "0.00",
 };
 
@@ -2420,12 +2422,24 @@ export default function OrderDetails() {
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(towSell-towCost) }}>
                         {pStr(towSell-towCost)}
                       </td>
-                      <td style={{ textAlign:"center", padding:"4px 6px" }}>
+                      <td style={{ textAlign:"center", padding:"4px 6px", whiteSpace:"nowrap" }}>
                         <button onClick={() => setEditingInternalRow(editing ? null : "towing")}
                           style={{ background:"none", border:"none", cursor:"pointer",
                             color: editing ? "#34d399" : "#60a5fa", fontSize:12, padding:"2px 4px" }}>
                           {editing ? "✓" : "✏️"}
                         </button>
+                        {!editing && (towSell > 0 || towCost > 0) && (
+                          <button
+                            onClick={async () => {
+                              if (!window.confirm("Remove Towing charge?")) return;
+                              await saveInternalField("towingCharge", "0");
+                              await saveInternalField("towingCost", "0");
+                            }}
+                            title="Remove towing"
+                            style={{ background:"none", border:"none", cursor:"pointer", color:"#f87171", fontSize:12, padding:"2px 4px" }}>
+                            🗑
+                          </button>
+                        )}
                       </td>
                     </tr>
                   );
@@ -2585,10 +2599,24 @@ export default function OrderDetails() {
                             </button>
                           </>
                         ) : (
-                          <button onClick={openOceanEdit}
-                            style={{ background:"none", border:"none", cursor:"pointer", color:"#60a5fa", fontSize:12, padding:"2px 4px" }}>
-                            ✏️
-                          </button>
+                          <>
+                            <button onClick={openOceanEdit}
+                              style={{ background:"none", border:"none", cursor:"pointer", color:"#60a5fa", fontSize:12, padding:"2px 4px" }}>
+                              ✏️
+                            </button>
+                            {(ocnSell > 0 || ocnCost > 0) && (
+                              <button
+                                onClick={async () => {
+                                  if (!window.confirm("Remove Ocean Freight charge?")) return;
+                                  await saveInternalField("oceanFreight", "0");
+                                  await saveInternalField("oceanCost", "0");
+                                }}
+                                title="Remove ocean freight"
+                                style={{ background:"none", border:"none", cursor:"pointer", color:"#f87171", fontSize:12, padding:"2px 4px" }}>
+                                🗑
+                              </button>
+                            )}
+                          </>
                         )}
                       </td>
                     </tr>
