@@ -1393,6 +1393,7 @@ router.post("/apply-misc", express.json(), async (req, res) => {
         billFileName:  row.billFileName || "",
         billDriveId:   row.billDriveId  || "",
         billDriveUrl:  row.billDriveUrl || "",
+        billMime:      row.billFileName ? "application/pdf" : "",
       });
       created++;
     }

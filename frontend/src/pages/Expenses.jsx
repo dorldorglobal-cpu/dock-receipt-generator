@@ -1603,7 +1603,7 @@ export default function Expenses() {
                     </td>
 
                     {/* Docs — bill + receipt combined */}
-                    <td style={{ ...td, whiteSpace: "nowrap" }}>
+                    <td style={{ ...td, whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
                       {exp.billFileName
                         ? <a href={`${API}/api/expenses/${exp._id}/bill`} target="_blank" rel="noopener noreferrer" title="View bill" style={{ color: "#a78bfa", fontSize: 16, textDecoration: "none", marginRight: 6 }}>📄</a>
                         : <span style={{ color: "#2d3748", marginRight: 6 }}>📄</span>}
