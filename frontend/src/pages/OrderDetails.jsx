@@ -1487,7 +1487,7 @@ export default function OrderDetails() {
       const fmtEta = (d) => d ? new Date(d).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" }) : "";
       const etaDisplay = fmtEta(etaRaw);
 
-      setInvSubject(`Invoice #${inv.invoiceNumber} — ${ymm}${last6 ? ` ${last6}` : ""}`);
+      setInvSubject(`Invoice #${inv.invoiceNumber} — ${ymm}${last6 ? ` ${last6}` : ""}${order?.refNumber ? ` | Ref #${order.refNumber}` : ""}`);
       setInvBody(
         `Dear ${order?.customerName || "Customer"},\n\n` +
         `Please find your invoice attached for the following vehicle:\n\n` +
