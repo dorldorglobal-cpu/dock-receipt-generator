@@ -1459,66 +1459,66 @@ export default function Expenses() {
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:"#6b7280",fontSize:10,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {proofRows.map((row, i) => (
                         <React.Fragment key={i}>
                         <tr style={{ opacity: row.selected ? 1 : 0.5 }}>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2}}>
                             <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill}
                               onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked}:r))}/>
                           </td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap"}}>{row.payeeName}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600}}>{row.orderRef || "—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:12}}>{row.note || "—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#34d399",fontWeight:600}}>${row.amount.toFixed(2)}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",fontSize:12,color:"#9ca3af"}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap",lineHeight:1.2}}>{row.payeeName}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600,lineHeight:1.2}}>{row.orderRef || "—"}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:11,lineHeight:1.2,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#34d399",fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap"}}>${row.amount.toFixed(2)}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",fontSize:11,color:"#9ca3af",lineHeight:1.2,maxWidth:220,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>
                             {row.matchedIds?.length
                               ? row.candidates.filter(c=>row.matchedIds.includes(c._id)).map(c=>c.description).join(", ")
                               : row.matchType === "already_paid" || row.matchType === "already_paid_mismatch"
                                 ? row.alreadyPaid?.map(c=>c.description).join(", ")
                                 : row.candidates?.length
-                                  ? <span style={{color:"#fbbf24"}}>⚠ {row.candidates.length} candidate(s), amounts don't sum to ${row.amount.toFixed(2)}</span>
+                                  ? <span style={{color:"#fbbf24"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>
                                   : row.createBill
                                     ? <span style={{color:"#34d399"}}>Will create new bill</span>
-                                    : <span style={{color:"#f87171"}}>No bill on file for order #{row.orderRef}</span>}
+                                    : <span style={{color:"#f87171"}}>No bill on file for #{row.orderRef}</span>}
                           </td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
-                            {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:12}}>✅ Exact match</span>}
-                            {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:12}}>✅ Combined match</span>}
-                            {row.matchType === "already_paid" && <span style={{color:"#60a5fa",fontSize:12}}>ℹ️ Already marked paid</span>}
-                            {row.matchType === "already_paid_mismatch" && <span style={{color:"#fbbf24",fontSize:12}}>⚠ Already paid, amount differs</span>}
-                            {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:12}}>⚠ Review</span>}
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2,whiteSpace:"nowrap"}}>
+                            {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact</span>}
+                            {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:11}}>✅ Combined</span>}
+                            {row.matchType === "already_paid" && <span style={{color:"#60a5fa",fontSize:11}}>ℹ️ Already paid</span>}
+                            {row.matchType === "already_paid_mismatch" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Amount differs</span>}
+                            {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Review</span>}
                             {row.matchType === "none" && !row.createBill && (
                               <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.payeeName } : r))}
-                                style={{ fontSize:11, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:6, padding:"3px 8px", background:"none", cursor:"pointer" }}>
+                                style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
                                 + Create Bill
                               </button>
                             )}
-                            {row.matchType === "none" && row.createBill && <span style={{color:"#34d399",fontSize:12}}>📝 New bill</span>}
+                            {row.matchType === "none" && row.createBill && <span style={{color:"#34d399",fontSize:11}}>📝 New bill</span>}
                           </td>
                         </tr>
                         {row.matchType === "none" && row.createBill && (
                           <tr>
                             <td></td>
-                            <td colSpan={6} style={{ padding:"6px 10px 14px", borderBottom:"1px solid #1a2030" }}>
-                              <div style={{ display:"flex", gap:10, alignItems:"center", background:"#0d1117", border:"1px solid #06b6d4", borderRadius:8, padding:"10px 14px" }}>
-                                <label style={{ fontSize:11, color:"#8b949e" }}>Category
+                            <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid #1a2030" }}>
+                              <div style={{ display:"flex", gap:8, alignItems:"center", background:"#0d1117", border:"1px solid #06b6d4", borderRadius:6, padding:"6px 10px" }}>
+                                <label style={{ fontSize:10, color:"#8b949e" }}>Category
                                   <select value={row.newCategory} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newCategory:e.target.value}:r))}
-                                    style={{ display:"block", marginTop:3, background:"#111827", border:"1px solid #374151", borderRadius:6, padding:"4px 8px", color:"#f1f5f9", fontSize:12 }}>
+                                    style={{ display:"block", marginTop:2, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"2px 6px", color:"#f1f5f9", fontSize:11 }}>
                                     {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
                                   </select>
                                 </label>
-                                <label style={{ fontSize:11, color:"#8b949e", flex:1 }}>Description
+                                <label style={{ fontSize:10, color:"#8b949e", flex:1 }}>Description
                                   <input value={row.newDescription} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newDescription:e.target.value}:r))}
-                                    style={{ display:"block", width:"100%", marginTop:3, background:"#111827", border:"1px solid #374151", borderRadius:6, padding:"4px 8px", color:"#f1f5f9", fontSize:12, boxSizing:"border-box" }} />
+                                    style={{ display:"block", width:"100%", marginTop:2, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"2px 6px", color:"#f1f5f9", fontSize:11, boxSizing:"border-box" }} />
                                 </label>
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, selected:true } : r))}
-                                  style={{ fontSize:11, color:"#fff", background:"#059669", border:"none", borderRadius:6, padding:"6px 12px", cursor:"pointer", fontWeight:600, alignSelf:"flex-end" }}>
+                                  style={{ fontSize:10, color:"#fff", background:"#059669", border:"none", borderRadius:5, padding:"4px 10px", cursor:"pointer", fontWeight:600, alignSelf:"flex-end" }}>
                                   ✓ Ready
                                 </button>
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill:false, selected:false } : r))}
-                                  style={{ fontSize:11, color:"#9ca3af", background:"none", border:"1px solid #374151", borderRadius:6, padding:"6px 12px", cursor:"pointer", alignSelf:"flex-end" }}>
+                                  style={{ fontSize:10, color:"#9ca3af", background:"none", border:"1px solid #374151", borderRadius:5, padding:"4px 10px", cursor:"pointer", alignSelf:"flex-end" }}>
                                   Cancel
                                 </button>
                               </div>
