@@ -1459,8 +1459,17 @@ export default function Expenses() {
             {proofRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
-                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:"#6b7280",fontSize:10,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                  <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, tableLayout: "fixed" }}>
+                    <colgroup>
+                      <col style={{ width: "3%" }} />
+                      <col style={{ width: "13%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "11%" }} />
+                      <col style={{ width: "8%" }} />
+                      <col style={{ width: "40%" }} />
+                      <col style={{ width: "17%" }} />
+                    </colgroup>
+                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:"#6b7280",fontSize:10,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {proofRows.map((row, i) => (
                         <React.Fragment key={i}>
@@ -1469,11 +1478,11 @@ export default function Expenses() {
                             <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill && !row.splitBills && !row.attachOnly}
                               onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked, ...(e.target.checked?{}:{attachOnly:false})}:r))}/>
                           </td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap",lineHeight:1.2}}>{row.payeeName}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600,lineHeight:1.2}}>{row.orderRef || "—"}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:11,lineHeight:1.2,maxWidth:140,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#34d399",fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap"}}>${row.amount.toFixed(2)}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",fontSize:11,color:"#9ca3af",lineHeight:1.2,maxWidth:260}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis"}}>{row.payeeName}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.orderRef || "—"}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:11,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#34d399",fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${row.amount.toFixed(2)}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",fontSize:11,color:"#9ca3af",lineHeight:1.2,overflow:"hidden"}}>
                             {(() => {
                               const list = row.matchedIds?.length
                                 ? row.candidates.filter(c=>row.matchedIds.includes(c._id))
@@ -1484,12 +1493,12 @@ export default function Expenses() {
                                 if (list.length > 1) {
                                   // Multiple bills (e.g. a split payment) — show each on its own line with its order ref
                                   return (
-                                    <div style={{ display:"flex", flexDirection:"column", gap:1 }}>
+                                    <div style={{ display:"flex", flexDirection:"column", gap:1, overflow:"hidden" }}>
                                       {list.map(c => (
-                                        <div key={c._id} style={{ display:"flex", gap:6, alignItems:"center", whiteSpace:"nowrap" }}>
-                                          <span style={{ color:"#60a5fa", fontWeight:600 }}>{c.orderRef ? `#${c.orderRef}` : "—"}</span>
-                                          <span style={{ overflow:"hidden", textOverflow:"ellipsis" }}>{c.description}</span>
-                                          <span style={{ color: c.status === "paid" ? "#34d399" : "#f87171", fontSize:10 }}>
+                                        <div key={c._id} style={{ display:"flex", gap:6, alignItems:"center", minWidth:0 }}>
+                                          <span style={{ color:"#60a5fa", fontWeight:600, flexShrink:0 }}>{c.orderRef ? `#${c.orderRef}` : "—"}</span>
+                                          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{c.description}</span>
+                                          <span style={{ color: c.status === "paid" ? "#34d399" : "#f87171", fontSize:10, flexShrink:0 }}>
                                             {c.status === "paid" ? "✓ paid" : "unpaid"}
                                           </span>
                                         </div>
@@ -1497,14 +1506,14 @@ export default function Expenses() {
                                     </div>
                                   );
                                 }
-                                return <span style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{list.map(c=>c.description).join(", ")}</span>;
+                                return <span style={{ display:"block", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{list.map(c=>c.description).join(", ")}</span>;
                               }
-                              if (row.candidates?.length) return <span style={{color:"#fbbf24",whiteSpace:"nowrap"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>;
-                              if (row.createBill) return <span style={{color:"#34d399",whiteSpace:"nowrap"}}>Will create new bill</span>;
-                              return <span style={{color:"#f87171",whiteSpace:"nowrap"}}>No bill on file for #{row.orderRef}</span>;
+                              if (row.candidates?.length) return <span style={{display:"block",color:"#fbbf24",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>;
+                              if (row.createBill) return <span style={{display:"block",color:"#34d399",whiteSpace:"nowrap"}}>Will create new bill</span>;
+                              return <span style={{display:"block",color:"#f87171",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>No bill on file for #{row.orderRef}</span>;
                             })()}
                           </td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2,whiteSpace:"nowrap"}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                             {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact</span>}
                             {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:11}}>✅ Combined</span>}
                             {(row.matchType === "already_paid" || row.matchType === "already_paid_mismatch") && (
