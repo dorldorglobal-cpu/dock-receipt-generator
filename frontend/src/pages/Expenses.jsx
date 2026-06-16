@@ -1508,7 +1508,7 @@ export default function Expenses() {
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Review</span>}
                             {row.matchType === "none" && !row.createBill && !row.splitBills && (
                               <div style={{ display:"flex", gap:4 }}>
-                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? `${r.payeeName} — ${r.note}` : r.payeeName } : r))}
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
                                   style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
                                   + Create Bill
                                 </button>
@@ -1519,7 +1519,7 @@ export default function Expenses() {
                                       const each = Math.round((r.amount / n) * 100) / 100;
                                       return { ...r, splitBills: r.bookingNumbers.map((bn, k) => ({
                                         orderRef: "", category: "Port / Terminal Fees",
-                                        description: `${r.payeeName} — ${bn}`,
+                                        description: bn,
                                         amount: k === n-1 ? Math.round((r.amount - each*(n-1))*100)/100 : each,
                                       })) };
                                     }))}
