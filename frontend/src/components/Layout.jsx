@@ -1,5 +1,4 @@
 import Sidebar from "./Sidebar";
-import ClaudeChat from "./ClaudeChat";
 import "./Layout.css";
 
 export default function Layout({ children }) {
@@ -10,8 +9,6 @@ export default function Layout({ children }) {
       <main className="main-content">
         {children}
       </main>
-
-      <ClaudeChat />
     </div>
   );
 }
