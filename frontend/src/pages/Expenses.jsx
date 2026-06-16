@@ -1525,35 +1525,36 @@ export default function Expenses() {
                                 )}
                               </div>
                             )}
-                            {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11}}>⚠ Review</span>}
-                            {row.matchType === "none" && !row.createBill && !row.splitBills && (
+                            {(row.matchType === "none" || row.matchType === "review") && !row.createBill && !row.splitBills && (
                               <div style={{ display:"flex", gap:4 }}>
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
                                   style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
                                   + Create Bill
                                 </button>
-                                {row.isMultiBooking && (
-                                  <button onClick={() => setProofRows(rs => rs.map((r,j) => {
-                                      if (j !== i) return r;
-                                      const n = r.bookingNumbers.length || 2;
-                                      const each = Math.round((r.amount / n) * 100) / 100;
-                                      return { ...r, splitBills: r.bookingNumbers.map((bn, k) => ({
-                                        orderRef: "", category: "Port / Terminal Fees",
-                                        description: bn,
-                                        amount: k === n-1 ? Math.round((r.amount - each*(n-1))*100)/100 : each,
-                                      })) };
-                                    }))}
-                                    style={{ fontSize:10, color:"#fbbf24", border:"1px solid #fbbf24", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
-                                    ✂ Split ({row.bookingNumbers.length})
-                                  </button>
-                                )}
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => {
+                                    if (j !== i) return r;
+                                    const seed = r.splitSeed?.length ? r.splitSeed : ["", ""];
+                                    const looksLikeOrderRef = /^\d{3,8}$/.test(seed[0]);
+                                    const n = seed.length;
+                                    const each = Math.round((r.amount / n) * 100) / 100;
+                                    return { ...r, splitBills: seed.map((s, k) => ({
+                                      orderRef: looksLikeOrderRef ? s : "",
+                                      category: "Port / Terminal Fees",
+                                      description: looksLikeOrderRef ? "" : s,
+                                      amount: k === n-1 ? Math.round((r.amount - each*(n-1))*100)/100 : each,
+                                    })) };
+                                  }))}
+                                  style={{ fontSize:10, color:"#fbbf24", border:"1px solid #fbbf24", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  ✂ Split{row.splitSeed?.length > 1 ? ` (${row.splitSeed.length})` : ""}
+                                </button>
                               </div>
                             )}
-                            {row.matchType === "none" && row.createBill && <span style={{color:"#34d399",fontSize:11}}>📝 New bill</span>}
-                            {row.matchType === "none" && row.splitBills && <span style={{color:"#fbbf24",fontSize:11}}>✂ Split into {row.splitBills.length}</span>}
+                            {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11,display:"block",marginBottom:2}}>⚠ Review</span>}
+                            {(row.matchType === "none" || row.matchType === "review") && row.createBill && <span style={{color:"#34d399",fontSize:11}}>📝 New bill</span>}
+                            {(row.matchType === "none" || row.matchType === "review") && row.splitBills && <span style={{color:"#fbbf24",fontSize:11}}>✂ Split into {row.splitBills.length}</span>}
                           </td>
                         </tr>
-                        {row.matchType === "none" && row.createBill && (
+                        {(row.matchType === "none" || row.matchType === "review") && row.createBill && (
                           <tr>
                             <td></td>
                             <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid #1a2030" }}>
@@ -1584,7 +1585,7 @@ export default function Expenses() {
                             </td>
                           </tr>
                         )}
-                        {row.matchType === "none" && row.splitBills && (() => {
+                        {(row.matchType === "none" || row.matchType === "review") && row.splitBills && (() => {
                           const sum = row.splitBills.reduce((s,b)=>s+(Number(b.amount)||0),0);
                           const balanced = Math.abs(sum - row.amount) < 0.01;
                           return (

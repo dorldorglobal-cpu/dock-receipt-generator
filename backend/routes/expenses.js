@@ -1472,11 +1472,15 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       const orderRef = refMatch?.[1] || "";
       const note      = addenda; // always show the raw addenda for context
 
-      // Multiple booking numbers (e.g. "S3-29358436 S3-29436152") mean this
-      // single payment covers more than one order — flag it so the UI can
-      // offer a split into one bill per booking instead of one combined bill.
+      // Multiple booking numbers (e.g. "S3-29358436 S3-29436152") or multiple
+      // plain order refs (e.g. "13734 13754 13759") mean this single payment
+      // covers more than one order — flag it so the UI can offer a split.
       const bookingNumbers = [...addenda.matchAll(/S3-\d+/gi)].map(m => m[0]);
-      const isMultiBooking = bookingNumbers.length > 1;
+      const plainRefs = [...new Set((addenda.match(/\b\d{3,8}\b/g) || []))];
+      const isMultiBooking = bookingNumbers.length > 1 || plainRefs.length > 1;
+      // What to pre-fill the Split form with — real order refs are far more
+      // useful than booking numbers when we have them.
+      const splitSeed = plainRefs.length > 1 ? plainRefs : bookingNumbers;
 
       // Find candidate unpaid expenses tied to this order ref
       let candidates = [];
@@ -1530,6 +1534,34 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         }
       }
 
+      // Multiple plain order refs in one Addenda (e.g. "13734 13754 13759")
+      // — try to find the bills across ALL of those orders before asking
+      // the user to split manually.
+      if ((matchType === "none" || matchType === "review") && plainRefs.length > 1) {
+        const multi = await Expense.find({
+          orderRef: { $in: plainRefs.map(r => new RegExp(`^${esc(r)}$`, "i")) },
+        }).select("_id description vendor amount orderRef status paidDate receiptFileName").lean();
+
+        if (multi.length) {
+          const unpaidMulti = multi.filter(c => c.status === "unpaid");
+          const paidMulti   = multi.filter(c => c.status === "paid");
+          const sumUnpaid   = unpaidMulti.reduce((s, c) => s + c.amount, 0);
+          const sumPaid     = paidMulti.reduce((s, c) => s + c.amount, 0);
+
+          if (unpaidMulti.length && Math.abs(sumUnpaid - amount) < 0.01) {
+            candidates = unpaidMulti;
+            matchedIds = unpaidMulti.map(c => c._id);
+            matchType = "combined";
+          } else if (!unpaidMulti.length && paidMulti.length) {
+            alreadyPaid = paidMulti;
+            matchType = Math.abs(sumPaid - amount) < 0.01 ? "already_paid" : "already_paid_mismatch";
+          } else {
+            candidates = multi;
+            matchType = "review";
+          }
+        }
+      }
+
       // Fallback for multi-booking payments with no plain order ref (e.g. the
       // ACL "S3-xxxxx" case) — these get split into bills whose description
       // contains the booking number, so match on vendor + booking number
@@ -1577,6 +1609,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         matchType,
         bookingNumbers,
         isMultiBooking,
+        splitSeed,
         selected: matchType === "exact" || matchType === "combined",
       });
     }
