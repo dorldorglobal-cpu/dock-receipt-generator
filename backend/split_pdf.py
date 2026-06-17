@@ -5,7 +5,19 @@ Pages are 0-indexed, end_page is inclusive.
 Handles encrypted PDFs (tries empty password automatically).
 """
 import sys
-from PyPDF2 import PdfReader, PdfWriter
+import subprocess
+
+# Auto-install PyPDF2 if not present (happens on fresh Render deploys)
+try:
+    from PyPDF2 import PdfReader, PdfWriter
+except ImportError:
+    subprocess.check_call(
+        [sys.executable, "-m", "pip", "install", "--quiet", "PyPDF2"],
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    from PyPDF2 import PdfReader, PdfWriter
+
 
 def main():
     if len(sys.argv) != 5:
@@ -27,6 +39,7 @@ def main():
 
     with open(output_path, "wb") as f:
         writer.write(f)
+
 
 if __name__ == "__main__":
     main()
