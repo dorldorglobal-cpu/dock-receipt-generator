@@ -412,20 +412,20 @@ async function generateInvoicePdf(inv, order) {
     // Each entry: [leftLabel, leftValue, rightLabel, rightValue]
     const shippingLineValue = [
       invShippingLine || "—",
-      voyage      ? `Voyage: ${voyage}`      : "",
-      arrivalDate ? `ETA: ${arrivalDate}`    : "",
+      voyage ? `Voyage: ${voyage}` : "",
     ].filter(Boolean).join("  |  ");
 
     const detailPairs = [
       ["Ref:",     inv.orderRef    || "—",  "Route:",         (inv.pol && inv.pod) ? `${inv.pol} > ${inv.pod}` : "—"],
       ["Vehicle:", txt(inv.vehicle || "—"), "Shipping Line:", shippingLineValue],
-      ["VIN:",     inv.vin         || "—",  "Booking #:",     bookingNumber || ""],
+      ["Booking #:", bookingNumber || "—",  "ETA:",           arrivalDate || ""],
+      ["VIN:",     inv.vin         || "—",  "",               ""],
     ];
 
     // Fixed label column widths (px at 8.5pt Helvetica)
-    // LBL1: widest left label is "Vehicle:" ~52px  → 58 gives a small gap
+    // LBL1: widest left label is "Booking #:" ~60px → 68 gives a small gap
     // LBL2: widest right label is "Shipping Line:" ~82px → 90 gives a small gap
-    const LBL1_W = 58;
+    const LBL1_W = 68;
     const LBL2_W = 90;
     const COL_W  = Math.floor(W / 2) - 10;
 
