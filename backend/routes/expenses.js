@@ -492,7 +492,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
 
       // Extract booking number (SLSE######) from this row
       const bookingMatch = line.match(/SLSE\d+/i);
-      const bookingRef = bookingMatch ? bookingMatch[0] : "";
+      const bookingRef = bookingMatch ? bookingMatch[0].replace(/^SLSE/i, "SLSE-") : "";
 
       // Extract vehicle description: text between booking number and VIN position
       // Works whether or not there are spaces between columns in the PDF text
