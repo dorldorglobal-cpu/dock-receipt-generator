@@ -2968,8 +2968,8 @@ export default function OrderDetails() {
                   </td>
                   <td>
                     {bill.status === "paid"
-                      ? <span style={{ fontSize:11, color:"#34d399", fontWeight:600 }}>
-                          ✓ Paid{bill.paidAmount != null && bill.paidAmount !== bill.amount ? ` ($${bill.paidAmount.toFixed(2)})` : ""}
+                      ? <span style={{ fontSize:11, fontWeight:600, color: bill.paidAmount != null && bill.paidAmount < bill.amount ? "#f97316" : "#34d399" }}>
+                          {bill.paidAmount != null && bill.paidAmount < bill.amount ? `Partial ($${bill.paidAmount.toFixed(2)})` : "✓ Paid"}
                         </span>
                       : <button onClick={() => markBillPaid(bill._id, bill.amount)}
                           style={{ fontSize:11, padding:"3px 10px", borderRadius:8, border:"none",

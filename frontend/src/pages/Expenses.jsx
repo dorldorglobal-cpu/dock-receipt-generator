@@ -1886,9 +1886,15 @@ export default function Expenses() {
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       {exp.status === "paid" ? (
                         <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                          <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#34d39922", color: "#34d399" }}>
-                            Paid
-                          </span>
+                          {exp.paidAmount != null && exp.paidAmount < exp.amount ? (
+                            <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#f9731622", color: "#f97316" }}>
+                              Partial ({fmt$(exp.paidAmount)})
+                            </span>
+                          ) : (
+                            <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#34d39922", color: "#34d399" }}>
+                              Paid
+                            </span>
+                          )}
                           {exp.paidDate && (
                             <span style={{ fontSize: 10, color: "#6b7280" }}>{fmtDate(exp.paidDate)}</span>
                           )}
