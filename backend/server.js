@@ -893,10 +893,21 @@ app.post("/upload", upload.any(), async (req, res) => {
           cutoffDate:  dbMatch.cutoffDate,
           sailDate:    dbMatch.sailDate,
           arrivalDate: dbMatch.arrivalDate,
+          carrier:     dbMatch.carrier,
         };
-        console.log(`[schedule] matched ${dbMatch.vessel} ${dbMatch.voyage} for ${vClean} ${polNorm}→${podNorm}`);
+        console.log(`[schedule] matched ${dbMatch.carrier} ${dbMatch.vessel} ${dbMatch.voyage} for ${vClean} ${polNorm}→${podNorm}`);
       }
     }
+
+    // Known terminal addresses keyed by carrier+POL
+    const TERMINAL_ADDRESSES = {
+      "SALLAUM|PROVIDENCE": { deliveryName: "SALLAUM – PROVIDENCE (DAVISVILLE)", deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
+      "SALLAUM|DAVISVILLE": { deliveryName: "SALLAUM – PROVIDENCE (DAVISVILLE)", deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
+      "ACL|PROVIDENCE":     { deliveryName: "ACL – PROVIDENCE",                  deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
+      "ACL|DAVISVILLE":     { deliveryName: "ACL – PROVIDENCE",                  deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
+      "SALLAUM|BALTIMORE":  { deliveryName: "SALLAUM – BALTIMORE (VEHICLES)", deliveryAddress: "2001 BROENING HWY", deliveryCity: "BALTIMORE", deliveryState: "MD", deliveryZip: "21224" },
+      "ACL|BALTIMORE":      { deliveryName: "ACL – BALTIMORE", deliveryAddress: "2001 BROENING HWY", deliveryCity: "BALTIMORE", deliveryState: "MD", deliveryZip: "21224" },
+    };
 
     let polDisplay = aesData.portOfLoading;
 
@@ -907,19 +918,27 @@ app.post("/upload", upload.any(), async (req, res) => {
       polDisplay = "DAVISVILLE";
     }
 
-    // Determine shipping line from booking number prefix
+    // Determine shipping line — prefer schedule match carrier, fall back to booking prefix
     const bookingUpper = cleanUpper(aesData.bookingNumber);
     let shippingLine = "";
-    if (bookingUpper.startsWith("SLSE") || bookingUpper.startsWith("SLS")) {
+    if (match && match.carrier) {
+      shippingLine = match.carrier === "ACL" ? "ACL" : "SALLAUM LINES";
+    } else if (bookingUpper.startsWith("SLSE") || bookingUpper.startsWith("SLS")) {
       shippingLine = "SALLAUM LINES";
     } else if (bookingUpper.startsWith("ACL") || bookingUpper.startsWith("GLL")) {
       shippingLine = "ACL";
     }
 
+    // Override delivery (RETURN) address with the correct terminal based on carrier + POL
+    const carrierKey = match?.carrier || (shippingLine === "ACL" ? "ACL" : shippingLine === "SALLAUM LINES" ? "SALLAUM" : "");
+    const polKey = normalizePort(aesData.portOfLoading);
+    const terminalOverride = carrierKey ? TERMINAL_ADDRESSES[`${carrierKey}|${polKey}`] : null;
+
     const output = {
       ...aesData,
       portOfLoading: polDisplay,
       ...dispatchData,
+      ...(terminalOverride || {}), // correct terminal address overrides dispatch-parsed delivery
       vin: aesData.vin || dispatchData.dispatchVin || "",
       weightKgs: forcedAesWeightKgs || aesData.weightKgs || dispatchData.dispatchWeightKgs || "",
       voyage:      match ? (match.voyage      || "") : "",
