@@ -1,0 +1,281 @@
+const express = require("express");
+const router = express.Router();
+const multer = require("multer");
+const pdfParse = require("pdf-parse");
+const { PDFDocument } = require("pdf-lib");
+const crypto = require("crypto");
+const fs = require("fs");
+const path = require("path");
+const Order = require("../models/Order");
+const Expense = require("../models/Expense");
+const { uploadBufferToDrive } = require("../googleDrive");
+
+const upload = multer({ storage: multer.memoryStorage() });
+const TEMP_DIR = path.join(__dirname, "..", "temp");
+
+// ── Sallaum: 1 page per BL ───────────────────────────────────────────────────
+function parseSallaum(pageTexts) {
+  return pageTexts.map((text, i) => {
+    const bookingMatch = text.match(/SLSE-\d+/);
+    const blMatch = text.match(/\bUS\d{8,}\b/);
+    const refMatch = text.match(/Reference number\s+(\d+)/i);
+    const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
+
+    let vehicle = "";
+    if (vinMatch) {
+      const afterVin = text.substring(text.indexOf(vinMatch[0]) + 17);
+      const vm = afterVin.match(/\d+\s+(.+?)\s+Model Year[:\s]+(\d{4})/i);
+      if (vm) vehicle = vm[1].trim() + " " + vm[2];
+    }
+
+    return {
+      carrier: "SALLAUM",
+      blNumber: blMatch ? blMatch[0] : "",
+      bookingNumber: bookingMatch ? bookingMatch[0] : "",
+      refNumber: refMatch ? refMatch[1] : "",
+      vin: vinMatch ? vinMatch[0] : "",
+      vehicle: vehicle.trim(),
+      type: "draft",
+      charges: null,
+      pages: [i, i],
+    };
+  });
+}
+
+// ── ACL: group pages by "Page X of Y" pattern ────────────────────────────────
+function parseACL(pageTexts) {
+  const bls = [];
+  let current = null;
+
+  for (let i = 0; i < pageTexts.length; i++) {
+    const text = pageTexts[i];
+    const pageMatch = text.match(/Page (\d+) of (\d+)/i);
+    if (!pageMatch) continue;
+
+    const pageNum = parseInt(pageMatch[1], 10);
+
+    if (pageNum === 1) {
+      if (current) bls.push(current);
+
+      const bookingMatch = text.match(/S329\d+/);
+      const booking = bookingMatch ? bookingMatch[0] : "";
+
+      // On data pages: "GRANDE VESSEL RefNo"; on 1-page BLs: "BookingNo RefNo BookingNo"
+      const refMatch =
+        text.match(/GRANDE\s+\S+\s+(\d{4,6})/i) ||
+        text.match(/S329\d+\s+(\d{4,6})\s+S329\d+/i);
+      const ref = refMatch ? refMatch[1] : "";
+
+      const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
+      const vin = vinMatch ? vinMatch[0] : "";
+
+      let vehicle = "";
+      if (vin) {
+        const afterVin = text.substring(text.indexOf(vin) + 17);
+        const vm = afterVin.match(/([A-Z][A-Z0-9 ]+?)\s+Model Year\s+(\d{4})/i);
+        if (vm) vehicle = vm[1].trim() + " " + vm[2];
+      }
+
+      const chargeMatch = text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i);
+      const charges = chargeMatch ? parseFloat(chargeMatch[1].replace(/,/g, "")) : null;
+
+      current = {
+        carrier: "ACL",
+        blNumber: booking,
+        bookingNumber: booking,
+        refNumber: ref,
+        vin,
+        vehicle: vehicle.trim(),
+        type: charges != null ? "rated" : "draft",
+        charges,
+        pages: [i, i],
+      };
+    } else {
+      if (current) {
+        current.pages[1] = i;
+        // Ref# may appear on the data page (page 2 of 2) — "GRANDE VESSEL RefNo"
+        if (!current.refNumber) {
+          const refMatch = text.match(/GRANDE\s+\S+\s+(\d{4,6})/i);
+          if (refMatch) current.refNumber = refMatch[1];
+        }
+        const chargeMatch = text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i);
+        if (chargeMatch) {
+          current.type = "rated";
+          current.charges = parseFloat(chargeMatch[1].replace(/,/g, ""));
+        }
+      }
+    }
+  }
+
+  if (current) bls.push(current);
+  return bls;
+}
+
+// ── POST /api/bl-separator/parse ──────────────────────────────────────────────
+router.post("/parse", upload.single("pdf"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
+
+    const buffer = req.file.buffer;
+    const pageTexts = [];
+
+    await pdfParse(buffer, {
+      pagerender: (pd) =>
+        pd.getTextContent().then((tc) => {
+          const t = tc.items.map((i) => i.str).join(" ");
+          pageTexts.push(t);
+          return t;
+        }),
+    });
+
+    const allText = pageTexts.join(" ");
+    const isSallaum = /Sallaum|SLSE-/i.test(allText);
+    const isACL = /Grimaldi|S329\d/i.test(allText);
+
+    if (!isSallaum && !isACL) {
+      return res.status(400).json({ error: "Could not detect carrier (Sallaum or ACL/Grimaldi)" });
+    }
+
+    const bls = isSallaum ? parseSallaum(pageTexts) : parseACL(pageTexts);
+
+    // Match ref numbers to orders
+    const refNumbers = [...new Set(bls.map((b) => b.refNumber).filter(Boolean))];
+    const orders = await Order.find({ refNumber: { $in: refNumbers } })
+      .select("_id refNumber customerName vin year make model driveFolderId")
+      .lean();
+    const orderByRef = {};
+    orders.forEach((o) => {
+      orderByRef[o.refNumber] = o;
+    });
+
+    bls.forEach((bl) => {
+      const order = orderByRef[bl.refNumber];
+      if (order) {
+        bl.orderId = String(order._id);
+        bl.orderCustomer = order.customerName;
+        bl.orderVin = order.vin;
+        bl.orderHasDrive = !!order.driveFolderId;
+      }
+    });
+
+    // Store PDF in temp for the attach call
+    const sessionId = crypto.randomUUID();
+    fs.writeFileSync(path.join(TEMP_DIR, `bl-${sessionId}.pdf`), buffer);
+
+    res.json({ carrier: isSallaum ? "SALLAUM" : "ACL", bls, sessionId });
+  } catch (err) {
+    console.error("BL parse error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/bl-separator/attach ─────────────────────────────────────────────
+// Splits individual BL PDFs and uploads them to each order's Drive folder.
+// Body: { sessionId, bls: [{ pages:[start,end], orderId, blNumber, refNumber, type, vin, vehicle, charges, createExpense }] }
+router.post("/attach", async (req, res) => {
+  try {
+    const { sessionId, bls } = req.body;
+    if (!sessionId || !Array.isArray(bls)) {
+      return res.status(400).json({ error: "Missing sessionId or bls" });
+    }
+
+    const tempPath = path.join(TEMP_DIR, `bl-${sessionId}.pdf`);
+    if (!fs.existsSync(tempPath)) {
+      return res.status(400).json({ error: "Session expired — please re-upload the PDF" });
+    }
+
+    const pdfBuffer = fs.readFileSync(tempPath);
+    const srcPdf = await PDFDocument.load(pdfBuffer);
+
+    const results = [];
+
+    for (const bl of bls) {
+      try {
+        const order = await Order.findById(bl.orderId);
+        if (!order) {
+          results.push({ blNumber: bl.blNumber, refNumber: bl.refNumber, error: "Order not found" });
+          continue;
+        }
+
+        if (!order.driveFolderId) {
+          results.push({ blNumber: bl.blNumber, refNumber: bl.refNumber, error: "Order has no Drive folder" });
+          continue;
+        }
+
+        // Extract pages for this BL
+        const [startPage, endPage] = bl.pages;
+        const newPdf = await PDFDocument.create();
+        const pageIndices = [];
+        for (let p = startPage; p <= endPage; p++) pageIndices.push(p);
+        const copiedPages = await newPdf.copyPages(srcPdf, pageIndices);
+        copiedPages.forEach((page) => newPdf.addPage(page));
+        const blBytes = await newPdf.save();
+
+        // Build filename: BL_[blNumber]_[type].pdf
+        const typeLabel = bl.type === "rated" ? "Rated" : "Draft";
+        const fileName = `BL_${bl.blNumber || bl.refNumber}_${typeLabel}.pdf`;
+        const docLabel = bl.type === "rated" ? "BL Rated" : "BL Draft";
+
+        const uploaded = await uploadBufferToDrive(
+          Buffer.from(blBytes),
+          fileName,
+          "application/pdf",
+          order.driveFolderId
+        );
+
+        order.files.push({
+          label: docLabel,
+          originalName: fileName,
+          filename: uploaded.name,
+          driveFileId: uploaded.id,
+          path: uploaded.webViewLink,
+          mimetype: "application/pdf",
+        });
+
+        order.timeline.push({
+          action: "BL Attached",
+          details: `${docLabel} uploaded: ${fileName}`,
+          createdAt: new Date(),
+        });
+
+        let expenseId = null;
+        if (bl.type === "rated" && bl.createExpense && bl.charges) {
+          const expense = await Expense.create({
+            category: "Ocean Freight",
+            description: `ACL Ocean Freight - BL ${bl.blNumber} (${bl.vehicle || bl.vin || ""})`,
+            vendor: "ACL / Grimaldi",
+            amount: bl.charges,
+            date: new Date(),
+            orderId: order._id,
+            orderRef: order.refNumber,
+            vin: bl.vin || order.vin || "",
+            status: "unpaid",
+          });
+          expenseId = String(expense._id);
+        }
+
+        await order.save();
+
+        results.push({
+          blNumber: bl.blNumber,
+          refNumber: bl.refNumber,
+          success: true,
+          driveLink: uploaded.webViewLink,
+          expenseId,
+        });
+      } catch (err) {
+        results.push({ blNumber: bl.blNumber, refNumber: bl.refNumber, error: err.message });
+      }
+    }
+
+    // Clean up temp file
+    try { fs.unlinkSync(tempPath); } catch {}
+
+    res.json({ results });
+  } catch (err) {
+    console.error("BL attach error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+module.exports = router;

@@ -199,6 +199,7 @@ app.use("/api/expenses", require("./routes/expenses"));
 app.use("/api/vendors",  require("./routes/vendors"));
 app.use("/api/invoices", require("./routes/invoices"));
 app.use("/api/claude",   require("./routes/claude"));
+app.use("/api/bl-separator", require("./routes/blSeparator"));
 
 // ── POST /api/customer-statement  — generate a customer statement PDF ─────────
 app.post("/api/customer-statement", async (req, res) => {

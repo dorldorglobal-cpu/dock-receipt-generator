@@ -81,7 +81,7 @@ export default function Sidebar() {
         <NavItem to="/towing-charges" iconKey="towing"      label="Towing Charges" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/ocean-freight"  iconKey="ocean"       label="Ocean Freight"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/vessel-schedule" iconKey="schedule"   label="Vessel Schedule" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
-        <NavItem to="/shipments"      iconKey="shipments"   label="Shipments"      collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/shipments"      iconKey="shipments"   label="BL Separator"   collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
       </nav>
 
       {!isMobile && <div className="sidebar-section-label">Finance</div>}

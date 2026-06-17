@@ -23,6 +23,7 @@ import Reports   from "./pages/Reports";
 import Invoices  from "./pages/Invoices";
 import VesselSchedule from "./pages/VesselSchedule";
 import AiAssistant from "./pages/AiAssistant";
+import BlSeparator from "./pages/BlSeparator";
 
 import "./App.css";
 
@@ -77,9 +78,7 @@ export default function App() {
 
           <Route
             path="/shipments"
-            element={
-              <ComingSoon title="Shipments" />
-            }
+            element={<BlSeparator />}
           />
 
           <Route path="/invoices" element={<Invoices />} />
