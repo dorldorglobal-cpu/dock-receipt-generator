@@ -619,10 +619,13 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           orderId,
           orderRef,
           invoiceNumber,
+          vin:           row.vin       || "",
           status:        "unpaid",
           notes:         `Voyage: ${voyage} | POL: ${pol || ""} | POD: ${pod || ""}${chargeParts.length ? " | " + chargeParts.join(", ") : ""}`,
-          billFileName:  billFileName || "",
-          billMime:      billMime     || "",
+          billFileName:  billFileName  || "",
+          billMime:      billMime      || "",
+          billDriveId:   billDriveId   || "",
+          billDriveUrl:  billDriveUrl  || "",
         });
         if (!duplicate) created.push(true);
 
