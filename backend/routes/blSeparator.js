@@ -39,6 +39,11 @@ function parseSallaum(pageTexts) {
       if (vm) vehicle = vm[1].trim() + " " + vm[2];
     }
 
+    // Vessel: "substitute Liberty Peace (26LE01)" → vessel="Liberty Peace", voyage="26LE01"
+    const vesselMatch = text.match(/substitute\s+(.+?)\s+\(([A-Z0-9]{4,})\)/i);
+    const vessel  = vesselMatch ? vesselMatch[1].trim() : "";
+    const voyage  = vesselMatch ? vesselMatch[2].trim() : "";
+
     return {
       carrier: "SALLAUM",
       blNumber: blMatch ? blMatch[0] : "",
@@ -46,6 +51,8 @@ function parseSallaum(pageTexts) {
       refNumber: refMatch ? refMatch[1] : "",
       vin: vinMatch ? vinMatch[0] : "",
       vehicle: vehicle.trim(),
+      vessel,
+      voyage,
       type: "draft",
       charges: null,
       pages: [i, i],
@@ -90,6 +97,12 @@ function parseACL(pageTexts) {
       const chargeMatch = text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i);
       const charges = chargeMatch ? parseFloat(chargeMatch[1].replace(/,/g, "")) : null;
 
+      // Voyage: "GSI0526" (3 letters + 4 digits); vessel: "GRANDE SICILIA"
+      const voyageCodeMatch = text.match(/\b([A-Z]{3}\d{4})\b/);
+      const grandeMatch = text.match(/GRANDE\s+(\S+)/i);
+      const voyage = voyageCodeMatch ? voyageCodeMatch[1] : "";
+      const vessel = grandeMatch ? ("GRANDE " + grandeMatch[1]).toUpperCase() : "";
+
       current = {
         carrier: "ACL",
         blNumber: booking,
@@ -97,6 +110,8 @@ function parseACL(pageTexts) {
         refNumber: ref,
         vin,
         vehicle: vehicle.trim(),
+        vessel,
+        voyage,
         type: charges != null ? "rated" : "draft",
         charges,
         pages: [i, i],
@@ -104,10 +119,16 @@ function parseACL(pageTexts) {
     } else {
       if (current) {
         current.pages[1] = i;
-        // Ref# may appear on the data page (page 2 of 2) — "GRANDE VESSEL RefNo"
+        // Ref# and vessel/voyage may appear on the data page (page 2 of 2)
         if (!current.refNumber) {
           const refMatch = text.match(/GRANDE\s+\S+\s+(\d{4,6})/i);
           if (refMatch) current.refNumber = refMatch[1];
+        }
+        if (!current.vessel) {
+          const vc = text.match(/\b([A-Z]{3}\d{4})\b/);
+          const gm = text.match(/GRANDE\s+(\S+)/i);
+          if (vc) current.voyage = vc[1];
+          if (gm) current.vessel = ("GRANDE " + gm[1]).toUpperCase();
         }
         const chargeMatch = text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i);
         if (chargeMatch) {
@@ -237,6 +258,24 @@ router.post("/attach", async (req, res) => {
           path: uploaded.webViewLink,
           mimetype: "application/pdf",
         });
+
+        // Update vessel/voyage from BL if not already set
+        if (bl.vessel && !order.vessel) order.vessel  = bl.vessel;
+        if (bl.voyage && !order.voyage) order.voyage  = bl.voyage;
+        if (bl.vessel) order.vessel = bl.vessel;
+        if (bl.voyage) order.voyage = bl.voyage;
+
+        // Auto-update status to Sailed on Draft upload (same logic as manual file upload)
+        const SAILED_STATUSES = ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail"];
+        if (bl.type === "draft" && SAILED_STATUSES.includes(order.status)) {
+          const prev = order.status;
+          order.status = "Sailed";
+          order.timeline.push({
+            action: "Status Changed",
+            details: `Auto-updated from "${prev}" to "Sailed" on Draft BL upload.`,
+            createdAt: new Date(),
+          });
+        }
 
         order.timeline.push({
           action: "BL Attached",
