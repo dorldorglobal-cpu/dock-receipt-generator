@@ -220,7 +220,7 @@ router.post("/attach", async (req, res) => {
         // Build filename: BL_[blNumber]_[type].pdf
         const typeLabel = bl.type === "rated" ? "Rated" : "Draft";
         const fileName = `BL_${bl.blNumber || bl.refNumber}_${typeLabel}.pdf`;
-        const docLabel = bl.type === "rated" ? "BL Rated" : "BL Draft";
+        const docLabel = bl.type === "rated" ? "Rated Draft" : "Draft";
 
         const uploaded = await uploadBufferToDrive(
           blBytes,
