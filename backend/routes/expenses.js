@@ -1,12 +1,28 @@
-﻿const express   = require("express");
-const router    = express.Router();
-const multer    = require("multer");
-const path      = require("path");
-const fs        = require("fs");
-const pdfParse  = require("pdf-parse");
-const Expense   = require("../models/Expense");
-const Order     = require("../models/Order");
+﻿const express      = require("express");
+const router       = express.Router();
+const multer       = require("multer");
+const path         = require("path");
+const fs           = require("fs");
+const crypto       = require("crypto");
+const { execFile } = require("child_process");
+const pdfParse     = require("pdf-parse");
+const Expense      = require("../models/Expense");
+const Order        = require("../models/Order");
 const { uploadBufferToDrive, getOrCreateFolder, deleteDriveFile } = require("../googleDrive");
+
+const TEMP_DIR     = path.join(__dirname, "..", "temp");
+const HIGHLIGHT_PY = path.join(__dirname, "..", "highlight_pdf.py");
+if (!fs.existsSync(TEMP_DIR)) fs.mkdirSync(TEMP_DIR, { recursive: true });
+
+// Run highlight_pdf.py to add a yellow annotation on the VIN row
+function highlightVinInPdf(inputPath, outputPath, vin) {
+  return new Promise((resolve, reject) => {
+    execFile("python3", [HIGHLIGHT_PY, inputPath, outputPath, vin], (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message));
+      resolve(outputPath);
+    });
+  });
+}
 
 // ── Google Drive folders for expenses ────────────────────────────────────────
 const DRIVE_RECEIPTS_FOLDER = "1zS9GARKen1KMucPSlm7ags9lq5LhS_Fv"; // Website > Expenses > Receipts
@@ -442,6 +458,11 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ error: "No PDF uploaded" });
 
+    // Save a temp copy so apply-sallaum can produce per-order highlighted PDFs
+    const sessionId = crypto.randomUUID();
+    const tempPdfPath = path.join(TEMP_DIR, `sallaum-${sessionId}.pdf`);
+    fs.writeFileSync(tempPdfPath, req.file.buffer);
+
     const savedFile = await saveUploadedFile(req.file.buffer, req.file.originalname);
 
     const data = await pdfParse(req.file.buffer);
@@ -549,7 +570,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       };
     });
 
-    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf" });
+    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf", sessionId });
   } catch (err) {
     console.error("parse-sallaum error:", err);
     res.status(500).json({ error: err.message });
@@ -560,7 +581,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
 router.post("/apply-sallaum", express.json(), async (req, res) => {
   try {
     const { invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows,
-            billFileName, billMime, billDriveId, billDriveUrl } = req.body;
+            billFileName, billMime, billDriveId, billDriveUrl, sessionId } = req.body;
     if (!rows || !rows.length) return res.status(400).json({ error: "No rows provided" });
 
     const dateObj = invoiceDate
@@ -602,27 +623,61 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
         });
         created.push(expense._id);
 
-        // Attach the invoice PDF to the matched order's docs as "Rated Draft"
-        if (orderId && billDriveId && billDriveUrl) {
+        // Attach the invoice PDF to the matched order's docs as "Rated Draft".
+        // If we have the session temp file, produce a highlighted copy first.
+        if (orderId) {
           const order = await Order.findById(orderId);
           if (order) {
-            order.files.push({
-              label:        "Rated Draft",
-              originalName: billFileName || `Invoice_${invoiceNumber}.pdf`,
-              filename:     billFileName || `Invoice_${invoiceNumber}.pdf`,
-              driveFileId:  billDriveId,
-              path:         billDriveUrl,
-              mimetype:     "application/pdf",
-            });
-            order.timeline.push({
-              action:    "Document Added",
-              details:   `Sallaum invoice ${invoiceNumber} attached as Rated Draft`,
-              createdAt: new Date(),
-            });
-            await order.save();
+            let attachDriveId  = billDriveId;
+            let attachDriveUrl = billDriveUrl;
+            const fname = billFileName || `Invoice_${invoiceNumber}.pdf`;
+            const hName = `Invoice_${invoiceNumber}_${row.vin}.pdf`;
+
+            const tempPdfPath = sessionId
+              ? path.join(TEMP_DIR, `sallaum-${sessionId}.pdf`)
+              : null;
+
+            if (tempPdfPath && fs.existsSync(tempPdfPath) && order.driveFolderId && row.vin) {
+              const hlPath = path.join(TEMP_DIR, `sallaum-hl-${crypto.randomUUID()}.pdf`);
+              try {
+                await highlightVinInPdf(tempPdfPath, hlPath, row.vin);
+                const hlBytes = fs.readFileSync(hlPath);
+                const uploaded = await uploadBufferToDrive(
+                  hlBytes, hName, "application/pdf", order.driveFolderId
+                );
+                attachDriveId  = uploaded.id;
+                attachDriveUrl = uploaded.webViewLink;
+              } catch (hlErr) {
+                console.warn("highlight failed, falling back to plain invoice:", hlErr.message);
+              } finally {
+                try { fs.unlinkSync(hlPath); } catch {}
+              }
+            }
+
+            if (attachDriveId && attachDriveUrl) {
+              order.files.push({
+                label:        "Rated Draft",
+                originalName: hName,
+                filename:     hName,
+                driveFileId:  attachDriveId,
+                path:         attachDriveUrl,
+                mimetype:     "application/pdf",
+              });
+              order.timeline.push({
+                action:    "Document Added",
+                details:   `Sallaum invoice ${invoiceNumber} attached as Rated Draft (VIN row highlighted)`,
+                createdAt: new Date(),
+              });
+              await order.save();
+            }
           }
         }
       }
+    }
+
+    // Clean up temp session PDF
+    if (sessionId) {
+      try { fs.unlinkSync(path.join(TEMP_DIR, `sallaum-${sessionId}.pdf`)); } catch {}
     }
 
     res.json({ created: created.length });
