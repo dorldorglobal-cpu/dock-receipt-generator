@@ -599,6 +599,9 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           if (o) { orderId = o._id; orderRef = o.refNumber; }
         }
 
+        // Skip creating a duplicate expense (same invoice + VIN already exists)
+        const duplicate = await Expense.findOne({ invoiceNumber, vin: row.vin }).lean();
+
         // Build charge breakdown note
         const chargeParts = [];
         if (row.freight) chargeParts.push(`Freight: $${row.freight.toFixed(2)}`);
@@ -607,7 +610,7 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
         if (row.storage) chargeParts.push(`Storage: $${row.storage.toFixed(2)}`);
         if (row.other)   chargeParts.push(`Other/NR/FK: $${row.other.toFixed(2)}`);
 
-        const expense = await Expense.create({
+        if (!duplicate) await Expense.create({
           category:      "Ocean Freight",
           description:   `Ocean Freight — ${row.ymm || ""} — VIN: ${row.vin}${row.bookingRef ? " — Booking: " + row.bookingRef : ""} — ${vessel || voyage}`.trim().replace(/\s*—\s*$/, ""),
           vendor:        "Sallaum Lines",
@@ -621,7 +624,7 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           billFileName:  billFileName || "",
           billMime:      billMime     || "",
         });
-        created.push(expense._id);
+        if (!duplicate) created.push(true);
 
         // Attach the invoice PDF to the matched order's docs as "Rated Draft".
         // If we have the session temp file, produce a highlighted copy first.
@@ -654,7 +657,11 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
               }
             }
 
-            if (attachDriveId && attachDriveUrl) {
+            // Only attach if this invoice isn't already in the order's docs
+            const alreadyAttached = order.files.some(
+              f => f.originalName === hName || (f.driveFileId && f.driveFileId === attachDriveId)
+            );
+            if (attachDriveId && attachDriveUrl && !alreadyAttached) {
               order.files.push({
                 label:        "Rated Draft",
                 originalName: hName,
