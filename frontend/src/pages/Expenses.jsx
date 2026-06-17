@@ -311,6 +311,9 @@ export default function Expenses() {
   const [sortKey, setSortKey]       = useState("date");
   const [sortDir, setSortDir]       = useState(-1);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [payConfirm, setPayConfirm]       = useState(null); // { exp } — single-bill pay modal
+  const [payConfirmAmt, setPayConfirmAmt] = useState("");
+  const [payConfirmDate, setPayConfirmDate] = useState(todayISO());
 
   // ── Pay Bills mode ────────────────────────────────────────────────────────────
   const [payMode, setPayMode]           = useState(false);
@@ -851,14 +854,24 @@ export default function Expenses() {
   };
 
   // Mark as paid
-  const markPaid = async (exp) => {
-    const paidDate = window.prompt("Enter paid date (YYYY-MM-DD):", todayISO());
-    if (paidDate === null) return;
+  const markPaid = (exp) => {
+    setPayConfirm({ exp });
+    setPayConfirmAmt(exp.amount != null ? String(exp.amount) : "");
+    setPayConfirmDate(todayISO());
+  };
+
+  const submitMarkPaid = async () => {
+    const { exp } = payConfirm;
+    const paidAmount = parseFloat(payConfirmAmt);
     await fetch(`${API}/api/expenses/${exp._id}/pay`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ paidDate: paidDate || todayISO() }),
+      body: JSON.stringify({
+        paidDate: payConfirmDate || todayISO(),
+        paidAmount: isNaN(paidAmount) ? undefined : paidAmount,
+      }),
     });
+    setPayConfirm(null);
     fetchAll();
   };
 
@@ -2042,6 +2055,38 @@ export default function Expenses() {
       )}
 
       {/* Confirm Delete */}
+      {payConfirm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:360, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 4px", color:"#e6edf3" }}>Mark Bill Paid</h3>
+            <p style={{ margin:"0 0 18px", fontSize:12, color:"#8b949e" }}>{payConfirm.exp.description}</p>
+            <label style={{ display:"block", marginBottom:14, fontSize:12, color:"#8b949e" }}>
+              Amount Paid
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                <span style={{ color:"#e6edf3" }}>$</span>
+                <input type="number" min="0" step="0.01" value={payConfirmAmt}
+                  onChange={e => setPayConfirmAmt(e.target.value)} autoFocus
+                  style={{ flex:1, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13 }} />
+              </div>
+              {payConfirm.exp.amount != null && parseFloat(payConfirmAmt) > 0 && parseFloat(payConfirmAmt) < payConfirm.exp.amount && (
+                <div style={{ marginTop:6, fontSize:11, color:"#f97316" }}>
+                  Partial payment — ${(payConfirm.exp.amount - parseFloat(payConfirmAmt)).toFixed(2)} remaining
+                </div>
+              )}
+            </label>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+              Paid Date
+              <input type="date" value={payConfirmDate} onChange={e => setPayConfirmDate(e.target.value)}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+            </label>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+              <button onClick={submitMarkPaid} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Confirm Paid</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {confirmDelete && (
         <Modal title="Delete Expense" onClose={() => setConfirmDelete(null)}>
           <p style={{ color: "#e2e8f0", fontSize: 14, marginTop: 0 }}>
