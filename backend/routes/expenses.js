@@ -484,28 +484,39 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       }
       if (!vin) continue;
 
-      // Extract the last dollar amount on the line as the total
+      // Extract all decimal amounts from the line.
+      // Column order after VIN: Volume(CBM), Freight, BAF, THC, Storage, Other(NR/FK), Total
       const nums = line.match(/[\d,]+\.\d{2}/g);
-      if (!nums || nums.length === 0) continue;
-      const total = parseFloat(nums[nums.length - 1].replace(/,/g, ""));
+      if (!nums || nums.length < 2) continue;
+      const pf = s => parseFloat(s.replace(/,/g, ""));
+      const total   = pf(nums[nums.length - 1]);
       if (!total || total <= 0) continue;
+      const freight = nums.length >= 7 ? pf(nums[nums.length - 6]) : 0;
+      const baf     = nums.length >= 6 ? pf(nums[nums.length - 5]) : 0;
+      const thc     = nums.length >= 5 ? pf(nums[nums.length - 4]) : 0;
+      const storage = nums.length >= 4 ? pf(nums[nums.length - 3]) : 0;
+      const other   = nums.length >= 3 ? pf(nums[nums.length - 2]) : 0;
+      const hasExtraCharges = thc > 0 || storage > 0 || other > 0;
 
       // Extract booking number (SLSE######) from this row
       const bookingMatch = line.match(/SLSE\d+/i);
       const bookingRef = bookingMatch ? bookingMatch[0].replace(/^SLSE/i, "SLSE-") : "";
 
       // Extract vehicle description: text between booking number and VIN position
-      // Works whether or not there are spaces between columns in the PDF text
       let ymm = "";
       if (bookingRef && vin) {
-        const afterBooking = line.substring(line.indexOf(bookingRef) + bookingRef.length);
-        const vinIdx = afterBooking.indexOf(vin);
-        if (vinIdx > 0) {
-          ymm = afterBooking.substring(0, vinIdx).replace(/[^a-zA-Z0-9\s\-]/g, " ").replace(/\s+/g, " ").trim();
+        const rawRef = bookingRef.replace("-", ""); // match original SLSE without dash
+        const refIdx = line.indexOf(rawRef);
+        if (refIdx >= 0) {
+          const afterBooking = line.substring(refIdx + rawRef.length);
+          const vinIdx = afterBooking.indexOf(vin);
+          if (vinIdx > 0) {
+            ymm = afterBooking.substring(0, vinIdx).replace(/[^a-zA-Z0-9\s\-]/g, " ").replace(/\s+/g, " ").trim();
+          }
         }
       }
 
-      rows.push({ vin, total, ymm, bookingRef });
+      rows.push({ vin, total, freight, baf, thc, storage, other, hasExtraCharges, ymm, bookingRef });
     }
 
     // Match each VIN to an order
@@ -521,14 +532,20 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       const order = orderByVin[r.vin.toUpperCase()] || null;
       const ymmFromOrder = order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : "";
       return {
-        vin:          r.vin,
-        total:        r.total,
-        ymm:          ymmFromOrder || r.ymm,
-        bookingRef:   r.bookingRef,
-        orderId:      order?._id || null,
-        orderRef:     order?.refNumber || "",
-        customerName: order?.customerName || "",
-        matched:      !!order,
+        vin:             r.vin,
+        total:           r.total,
+        freight:         r.freight,
+        baf:             r.baf,
+        thc:             r.thc,
+        storage:         r.storage,
+        other:           r.other,
+        hasExtraCharges: r.hasExtraCharges,
+        ymm:             ymmFromOrder || r.ymm,
+        bookingRef:      r.bookingRef,
+        orderId:         order?._id || null,
+        orderRef:        order?.refNumber || "",
+        customerName:    order?.customerName || "",
+        matched:         !!order,
       };
     });
 
@@ -542,7 +559,8 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
 // ── POST /api/expenses/apply-sallaum — bulk create expenses from parsed bill ──
 router.post("/apply-sallaum", express.json(), async (req, res) => {
   try {
-    const { invoiceNumber, invoiceDate, voyage, vessel, rows, billFileName, billMime } = req.body;
+    const { invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows,
+            billFileName, billMime, billDriveId, billDriveUrl } = req.body;
     if (!rows || !rows.length) return res.status(400).json({ error: "No rows provided" });
 
     const dateObj = invoiceDate
@@ -559,6 +577,15 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
             .select("_id refNumber").lean();
           if (o) { orderId = o._id; orderRef = o.refNumber; }
         }
+
+        // Build charge breakdown note
+        const chargeParts = [];
+        if (row.freight) chargeParts.push(`Freight: $${row.freight.toFixed(2)}`);
+        if (row.baf)     chargeParts.push(`BAF: $${row.baf.toFixed(2)}`);
+        if (row.thc)     chargeParts.push(`THC: $${row.thc.toFixed(2)}`);
+        if (row.storage) chargeParts.push(`Storage: $${row.storage.toFixed(2)}`);
+        if (row.other)   chargeParts.push(`Other/NR/FK: $${row.other.toFixed(2)}`);
+
         const expense = await Expense.create({
           category:      "Ocean Freight",
           description:   `Ocean Freight — ${row.ymm || ""} — VIN: ${row.vin}${row.bookingRef ? " — Booking: " + row.bookingRef : ""} — ${vessel || voyage}`.trim().replace(/\s*—\s*$/, ""),
@@ -567,13 +594,34 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           date:          dateObj,
           orderId,
           orderRef,
-          invoiceNumber: invoiceNumber,
+          invoiceNumber,
           status:        "unpaid",
-          notes:         `Voyage: ${voyage} | POL: ${req.body.pol || ""} | POD: ${req.body.pod || ""}`,
+          notes:         `Voyage: ${voyage} | POL: ${pol || ""} | POD: ${pod || ""}${chargeParts.length ? " | " + chargeParts.join(", ") : ""}`,
           billFileName:  billFileName || "",
           billMime:      billMime     || "",
         });
         created.push(expense._id);
+
+        // Attach the invoice PDF to the matched order's docs as "Rated Draft"
+        if (orderId && billDriveId && billDriveUrl) {
+          const order = await Order.findById(orderId);
+          if (order) {
+            order.files.push({
+              label:        "Rated Draft",
+              originalName: billFileName || `Invoice_${invoiceNumber}.pdf`,
+              filename:     billFileName || `Invoice_${invoiceNumber}.pdf`,
+              driveFileId:  billDriveId,
+              path:         billDriveUrl,
+              mimetype:     "application/pdf",
+            });
+            order.timeline.push({
+              action:    "Document Added",
+              details:   `Sallaum invoice ${invoiceNumber} attached as Rated Draft`,
+              createdAt: new Date(),
+            });
+            await order.save();
+          }
+        }
       }
     }
 
