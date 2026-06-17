@@ -903,8 +903,8 @@ app.post("/upload", upload.any(), async (req, res) => {
     const TERMINAL_ADDRESSES = {
       "SALLAUM|PROVIDENCE": { deliveryName: "SALLAUM – PROVIDENCE (DAVISVILLE)", deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
       "SALLAUM|DAVISVILLE": { deliveryName: "SALLAUM – PROVIDENCE (DAVISVILLE)", deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
-      "ACL|PROVIDENCE":     { deliveryName: "ACL – PROVIDENCE",                  deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
-      "ACL|DAVISVILLE":     { deliveryName: "ACL – PROVIDENCE",                  deliveryAddress: "1 DAVISVILLE ROAD", deliveryCity: "NORTH KINGSTOWN", deliveryState: "RI", deliveryZip: "02852" },
+      "ACL|PROVIDENCE":     { deliveryName: "ACL PROVIDENCE",  deliveryAddress: "35 TERMINAL ROAD", deliveryCity: "PROVIDENCE", deliveryState: "RI", deliveryZip: "02905" },
+      "ACL|DAVISVILLE":     { deliveryName: "ACL PROVIDENCE",  deliveryAddress: "35 TERMINAL ROAD", deliveryCity: "PROVIDENCE", deliveryState: "RI", deliveryZip: "02905" },
       "SALLAUM|BALTIMORE":  { deliveryName: "SALLAUM – BALTIMORE (VEHICLES)", deliveryAddress: "2001 BROENING HWY", deliveryCity: "BALTIMORE", deliveryState: "MD", deliveryZip: "21224" },
       "ACL|BALTIMORE":      { deliveryName: "ACL – BALTIMORE", deliveryAddress: "2001 BROENING HWY", deliveryCity: "BALTIMORE", deliveryState: "MD", deliveryZip: "21224" },
     };
