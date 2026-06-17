@@ -729,14 +729,15 @@ export default function OrderDetails() {
   };
 
   const submitMarkPaid = async () => {
-    const { billId } = payConfirm;
-    const paidAmount = parseFloat(payConfirmAmt);
+    const { billId, amount, addTo } = payConfirm;
+    const entered = parseFloat(payConfirmAmt);
+    const paidAmount = isNaN(entered) ? undefined : (addTo != null ? Math.min(addTo + entered, amount) : entered);
     const res = await fetch(`${API}/api/expenses/${billId}/pay`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
       body:    JSON.stringify({
         paidDate: new Date().toISOString().slice(0, 10),
-        paidAmount: isNaN(paidAmount) ? undefined : paidAmount,
+        paidAmount,
       }),
     });
     if (res.ok) { setPayConfirm(null); fetchBills(); }
@@ -2968,9 +2969,20 @@ export default function OrderDetails() {
                   </td>
                   <td>
                     {bill.status === "paid"
-                      ? <span style={{ fontSize:11, fontWeight:600, color: bill.paidAmount != null && bill.paidAmount < bill.amount ? "#f97316" : "#34d399" }}>
-                          {bill.paidAmount != null && bill.paidAmount < bill.amount ? `Partial ($${bill.paidAmount.toFixed(2)})` : "✓ Paid"}
-                        </span>
+                      ? <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          <span style={{ fontSize:11, fontWeight:600, color: bill.paidAmount != null && bill.paidAmount < bill.amount ? "#f97316" : "#34d399" }}>
+                            {bill.paidAmount != null && bill.paidAmount < bill.amount ? `Partial ($${bill.paidAmount.toFixed(2)})` : "✓ Paid"}
+                          </span>
+                          {bill.paidAmount != null && bill.paidAmount < bill.amount && (
+                            <button onClick={() => {
+                              const remaining = bill.amount - bill.paidAmount;
+                              setPayConfirm({ billId: bill._id, amount: bill.amount, addTo: bill.paidAmount });
+                              setPayConfirmAmt(remaining.toFixed(2));
+                            }} style={{ fontSize:10, padding:"2px 7px", borderRadius:6, border:"none", background:"rgba(249,115,22,0.15)", color:"#f97316", cursor:"pointer", fontWeight:600 }}>
+                              + Payment
+                            </button>
+                          )}
+                        </div>
                       : <button onClick={() => markBillPaid(bill._id, bill.amount)}
                           style={{ fontSize:11, padding:"3px 10px", borderRadius:8, border:"none",
                             background:"rgba(5,150,105,0.15)", color:"#34d399",
@@ -4339,7 +4351,7 @@ export default function OrderDetails() {
       {payConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:340, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 16px", color:"#e6edf3" }}>Mark Bill Paid</h3>
+            <h3 style={{ margin:"0 0 16px", color:"#e6edf3" }}>{payConfirm.addTo != null ? "Add Payment" : "Mark Bill Paid"}</h3>
             <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
               Amount Paid
               <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
@@ -4352,11 +4364,21 @@ export default function OrderDetails() {
                   autoFocus
                 />
               </div>
-              {payConfirm.amount != null && parseFloat(payConfirmAmt) < payConfirm.amount && parseFloat(payConfirmAmt) > 0 && (
-                <div style={{ marginTop:6, fontSize:11, color:"#f97316" }}>
-                  Partial payment — ${(payConfirm.amount - parseFloat(payConfirmAmt)).toFixed(2)} remaining
-                </div>
-              )}
+              {(() => {
+                const entered = parseFloat(payConfirmAmt);
+                const addTo = payConfirm.addTo || 0;
+                const newTotal = addTo + (isNaN(entered) ? 0 : entered);
+                const remaining = (payConfirm.amount || 0) - newTotal;
+                if (entered > 0 && remaining > 0.005) return (
+                  <div style={{ marginTop:6, fontSize:11, color:"#f97316" }}>
+                    {payConfirm.addTo != null ? `Total paid: $${newTotal.toFixed(2)} — ` : "Partial — "}${remaining.toFixed(2)} remaining
+                  </div>
+                );
+                if (entered > 0 && remaining <= 0.005 && payConfirm.addTo != null) return (
+                  <div style={{ marginTop:6, fontSize:11, color:"#34d399" }}>Fully paid!</div>
+                );
+                return null;
+              })()}
             </label>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>

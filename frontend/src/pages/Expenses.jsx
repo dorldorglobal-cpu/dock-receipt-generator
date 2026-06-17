@@ -861,14 +861,15 @@ export default function Expenses() {
   };
 
   const submitMarkPaid = async () => {
-    const { exp } = payConfirm;
-    const paidAmount = parseFloat(payConfirmAmt);
+    const { exp, addTo } = payConfirm;
+    const entered = parseFloat(payConfirmAmt);
+    const paidAmount = isNaN(entered) ? undefined : (addTo != null ? Math.min(addTo + entered, exp.amount) : entered);
     await fetch(`${API}/api/expenses/${exp._id}/pay`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
         paidDate: payConfirmDate || todayISO(),
-        paidAmount: isNaN(paidAmount) ? undefined : paidAmount,
+        paidAmount,
       }),
     });
     setPayConfirm(null);
@@ -1930,6 +1931,19 @@ export default function Expenses() {
                             Mark Paid
                           </button>
                         )}
+                        {exp.status === "paid" && exp.paidAmount != null && exp.paidAmount < exp.amount && (
+                          <button onClick={() => {
+                            const remaining = exp.amount - exp.paidAmount;
+                            setPayConfirm({ exp, addTo: exp.paidAmount });
+                            setPayConfirmAmt(remaining.toFixed(2));
+                            setPayConfirmDate(todayISO());
+                          }} style={{
+                            background: "#f9731620", color: "#f97316", border: "none", borderRadius: 5,
+                            padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                          }}>
+                            + Payment
+                          </button>
+                        )}
                         <button onClick={() => openEdit(exp)} title="Edit" style={{
                           background: "#3b82f620", color: "#60a5fa", border: "none", borderRadius: 5,
                           padding: "4px 10px", fontSize: 11, cursor: "pointer",
@@ -2064,7 +2078,7 @@ export default function Expenses() {
       {payConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:360, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 4px", color:"#e6edf3" }}>Mark Bill Paid</h3>
+            <h3 style={{ margin:"0 0 4px", color:"#e6edf3" }}>{payConfirm.addTo != null ? "Add Payment" : "Mark Bill Paid"}</h3>
             <p style={{ margin:"0 0 18px", fontSize:12, color:"#8b949e" }}>{payConfirm.exp.description}</p>
             <label style={{ display:"block", marginBottom:14, fontSize:12, color:"#8b949e" }}>
               Amount Paid
@@ -2074,11 +2088,21 @@ export default function Expenses() {
                   onChange={e => setPayConfirmAmt(e.target.value)} autoFocus
                   style={{ flex:1, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13 }} />
               </div>
-              {payConfirm.exp.amount != null && parseFloat(payConfirmAmt) > 0 && parseFloat(payConfirmAmt) < payConfirm.exp.amount && (
-                <div style={{ marginTop:6, fontSize:11, color:"#f97316" }}>
-                  Partial payment — ${(payConfirm.exp.amount - parseFloat(payConfirmAmt)).toFixed(2)} remaining
-                </div>
-              )}
+              {(() => {
+                const entered = parseFloat(payConfirmAmt);
+                const addTo = payConfirm.addTo || 0;
+                const newTotal = addTo + (isNaN(entered) ? 0 : entered);
+                const remaining = payConfirm.exp.amount - newTotal;
+                if (entered > 0 && remaining > 0.005) return (
+                  <div style={{ marginTop:6, fontSize:11, color:"#f97316" }}>
+                    {payConfirm.addTo != null ? `Total paid: $${newTotal.toFixed(2)} — ` : "Partial — "}${remaining.toFixed(2)} remaining
+                  </div>
+                );
+                if (entered > 0 && remaining <= 0.005 && payConfirm.addTo != null) return (
+                  <div style={{ marginTop:6, fontSize:11, color:"#34d399" }}>Fully paid!</div>
+                );
+                return null;
+              })()}
             </label>
             <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
               Paid Date
