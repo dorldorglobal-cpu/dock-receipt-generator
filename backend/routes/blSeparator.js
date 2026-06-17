@@ -185,7 +185,7 @@ router.post("/attach", async (req, res) => {
     }
 
     const pdfBuffer = fs.readFileSync(tempPath);
-    const srcPdf = await PDFDocument.load(pdfBuffer);
+    const srcPdf = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
 
     const results = [];
 
@@ -290,7 +290,7 @@ router.post("/download-bl", async (req, res) => {
     }
 
     const pdfBuffer = fs.readFileSync(tempPath);
-    const srcPdf = await PDFDocument.load(pdfBuffer);
+    const srcPdf = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
     const newPdf = await PDFDocument.create();
     const [startPage, endPage] = pages;
     const indices = [];
