@@ -47,6 +47,7 @@ const EMPTY_FORM = {
   amount: "",
   date: todayISO(),
   orderRef: "",
+  vin: "",
   invoiceNumber: "",
   status: "unpaid",
   paidDate: "",
@@ -224,6 +225,15 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
         <label style={labelStyle}>
           Order # (optional)
           <input {...inp("orderRef")} style={inputStyle} placeholder="e.g. 30979" />
+        </label>
+
+        {/* VIN */}
+        <label style={labelStyle}>
+          VIN (optional)
+          <input {...inp("vin")} style={{ ...inputStyle, fontFamily: "monospace", textTransform: "uppercase" }}
+            placeholder="17-char VIN"
+            onChange={e => setForm(f => ({ ...f, vin: e.target.value.toUpperCase() }))}
+          />
         </label>
 
         {/* Invoice Number */}
@@ -820,6 +830,7 @@ export default function Expenses() {
       amount:        exp.amount != null ? String(exp.amount) : "",
       date:          exp.date ? exp.date.slice(0, 10) : todayISO(),
       orderRef:      exp.orderRef      || "",
+      vin:           exp.vin           || "",
       invoiceNumber: exp.invoiceNumber || "",
       status:        exp.status        || "unpaid",
       paidDate:      exp.paidDate ? exp.paidDate.slice(0, 10) : "",

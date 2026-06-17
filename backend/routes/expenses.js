@@ -259,7 +259,7 @@ router.post("/", uploadFields, async (req, res) => {
 router.put("/:id", uploadFields, async (req, res) => {
   try {
     const { category, description, vendor, amount, date, orderId, orderRef,
-            invoiceNumber, status, paidDate, notes } = req.body;
+            invoiceNumber, status, paidDate, notes, vin } = req.body;
 
     let lineItems = [];
     if (req.body.lineItems) {
@@ -269,6 +269,7 @@ router.put("/:id", uploadFields, async (req, res) => {
 
     const update = {
       category, description, vendor, notes,
+      vin:           vin !== undefined ? (vin || "") : undefined,
       invoiceNumber: invoiceNumber || "",
       amount:    parseFloat(amount) + extrasTotal,
       date:      date ? new Date(date) : undefined,
