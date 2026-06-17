@@ -416,6 +416,25 @@ async function saveUploadedFile(buffer, originalName, mimeType, orderId = null) 
   return { fname: driveFile.name, driveId: driveFile.id, driveUrl: driveFile.webViewLink };
 }
 
+// VIN check-digit validation (NHTSA algorithm — works for all NA-market VINs)
+const VIN_CHAR_VALS = {
+  A:1,B:2,C:3,D:4,E:5,F:6,G:7,H:8,
+  J:1,K:2,L:3,M:4,N:5,P:7,R:9,
+  S:2,T:3,U:4,V:5,W:6,X:7,Y:8,Z:9,
+};
+const VIN_WEIGHTS = [8,7,6,5,4,3,2,10,0,9,8,7,6,5,4,3,2];
+function vinChecksumValid(vin) {
+  let sum = 0;
+  for (let i = 0; i < 17; i++) {
+    const c = vin[i];
+    const val = /\d/.test(c) ? parseInt(c, 10) : (VIN_CHAR_VALS[c] || 0);
+    sum += val * VIN_WEIGHTS[i];
+  }
+  const rem = sum % 11;
+  const expected = rem === 10 ? "X" : String(rem);
+  return vin[8] === expected;
+}
+
 // ── POST /api/expenses/parse-sallaum — parse PDF, return VIN rows + order matches ──
 const memUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
@@ -450,13 +469,18 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
     const lines = text.split("\n");
 
     for (const line of lines) {
-      // Overlapping scan: take the LAST 17-char VIN candidate on the line.
-      // Model names like "RAV4" or "C300" bleed into earlier matches; the real
-      // VIN always follows the description so the rightmost match is correct.
+      // Overlapping scan: find the first 17-char candidate that passes VIN checksum.
+      // This handles two PDF concatenation artifacts:
+      //   • model names ending in digits (RAV4, C300) bleed into VIN from the left
+      //   • volume column digits (11.08 → "11") bleed into VIN from the right
+      // The real VIN always satisfies the NHTSA check-digit algorithm; artifacts don't.
       let vin = null;
       for (let ci = 0; ci <= line.length - 17; ci++) {
         const sub = line.substring(ci, ci + 17);
-        if (/^[A-HJ-NPR-Z0-9]{17}$/.test(sub)) vin = sub;
+        if (/^[A-HJ-NPR-Z0-9]{17}$/.test(sub) && vinChecksumValid(sub)) {
+          vin = sub;
+          break; // first valid match is the actual VIN
+        }
       }
       if (!vin) continue;
 
@@ -470,7 +494,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       const ymmMatch = line.match(/SLSE\d+\s+(.+?)\s+[A-HJ-NPR-Z0-9]{17}/i);
       const ymm = ymmMatch?.[1]?.trim() || "";
 
-      rows.push({ vin, total, ymm, _line: line.substring(0, 120) });
+      rows.push({ vin, total, ymm });
     }
 
     // Match each VIN to an order
@@ -496,7 +520,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       };
     });
 
-    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf", _debugRows: rows.map(r => ({ vin: r.vin, line: r._line })) });
+    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf" });
   } catch (err) {
     console.error("parse-sallaum error:", err);
     res.status(500).json({ error: err.message });
