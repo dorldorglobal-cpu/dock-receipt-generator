@@ -450,9 +450,15 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
     const lines = text.split("\n");
 
     for (const line of lines) {
-      const vinMatch = line.match(/[A-HJ-NPR-Z0-9]{17}/);
-      if (!vinMatch) continue;
-      const vin = vinMatch[0];
+      // Overlapping scan: take the LAST 17-char VIN candidate on the line.
+      // Model names like "RAV4" or "C300" bleed into earlier matches; the real
+      // VIN always follows the description so the rightmost match is correct.
+      let vin = null;
+      for (let ci = 0; ci <= line.length - 17; ci++) {
+        const sub = line.substring(ci, ci + 17);
+        if (/^[A-HJ-NPR-Z0-9]{17}$/.test(sub)) vin = sub;
+      }
+      if (!vin) continue;
 
       // Extract the last dollar amount on the line as the total
       const nums = line.match(/[\d,]+\.\d{2}/g);
