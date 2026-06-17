@@ -495,13 +495,13 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       // This handles two PDF concatenation artifacts:
       //   • model names ending in digits (RAV4, C300) bleed into VIN from the left
       //   • volume column digits (11.08 → "11") bleed into VIN from the right
-      // The real VIN always satisfies the NHTSA check-digit algorithm; artifacts don't.
+      // Take the LAST checksum-passing candidate: for left-bleed the real VIN is further
+      // right; for right-bleed only one candidate passes so last = first = correct.
       let vin = null;
       for (let ci = 0; ci <= line.length - 17; ci++) {
         const sub = line.substring(ci, ci + 17);
         if (/^[A-HJ-NPR-Z0-9]{17}$/.test(sub) && vinChecksumValid(sub)) {
-          vin = sub;
-          break; // first valid match is the actual VIN
+          vin = sub; // keep scanning — rightmost winner wins
         }
       }
       if (!vin) continue;
