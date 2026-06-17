@@ -9,8 +9,9 @@ export default function BlSeparator() {
   const [dragging, setDragging] = useState(false);
   const [parsing, setParsing] = useState(false);
   const [parsed, setParsed] = useState(null); // { carrier, bls, sessionId }
-  const [selected, setSelected] = useState({}); // blNumber+type → { selected, createExpense }
+  const [selected, setSelected] = useState({}); // key → { selected, createExpense }
   const [attaching, setAttaching] = useState(false);
+  const [downloading, setDownloading] = useState(false);
   const [results, setResults] = useState(null);
   const [error, setError] = useState("");
   const fileRef = useRef();
@@ -42,11 +43,10 @@ export default function BlSeparator() {
       if (!res.ok) throw new Error(data.error || "Parse failed");
 
       setParsed(data);
-      // Default: select all with an order match
       const sel = {};
       data.bls.forEach((bl, i) => {
         const k = blKey(bl, i);
-        sel[k] = { selected: !!bl.orderId, createExpense: bl.type === "rated" && !!bl.orderId };
+        sel[k] = { selected: true, createExpense: bl.type === "rated" && !!bl.orderId };
       });
       setSelected(sel);
     } catch (e) {
@@ -71,10 +71,18 @@ export default function BlSeparator() {
     const next = {};
     parsed.bls.forEach((bl, i) => {
       const k = blKey(bl, i);
-      next[k] = { ...selected[k], selected: val && !!bl.orderId };
+      next[k] = { ...selected[k], selected: val };
     });
     setSelected(next);
   };
+
+  // Count selected matched (for upload) and selected unmatched (for download)
+  const selectedMatched = parsed
+    ? parsed.bls.filter((bl, i) => selected[blKey(bl, i)]?.selected && bl.orderId).length
+    : 0;
+  const selectedAll = parsed
+    ? parsed.bls.filter((bl, i) => selected[blKey(bl, i)]?.selected).length
+    : 0;
 
   const attachSelected = async () => {
     const toAttach = parsed.bls
@@ -93,7 +101,7 @@ export default function BlSeparator() {
       }));
 
     if (!toAttach.length) {
-      setError("No BLs selected.");
+      setError("No matched BLs selected.");
       return;
     }
 
@@ -115,16 +123,54 @@ export default function BlSeparator() {
     }
   };
 
-  const selectedCount = parsed
-    ? parsed.bls.filter((bl, i) => selected[blKey(bl, i)]?.selected && bl.orderId).length
-    : 0;
+  const downloadSelected = async () => {
+    const toDownload = parsed.bls
+      .map((bl, i) => ({ bl, i }))
+      .filter(({ bl, i }) => selected[blKey(bl, i)]?.selected);
+
+    if (!toDownload.length) { setError("No BLs selected."); return; }
+
+    setDownloading(true);
+    setError("");
+    try {
+      for (const { bl } of toDownload) {
+        const typeLabel = bl.type === "rated" ? "Rated" : "Draft";
+        const ref = bl.refNumber || bl.blNumber || "Unknown";
+        const filename = `${ref} ${typeLabel}.pdf`;
+
+        const res = await fetch(`${API}/api/bl-separator/download-bl`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ sessionId: parsed.sessionId, pages: bl.pages, filename }),
+        });
+        if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Download failed"); }
+
+        const blob = await res.blob();
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        // Small delay between downloads so browser doesn't block them
+        await new Promise((r) => setTimeout(r, 300));
+      }
+    } catch (e) {
+      setError(e.message);
+    } finally {
+      setDownloading(false);
+    }
+  };
 
   return (
-    <div style={{ padding: "24px", maxWidth: 1100, margin: "0 auto" }}>
+    <div style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
       <h2 style={{ marginBottom: 4, fontSize: 22 }}>BL Separator</h2>
       <p style={{ color: "#9ca3af", marginBottom: 24, fontSize: 14 }}>
         Upload a Sallaum or ACL/Grimaldi batch BL PDF. The system will parse and separate individual
-        BLs, match them to orders, and upload each BL to the correct order's documents.
+        BLs, match them to orders by reference number, and let you upload or download each BL.
       </p>
 
       {!parsed && !parsing && (
@@ -170,12 +216,12 @@ export default function BlSeparator() {
       {results && (
         <div style={{ marginTop: 0 }}>
           <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-            <h3 style={{ margin: 0 }}>Results</h3>
+            <h3 style={{ margin: 0 }}>Upload Results</h3>
             <button
               onClick={reset}
               style={{ padding: "6px 14px", background: "#374151", color: "#e5e7eb", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13 }}
             >
-              Upload Another
+              Upload Another PDF
             </button>
           </div>
           <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
@@ -215,22 +261,32 @@ export default function BlSeparator() {
 
       {parsed && !results && (
         <div>
-          <div style={{ display: "flex", alignItems: "center", gap: 16, marginBottom: 16 }}>
-            <div>
-              <span style={{ color: "#9ca3af", fontSize: 13 }}>Carrier: </span>
+          {/* Action bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
+            <div style={{ color: "#9ca3af", fontSize: 13 }}>
               <span style={{ color: "#e5e7eb", fontWeight: 600 }}>{parsed.carrier}</span>
-              <span style={{ color: "#9ca3af", fontSize: 13, marginLeft: 16 }}>{parsed.bls.length} BLs found</span>
+              <span style={{ marginLeft: 10 }}>{parsed.bls.length} BLs</span>
             </div>
-            <div style={{ marginLeft: "auto", display: "flex", gap: 8 }}>
+
+            <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => toggleAll(true)} style={btnStyle("#1e3a5f", "#60a5fa")}>Select All</button>
               <button onClick={() => toggleAll(false)} style={btnStyle("#374151", "#9ca3af")}>Deselect All</button>
               <button onClick={reset} style={btnStyle("#374151", "#9ca3af")}>Reset</button>
+
+              <button
+                onClick={downloadSelected}
+                disabled={downloading || selectedAll === 0}
+                style={btnStyle(selectedAll > 0 ? "#1a2e1a" : "#374151", selectedAll > 0 ? "#4ade80" : "#6b7280", downloading || selectedAll === 0)}
+              >
+                {downloading ? "Downloading…" : `⬇ Download Selected (${selectedAll})`}
+              </button>
+
               <button
                 onClick={attachSelected}
-                disabled={attaching || selectedCount === 0}
-                style={btnStyle(selectedCount > 0 ? "#312e81" : "#374151", selectedCount > 0 ? "#818cf8" : "#6b7280", attaching)}
+                disabled={attaching || selectedMatched === 0}
+                style={btnStyle(selectedMatched > 0 ? "#312e81" : "#374151", selectedMatched > 0 ? "#818cf8" : "#6b7280", attaching || selectedMatched === 0)}
               >
-                {attaching ? "Uploading…" : `Upload ${selectedCount} BL${selectedCount !== 1 ? "s" : ""}`}
+                {attaching ? "Uploading…" : `☁ Upload to Orders (${selectedMatched})`}
               </button>
             </div>
           </div>
@@ -260,21 +316,19 @@ export default function BlSeparator() {
                     style={{
                       borderBottom: "1px solid #1f2937",
                       background: sel.selected ? "#1e1b4b11" : "transparent",
-                      opacity: matched ? 1 : 0.5,
                     }}
                   >
                     <td style={td}>
                       <input
                         type="checkbox"
                         checked={!!sel.selected}
-                        disabled={!matched}
                         onChange={(e) =>
                           setSelected((prev) => ({
                             ...prev,
                             [k]: { ...prev[k], selected: e.target.checked },
                           }))
                         }
-                        style={{ accentColor: "#6366f1", width: 14, height: 14 }}
+                        style={{ accentColor: "#6366f1", width: 14, height: 14, cursor: "pointer" }}
                       />
                     </td>
                     <td style={td}>
@@ -284,7 +338,7 @@ export default function BlSeparator() {
                       {matched ? (
                         <span style={{ color: "#34d399", fontWeight: 600 }}>{bl.refNumber}</span>
                       ) : (
-                        <span style={{ color: "#ef4444" }}>{bl.refNumber || "?"} (not found)</span>
+                        <span style={{ color: "#ef4444" }}>{bl.refNumber || "?"} <span style={{ color: "#6b7280", fontSize: 11 }}>(not found)</span></span>
                       )}
                     </td>
                     <td style={td}>
@@ -330,7 +384,7 @@ export default function BlSeparator() {
                                 [k]: { ...prev[k], createExpense: e.target.checked },
                               }))
                             }
-                            style={{ accentColor: "#f59e0b", width: 14, height: 14 }}
+                            style={{ accentColor: "#f59e0b", width: 14, height: 14, cursor: "pointer" }}
                           />
                         ) : (
                           <span style={{ color: "#374151" }}>—</span>

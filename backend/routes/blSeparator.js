@@ -278,4 +278,35 @@ router.post("/attach", async (req, res) => {
   }
 });
 
+// ── POST /api/bl-separator/download-bl ───────────────────────────────────────
+// Returns a single BL's pages as a PDF stream.
+// Body: { sessionId, pages: [start, end], filename }
+router.post("/download-bl", async (req, res) => {
+  try {
+    const { sessionId, pages, filename } = req.body;
+    const tempPath = path.join(TEMP_DIR, `bl-${sessionId}.pdf`);
+    if (!fs.existsSync(tempPath)) {
+      return res.status(400).json({ error: "Session expired — please re-upload the PDF" });
+    }
+
+    const pdfBuffer = fs.readFileSync(tempPath);
+    const srcPdf = await PDFDocument.load(pdfBuffer);
+    const newPdf = await PDFDocument.create();
+    const [startPage, endPage] = pages;
+    const indices = [];
+    for (let p = startPage; p <= endPage; p++) indices.push(p);
+    const copiedPages = await newPdf.copyPages(srcPdf, indices);
+    copiedPages.forEach((page) => newPdf.addPage(page));
+    const blBytes = await newPdf.save();
+
+    const safeName = (filename || "BL.pdf").replace(/[^a-zA-Z0-9._\- ]/g, "_");
+    res.set("Content-Type", "application/pdf");
+    res.set("Content-Disposition", `attachment; filename="${safeName}"`);
+    res.send(Buffer.from(blBytes));
+  } catch (err) {
+    console.error("BL download error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
