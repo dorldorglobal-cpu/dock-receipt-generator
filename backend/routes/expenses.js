@@ -470,7 +470,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       const ymmMatch = line.match(/SLSE\d+\s+(.+?)\s+[A-HJ-NPR-Z0-9]{17}/i);
       const ymm = ymmMatch?.[1]?.trim() || "";
 
-      rows.push({ vin, total, ymm });
+      rows.push({ vin, total, ymm, _line: line.substring(0, 120) });
     }
 
     // Match each VIN to an order
@@ -496,7 +496,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       };
     });
 
-    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf" });
+    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf", _debugRows: rows.map(r => ({ vin: r.vin, line: r._line })) });
   } catch (err) {
     console.error("parse-sallaum error:", err);
     res.status(500).json({ error: err.message });
