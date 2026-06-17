@@ -259,11 +259,9 @@ router.post("/attach", async (req, res) => {
           mimetype: "application/pdf",
         });
 
-        // Update vessel/voyage from BL if not already set
-        if (bl.vessel && !order.vessel) order.vessel  = bl.vessel;
-        if (bl.voyage && !order.voyage) order.voyage  = bl.voyage;
-        if (bl.vessel) order.vessel = bl.vessel;
-        if (bl.voyage) order.voyage = bl.voyage;
+        // Always update vessel/voyage from BL
+        if (bl.vessel) { order.vessel = bl.vessel; order.markModified("vessel"); }
+        if (bl.voyage) { order.voyage = bl.voyage; order.markModified("voyage"); }
 
         // Auto-update status to Sailed on Draft upload (same logic as manual file upload)
         const SAILED_STATUSES = ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail"];
