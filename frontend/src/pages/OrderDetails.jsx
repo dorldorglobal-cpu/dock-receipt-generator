@@ -385,6 +385,8 @@ export default function OrderDetails() {
   const [googleContacts, setGoogleContacts] = useState([]);
   const [storageConfirm, setStorageConfirm] = useState(null); // { parsed, file }
   const [storageSellPrice, setStorageSellPrice] = useState("");
+  const [payConfirm, setPayConfirm] = useState(null); // { billId, amount } — partial-pay modal
+  const [payConfirmAmt, setPayConfirmAmt] = useState("");
 
   // Sallaum nonrunner/forklift notify popup
   const [sallaumNotify,        setSallaumNotify]        = useState(false);
@@ -721,13 +723,23 @@ export default function OrderDetails() {
     setEditingBill(b => ({ ...b, [`${type}FileName`]: "" }));
   };
 
-  const markBillPaid = async (billId) => {
+  const markBillPaid = (billId, billAmount) => {
+    setPayConfirm({ billId, amount: billAmount });
+    setPayConfirmAmt(billAmount != null ? String(billAmount) : "");
+  };
+
+  const submitMarkPaid = async () => {
+    const { billId } = payConfirm;
+    const paidAmount = parseFloat(payConfirmAmt);
     const res = await fetch(`${API}/api/expenses/${billId}/pay`, {
       method:  "PATCH",
       headers: { "Content-Type": "application/json" },
-      body:    JSON.stringify({ paidDate: new Date().toISOString().slice(0, 10) }),
+      body:    JSON.stringify({
+        paidDate: new Date().toISOString().slice(0, 10),
+        paidAmount: isNaN(paidAmount) ? undefined : paidAmount,
+      }),
     });
-    if (res.ok) fetchBills();
+    if (res.ok) { setPayConfirm(null); fetchBills(); }
   };
 
   const deleteBill = async (billId) => {
@@ -2956,8 +2968,10 @@ export default function OrderDetails() {
                   </td>
                   <td>
                     {bill.status === "paid"
-                      ? <span style={{ fontSize:11, color:"#34d399", fontWeight:600 }}>✓ Paid</span>
-                      : <button onClick={() => markBillPaid(bill._id)}
+                      ? <span style={{ fontSize:11, color:"#34d399", fontWeight:600 }}>
+                          ✓ Paid{bill.paidAmount != null && bill.paidAmount !== bill.amount ? ` ($${bill.paidAmount.toFixed(2)})` : ""}
+                        </span>
+                      : <button onClick={() => markBillPaid(bill._id, bill.amount)}
                           style={{ fontSize:11, padding:"3px 10px", borderRadius:8, border:"none",
                             background:"rgba(5,150,105,0.15)", color:"#34d399",
                             cursor:"pointer", fontWeight:600 }}>
@@ -4321,6 +4335,37 @@ export default function OrderDetails() {
         </div>
       )}
 
+      {/* ── Mark Bill Paid Modal ── */}
+      {payConfirm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:340, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 16px", color:"#e6edf3" }}>Mark Bill Paid</h3>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+              Amount Paid
+              <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                <span style={{ color:"#e6edf3" }}>$</span>
+                <input
+                  type="number" min="0" step="0.01"
+                  value={payConfirmAmt}
+                  onChange={e => setPayConfirmAmt(e.target.value)}
+                  style={{ flex:1, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13 }}
+                  autoFocus
+                />
+              </div>
+              {payConfirm.amount != null && parseFloat(payConfirmAmt) < payConfirm.amount && parseFloat(payConfirmAmt) > 0 && (
+                <div style={{ marginTop:6, fontSize:11, color:"#f97316" }}>
+                  Partial payment — ${(payConfirm.amount - parseFloat(payConfirmAmt)).toFixed(2)} remaining
+                </div>
+              )}
+            </label>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+              <button onClick={submitMarkPaid} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Confirm Paid</button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Storage Bill Confirm Modal ── */}
       {storageConfirm && (() => {
         const { parsed } = storageConfirm;
@@ -4405,8 +4450,8 @@ export default function OrderDetails() {
               <p style={{ margin:"0 0 18px", fontSize:13, color:"#8b949e" }}>Mark this bill as <strong style={{color:"#34d399"}}>PAID</strong>? (You usually pay with credit card)</p>
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
                 <button onClick={() => setStorageConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
-                <button onClick={() => submitStorageBill(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#e6edf3", cursor:"pointer" }}>Save Unpaid</button>
-                <button onClick={() => submitStorageBill(true)} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Mark Paid</button>
+                <button onClick={() => submitStorageBill(false).catch(err => { setMessage("❌ Error: " + err.message); })} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#e6edf3", cursor:"pointer" }}>Save Unpaid</button>
+                <button onClick={() => submitStorageBill(true).catch(err => { setMessage("❌ Error: " + err.message); })} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Mark Paid</button>
               </div>
             </div>
           </div>

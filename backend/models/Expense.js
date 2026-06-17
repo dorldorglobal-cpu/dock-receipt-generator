@@ -27,6 +27,7 @@ const expenseSchema = new mongoose.Schema(
     // Payment status
     status:          { type: String, enum: ["unpaid", "paid"], default: "unpaid" },
     paidDate:        { type: Date, default: null },
+    paidAmount:      { type: Number, default: null }, // null = full amount; set for partial payments
     paymentMethod:   { type: String, default: "" }, // "Bank ACH", "Zelle", "Venmo", "Check", "Other"
 
     vin:           { type: String, default: "" },

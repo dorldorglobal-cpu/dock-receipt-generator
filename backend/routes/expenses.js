@@ -321,10 +321,12 @@ router.post("/bulk-pay", async (req, res) => {
 // ── PATCH /api/expenses/:id/pay — quick mark as paid ─────────────────────────
 router.patch("/:id/pay", async (req, res) => {
   try {
-    const { paidDate } = req.body;
+    const { paidDate, paidAmount } = req.body;
+    const fields = { status: "paid", paidDate: paidDate ? new Date(paidDate) : new Date() };
+    if (paidAmount != null && paidAmount !== "") fields.paidAmount = Number(paidAmount);
     const updated = await Expense.findByIdAndUpdate(
       req.params.id,
-      { $set: { status: "paid", paidDate: paidDate ? new Date(paidDate) : new Date() } },
+      { $set: fields },
       { new: true }
     );
     if (!updated) return res.status(404).json({ error: "Not found" });
