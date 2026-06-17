@@ -542,12 +542,14 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
 
     // Match each VIN to an order
     const vins = rows.map(r => r.vin);
-    const orders = await Order.find({ vin: { $in: vins } })
-      .select("_id refNumber vin customerName year make model")
-      .lean();
+    const [orders, existingExpenses] = await Promise.all([
+      Order.find({ vin: { $in: vins } }).select("_id refNumber vin customerName year make model").lean(),
+      Expense.find({ invoiceNumber, vin: { $in: vins } }).select("vin").lean(),
+    ]);
 
     const orderByVin = {};
     for (const o of orders) orderByVin[o.vin?.toUpperCase()] = o;
+    const dupVins = new Set(existingExpenses.map(e => e.vin?.toUpperCase()));
 
     const result = rows.map(r => {
       const order = orderByVin[r.vin.toUpperCase()] || null;
@@ -567,6 +569,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
         orderRef:        order?.refNumber || "",
         customerName:    order?.customerName || "",
         matched:         !!order,
+        duplicate:       dupVins.has(r.vin.toUpperCase()),
       };
     });
 

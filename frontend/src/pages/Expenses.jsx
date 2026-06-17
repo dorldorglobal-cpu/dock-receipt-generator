@@ -550,9 +550,13 @@ export default function Expenses() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Parse failed");
       setSallaumParsed(data);
-      setSallaumRows(data.rows.map(r => ({ ...r, skip: false })));
+      setSallaumRows(data.rows.map(r => ({ ...r, skip: r.duplicate || false })));
       const unmatched = data.rows.filter(r => !r.matched).length;
-      setSallaumMsg(unmatched > 0 ? `⚠ ${unmatched} VIN(s) not matched to any order — review below.` : "");
+      const dups = data.rows.filter(r => r.duplicate).length;
+      const msgs = [];
+      if (dups > 0) msgs.push(`⚠ ${dups} already expensed on this invoice — unchecked`);
+      if (unmatched > dups) msgs.push(`⚠ ${unmatched - dups} VIN(s) not matched to any order`);
+      setSallaumMsg(msgs.join(" · ") || "");
     } catch (err) {
       setSallaumMsg("❌ " + err.message);
     } finally {
@@ -1233,9 +1237,11 @@ export default function Expenses() {
                             </div>
                           </td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030" }}>
-                            {row.matched
-                              ? <span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>
-                              : <span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}
+                            {row.duplicate
+                              ? <span style={{color:"#f87171",fontSize:12}}>🔁 Already expensed</span>
+                              : row.matched
+                                ? <span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>
+                                : <span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}
                           </td>
                         </tr>
                       ))}
