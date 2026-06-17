@@ -490,11 +490,22 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       const total = parseFloat(nums[nums.length - 1].replace(/,/g, ""));
       if (!total || total <= 0) continue;
 
-      // Extract vehicle description — text between booking ref (SLSE####) and VIN
-      const ymmMatch = line.match(/SLSE\d+\s+(.+?)\s+[A-HJ-NPR-Z0-9]{17}/i);
-      const ymm = ymmMatch?.[1]?.trim() || "";
+      // Extract booking number (SLSE######) from this row
+      const bookingMatch = line.match(/SLSE\d+/i);
+      const bookingRef = bookingMatch ? bookingMatch[0] : "";
 
-      rows.push({ vin, total, ymm });
+      // Extract vehicle description: text between booking number and VIN position
+      // Works whether or not there are spaces between columns in the PDF text
+      let ymm = "";
+      if (bookingRef && vin) {
+        const afterBooking = line.substring(line.indexOf(bookingRef) + bookingRef.length);
+        const vinIdx = afterBooking.indexOf(vin);
+        if (vinIdx > 0) {
+          ymm = afterBooking.substring(0, vinIdx).replace(/[^a-zA-Z0-9\s\-]/g, " ").replace(/\s+/g, " ").trim();
+        }
+      }
+
+      rows.push({ vin, total, ymm, bookingRef });
     }
 
     // Match each VIN to an order
@@ -508,14 +519,15 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
 
     const result = rows.map(r => {
       const order = orderByVin[r.vin.toUpperCase()] || null;
+      const ymmFromOrder = order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : "";
       return {
         vin:          r.vin,
         total:        r.total,
-        ymm:          r.ymm || (order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : ""),
+        ymm:          ymmFromOrder || r.ymm,
+        bookingRef:   r.bookingRef,
         orderId:      order?._id || null,
         orderRef:     order?.refNumber || "",
         customerName: order?.customerName || "",
-        ymm:          order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : "",
         matched:      !!order,
       };
     });
@@ -549,7 +561,7 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
         }
         const expense = await Expense.create({
           category:      "Ocean Freight",
-          description:   `Ocean Freight — ${row.ymm || ""} — VIN: ${row.vin} — ${vessel || voyage}`.trim().replace(/\s*—\s*$/, ""),
+          description:   `Ocean Freight — ${row.ymm || ""} — VIN: ${row.vin}${row.bookingRef ? " — Booking: " + row.bookingRef : ""} — ${vessel || voyage}`.trim().replace(/\s*—\s*$/, ""),
           vendor:        "Sallaum Lines",
           amount:        row.total,
           date:          dateObj,

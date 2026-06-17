@@ -1212,13 +1212,14 @@ export default function Expenses() {
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr>{["✓","VIN","Vehicle","Order Ref","Customer","Amount","Status"].map(h => <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid #374151", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","VIN","Vehicle","Booking","Order Ref","Customer","Amount","Status"].map(h => <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid #374151", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                     <tbody>
                       {sallaumRows.map((row, i) => (
                         <tr key={row.vin} style={{ opacity: row.skip ? 0.4 : 1 }}>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030" }}><input type="checkbox" checked={!row.skip} onChange={e => setSallaumRows(rs => rs.map((r,j) => j===i?{...r,skip:!e.target.checked}:r))} /></td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", color:"#e2e8f0" }}>{row.ymm||"—"}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", fontFamily:"monospace", fontSize:11, color:"#6b7280" }}>{row.bookingRef||"—"}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030" }}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setSallaumRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"#111827",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:110}}/>}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", color:"#9ca3af", fontSize:12 }}>{row.customerName||"—"}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", color:"#34d399", fontWeight:600 }}>${row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
