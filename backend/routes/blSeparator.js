@@ -2,16 +2,27 @@ const express = require("express");
 const router = express.Router();
 const multer = require("multer");
 const pdfParse = require("pdf-parse");
-const { PDFDocument } = require("pdf-lib");
 const crypto = require("crypto");
 const fs = require("fs");
 const path = require("path");
+const { execFile } = require("child_process");
 const Order = require("../models/Order");
 const Expense = require("../models/Expense");
 const { uploadBufferToDrive } = require("../googleDrive");
 
 const upload = multer({ storage: multer.memoryStorage() });
 const TEMP_DIR = path.join(__dirname, "..", "temp");
+const SPLIT_PY = path.join(__dirname, "..", "split_pdf.py");
+
+// Split pages from a PDF using Python/PyPDF2 (handles encrypted PDFs correctly)
+function splitPdf(inputPath, startPage, endPage, outputPath) {
+  return new Promise((resolve, reject) => {
+    execFile("python3", [SPLIT_PY, inputPath, String(startPage), String(endPage), outputPath], (err, stdout, stderr) => {
+      if (err) return reject(new Error(stderr || err.message));
+      resolve(outputPath);
+    });
+  });
+}
 
 // ── Sallaum: 1 page per BL ───────────────────────────────────────────────────
 function parseSallaum(pageTexts) {
@@ -184,9 +195,6 @@ router.post("/attach", async (req, res) => {
       return res.status(400).json({ error: "Session expired — please re-upload the PDF" });
     }
 
-    const pdfBuffer = fs.readFileSync(tempPath);
-    const srcPdf = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
-
     const results = [];
 
     for (const bl of bls) {
@@ -202,14 +210,12 @@ router.post("/attach", async (req, res) => {
           continue;
         }
 
-        // Extract pages for this BL
+        // Extract pages for this BL using Python (handles encrypted PDFs)
         const [startPage, endPage] = bl.pages;
-        const newPdf = await PDFDocument.create();
-        const pageIndices = [];
-        for (let p = startPage; p <= endPage; p++) pageIndices.push(p);
-        const copiedPages = await newPdf.copyPages(srcPdf, pageIndices);
-        copiedPages.forEach((page) => newPdf.addPage(page));
-        const blBytes = await newPdf.save();
+        const splitPath = path.join(TEMP_DIR, `bl-split-${crypto.randomUUID()}.pdf`);
+        await splitPdf(tempPath, startPage, endPage, splitPath);
+        const blBytes = fs.readFileSync(splitPath);
+        try { fs.unlinkSync(splitPath); } catch {}
 
         // Build filename: BL_[blNumber]_[type].pdf
         const typeLabel = bl.type === "rated" ? "Rated" : "Draft";
@@ -217,7 +223,7 @@ router.post("/attach", async (req, res) => {
         const docLabel = bl.type === "rated" ? "BL Rated" : "BL Draft";
 
         const uploaded = await uploadBufferToDrive(
-          Buffer.from(blBytes),
+          blBytes,
           fileName,
           "application/pdf",
           order.driveFolderId
@@ -289,20 +295,16 @@ router.post("/download-bl", async (req, res) => {
       return res.status(400).json({ error: "Session expired — please re-upload the PDF" });
     }
 
-    const pdfBuffer = fs.readFileSync(tempPath);
-    const srcPdf = await PDFDocument.load(pdfBuffer, { ignoreEncryption: true });
-    const newPdf = await PDFDocument.create();
     const [startPage, endPage] = pages;
-    const indices = [];
-    for (let p = startPage; p <= endPage; p++) indices.push(p);
-    const copiedPages = await newPdf.copyPages(srcPdf, indices);
-    copiedPages.forEach((page) => newPdf.addPage(page));
-    const blBytes = await newPdf.save();
+    const splitPath = path.join(TEMP_DIR, `bl-dl-${crypto.randomUUID()}.pdf`);
+    await splitPdf(tempPath, startPage, endPage, splitPath);
+    const blBytes = fs.readFileSync(splitPath);
+    try { fs.unlinkSync(splitPath); } catch {}
 
     const safeName = (filename || "BL.pdf").replace(/[^a-zA-Z0-9._\- ]/g, "_");
     res.set("Content-Type", "application/pdf");
     res.set("Content-Disposition", `attachment; filename="${safeName}"`);
-    res.send(Buffer.from(blBytes));
+    res.send(blBytes);
   } catch (err) {
     console.error("BL download error:", err);
     res.status(500).json({ error: err.message });

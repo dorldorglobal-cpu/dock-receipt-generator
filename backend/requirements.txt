@@ -1,1 +1,2 @@
 pdfplumber
+PyPDF2
