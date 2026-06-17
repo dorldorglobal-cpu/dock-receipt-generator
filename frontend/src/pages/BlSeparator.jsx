@@ -12,14 +12,15 @@ export default function BlSeparator() {
   const [selected, setSelected] = useState({}); // key → { selected, createExpense }
   const [attaching, setAttaching] = useState(false);
   const [downloading, setDownloading] = useState(false);
-  const [results, setResults] = useState(null);
+  // Inline per-BL upload results: key → { success, error, driveLink, expenseId }
+  const [rowResults, setRowResults] = useState({});
   const [error, setError] = useState("");
   const fileRef = useRef();
 
   const reset = () => {
     setParsed(null);
     setSelected({});
-    setResults(null);
+    setRowResults({});
     setError("");
   };
 
@@ -33,7 +34,7 @@ export default function BlSeparator() {
     setError("");
     setParsing(true);
     setParsed(null);
-    setResults(null);
+    setRowResults({});
 
     try {
       const fd = new FormData();
@@ -65,6 +66,7 @@ export default function BlSeparator() {
 
   const onFileChange = (e) => {
     if (e.target.files[0]) handleFile(e.target.files[0]);
+    e.target.value = "";
   };
 
   const toggleAll = (val) => {
@@ -76,7 +78,6 @@ export default function BlSeparator() {
     setSelected(next);
   };
 
-  // Count selected matched (for upload) and selected unmatched (for download)
   const selectedMatched = parsed
     ? parsed.bls.filter((bl, i) => selected[blKey(bl, i)]?.selected && bl.orderId).length
     : 0;
@@ -86,24 +87,10 @@ export default function BlSeparator() {
 
   const attachSelected = async () => {
     const toAttach = parsed.bls
-      .map((bl, i) => ({ bl, i }))
-      .filter(({ bl, i }) => selected[blKey(bl, i)]?.selected && bl.orderId)
-      .map(({ bl, i }) => ({
-        pages: bl.pages,
-        orderId: bl.orderId,
-        blNumber: bl.blNumber,
-        refNumber: bl.refNumber,
-        type: bl.type,
-        vin: bl.vin,
-        vehicle: bl.vehicle,
-        charges: bl.charges,
-        createExpense: !!selected[blKey(bl, i)]?.createExpense,
-      }));
+      .map((bl, i) => ({ bl, i, k: blKey(bl, i) }))
+      .filter(({ bl, i, k }) => selected[k]?.selected && bl.orderId);
 
-    if (!toAttach.length) {
-      setError("No matched BLs selected.");
-      return;
-    }
+    if (!toAttach.length) { setError("No matched BLs selected."); return; }
 
     setAttaching(true);
     setError("");
@@ -111,11 +98,36 @@ export default function BlSeparator() {
       const res = await fetch(`${API}/api/bl-separator/attach`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sessionId: parsed.sessionId, bls: toAttach }),
+        body: JSON.stringify({
+          sessionId: parsed.sessionId,
+          bls: toAttach.map(({ bl, i, k }) => ({
+            pages: bl.pages,
+            orderId: bl.orderId,
+            blNumber: bl.blNumber,
+            refNumber: bl.refNumber,
+            type: bl.type,
+            vin: bl.vin,
+            vehicle: bl.vehicle,
+            charges: bl.charges,
+            createExpense: !!selected[k]?.createExpense,
+          })),
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Attach failed");
-      setResults(data.results);
+
+      // Merge results into rowResults by matching blNumber + refNumber
+      setRowResults((prev) => {
+        const next = { ...prev };
+        data.results.forEach((r) => {
+          // Find the matching key
+          const match = toAttach.find(
+            ({ bl }) => bl.blNumber === r.blNumber && bl.refNumber === r.refNumber
+          );
+          if (match) next[match.k] = r;
+        });
+        return next;
+      });
     } catch (e) {
       setError(e.message);
     } finally {
@@ -154,8 +166,6 @@ export default function BlSeparator() {
         a.click();
         document.body.removeChild(a);
         URL.revokeObjectURL(url);
-
-        // Small delay between downloads so browser doesn't block them
         await new Promise((r) => setTimeout(r, 300));
       }
     } catch (e) {
@@ -208,58 +218,12 @@ export default function BlSeparator() {
       )}
 
       {error && (
-        <div style={{ marginTop: 16, padding: "10px 16px", background: "#7f1d1d22", border: "1px solid #ef4444", borderRadius: 8, color: "#ef4444", fontSize: 14 }}>
+        <div style={{ marginTop: 16, marginBottom: 8, padding: "10px 16px", background: "#7f1d1d22", border: "1px solid #ef4444", borderRadius: 8, color: "#ef4444", fontSize: 14 }}>
           {error}
         </div>
       )}
 
-      {results && (
-        <div style={{ marginTop: 0 }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 16 }}>
-            <h3 style={{ margin: 0 }}>Upload Results</h3>
-            <button
-              onClick={reset}
-              style={{ padding: "6px 14px", background: "#374151", color: "#e5e7eb", border: "none", borderRadius: 6, cursor: "pointer", fontSize: 13 }}
-            >
-              Upload Another PDF
-            </button>
-          </div>
-          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-            {results.map((r, i) => (
-              <div
-                key={i}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: 12,
-                  padding: "10px 16px",
-                  background: r.success ? "#052e1622" : "#7f1d1d22",
-                  border: `1px solid ${r.success ? "#34d399" : "#ef4444"}`,
-                  borderRadius: 8,
-                  fontSize: 13,
-                }}
-              >
-                <span style={{ color: r.success ? "#34d399" : "#ef4444", fontSize: 16 }}>
-                  {r.success ? "✓" : "✗"}
-                </span>
-                <span style={{ color: "#e5e7eb", fontWeight: 600 }}>Order {r.refNumber}</span>
-                <span style={{ color: "#9ca3af" }}>BL {r.blNumber}</span>
-                {r.error && <span style={{ color: "#ef4444" }}>{r.error}</span>}
-                {r.driveLink && (
-                  <a href={r.driveLink} target="_blank" rel="noreferrer" style={{ color: "#6366f1", marginLeft: "auto", fontSize: 12 }}>
-                    View in Drive ↗
-                  </a>
-                )}
-                {r.expenseId && (
-                  <span style={{ color: "#f59e0b", fontSize: 12 }}>+ Ocean Freight expense created</span>
-                )}
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {parsed && !results && (
+      {parsed && (
         <div>
           {/* Action bar */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
@@ -302,7 +266,8 @@ export default function BlSeparator() {
                 <th style={th}>Vehicle</th>
                 <th style={th}>Type</th>
                 <th style={th}>Charges</th>
-                {parsed.carrier === "ACL" && <th style={th}>Create Expense</th>}
+                {parsed.carrier === "ACL" && <th style={th}>Expense</th>}
+                <th style={th}>Status</th>
               </tr>
             </thead>
             <tbody>
@@ -310,12 +275,15 @@ export default function BlSeparator() {
                 const k = blKey(bl, i);
                 const sel = selected[k] || {};
                 const matched = !!bl.orderId;
+                const result = rowResults[k];
                 return (
                   <tr
                     key={k}
                     style={{
                       borderBottom: "1px solid #1f2937",
-                      background: sel.selected ? "#1e1b4b11" : "transparent",
+                      background: result?.success
+                        ? "#052e1611"
+                        : sel.selected ? "#1e1b4b11" : "transparent",
                     }}
                   >
                     <td style={td}>
@@ -338,7 +306,9 @@ export default function BlSeparator() {
                       {matched ? (
                         <span style={{ color: "#34d399", fontWeight: 600 }}>{bl.refNumber}</span>
                       ) : (
-                        <span style={{ color: "#ef4444" }}>{bl.refNumber || "?"} <span style={{ color: "#6b7280", fontSize: 11 }}>(not found)</span></span>
+                        <span style={{ color: "#ef4444" }}>
+                          {bl.refNumber || "?"} <span style={{ color: "#6b7280", fontSize: 11 }}>(not found)</span>
+                        </span>
                       )}
                     </td>
                     <td style={td}>
@@ -353,17 +323,12 @@ export default function BlSeparator() {
                       <span style={{ color: "#d1d5db" }}>{bl.vehicle || "—"}</span>
                     </td>
                     <td style={td}>
-                      <span
-                        style={{
-                          padding: "2px 8px",
-                          borderRadius: 9999,
-                          fontSize: 11,
-                          fontWeight: 600,
-                          background: bl.type === "rated" ? "#78350f22" : "#1e3a5f22",
-                          color: bl.type === "rated" ? "#f59e0b" : "#60a5fa",
-                          textTransform: "uppercase",
-                        }}
-                      >
+                      <span style={{
+                        padding: "2px 8px", borderRadius: 9999, fontSize: 11, fontWeight: 600,
+                        background: bl.type === "rated" ? "#78350f22" : "#1e3a5f22",
+                        color: bl.type === "rated" ? "#f59e0b" : "#60a5fa",
+                        textTransform: "uppercase",
+                      }}>
                         {bl.type}
                       </span>
                     </td>
@@ -391,6 +356,20 @@ export default function BlSeparator() {
                         )}
                       </td>
                     )}
+                    <td style={td}>
+                      {result ? (
+                        result.success ? (
+                          <span style={{ color: "#34d399", fontSize: 12 }}>
+                            ✓ Uploaded
+                            {result.expenseId && <span style={{ color: "#f59e0b", marginLeft: 6 }}>+ expense</span>}
+                          </span>
+                        ) : (
+                          <span style={{ color: "#ef4444", fontSize: 12 }}>✗ {result.error}</span>
+                        )
+                      ) : (
+                        <span style={{ color: "#374151" }}>—</span>
+                      )}
+                    </td>
                   </tr>
                 );
               })}
