@@ -108,6 +108,8 @@ export default function BlSeparator() {
             type: bl.type,
             vin: bl.vin,
             vehicle: bl.vehicle,
+            vessel: bl.vessel,
+            voyage: bl.voyage,
             charges: bl.charges,
             createExpense: !!selected[k]?.createExpense,
           })),
