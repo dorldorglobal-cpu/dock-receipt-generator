@@ -3,8 +3,8 @@ const mongoose = require("mongoose");
 const CATEGORIES = [
   "Towing / Transport",
   "Ocean Freight",
+  "Storage",
   "Port / Terminal Fees",
-  "Storage Fees",
   "Loaders & Warehouses",
   "Software",
   "Legal Fees",
