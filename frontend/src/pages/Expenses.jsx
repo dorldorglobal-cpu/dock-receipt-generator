@@ -161,6 +161,24 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     onChange: (e) => setForm(f => ({ ...f, [key]: e.target.value })),
   });
 
+  const autoCategory = (desc) => {
+    const d = desc.toLowerCase();
+    if (/storage|auction storage|lot fee|yard fee/.test(d))    return "Storage";
+    if (/tow|transport|pickup|haul|dispatch/.test(d))          return "Towing / Transport";
+    if (/ocean|freight|shipping|sallaum|acl|vessel/.test(d))   return "Ocean Freight";
+    if (/port|terminal|customs|inspection|dray/.test(d))       return "Port / Terminal Fees";
+    if (/loader|warehouse|stuff|unstuff/.test(d))              return "Loaders & Warehouses";
+    return "";
+  };
+
+  const handleDescriptionChange = (e) => {
+    const desc = e.target.value;
+    setForm(f => {
+      const guessed = autoCategory(desc);
+      return { ...f, description: desc, ...(guessed && !f.category ? { category: guessed } : {}) };
+    });
+  };
+
   const inputStyle = {
     width: "100%", padding: "8px 10px", background: "#111827",
     border: "1px solid #374151", borderRadius: 6, color: "#f1f5f9",
@@ -184,7 +202,7 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
         {/* Description */}
         <label style={{ ...labelStyle, gridColumn: "1 / -1" }}>
           Description *
-          <input {...inp("description")} required style={inputStyle} placeholder="e.g. Towing – VIN 1HGCV1F3XJA123456" />
+          <input value={form.description ?? ""} onChange={handleDescriptionChange} required style={inputStyle} placeholder="e.g. Towing – VIN 1HGCV1F3XJA123456" />
         </label>
 
         {/* Vendor */}
