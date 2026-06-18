@@ -161,7 +161,7 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     onChange: (e) => setForm(f => ({ ...f, [key]: e.target.value })),
   });
 
-  const autoCategory = (desc) => {
+  const autoCategoryFromDesc = (desc) => {
     const d = desc.toLowerCase();
     if (/storage|auction storage|lot fee|yard fee/.test(d))    return "Storage";
     if (/tow|transport|pickup|haul|dispatch/.test(d))          return "Towing / Transport";
@@ -171,11 +171,28 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     return "";
   };
 
+  const autoCategoryFromVendor = (vendor) => {
+    const v = vendor.toLowerCase();
+    if (/dispatch|tow|transport/.test(v))                                        return "Towing / Transport";
+    if (/sallaum|acl\b|grimaldi|wallenius|eukor/.test(v))                        return "Ocean Freight";
+    if (/ezcargo|savannah auto export|cedars express|iship|i-ship/.test(v))      return "Loaders & Warehouses";
+    if (/copart|iaai|manheim|adesa/.test(v))                                     return "Storage";
+    return "";
+  };
+
   const handleDescriptionChange = (e) => {
     const desc = e.target.value;
     setForm(f => {
-      const guessed = autoCategory(desc);
+      const guessed = autoCategoryFromDesc(desc);
       return { ...f, description: desc, ...(guessed && !f.category ? { category: guessed } : {}) };
+    });
+  };
+
+  const handleVendorChange = (e) => {
+    const vendor = e.target.value;
+    setForm(f => {
+      const guessed = autoCategoryFromVendor(vendor);
+      return { ...f, vendor, ...(guessed && !f.category ? { category: guessed } : {}) };
     });
   };
 
@@ -209,7 +226,8 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
         <label style={labelStyle}>
           Vendor / Paid To
           <input
-            {...inp("vendor")}
+            value={form.vendor ?? ""}
+            onChange={handleVendorChange}
             list="vendor-list"
             style={inputStyle}
             placeholder="Type or select a vendor…"
