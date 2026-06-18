@@ -126,6 +126,14 @@ const orderSchema = new mongoose.Schema(
       },
     ],
 
+    pendingInvoiceItems: [
+      {
+        description: { type: String, required: true },
+        amount:      { type: Number, required: true },
+        addedAt:     { type: Date, default: Date.now },
+      },
+    ],
+
     timeline: [
       {
         action: String,

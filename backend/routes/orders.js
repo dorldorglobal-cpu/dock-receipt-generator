@@ -1705,6 +1705,31 @@ router.post("/:id/timeline", express.json(), async (req, res) => {
   }
 });
 
+// ── POST /api/orders/:id/pending-invoice-items — add a pending charge ────────
+router.post("/:id/pending-invoice-items", express.json(), async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Not found" });
+    const { description, amount } = req.body;
+    if (!description || amount == null) return res.status(400).json({ error: "description and amount required" });
+    order.pendingInvoiceItems.push({ description, amount: Number(amount) });
+    await order.save();
+    res.json({ pendingInvoiceItems: order.pendingInvoiceItems });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── DELETE /api/orders/:id/pending-invoice-items — clear after invoice created
+router.delete("/:id/pending-invoice-items", async (req, res) => {
+  try {
+    await Order.findByIdAndUpdate(req.params.id, { $set: { pendingInvoiceItems: [] } });
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/orders/set-counter — one-time counter reset ────────────────────
 router.post("/set-counter", async (req, res) => {
   try {
