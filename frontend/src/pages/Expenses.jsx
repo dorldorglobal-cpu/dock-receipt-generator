@@ -7,6 +7,7 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const CATEGORIES = [
   "Towing / Transport",
   "Ocean Freight",
+  "Storage",
   "Port / Terminal Fees",
   "Loaders & Warehouses",
   "Software",
@@ -18,6 +19,7 @@ const CATEGORIES = [
 const CAT_COLORS = {
   "Towing / Transport":   "#60a5fa",
   "Ocean Freight":        "#34d399",
+  "Storage":              "#c084fc",
   "Port / Terminal Fees": "#a78bfa",
   "Loaders & Warehouses": "#fb923c",
   "Software":             "#38bdf8",

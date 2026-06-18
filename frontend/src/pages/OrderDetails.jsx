@@ -2339,17 +2339,14 @@ export default function OrderDetails() {
                         🧮 Create Bill from Rated Draft
                       </button>
                     )}
-                    {isStoragePaid && (() => {
-                      const hasStorageBill = bills.some(b => /storage/i.test(b.category) && b.orderRef === order.refNumber);
-                      return (
-                        <button
-                          title="Create Bill from Storage Receipt"
-                          onClick={e => { e.stopPropagation(); createStorageBill(); }}
-                          style={{ background:"none", border:"none", cursor:"pointer", color: hasStorageBill ? "#34d399" : "#a78bfa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
-                          {hasStorageBill ? "✅ Bill Created" : "🏬 Create Bill from Storage Receipt"}
-                        </button>
-                      );
-                    })()}
+                    {isStoragePaid && (
+                      <button
+                        title="Create Bill from Storage Receipt"
+                        onClick={e => { e.stopPropagation(); createStorageBill(); }}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:"#a78bfa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                        🏬 Create Storage Bill
+                      </button>
+                    )}
                     <a href={f.webViewLink} download onClick={e => e.stopPropagation()}
                       style={{ background:"none", border:"1px solid var(--border)", borderRadius:5,
                         color:"var(--text-secondary)", fontSize:11, padding:"3px 9px",
@@ -4408,17 +4405,22 @@ export default function OrderDetails() {
       {storageConfirm && (() => {
         const { parsed } = storageConfirm;
         const submitStorageBill = async (markPaid) => {
+          const { file: srcFile } = storageConfirm;
           const body = new FormData();
-          body.append("category", "Storage Fees");
+          body.append("category", "Storage");
           body.append("description", `Storage Fee – ${order.refNumber}${parsed.lotNumber ? ` (Lot ${parsed.lotNumber})` : ""}`);
           body.append("vendor", parsed.vendor || "Copart");
           body.append("amount", parsed.amount || 0);
           body.append("date", parsed.date ? new Date(parsed.date).toISOString().slice(0,10) : new Date().toISOString().slice(0,10));
           body.append("orderId", parsed.orderId || order._id);
           body.append("orderRef", parsed.orderRef || order.refNumber);
+          body.append("vin", order.vin || "");
           body.append("status", markPaid ? "paid" : "unpaid");
           if (markPaid) body.append("paidDate", new Date().toISOString().slice(0,10));
-          if (parsed.yard) body.append("notes", `Sale Yard: ${parsed.yard}`);
+          const notes = [parsed.yard ? `Sale Yard: ${parsed.yard}` : "", srcFile?.name ? `File: ${srcFile.name}` : ""].filter(Boolean).join(" | ");
+          if (notes) body.append("notes", notes);
+          if (srcFile?.id)          body.append("billDriveId",  srcFile.id);
+          if (srcFile?.webViewLink) body.append("billDriveUrl", srcFile.webViewLink);
           const res = await fetch(`${API}/api/expenses`, { method: "POST", body });
           if (!res.ok) throw new Error("Failed to create expense");
 

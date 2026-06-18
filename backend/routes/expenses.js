@@ -192,7 +192,8 @@ router.get("/export", async (req, res) => {
 router.post("/", uploadFields, async (req, res) => {
   try {
     const { category, description, vendor, amount, date, orderId, orderRef,
-            vin, invoiceNumber, status, paidDate, notes } = req.body;
+            vin, invoiceNumber, status, paidDate, notes,
+            billDriveId, billDriveUrl } = req.body;
 
     if (!category || !description || !amount) {
       return res.status(400).json({ error: "Category, description, and amount are required." });
@@ -245,6 +246,10 @@ router.post("/", uploadFields, async (req, res) => {
       data.billMime     = f.mimetype;
       data.billDriveId  = driveFile.id;
       data.billDriveUrl = driveFile.webViewLink;
+    } else if (billDriveId) {
+      // Bill already lives in Drive (e.g. storage receipt uploaded to order docs)
+      data.billDriveId  = billDriveId;
+      data.billDriveUrl = billDriveUrl || "";
     }
 
     const expense = await Expense.create(data);
