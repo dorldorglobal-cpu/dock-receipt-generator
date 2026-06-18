@@ -37,6 +37,15 @@ const invoiceSchema = new mongoose.Schema(
 
     sentAt: Date,
     paidAt: Date,
+
+    payments: [
+      {
+        amount:  { type: Number, required: true },
+        method:  { type: String, default: "" },  // "Bank ACH", "Wire", "Zelle", etc.
+        date:    { type: Date,   default: Date.now },
+        notes:   { type: String, default: "" },
+      },
+    ],
   },
   { timestamps: true }
 );

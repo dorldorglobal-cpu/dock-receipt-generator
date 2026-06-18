@@ -269,6 +269,64 @@ router.patch("/:id/status", async (req, res) => {
   }
 });
 
+// ── Helper: recalculate invoice status from payments ─────────────────────────
+function recalcStatus(inv) {
+  const paid = (inv.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+  if (paid >= (inv.total || 0) && inv.total > 0) return "paid";
+  if (inv.sentAt) return "sent";
+  return "draft";
+}
+
+// ── POST /api/invoices/:id/payments — add a payment ──────────────────────────
+router.post("/:id/payments", async (req, res) => {
+  try {
+    const inv = await Invoice.findById(req.params.id);
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+    const { amount, method, date, notes } = req.body;
+    if (!amount || isNaN(Number(amount))) return res.status(400).json({ error: "amount required" });
+    inv.payments.push({ amount: Number(amount), method: method || "", date: date ? new Date(date) : new Date(), notes: notes || "" });
+    inv.status = recalcStatus(inv);
+    if (inv.status === "paid" && !inv.paidAt) inv.paidAt = new Date();
+    if (inv.status !== "paid") inv.paidAt = null;
+    await inv.save();
+    res.json(inv);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── PUT /api/invoices/:id/payments/:pid — edit a payment ─────────────────────
+router.put("/:id/payments/:pid", async (req, res) => {
+  try {
+    const inv = await Invoice.findById(req.params.id);
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+    const payment = inv.payments.id(req.params.pid);
+    if (!payment) return res.status(404).json({ error: "Payment not found" });
+    const { amount, method, date, notes } = req.body;
+    if (amount != null) payment.amount = Number(amount);
+    if (method != null) payment.method = method;
+    if (date   != null) payment.date   = new Date(date);
+    if (notes  != null) payment.notes  = notes;
+    inv.status = recalcStatus(inv);
+    if (inv.status === "paid" && !inv.paidAt) inv.paidAt = new Date();
+    if (inv.status !== "paid") inv.paidAt = null;
+    await inv.save();
+    res.json(inv);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── DELETE /api/invoices/:id/payments/:pid — delete a payment ────────────────
+router.delete("/:id/payments/:pid", async (req, res) => {
+  try {
+    const inv = await Invoice.findById(req.params.id);
+    if (!inv) return res.status(404).json({ error: "Invoice not found" });
+    inv.payments.pull({ _id: req.params.pid });
+    inv.status = recalcStatus(inv);
+    if (inv.status === "paid" && !inv.paidAt) inv.paidAt = new Date();
+    if (inv.status !== "paid") inv.paidAt = null;
+    await inv.save();
+    res.json(inv);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── Shared: generate invoice PDF → Buffer ─────────────────────────────────────
 async function generateInvoicePdf(inv, order) {
     const bookingNumber = order?.bookingNumber || "";
