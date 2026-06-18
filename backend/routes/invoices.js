@@ -278,7 +278,7 @@ function recalcStatus(inv) {
 }
 
 // ── POST /api/invoices/:id/payments — add a payment ──────────────────────────
-router.post("/:id/payments", async (req, res) => {
+router.post("/:id/payments", express.json(), async (req, res) => {
   try {
     const inv = await Invoice.findById(req.params.id);
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
@@ -294,7 +294,7 @@ router.post("/:id/payments", async (req, res) => {
 });
 
 // ── PUT /api/invoices/:id/payments/:pid — edit a payment ─────────────────────
-router.put("/:id/payments/:pid", async (req, res) => {
+router.put("/:id/payments/:pid", express.json(), async (req, res) => {
   try {
     const inv = await Invoice.findById(req.params.id);
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
