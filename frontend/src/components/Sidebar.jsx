@@ -77,7 +77,7 @@ export default function Sidebar() {
 
       {!isMobile && <div className="sidebar-section-label">Operations</div>}
       <nav className="sidebar-nav">
-        <NavItem to="/dock-receipt"   iconKey="dockReceipt" label="Dock Receipt"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/dock-receipt"   iconKey="dockReceipt" label="New DR / Import"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/towing-charges" iconKey="towing"      label="Towing Charges" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/ocean-freight"  iconKey="ocean"       label="Ocean Freight"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/vessel-schedule" iconKey="schedule"   label="Vessel Schedule" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
