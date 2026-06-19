@@ -2309,13 +2309,32 @@ export default function OrderDetails() {
                 <tr key={f.id} onClick={() => setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label })}
                   style={{ cursor: "pointer" }}>
                   <td>{f.name}</td>
-                  <td>
-                    <span style={{ fontSize:11, padding:"2px 7px", borderRadius:5,
-                      background: isRatedDraft ? "rgba(234,179,8,0.15)" : "var(--bg-panel)",
-                      color:      isRatedDraft ? "#fbbf24"              : "var(--text-secondary)",
-                      border:`1px solid ${isRatedDraft ? "rgba(251,191,36,0.3)" : "var(--border)"}` }}>
-                      {label}
-                    </span>
+                  <td onClick={e => e.stopPropagation()}>
+                    <select
+                      value={label}
+                      onChange={async e => {
+                        const newLabel = e.target.value;
+                        await fetch(`${API}/api/orders/${order._id}/file-label`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ filename: f.name, label: newLabel }),
+                        });
+                        setOrder(prev => {
+                          const files = [...(prev.files || [])];
+                          const idx = files.findIndex(x => x.filename === f.name || x.originalName === f.name);
+                          if (idx >= 0) files[idx] = { ...files[idx], label: newLabel };
+                          else files.push({ filename: f.name, originalName: f.name, label: newLabel });
+                          return { ...prev, files };
+                        });
+                      }}
+                      style={{ fontSize:11, padding:"2px 6px", borderRadius:5, cursor:"pointer",
+                        background: isRatedDraft ? "rgba(234,179,8,0.15)" : "var(--bg-panel)",
+                        color:      isRatedDraft ? "#fbbf24"              : "var(--text-secondary)",
+                        border:`1px solid ${isRatedDraft ? "rgba(251,191,36,0.3)" : "var(--border)"}` }}>
+                      {["Buyer Receipt","Email","Order Request Form","Dispatch","Title","AES",
+                        "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","Other","Document"]
+                        .map(opt => <option key={opt} value={opt}>{opt}</option>)}
+                    </select>
                   </td>
                   <td>{f.modifiedTime ? new Date(f.modifiedTime).toLocaleString() : ""}</td>
                   <td><a href={f.webViewLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>↗ Open</a></td>
