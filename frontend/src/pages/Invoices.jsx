@@ -41,6 +41,8 @@ export default function Invoices() {
   const [from,        setFrom]        = useState("");
   const [to,          setTo]          = useState("");
   const [message,     setMessage]     = useState("");
+  const [overdue,     setOverdue]     = useState([]);
+  const [showOverdue, setShowOverdue] = useState(false);
   const [previewInv,  setPreviewInv]  = useState(null);
 
   // Payment modal state
@@ -67,6 +69,13 @@ export default function Invoices() {
   };
 
   useEffect(() => { load(); }, [statusTab]);
+
+  useEffect(() => {
+    fetch(`${API}/api/invoices/overdue`)
+      .then(r => r.json())
+      .then(d => setOverdue(Array.isArray(d) ? d : []))
+      .catch(() => {});
+  }, [invoices]);
 
   const handleSearch = (e) => { e.preventDefault(); load(); };
 
@@ -177,6 +186,43 @@ export default function Invoices() {
         </div>
         {message && <span style={{ fontSize: 13, color: "#34d399" }}>{message}</span>}
       </div>
+
+      {/* ── Overdue Alert Banner ── */}
+      {overdue.length > 0 && (
+        <div style={{ background:"rgba(220,38,38,0.08)", border:"1px solid rgba(220,38,38,0.35)",
+          borderRadius:10, padding:"12px 18px", marginBottom:18, display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+          <span style={{ fontSize:18 }}>🚨</span>
+          <div style={{ flex:1 }}>
+            <strong style={{ color:"#f87171" }}>{overdue.length} overdue invoice{overdue.length !== 1 ? "s" : ""}</strong>
+            <span style={{ color:"#9ca3af", fontSize:13, marginLeft:8 }}>
+              — {f$(overdue.reduce((s,i) => s + (i.total||0), 0))} outstanding past due date
+            </span>
+          </div>
+          <button onClick={() => setShowOverdue(v => !v)}
+            style={{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"1px solid rgba(248,113,113,0.4)",
+              background:"none", color:"#f87171", cursor:"pointer", fontWeight:600 }}>
+            {showOverdue ? "Hide" : "View All"}
+          </button>
+          <button onClick={() => setStatusTab("sent")}
+            style={{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"none",
+              background:"rgba(220,38,38,0.2)", color:"#f87171", cursor:"pointer", fontWeight:600 }}>
+            Filter Overdue
+          </button>
+        </div>
+      )}
+      {showOverdue && overdue.length > 0 && (
+        <div style={{ background:"#1c2130", border:"1px solid rgba(220,38,38,0.25)", borderRadius:10, padding:16, marginBottom:18 }}>
+          <div style={{ fontSize:11, fontWeight:700, color:"#f87171", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Overdue Invoices</div>
+          {overdue.map(inv => (
+            <div key={inv._id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:13 }}>
+              <span style={{ fontFamily:"monospace", color:"var(--accent)", fontWeight:700, minWidth:120 }}>{inv.invoiceNumber}</span>
+              <span style={{ flex:1, color:"#e6edf3" }}>{inv.customerName || "—"}</span>
+              <span style={{ color:"#f87171", fontSize:11 }}>Due {fD(inv.dueDate)}</span>
+              <span style={{ fontFamily:"monospace", fontWeight:700, color:"#f87171" }}>{f$(inv.total)}</span>
+            </div>
+          ))}
+        </div>
+      )}
 
       {/* ── Summary Chips ── */}
       <div className="dashboard-grid" style={{ marginBottom: 24 }}>

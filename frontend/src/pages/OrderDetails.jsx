@@ -2897,6 +2897,54 @@ export default function OrderDetails() {
         );
       })()}
 
+      {/* ── Reconciliation ──────────────────────────── */}
+      {(() => {
+        if (!bills.length && !orderInvoices.length) return null;
+        const totalExpenses = bills.reduce((s, b) => s + (b.amount || 0), 0);
+        const unpaidBills   = bills.filter(b => b.status === "unpaid").reduce((s, b) => s + (b.amount || 0), 0);
+        const invoiceTotal  = orderInvoices.length ? (orderInvoices[0].total || 0) : 0;
+        const invoicePaid   = orderInvoices.length
+          ? (orderInvoices[0].payments || []).reduce((s, p) => s + (p.amount || 0), 0)
+          : 0;
+        const margin        = invoiceTotal - totalExpenses;
+        const marginPct     = invoiceTotal > 0 ? ((margin / invoiceTotal) * 100).toFixed(1) : null;
+        const fmt = v => "$" + Math.abs(v).toLocaleString(undefined, { minimumFractionDigits:2, maximumFractionDigits:2 });
+        const clr = n => n >= 0 ? "#34d399" : "#f87171";
+        const issues = [];
+        if (margin < 0) issues.push(`Expenses exceed invoice by ${fmt(Math.abs(margin))} — losing money on this order`);
+        if (unpaidBills > 0) issues.push(`${fmt(unpaidBills)} in bills still unpaid`);
+        if (invoiceTotal > 0 && invoicePaid < invoiceTotal) issues.push(`Customer still owes ${fmt(invoiceTotal - invoicePaid)}`);
+        return (
+          <section className="form-section" style={{ gridColumn:"1 / -1" }}>
+            <h2 style={{ marginBottom:14 }}>Reconciliation</h2>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fit, minmax(160px, 1fr))", gap:12, marginBottom: issues.length ? 14 : 0 }}>
+              {[
+                ["Invoice Total",   fmt(invoiceTotal),  invoiceTotal > 0 ? "#34d399" : "var(--text-muted)"],
+                ["Total Expenses",  fmt(totalExpenses), totalExpenses > 0 ? "#f87171" : "var(--text-muted)"],
+                ["Gross Margin",    (margin >= 0 ? "+" : "-") + fmt(margin), clr(margin)],
+                ["Margin %",        marginPct ? `${marginPct}%` : "—", marginPct && Number(marginPct) >= 20 ? "#34d399" : "#f59e0b"],
+                ["Customer Paid",   fmt(invoicePaid),   invoicePaid >= invoiceTotal && invoiceTotal > 0 ? "#34d399" : "#f59e0b"],
+                ["Bills Unpaid",    fmt(unpaidBills),   unpaidBills > 0 ? "#f87171" : "#34d399"],
+              ].map(([label, val, color]) => (
+                <div key={label} style={{ background:"var(--bg-panel)", borderRadius:8, padding:"12px 14px", border:"1px solid var(--border)" }}>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:".06em", marginBottom:4 }}>{label}</div>
+                  <div style={{ fontSize:16, fontWeight:800, fontFamily:"monospace", color }}>{val}</div>
+                </div>
+              ))}
+            </div>
+            {issues.length > 0 && (
+              <div style={{ background:"rgba(220,38,38,0.07)", border:"1px solid rgba(220,38,38,0.25)", borderRadius:8, padding:"10px 14px" }}>
+                {issues.map((iss, i) => (
+                  <div key={i} style={{ fontSize:12, color:"#f87171", display:"flex", alignItems:"center", gap:6, marginBottom: i < issues.length-1 ? 4 : 0 }}>
+                    <span>⚠</span> {iss}
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+        );
+      })()}
+
       {/* ── Bills ───────────────────────────────────── */}
       <section className="form-section">
         <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>

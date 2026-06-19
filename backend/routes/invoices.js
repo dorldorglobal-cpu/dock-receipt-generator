@@ -698,4 +698,17 @@ router.post("/:id/send", async (req, res) => {
   }
 });
 
+// ── GET /api/invoices/overdue — list unpaid invoices past due date ────────────
+router.get("/overdue", async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const overdue = await Invoice.find({
+      status:  { $ne: "paid" },
+      dueDate: { $lt: today },
+    }).select("invoiceNumber customerName total dueDate status orderId orderRef").sort({ dueDate: 1 }).lean();
+    res.json(overdue);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;

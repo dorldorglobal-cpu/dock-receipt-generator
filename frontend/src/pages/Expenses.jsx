@@ -359,6 +359,7 @@ export default function Expenses() {
   const [sortKey, setSortKey]       = useState("date");
   const [sortDir, setSortDir]       = useState(-1);
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [dupWarning, setDupWarning]       = useState(null); // { existing } — duplicate detected
   const [payConfirm, setPayConfirm]       = useState(null); // { exp } — single-bill pay modal
   const [payConfirmAmt, setPayConfirmAmt] = useState("");
   const [payConfirmDate, setPayConfirmDate] = useState(todayISO());
@@ -880,8 +881,8 @@ export default function Expenses() {
   };
 
   // Submit (create or update)
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const handleSubmit = async (e, force = false) => {
+    if (e && e.preventDefault) e.preventDefault();
     setSaving(true);
     try {
       const fd = new FormData();
@@ -889,15 +890,24 @@ export default function Expenses() {
       if (receiptFile) fd.append("receipt", receiptFile);
       if (billFile)    fd.append("bill",    billFile);
 
-      const url    = editing ? `${API}/api/expenses/${editing._id}` : `${API}/api/expenses`;
+      const url    = editing
+        ? `${API}/api/expenses/${editing._id}`
+        : `${API}/api/expenses${force ? "?force=true" : ""}`;
       const method = editing ? "PUT" : "POST";
       const res    = await fetch(url, { method, body: fd });
+      if (res.status === 409) {
+        const data = await res.json();
+        setDupWarning(data.existing);
+        setSaving(false);
+        return;
+      }
       if (!res.ok) {
         const err = await res.json();
         alert(err.error || "Save failed");
         return;
       }
       setShowModal(false);
+      setDupWarning(null);
       fetchAll();
     } catch (err) {
       alert("Network error");
@@ -2051,6 +2061,35 @@ export default function Expenses() {
           </div>
         )}
       </div>
+
+      {/* ── Duplicate Warning Modal ── */}
+      {dupWarning && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#1c2130", border:"1px solid #f59e0b", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
+            <div style={{ fontSize:20, marginBottom:12 }}>⚠️ Possible Duplicate</div>
+            <p style={{ fontSize:13, color:"#9ca3af", marginBottom:16 }}>
+              A similar expense already exists:
+            </p>
+            <div style={{ background:"#111827", borderRadius:8, padding:"12px 14px", marginBottom:20, fontSize:13 }}>
+              <div style={{ color:"#f1f5f9", fontWeight:600 }}>{dupWarning.description}</div>
+              <div style={{ color:"#34d399", fontWeight:700, fontSize:15, marginTop:4 }}>${Number(dupWarning.amount).toFixed(2)}</div>
+              <div style={{ color:"#9ca3af", fontSize:11, marginTop:4 }}>
+                {dupWarning.date ? new Date(dupWarning.date).toLocaleDateString() : ""}{dupWarning.orderRef ? ` · Order #${dupWarning.orderRef}` : ""}{" · "}{dupWarning.status}
+              </div>
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setDupWarning(null)}
+                style={{ padding:"9px 18px", background:"none", border:"1px solid #374151", borderRadius:8, color:"#9ca3af", cursor:"pointer" }}>
+                Cancel
+              </button>
+              <button onClick={() => { setDupWarning(null); handleSubmit(null, true); }}
+                style={{ padding:"9px 18px", background:"#b45309", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                Save Anyway
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {showModal && (

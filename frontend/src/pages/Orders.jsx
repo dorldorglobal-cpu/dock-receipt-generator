@@ -45,7 +45,10 @@ export default function Orders() {
   const [updatingStatus, setUpdatingStatus] = useState(null); // orderId being updated
   const navigate = useNavigate();
 
-  useEffect(() => { fetchOrders(); }, []);
+  useEffect(() => {
+    fetch(`${API}/api/orders/auto-advance-arrived`, { method: "POST" }).catch(() => {});
+    fetchOrders();
+  }, []);
 
   const fetchOrders = async () => {
     const res  = await fetch(`${API}/api/orders`);

@@ -1730,6 +1730,30 @@ router.delete("/:id/pending-invoice-items", async (req, res) => {
   }
 });
 
+// ── POST /api/orders/auto-advance-arrived — Sailed → Arrived when past arrival date ──
+router.post("/auto-advance-arrived", async (req, res) => {
+  try {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+    const candidates = await Order.find({
+      status: "Sailed",
+      arrivalDate: { $lte: today.toISOString().slice(0, 10) },
+    }).select("_id refNumber arrivalDate customerName").lean();
+
+    const updated = [];
+    for (const o of candidates) {
+      await Order.findByIdAndUpdate(o._id, {
+        $set:  { status: "Arrived" },
+        $push: { timeline: { action: "Status Changed", details: `Auto-advanced to Arrived (arrival date: ${o.arrivalDate})`, createdAt: new Date() } },
+      });
+      updated.push(o.refNumber);
+    }
+    res.json({ advanced: updated.length, orders: updated });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/orders/set-counter — one-time counter reset ────────────────────
 router.post("/set-counter", async (req, res) => {
   try {

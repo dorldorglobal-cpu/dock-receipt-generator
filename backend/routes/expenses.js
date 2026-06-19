@@ -199,6 +199,24 @@ router.post("/", uploadFields, async (req, res) => {
       return res.status(400).json({ error: "Category, description, and amount are required." });
     }
 
+    // Duplicate detection — same vendor + amount + date within 7 days (skip if force=true)
+    if (req.query.force !== "true" && vendor && amount) {
+      const checkDate = date ? new Date(date) : new Date();
+      const window7   = 7 * 24 * 60 * 60 * 1000;
+      const existing  = await Expense.findOne({
+        vendor:   { $regex: `^${vendor.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+        amount:   parseFloat(amount),
+        date:     { $gte: new Date(checkDate - window7), $lte: new Date(+checkDate + window7) },
+      }).lean();
+      if (existing) {
+        return res.status(409).json({
+          error:    "Possible duplicate expense",
+          existing: { _id: existing._id, description: existing.description, amount: existing.amount,
+                      date: existing.date, orderRef: existing.orderRef, status: existing.status },
+        });
+      }
+    }
+
     // If VIN provided but no order link yet, auto-lookup the order
     let resolvedOrderId  = orderId  || null;
     let resolvedOrderRef = orderRef || "";
