@@ -4698,7 +4698,7 @@ export default function OrderDetails() {
               const m = docPreview.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
               // Proxy through backend — avoids Google auth wall and enables copy/paste
               const src = m ? `${API}/api/drive-proxy/${m[1]}` : docPreview.url;
-              const isImage = /\.(jpe?g|png|gif|webp|heic|bmp)$/i.test(docPreview.name || "");
+              const isImage = /\.(jpe?g|png|gif|webp|bmp)$/i.test(docPreview.name || "");
               return isImage ? (
                 <div
                   onWheel={onWheelZoom}
