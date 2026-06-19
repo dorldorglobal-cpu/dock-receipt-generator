@@ -3,7 +3,10 @@ import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
+const ACTIVE_EXCLUDED = ["Completed", "Canceled", "Waiting to Sail"];
+
 const TABS = [
+  { label: "Active",           value: "active",           color: "#34d399" },
   { label: "All",              value: "all",              color: "#8b949e" },
   { label: "New Order",        value: "New Order",        color: "#60a5fa" },
   { label: "Awaiting Pickup",  value: "Awaiting Pickup",  color: "#f97316" },
@@ -36,7 +39,7 @@ const STATUS_COLORS = {
 export default function Orders() {
   const [orders, setOrders]           = useState([]);
   const [search, setSearch]           = useState("");
-  const [activeTab, setActiveTab]     = useState("all");
+  const [activeTab, setActiveTab]     = useState("active");
   const [sourceFilter, setSourceFilter] = useState("");
   const [typeFilter, setTypeFilter]   = useState("all");
   const [deleteTarget, setDeleteTarget] = useState(null);
@@ -71,13 +74,19 @@ export default function Orders() {
   for (const t of TABS) {
     counts[t.value] = t.value === "all"
       ? orders.length
+      : t.value === "active"
+      ? orders.filter(o => !ACTIVE_EXCLUDED.includes(o.status)).length
       : orders.filter(o => o.status === t.value).length;
   }
 
   const filtered = orders.filter(o => {
     const text = `${o.refNumber} ${o.customerName} ${o.vin} ${o.make} ${o.model} ${o.lotNumber || ""}`.toLowerCase();
     const matchSearch  = text.includes(search.toLowerCase());
-    const matchTab     = activeTab === "all" || o.status === activeTab;
+    const matchTab     = activeTab === "all"
+      ? true
+      : activeTab === "active"
+      ? !ACTIVE_EXCLUDED.includes(o.status)
+      : o.status === activeTab;
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
     const matchType    = typeFilter === "all" || (o.requestType || "").toLowerCase() === typeFilter.toLowerCase();
     return matchSearch && matchTab && matchSource && matchType;
