@@ -4698,7 +4698,17 @@ export default function OrderDetails() {
               const m = docPreview.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
               // Proxy through backend — avoids Google auth wall and enables copy/paste
               const src = m ? `${API}/api/drive-proxy/${m[1]}` : docPreview.url;
-              const isImage = /\.(jpe?g|png|gif|webp|heic|bmp)$/i.test(docPreview.name || "");
+              const isHeic  = /\.heic$/i.test(docPreview.name || "");
+              const isImage = /\.(jpe?g|png|gif|webp|bmp)$/i.test(docPreview.name || "");
+              // HEIC: use Drive iframe with embed URL (browsers can't render HEIC natively)
+              if (isHeic) {
+                const fileId = m ? m[1] : null;
+                const embedSrc = fileId ? `https://drive.google.com/file/d/${fileId}/preview` : docPreview.url;
+                return (
+                  <iframe src={embedSrc} style={{ flex:1, border:"none", width:"100%" }}
+                    title={docPreview.name} allow="autoplay" />
+                );
+              }
               return isImage ? (
                 <div
                   onWheel={onWheelZoom}
