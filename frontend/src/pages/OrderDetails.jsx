@@ -28,7 +28,8 @@ const feeRows = [
   ["emergencyBafFee",     "Emergency BAF",                 {}],
   ["ctnFee",              "CTN Fee",                       { defaultSell: 75   }],
   ["dryRunFee",           "Dry Run Fee",                   { defaultSell: 75   }],
-  ["miscellaneousFee",    "Miscellaneous Fee",             {}],
+  ["inOutFee",            "In & Out Fee",                  { category: "Loaders & Warehouses" }],
+  ["miscellaneousFee",    "Miscellaneous Fee",             { hasDesc: true }],
 ];
 
 const defaultCharges = {
@@ -51,6 +52,7 @@ const defaultCharges = {
   emergencyBafFee: "0.00",
   ctnFee: "0.00",
   dryRunFee: "0.00",
+  inOutFee: "0.00",
   miscellaneousFee: "0.00",
 };
 
