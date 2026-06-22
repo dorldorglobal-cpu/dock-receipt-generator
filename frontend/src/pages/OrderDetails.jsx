@@ -1497,13 +1497,20 @@ export default function OrderDetails() {
       }
       fetchOrder();
 
-      // Auto-open send modal after generation
+      // Fetch PDF once — use for both Drive upload and send modal
       const pdfRes = await fetch(`${API}/api/invoices/${inv._id}/pdf`);
       const ab = await pdfRes.arrayBuffer();
       const uint8 = new Uint8Array(ab);
       let bin = ""; uint8.forEach(b => bin += String.fromCharCode(b));
       const base64 = btoa(bin);
-      setInvoiceSendModal({ invoiceId: inv._id, pdfBase64: base64, pdfName: `Invoice-${inv.invoiceNumber}.pdf`, invoiceNumber: inv.invoiceNumber });
+
+      // Upload copy to order's Drive folder
+      const pdfName = `Invoice-${inv.invoiceNumber}.pdf`;
+      const pdfBlob = new Blob([uint8], { type: "application/pdf" });
+      const pdfFile = new File([pdfBlob], pdfName, { type: "application/pdf" });
+      uploadFile(pdfFile, "Invoice").catch(() => {});
+
+      setInvoiceSendModal({ invoiceId: inv._id, pdfBase64: base64, pdfName, invoiceNumber: inv.invoiceNumber });
       setInvSendTo(order?.customerEmail || "");
 
       const ymm = [order?.year, order?.make, order?.model].filter(Boolean).join(" ");
