@@ -390,6 +390,11 @@ export default function OrderDetails() {
   const [payConfirm, setPayConfirm] = useState(null); // { billId, amount } — partial-pay modal
   const [payConfirmAmt, setPayConfirmAmt] = useState("");
 
+  // Office text modal
+  const [textOfficeModal, setTextOfficeModal] = useState(false);
+  const [textOfficeMsg,   setTextOfficeMsg]   = useState("");
+  const [textOfficeSending, setTextOfficeSending] = useState(false);
+
   // Sallaum nonrunner/forklift notify popup
   const [sallaumNotify,        setSallaumNotify]        = useState(false);
   const [sallaumNotifySubject, setSallaumNotifySubject] = useState("");
@@ -1450,6 +1455,40 @@ export default function OrderDetails() {
     }
   };
 
+  const openTextOfficeModal = () => {
+    const ref       = order.refNumber || "";
+    const condition = (drPayload?.condition || order.condition || "").trim();
+    const line      = (order.shippingLine || drPayload?.shippingLine || "").trim();
+    setTextOfficeMsg(`DR: ${ref} | ${condition} | ${line}`);
+    setTextOfficeModal(true);
+  };
+
+  const sendOfficeText = async () => {
+    setTextOfficeSending(true);
+    const numbers = ["9172003998@tmomail.net", "9176811442@tmomail.net"];
+    try {
+      await Promise.all(numbers.map(to =>
+        fetch(`${API}/api/send-email`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ to, subject: " ", body: textOfficeMsg }),
+        })
+      ));
+      await fetch(`${API}/api/orders/${id}/timeline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "Text Sent to Office", details: textOfficeMsg }),
+      });
+      fetchOrder();
+      setTextOfficeModal(false);
+      setMessage("✅ Text sent to office");
+    } catch (e) {
+      setMessage("❌ Failed to send text: " + e.message);
+    } finally {
+      setTextOfficeSending(false);
+    }
+  };
+
   const generateInvoicePdf = async () => {
     setInvoiceSaving(true);
     setMessage("Saving invoice…");
@@ -1822,6 +1861,9 @@ export default function OrderDetails() {
           }
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
           ✉️ Send DR
+        </button>
+        <button onClick={openTextOfficeModal} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#7c3aed", color:"white", cursor:"pointer", fontSize:"13px" }}>
+          📱 Text Office
         </button>
       </div>
 
@@ -4401,6 +4443,29 @@ export default function OrderDetails() {
               <button onClick={() => setDrSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
               <button onClick={sendDrEmail} disabled={drSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {drSending ? "Sending…" : "Send DR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Text Office Modal ── */}
+      {textOfficeModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"#1c2130", border:"1px solid #7c3aed", borderRadius:12, padding:28, width:440, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 6px", color:"#e6edf3" }}>📱 Text Office</h3>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"#8b949e" }}>
+              Sending to: <strong style={{color:"#e6edf3"}}>9172003998</strong> &amp; <strong style={{color:"#e6edf3"}}>9176811442</strong> (T-Mobile)
+            </p>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+              Message
+              <textarea value={textOfficeMsg} onChange={e => setTextOfficeMsg(e.target.value)} rows={3}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:14, resize:"vertical", boxSizing:"border-box" }} />
+            </label>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setTextOfficeModal(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+              <button onClick={sendOfficeText} disabled={textOfficeSending} style={{ padding:"8px 20px", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                {textOfficeSending ? "Sending…" : "Send Text"}
               </button>
             </div>
           </div>
