@@ -139,13 +139,14 @@ function extractVehicleData(text) {
 
   // vehicle year/make/model
   let year = "", make = "", model = "";
+  const NOT_A_MAKE = /^(MEMBER|PAID|DATE|SALE|SOLD|BUYER|GATE|TITLE|ITEM|YARD|KEYS?|ROW|THROUGH|AGREES|THAT|THE|VEHICLE|HAS|BEEN|WITH|NO)$/i;
   const vehiclePatterns = [
     /(\d{4})\s+([A-Z]+)\s+([A-Z0-9 \-]+)/i,
     /Vehicle Description[:\s]+(\d{4})\s+([A-Z]+)\s+([A-Z0-9 \-]+)/i,
   ];
   for (const p of vehiclePatterns) {
     const m = text.match(p);
-    if (m) {
+    if (m && !NOT_A_MAKE.test(m[2])) {
       year = clean(m[1]);
       make = clean(m[2]);
       model = clean(m[3]).split(vin)[0].trim();
@@ -1186,13 +1187,20 @@ async function parseBuyerReceipt(filePath) {
   // ── Vehicle year/make/model ───────────────────────────────────────────────
   // Copart receipts have a dedicated "VEHICLE: YEAR MAKE MODEL COLOR" line.
   // Try that first — much more reliable than the generic extractVehicleData pattern
-  // which false-matches years embedded in dates (e.g. "05/15/2026 MEMBER AGREES…").
+  // which false-matches years embedded in dates (e.g. "06/22/2026 MEMBER AGREES…").
   let year = vehicle.year, make = vehicle.make, model = vehicle.model;
-  const copartVehicleLine = text.match(/VEHICLE:\s*(\d{4})\s+([A-Z0-9]+)\s+([A-Z0-9 \-/]+?)(?:\s+(?:PHY\s+YARD|PHY:|KEYS?:|SALE\s+YARD|ROW:|ITEM#|BLACK|WHITE|SILVER|RED|BLUE|GREEN|GREY|GRAY|BROWN|YELLOW|ORANGE|GOLD|BURGUNDY|PURPLE|TAN|MAROON|BEIGE|CHAMPAGNE|$))/i);
-  if (copartVehicleLine) {
-    year  = clean(copartVehicleLine[1]);
-    make  = clean(copartVehicleLine[2]);
-    model = clean(copartVehicleLine[3]).replace(/\s+/g, " ").trim();
+  // Primary: match up to a known color or field label
+  const copartVehicleLine = text.match(/VEHICLE:\s*(\d{4})\s+([A-Z0-9][A-Z0-9\-]+)\s+([A-Z0-9 \-/]+?)(?:\s+(?:PHY\s+YARD|PHY:|KEYS?:|SALE\s+YARD|ROW:|ITEM#|LOT#|BLACK|WHITE|SILVER|RED|BLUE|GREEN|GREY|GRAY|BROWN|YELLOW|ORANGE|GOLD|BURGUNDY|PURPLE|TAN|MAROON|BEIGE|CHAMPAGNE))/i);
+  // Fallback: match to end of line (handles PDFs where color/field isn't on same line)
+  const copartVehicleFallback = !copartVehicleLine
+    ? text.match(/VEHICLE:\s*(\d{4})\s+([A-Z0-9][A-Z0-9\-]+)\s+([A-Z0-9 \-/]{2,40})/i)
+    : null;
+  const cvl = copartVehicleLine || copartVehicleFallback;
+  if (cvl) {
+    year  = clean(cvl[1]);
+    make  = clean(cvl[2]);
+    // Strip trailing color words or junk from fallback match
+    model = clean(cvl[3]).replace(/\s+(BLACK|WHITE|SILVER|RED|BLUE|GREEN|GREY|GRAY|BROWN|YELLOW|ORANGE|GOLD|BURGUNDY|PURPLE|TAN|MAROON|BEIGE|CHAMPAGNE|PHY|ROW|KEYS?|ITEM|LOT)\b.*/i, "").replace(/\s+/g, " ").trim();
   }
 
   return {
