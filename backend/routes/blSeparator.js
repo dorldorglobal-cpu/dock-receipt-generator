@@ -90,7 +90,7 @@ function parseACL(pageTexts) {
       let vehicle = "";
       if (vin) {
         const afterVin = text.substring(text.indexOf(vin) + 17);
-        const vm = afterVin.match(/([A-Z][A-Z0-9 ]+?)\s+Model Year\s+(\d{4})/i);
+        const vm = afterVin.match(/([A-Z][A-Z0-9 \-]+?)\s+Model Year\s+(\d{4})/i);
         if (vm) vehicle = vm[1].trim() + " " + vm[2];
       }
 
