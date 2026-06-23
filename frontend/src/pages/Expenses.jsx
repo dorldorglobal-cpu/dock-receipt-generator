@@ -423,6 +423,7 @@ export default function Expenses() {
   const [manualSaving, setManualSaving]     = useState(false);
   const [manualMsg, setManualMsg]           = useState("");
   const [extraLines, setExtraLines]         = useState([]); // [{ description, amount }]
+  const [editExtraLines, setEditExtraLines] = useState([]); // extra lines added during edit
 
   const CARD_DEFAULTS = {
     sallaum:  { vendor: "Sallaum Lines",   category: "Ocean Freight",        color: "#3b82f6" },
@@ -877,6 +878,7 @@ export default function Expenses() {
     });
     setReceiptFile(null);
     setBillFile(null);
+    setEditExtraLines([]);
     setShowModal(true);
   };
 
@@ -906,8 +908,27 @@ export default function Expenses() {
         alert(err.error || "Save failed");
         return;
       }
+
+      // Create any extra lines added during edit
+      if (editing) {
+        const validExtras = editExtraLines.filter(l => l.description.trim() && Number(l.amount) > 0);
+        for (const line of validExtras) {
+          const efd = new FormData();
+          efd.append("category",    form.category || "Towing / Transport");
+          efd.append("description", line.description.trim());
+          efd.append("vendor",      form.vendor || "");
+          efd.append("amount",      String(line.amount));
+          efd.append("date",        form.date || todayISO());
+          efd.append("orderRef",    form.orderRef || "");
+          efd.append("vin",         form.vin || "");
+          efd.append("status",      "unpaid");
+          await fetch(`${API}/api/expenses`, { method: "POST", body: efd });
+        }
+      }
+
       setShowModal(false);
       setDupWarning(null);
+      setEditExtraLines([]);
       fetchAll();
     } catch (err) {
       alert("Network error");
@@ -2107,6 +2128,52 @@ export default function Expenses() {
             onRemoveReceipt={removeReceipt}
             vendors={vendors}
           />
+
+          {/* Extra charge lines — only shown when editing */}
+          {editing && (
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #374151" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>Extra Charges (new expense lines)</div>
+                <button
+                  type="button"
+                  onClick={() => setEditExtraLines(l => [...l, { description: "", amount: "" }])}
+                  style={{ fontSize: 12, padding: "4px 12px", borderRadius: 6, border: "1px solid #374151", background: "none", color: "#34d399", cursor: "pointer" }}>
+                  + Add Line
+                </button>
+              </div>
+              {editExtraLines.length === 0 && (
+                <div style={{ fontSize: 12, color: "#4b5563", fontStyle: "italic" }}>
+                  Use this to log extra work or charges the trucker incurred — each line saves as a separate expense.
+                </div>
+              )}
+              {editExtraLines.map((line, i) => (
+                <div key={i} style={{ display: "grid", gridTemplateColumns: "1fr 120px 32px", gap: 8, alignItems: "center", marginBottom: 8 }}>
+                  <input
+                    value={line.description}
+                    onChange={e => setEditExtraLines(ls => ls.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
+                    placeholder="e.g. Storage fee, gate fee, wait time…"
+                    style={{ background: "#111827", border: "1px solid #374151", borderRadius: 6, padding: "7px 10px", color: "#f1f5f9", fontSize: 13, boxSizing: "border-box" }} />
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={line.amount}
+                    onChange={e => setEditExtraLines(ls => ls.map((l, j) => j === i ? { ...l, amount: e.target.value } : l))}
+                    placeholder="0.00"
+                    style={{ background: "#111827", border: "1px solid #374151", borderRadius: 6, padding: "7px 10px", color: "#34d399", fontSize: 13, fontWeight: 600, boxSizing: "border-box" }} />
+                  <button
+                    type="button"
+                    onClick={() => setEditExtraLines(ls => ls.filter((_, j) => j !== i))}
+                    style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 16, padding: 0 }}>✕</button>
+                </div>
+              ))}
+              {editExtraLines.length > 0 && (
+                <div style={{ textAlign: "right", fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
+                  Extra total: <strong style={{ color: "#34d399" }}>
+                    ${editExtraLines.reduce((s, l) => s + Number(l.amount || 0), 0).toFixed(2)}
+                  </strong>
+                </div>
+              )}
+            </div>
+          )}
         </Modal>
       )}
 
