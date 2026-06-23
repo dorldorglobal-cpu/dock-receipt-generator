@@ -878,7 +878,7 @@ export default function Expenses() {
     });
     setReceiptFile(null);
     setBillFile(null);
-    setEditExtraLines([]);
+    setEditExtraLines((exp.lineItems || []).map(l => ({ description: l.description, amount: String(l.amount) })));
     setShowModal(true);
   };
 
@@ -891,6 +891,11 @@ export default function Expenses() {
       Object.entries(form).forEach(([k, v]) => v !== undefined && v !== null && fd.append(k, v));
       if (receiptFile) fd.append("receipt", receiptFile);
       if (billFile)    fd.append("bill",    billFile);
+      // Include line items when editing (stored on same expense record)
+      if (editing) {
+        const validExtras = editExtraLines.filter(l => l.description.trim() && Number(l.amount) > 0);
+        fd.append("lineItems", JSON.stringify(validExtras));
+      }
 
       const url    = editing
         ? `${API}/api/expenses/${editing._id}`
@@ -907,23 +912,6 @@ export default function Expenses() {
         const err = await res.json();
         alert(err.error || "Save failed");
         return;
-      }
-
-      // Create any extra lines added during edit
-      if (editing) {
-        const validExtras = editExtraLines.filter(l => l.description.trim() && Number(l.amount) > 0);
-        for (const line of validExtras) {
-          const efd = new FormData();
-          efd.append("category",    form.category || "Towing / Transport");
-          efd.append("description", line.description.trim());
-          efd.append("vendor",      form.vendor || "");
-          efd.append("amount",      String(line.amount));
-          efd.append("date",        form.date || todayISO());
-          efd.append("orderRef",    form.orderRef || "");
-          efd.append("vin",         form.vin || "");
-          efd.append("status",      "unpaid");
-          await fetch(`${API}/api/expenses`, { method: "POST", body: efd });
-        }
       }
 
       setShowModal(false);
@@ -1935,7 +1923,8 @@ export default function Expenses() {
               </thead>
               <tbody>
                 {displayList.map(exp => (
-                  <tr key={exp._id}
+                  <React.Fragment key={exp._id}>
+                  <tr
                     style={{ background: selected[exp._id] ? "#1a2f1a" : "#161d2c", cursor: "pointer" }}
                     onMouseEnter={e => e.currentTarget.style.background = selected[exp._id] ? "#1a2f1a" : "#1a2235"}
                     onMouseLeave={e => e.currentTarget.style.background = selected[exp._id] ? "#1a2f1a" : "#161d2c"}
@@ -2061,6 +2050,25 @@ export default function Expenses() {
                     </td>
 
                   </tr>
+                  {(exp.lineItems || []).filter(l => l.description?.trim()).map((li, li_i) => (
+                    <tr key={`${exp._id}-li-${li_i}`}
+                      style={{ background: selected[exp._id] ? "#162416" : "#0f1520" }}
+                      onClick={() => toggleSelect(exp._id)}>
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none", fontSize: 10, color: "#4b5563" }} />
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none", fontSize: 11, color: "#6b7280", paddingLeft: 20 }}>
+                        ↳ {li.description}
+                      </td>
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none", textAlign: "right", fontSize: 12, color: "#f59e0b", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                        {fmt$(li.amount)}
+                      </td>
+                      <td style={{ ...td, borderTop: "none" }} colSpan={3} />
+                    </tr>
+                  ))}
+                  </React.Fragment>
                 ))}
               </tbody>
 
