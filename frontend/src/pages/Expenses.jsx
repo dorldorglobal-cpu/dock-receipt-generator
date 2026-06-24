@@ -425,6 +425,19 @@ export default function Expenses() {
   const [extraLines, setExtraLines]         = useState([]); // [{ description, amount }]
   const [editExtraLines, setEditExtraLines] = useState([]); // extra lines added during edit
 
+  // ── Split Bill state ─────────────────────────────────────────────────────────
+  const [showSplitForm, setShowSplitForm]   = useState(false);
+  const [splitVendor, setSplitVendor]       = useState("");
+  const [splitDate, setSplitDate]           = useState(todayISO());
+  const [splitInvoice, setSplitInvoice]     = useState("");
+  const [splitFile, setSplitFile]           = useState(null);
+  const [splitLines, setSplitLines]         = useState([
+    { orderRef: "", category: "Towing / Transport", description: "", amount: "" },
+    { orderRef: "", category: "Towing / Transport", description: "", amount: "" },
+  ]);
+  const [splitSaving, setSplitSaving]       = useState(false);
+  const [splitMsg, setSplitMsg]             = useState("");
+
   const CARD_DEFAULTS = {
     sallaum:  { vendor: "Sallaum Lines",   category: "Ocean Freight",        color: "#3b82f6" },
     acl:      { vendor: "Grimaldi / ACL",  category: "Ocean Freight",        color: "#8b5cf6" },
@@ -485,6 +498,51 @@ export default function Expenses() {
     } finally {
       setManualSaving(false);
     }
+  };
+
+  const submitSplitBill = async () => {
+    const valid = splitLines.filter(l => l.orderRef.trim() || l.description.trim()).filter(l => Number(l.amount) > 0);
+    if (!splitVendor.trim() || valid.length === 0) { setSplitMsg("❌ Vendor and at least one line with amount required."); return; }
+    setSplitSaving(true); setSplitMsg("");
+    try {
+      let billDriveUrl = ""; let billFileName = ""; let billMime = "";
+      if (splitFile) {
+        // Upload the shared bill file once, reuse url on all lines
+        const fd0 = new FormData();
+        fd0.append("category", valid[0].category || "Towing / Transport");
+        fd0.append("description", valid[0].description || splitVendor);
+        fd0.append("vendor", splitVendor);
+        fd0.append("amount", String(valid[0].amount));
+        fd0.append("date", splitDate);
+        fd0.append("orderRef", valid[0].orderRef || "");
+        fd0.append("status", "unpaid");
+        fd0.append("invoiceNumber", splitInvoice);
+        fd0.append("bill", splitFile);
+        const r0 = await fetch(`${API}/api/expenses`, { method: "POST", body: fd0 });
+        const d0 = await r0.json();
+        if (!r0.ok) throw new Error(d0.error);
+        billDriveUrl = d0.billDriveUrl || ""; billFileName = d0.billFileName || ""; billMime = d0.billMime || "";
+        // remaining lines
+        for (let i = 1; i < valid.length; i++) {
+          const l = valid[i];
+          await fetch(`${API}/api/expenses`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ category: l.category, description: l.description || splitVendor, vendor: splitVendor, amount: Number(l.amount), date: splitDate, orderRef: l.orderRef || "", status: "unpaid", invoiceNumber: splitInvoice, billDriveUrl, billFileName, billMime }),
+          });
+        }
+      } else {
+        for (const l of valid) {
+          await fetch(`${API}/api/expenses`, {
+            method: "POST", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ category: l.category, description: l.description || splitVendor, vendor: splitVendor, amount: Number(l.amount), date: splitDate, orderRef: l.orderRef || "", status: "unpaid", invoiceNumber: splitInvoice }),
+          });
+        }
+      }
+      setSplitMsg(`✅ Created ${valid.length} expense${valid.length > 1 ? "s" : ""}!`);
+      setTimeout(() => { setShowSplitForm(false); setSplitMsg(""); setSplitVendor(""); setSplitDate(todayISO()); setSplitInvoice(""); setSplitFile(null); setSplitLines([{ orderRef:"", category:"Towing / Transport", description:"", amount:"" },{ orderRef:"", category:"Towing / Transport", description:"", amount:"" }]); }, 1200);
+      fetchAll();
+    } catch (err) { setSplitMsg("❌ " + err.message); }
+    finally { setSplitSaving(false); }
   };
 
   // Legacy aliases (keep old Other form working)
@@ -1048,8 +1106,8 @@ export default function Expenses() {
       <div style={{ background: "#1e2433", borderRadius: 12, padding: "20px 24px", marginBottom: 24, border: "1px solid #374151" }}>
         <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 16 }}>📥 Import Bill</div>
 
-        {/* Six dropzones side by side */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: 14, marginBottom: 6 }}>
+        {/* Seven dropzones side by side */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 14, marginBottom: 6 }}>
 
           {/* Sallaum dropzone */}
           {[
@@ -1162,7 +1220,110 @@ export default function Expenses() {
               </label>
             </div>
           </div>
+
+          {/* ✂ Split Bill card */}
+          <div
+            onClick={() => setShowSplitForm(s => !s)}
+            style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8,
+              background:"#111827", border:`2px dashed ${showSplitForm ? "#a855f7" : "#374151"}`,
+              borderRadius:12, padding:"24px 16px", textAlign:"center", cursor:"pointer", transition:"border-color 0.15s" }}
+            onMouseEnter={e => e.currentTarget.style.borderColor="#a855f7"}
+            onMouseLeave={e => e.currentTarget.style.borderColor=showSplitForm?"#a855f7":"#374151"}>
+            <span style={{ fontSize:32 }}>✂</span>
+            <span style={{ fontSize:14, fontWeight:700, color:"#f1f5f9" }}>Split Bill</span>
+            <span style={{ fontSize:12, color:"#6b7280", marginBottom:4 }}>One bill, multiple orders</span>
+            <div style={{ fontSize:11, color:"#a855f7", border:"1px solid #a855f7", borderRadius:6, padding:"3px 10px" }}>
+              ✏️ Manual
+            </div>
+          </div>
         </div>
+
+        {/* ── Split Bill manual form ── */}
+        {showSplitForm && (
+          <div style={{ marginTop:16, padding:"18px 20px", background:"#111827", borderRadius:10, border:"1px solid #a855f7" }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
+              <div style={{ fontSize:13, fontWeight:700, color:"#a855f7" }}>✂ Split Bill — Manual Entry</div>
+              <button onClick={() => setShowSplitForm(false)} style={{ background:"none", border:"none", color:"#9ca3af", fontSize:16, cursor:"pointer" }}>✕</button>
+            </div>
+            {/* Header fields */}
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
+              <div>
+                <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Vendor / Paid To *</div>
+                <input value={splitVendor} onChange={e => setSplitVendor(e.target.value)} placeholder="Vendor name"
+                  style={{ width:"100%", background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"7px 10px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box" }} />
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Date</div>
+                <input type="date" value={splitDate} onChange={e => setSplitDate(e.target.value)}
+                  style={{ width:"100%", background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"7px 10px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box" }} />
+              </div>
+              <div>
+                <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Invoice # (optional)</div>
+                <input value={splitInvoice} onChange={e => setSplitInvoice(e.target.value)} placeholder="e.g. INV-0042"
+                  style={{ width:"100%", background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"7px 10px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box" }} />
+              </div>
+            </div>
+            {/* Bill file */}
+            <div style={{ marginBottom:12 }}>
+              <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Bill Document (shared across all lines)</div>
+              {splitFile ? (
+                <div style={{ display:"flex", alignItems:"center", gap:10, background:"#1e2433", borderRadius:6, padding:"6px 12px" }}>
+                  <span style={{ fontSize:13, color:"#34d399" }}>📄 {splitFile.name}</span>
+                  <button onClick={() => setSplitFile(null)} style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:12 }}>✕ Remove</button>
+                </div>
+              ) : (
+                <label style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#1e2433", border:"1px dashed #374151", borderRadius:6, padding:"6px 14px", cursor:"pointer", fontSize:12, color:"#9ca3af" }}>
+                  📎 Attach bill PDF / image
+                  <input type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={e => { if (e.target.files[0]) setSplitFile(e.target.files[0]); }} />
+                </label>
+              )}
+            </div>
+            {/* Split lines */}
+            <div style={{ marginBottom:8 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
+                <div style={{ fontSize:11, color:"#9ca3af", fontWeight:600 }}>Split Lines</div>
+                <button onClick={() => setSplitLines(ls => [...ls, { orderRef:"", category:"Towing / Transport", description:"", amount:"" }])}
+                  style={{ fontSize:11, padding:"3px 10px", borderRadius:6, border:"1px solid #a855f7", background:"none", color:"#a855f7", cursor:"pointer" }}>+ Add Line</button>
+              </div>
+              {/* Column headers */}
+              <div style={{ display:"grid", gridTemplateColumns:"90px 1fr 180px 90px 28px", gap:6, marginBottom:4 }}>
+                {["Order Ref","Description","Category","Amount",""].map(h => (
+                  <div key={h} style={{ fontSize:10, color:"#6b7280", fontWeight:600 }}>{h}</div>
+                ))}
+              </div>
+              {splitLines.map((line, i) => (
+                <div key={i} style={{ display:"grid", gridTemplateColumns:"90px 1fr 180px 90px 28px", gap:6, alignItems:"center", marginBottom:6 }}>
+                  <input value={line.orderRef} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,orderRef:e.target.value}:l))}
+                    placeholder="Order #"
+                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 8px", color:"#60a5fa", fontSize:12, boxSizing:"border-box" }} />
+                  <input value={line.description} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,description:e.target.value}:l))}
+                    placeholder="e.g. Port fee, storage…"
+                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 8px", color:"#f1f5f9", fontSize:12, boxSizing:"border-box" }} />
+                  <select value={line.category} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,category:e.target.value}:l))}
+                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 6px", color:"#f1f5f9", fontSize:12 }}>
+                    {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
+                  </select>
+                  <input type="number" min="0" step="0.01" value={line.amount} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,amount:e.target.value}:l))}
+                    placeholder="0.00"
+                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 8px", color:"#34d399", fontSize:12, fontWeight:600, boxSizing:"border-box" }} />
+                  <button onClick={() => setSplitLines(ls => ls.filter((_,j)=>j!==i))}
+                    style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:15, padding:0 }}>✕</button>
+                </div>
+              ))}
+              {/* Total */}
+              <div style={{ textAlign:"right", fontSize:12, color:"#9ca3af", marginTop:4 }}>
+                Total: <strong style={{ color:"#34d399" }}>
+                  ${splitLines.reduce((s,l) => s + Number(l.amount||0), 0).toFixed(2)}
+                </strong>
+              </div>
+            </div>
+            {splitMsg && <div style={{ marginBottom:10, fontSize:13, color: splitMsg.startsWith("✅") ? "#34d399" : "#f87171" }}>{splitMsg}</div>}
+            <button onClick={submitSplitBill} disabled={splitSaving || !splitVendor.trim()}
+              style={{ background: splitVendor.trim() ? "#7c3aed" : "#374151", color:"#fff", border:"none", borderRadius:8, padding:"9px 20px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+              {splitSaving ? "Saving…" : `✅ Create ${splitLines.filter(l=>Number(l.amount)>0).length} Expenses`}
+            </button>
+          </div>
+        )}
 
         {/* ── Other manual entry form ── */}
         {showManualForm && (
