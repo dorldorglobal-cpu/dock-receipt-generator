@@ -38,7 +38,7 @@
   height: 32px;
   border-radius: 7px;
   object-fit: contain;
-  background: #1a2235;
+  background: var(--bg-hover);
   padding: 3px;
   flex-shrink: 0;
 }

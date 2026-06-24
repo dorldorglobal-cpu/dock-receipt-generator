@@ -129,7 +129,7 @@ export default function Sidebar() {
           {collapsed ? (
             /* When collapsed: whole header is the expand button */
             <button className="sidebar-toggle-collapsed" onClick={toggleCollapsed} title="Expand sidebar">
-              <img src={logo} alt="DDG" style={{ width:28, height:28, borderRadius:6, background:"#1a2235", padding:3, objectFit:"contain" }} />
+              <img src={logo} alt="DDG" style={{ width:28, height:28, borderRadius:6, background:"var(--bg-hover)", padding:3, objectFit:"contain" }} />
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M9 18l6-6-6-6" />
               </svg>
@@ -179,7 +179,7 @@ export default function Sidebar() {
           </svg>
         </button>
         <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-          <img src={logo} alt="DDG" style={{ width:28, height:28, borderRadius:6, background:"#1a2235", padding:2, objectFit:"contain" }} />
+          <img src={logo} alt="DDG" style={{ width:28, height:28, borderRadius:6, background:"var(--bg-hover)", padding:2, objectFit:"contain" }} />
           <span style={{ fontWeight:700, fontSize:14, color:"var(--text-primary)" }}>DDG OPS</span>
         </div>
         <div style={{ width:36 }} />
@@ -191,7 +191,7 @@ export default function Sidebar() {
           <div className="mobile-drawer" onClick={e => e.stopPropagation()}>
             <div className="mobile-drawer-header">
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
-                <img src={logo} alt="DDG" style={{ width:30, height:30, borderRadius:7, background:"#1a2235", padding:3, objectFit:"contain" }} />
+                <img src={logo} alt="DDG" style={{ width:30, height:30, borderRadius:7, background:"var(--bg-hover)", padding:3, objectFit:"contain" }} />
                 <div>
                   <div style={{ fontWeight:700, fontSize:13, color:"var(--text-primary)" }}>DDG OPS</div>
                   <div style={{ fontSize:10, color:"var(--text-muted)", textTransform:"uppercase", letterSpacing:"0.05em" }}>Operations Platform</div>
