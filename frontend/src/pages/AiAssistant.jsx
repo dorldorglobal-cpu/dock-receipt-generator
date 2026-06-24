@@ -141,11 +141,11 @@ export default function AiAssistant() {
       {dragging && (
         <div style={{
           position: "fixed", inset: 0, zIndex: 9999,
-          background: "rgba(26,110,247,0.15)", border: "3px dashed #1a6ef7",
+          background: "rgba(26,110,247,0.15)", border: "3px dashed #2563eb",
           display: "flex", alignItems: "center", justifyContent: "center",
           pointerEvents: "none",
         }}>
-          <div style={{ color: "#1a6ef7", fontSize: 22, fontWeight: 700 }}>✦ Drop document to extract fields</div>
+          <div style={{ color: "#2563eb", fontSize: 22, fontWeight: 700 }}>✦ Drop document to extract fields</div>
         </div>
       )}
 
@@ -167,11 +167,11 @@ export default function AiAssistant() {
           {extractedFields && (
             <button
               onClick={() => navigator.clipboard.writeText(JSON.stringify(extractedFields, null, 2))}
-              style={{ background: "#161b22", border: "1px solid #30363d", color: "var(--text-secondary)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}
+              style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}
               title="Copy extracted fields as JSON"
             >Copy fields</button>
           )}
-          <button onClick={clearChat} style={{ background: "#161b22", border: "1px solid #30363d", color: "var(--text-secondary)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}>
+          <button onClick={clearChat} style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", color: "var(--text-secondary)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}>
             Clear
           </button>
         </div>
@@ -184,12 +184,12 @@ export default function AiAssistant() {
           <div
             onClick={() => fileInputRef.current?.click()}
             style={{
-              border: "2px dashed #1a6ef755", borderRadius: 10, padding: "14px 18px",
+              border: "2px dashed #2563eb55", borderRadius: 10, padding: "14px 18px",
               marginBottom: 10, cursor: "pointer", textAlign: "center",
               color: "var(--text-secondary)", fontSize: 13, transition: "border-color 0.15s",
             }}
-            onMouseEnter={e => e.currentTarget.style.borderColor = "#1a6ef7"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = "#1a6ef755"}
+            onMouseEnter={e => e.currentTarget.style.borderColor = "#2563eb"}
+            onMouseLeave={e => e.currentTarget.style.borderColor = "#2563eb55"}
           >
             <span style={{ fontSize: 18 }}>📄</span>  Drop or click to upload a shipping document
             <div style={{ fontSize: 11, marginTop: 4, color: "#484f58" }}>Buyer receipt, dispatch sheet, BOL, booking confirmation…</div>
@@ -200,11 +200,11 @@ export default function AiAssistant() {
           <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
             {SUGGESTIONS.map(s => (
               <button key={s} onClick={() => send(s)} style={{
-                background: "#161b22", border: "1px solid #30363d", borderRadius: 20,
+                background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 20,
                 padding: "5px 12px", fontSize: 11, color: "var(--text-secondary)", cursor: "pointer",
               }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "#1a6ef7"; e.currentTarget.style.color = "var(--text-primary)"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "#30363d"; e.currentTarget.style.color = "var(--text-secondary)"; }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "#2563eb"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "var(--border)"; e.currentTarget.style.color = "var(--text-secondary)"; }}
               >{s}</button>
             ))}
           </div>
@@ -216,14 +216,14 @@ export default function AiAssistant() {
         {messages.map((m, i) => (
           <div key={i} style={{ display: "flex", justifyContent: m.role === "user" ? "flex-end" : "flex-start", gap: 8 }}>
             {m.role === "assistant" && (
-              <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#1a6ef7,#0e4db5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0, marginTop: 2 }}>✦</div>
+              <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#2563eb,#0e4db5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0, marginTop: 2 }}>✦</div>
             )}
             <div style={{ maxWidth: "78%", display: "flex", flexDirection: "column", gap: 6 }}>
               <div style={{
                 padding: "10px 14px", borderRadius: 12, fontSize: 13, lineHeight: 1.65,
-                background: m.role === "user" ? "#1a6ef7" : "#161b22",
+                background: m.role === "user" ? "#2563eb" : "var(--bg-elevated)",
                 color: "var(--text-primary)",
-                border: m.role === "user" ? "none" : "1px solid #21262d",
+                border: m.role === "user" ? "none" : "1px solid var(--border-muted)",
                 whiteSpace: "pre-wrap",
               }}>
                 {m.content}
@@ -231,8 +231,8 @@ export default function AiAssistant() {
 
               {/* Extracted fields card */}
               {m.extractedFields && (
-                <div style={{ background: "var(--bg-base)", border: "1px solid #1a6ef755", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
-                  <div style={{ color: "#1a6ef7", fontWeight: 600, marginBottom: 8, fontSize: 11 }}>✦ EXTRACTED FIELDS</div>
+                <div style={{ background: "var(--bg-base)", border: "1px solid #2563eb55", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
+                  <div style={{ color: "#2563eb", fontWeight: 600, marginBottom: 8, fontSize: 11 }}>✦ EXTRACTED FIELDS</div>
                   {[
                     { label: "Vehicle", keys: ["year","make","model","vin","color","mileage","lotNumber","bidAmount"] },
                     { label: "Customer", keys: ["customerName","customerPhone","customerEmail"] },
@@ -263,11 +263,11 @@ export default function AiAssistant() {
                   <div style={{ display: "flex", gap: 8, marginTop: 10 }}>
                     <button
                       onClick={() => createOrder(m.extractedFields)}
-                      style={{ background: "linear-gradient(135deg,#1a6ef7,#0e4db5)", border: "none", borderRadius: 8, color: "#fff", padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
+                      style={{ background: "linear-gradient(135deg,#2563eb,#0e4db5)", border: "none", borderRadius: 8, color: "#fff", padding: "7px 14px", cursor: "pointer", fontSize: 12, fontWeight: 600 }}
                     >✦ Create Order</button>
                     <button
                       onClick={saveRules}
-                      style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, color: "var(--text-secondary)", padding: "7px 14px", cursor: "pointer", fontSize: 12 }}
+                      style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", padding: "7px 14px", cursor: "pointer", fontSize: 12 }}
                     >💾 Save Rules</button>
                   </div>
                 </div>
@@ -278,20 +278,20 @@ export default function AiAssistant() {
 
         {loading && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-            <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#1a6ef7,#0e4db5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}>✦</div>
-            <div style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: 12, padding: "10px 14px", color: "var(--text-secondary)", fontSize: 13 }}>Thinking…</div>
+            <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#2563eb,#0e4db5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}>✦</div>
+            <div style={{ background: "var(--bg-elevated)", border: "1px solid var(--border-muted)", borderRadius: 12, padding: "10px 14px", color: "var(--text-secondary)", fontSize: 13 }}>Thinking…</div>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
       {/* Input row */}
-      <div style={{ display: "flex", gap: 8, padding: "10px 0 16px", borderTop: "1px solid #21262d", alignItems: "flex-end" }}>
+      <div style={{ display: "flex", gap: 8, padding: "10px 0 16px", borderTop: "1px solid var(--border-muted)", alignItems: "flex-end" }}>
         {/* Upload button */}
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Upload document"
-          style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 10, color: "var(--text-secondary)", padding: "10px 12px", cursor: "pointer", fontSize: 16, flexShrink: 0 }}
+          style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 10, color: "var(--text-secondary)", padding: "10px 12px", cursor: "pointer", fontSize: 16, flexShrink: 0 }}
         >📎</button>
         <input ref={fileInputRef} type="file" accept=".pdf,.txt" style={{ display: "none" }}
           onChange={e => { if (e.target.files[0]) { send("", e.target.files[0]); e.target.value = ""; } }} />
@@ -302,14 +302,14 @@ export default function AiAssistant() {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
           placeholder={hasDoc ? `Ask about ${docContext.docType}, correct a field, or say "remember this"…` : "Ask about orders, or drop a document above…"}
-          style={{ flex: 1, background: "#161b22", border: "1px solid #30363d", borderRadius: 10, padding: "10px 14px", color: "var(--text-primary)", fontSize: 13, outline: "none" }}
-          onFocus={e => e.target.style.borderColor = "#1a6ef7"}
-          onBlur={e => e.target.style.borderColor = "#30363d"}
+          style={{ flex: 1, background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 10, padding: "10px 14px", color: "var(--text-primary)", fontSize: 13, outline: "none" }}
+          onFocus={e => e.target.style.borderColor = "#2563eb"}
+          onBlur={e => e.target.style.borderColor = "var(--border)"}
         />
         <button
           onClick={() => send()}
           disabled={loading || !input.trim()}
-          style={{ background: loading || !input.trim() ? "#21262d" : "linear-gradient(135deg,#1a6ef7,#0e4db5)", border: "none", borderRadius: 10, color: "#fff", padding: "10px 18px", cursor: loading || !input.trim() ? "default" : "pointer", fontSize: 13, fontWeight: 600 }}
+          style={{ background: loading || !input.trim() ? "var(--border-muted)" : "linear-gradient(135deg,#2563eb,#0e4db5)", border: "none", borderRadius: 10, color: "#fff", padding: "10px 18px", cursor: loading || !input.trim() ? "default" : "pointer", fontSize: 13, fontWeight: 600 }}
         >Send</button>
       </div>
     </div>

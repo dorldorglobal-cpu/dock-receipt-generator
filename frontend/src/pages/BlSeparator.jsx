@@ -180,7 +180,7 @@ export default function BlSeparator() {
   return (
     <div style={{ padding: "24px", maxWidth: 1200, margin: "0 auto" }}>
       <h2 style={{ marginBottom: 4, fontSize: 22 }}>BL Separator</h2>
-      <p style={{ color: "#9ca3af", marginBottom: 24, fontSize: 14 }}>
+      <p style={{ color: "var(--text-secondary)", marginBottom: 24, fontSize: 14 }}>
         Upload a Sallaum or ACL/Grimaldi batch BL PDF. The system will parse and separate individual
         BLs, match them to orders by reference number, and let you upload or download each BL.
       </p>
@@ -205,7 +205,7 @@ export default function BlSeparator() {
           <div style={{ fontSize: 16, fontWeight: 600, color: "#e5e7eb", marginBottom: 6 }}>
             Drop BL PDF here or click to browse
           </div>
-          <div style={{ fontSize: 13, color: "#6b7280" }}>
+          <div style={{ fontSize: 13, color: "var(--text-muted)" }}>
             Supports Sallaum (SLSE-) and ACL/Grimaldi (S329-)
           </div>
           <input ref={fileRef} type="file" accept=".pdf" style={{ display: "none" }} onChange={onFileChange} />
@@ -213,7 +213,7 @@ export default function BlSeparator() {
       )}
 
       {parsing && (
-        <div style={{ textAlign: "center", padding: 60, color: "#9ca3af" }}>
+        <div style={{ textAlign: "center", padding: 60, color: "var(--text-secondary)" }}>
           <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
           Parsing PDF…
         </div>
@@ -229,20 +229,20 @@ export default function BlSeparator() {
         <div>
           {/* Action bar */}
           <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-            <div style={{ color: "#9ca3af", fontSize: 13 }}>
+            <div style={{ color: "var(--text-secondary)", fontSize: 13 }}>
               <span style={{ color: "#e5e7eb", fontWeight: 600 }}>{parsed.carrier}</span>
               <span style={{ marginLeft: 10 }}>{parsed.bls.length} BLs</span>
             </div>
 
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => toggleAll(true)} style={btnStyle("#1e3a5f", "#60a5fa")}>Select All</button>
-              <button onClick={() => toggleAll(false)} style={btnStyle("var(--border)", "#9ca3af")}>Deselect All</button>
-              <button onClick={reset} style={btnStyle("var(--border)", "#9ca3af")}>Reset</button>
+              <button onClick={() => toggleAll(false)} style={btnStyle("var(--border)", "var(--text-secondary)")}>Deselect All</button>
+              <button onClick={reset} style={btnStyle("var(--border)", "var(--text-secondary)")}>Reset</button>
 
               <button
                 onClick={downloadSelected}
                 disabled={downloading || selectedAll === 0}
-                style={btnStyle(selectedAll > 0 ? "#1a2e1a" : "var(--border)", selectedAll > 0 ? "#4ade80" : "#6b7280", downloading || selectedAll === 0)}
+                style={btnStyle(selectedAll > 0 ? "#1a2e1a" : "var(--border)", selectedAll > 0 ? "#4ade80" : "var(--text-muted)", downloading || selectedAll === 0)}
               >
                 {downloading ? "Downloading…" : `⬇ Download Selected (${selectedAll})`}
               </button>
@@ -250,7 +250,7 @@ export default function BlSeparator() {
               <button
                 onClick={attachSelected}
                 disabled={attaching || selectedMatched === 0}
-                style={btnStyle(selectedMatched > 0 ? "#312e81" : "var(--border)", selectedMatched > 0 ? "#818cf8" : "#6b7280", attaching || selectedMatched === 0)}
+                style={btnStyle(selectedMatched > 0 ? "#312e81" : "var(--border)", selectedMatched > 0 ? "#818cf8" : "var(--text-muted)", attaching || selectedMatched === 0)}
               >
                 {attaching ? "Uploading…" : `☁ Upload to Orders (${selectedMatched})`}
               </button>
@@ -259,7 +259,7 @@ export default function BlSeparator() {
 
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid var(--border)", color: "#6b7280", textAlign: "left" }}>
+              <tr style={{ borderBottom: "1px solid var(--border)", color: "var(--text-muted)", textAlign: "left" }}>
                 <th style={th}>✓</th>
                 <th style={th}>BL #</th>
                 <th style={th}>Order</th>
@@ -309,12 +309,12 @@ export default function BlSeparator() {
                         <span style={{ color: "#34d399", fontWeight: 600 }}>{bl.refNumber}</span>
                       ) : (
                         <span style={{ color: "#ef4444" }}>
-                          {bl.refNumber || "?"} <span style={{ color: "#6b7280", fontSize: 11 }}>(not found)</span>
+                          {bl.refNumber || "?"} <span style={{ color: "var(--text-muted)", fontSize: 11 }}>(not found)</span>
                         </span>
                       )}
                     </td>
                     <td style={td}>
-                      <span style={{ color: "#9ca3af" }}>{bl.orderCustomer || "—"}</span>
+                      <span style={{ color: "var(--text-secondary)" }}>{bl.orderCustomer || "—"}</span>
                     </td>
                     <td style={td}>
                       <span style={{ fontFamily: "monospace", fontSize: 11, color: "#d1d5db" }}>
@@ -335,7 +335,7 @@ export default function BlSeparator() {
                       </span>
                     </td>
                     <td style={td}>
-                      <span style={{ color: bl.charges ? "#34d399" : "#6b7280" }}>
+                      <span style={{ color: bl.charges ? "#34d399" : "var(--text-muted)" }}>
                         {bl.charges ? fmt$(bl.charges) : "—"}
                       </span>
                     </td>

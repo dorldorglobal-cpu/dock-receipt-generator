@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -14,11 +14,11 @@ function statusColor(s) {
     "Waiting to Sail":   "#fb923c",
     "Picked Up":         "#60a5fa",
     "Awaiting Pickup":   "#fbbf24",
-    "New Order":         "#9ca3af",
+    "New Order":         "var(--text-secondary)",
     "Problem / Hold":    "#f87171",
-    "Canceled":          "#9ca3af",
+    "Canceled":          "var(--text-secondary)",
   };
-  return m[s] || "#9ca3af";
+  return m[s] || "var(--text-secondary)";
 }
 
 function ago(dateStr) {

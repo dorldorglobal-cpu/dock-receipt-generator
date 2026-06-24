@@ -123,7 +123,7 @@ export default function Dashboard() {
     { label: "Sailed",          value: countStatus("Sailed"),            color: "var(--success)", status: "Sailed" },
     { label: "Completed",       value: countStatus("Completed"),         color: "#4ade80",         status: "Completed" },
     { label: "Problem / Hold",  value: countStatus("Problem / Hold"),    color: "var(--danger)",  status: "Problem / Hold" },
-    { label: "Canceled",        value: countStatus("Canceled"),          color: "#9ca3af",        status: "Canceled" },
+    { label: "Canceled",        value: countStatus("Canceled"),          color: "var(--text-secondary)",        status: "Canceled" },
   ];
 
   const recent = orders.slice(0, 10);
@@ -145,7 +145,7 @@ export default function Dashboard() {
     "Software":             "#38bdf8",
     "Legal Fees":           "#f472b6",
     "Office & Admin":       "#fbbf24",
-    "General Overhead":     "#9ca3af",
+    "General Overhead":     "var(--text-secondary)",
   };
 
   return (
@@ -192,7 +192,7 @@ export default function Dashboard() {
                 { label:"This Year",    value: activity.year,   color:"#fbbf24" },
               ].map(({ label, value, color }) => (
                 <div key={label}>
-                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3 }}>{label}</div>
+                  <div style={{ fontSize:11, color:"var(--text-muted)", marginBottom:3 }}>{label}</div>
                   <div style={{ fontSize:36, fontWeight:800, color, lineHeight:1 }}>{value}</div>
                 </div>
               ))}
@@ -214,7 +214,7 @@ export default function Dashboard() {
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
               <h2 style={{ margin:0, fontSize:20, color:"var(--text-primary)" }}>📊 New Orders Activity</h2>
-              <button onClick={() => setActivityModal(false)} style={{ background:"none", border:"none", color:"#6b7280", fontSize:22, cursor:"pointer" }}>✕</button>
+              <button onClick={() => setActivityModal(false)} style={{ background:"none", border:"none", color:"var(--text-muted)", fontSize:22, cursor:"pointer" }}>✕</button>
             </div>
 
             {/* View toggle */}
@@ -223,7 +223,7 @@ export default function Dashboard() {
                 <button key={v} onClick={() => { setActivityView(v); setActivityDate(""); }}
                   style={{ padding:"7px 18px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:600,
                     background: activityView===v ? "#3b82f6" : "var(--bg-elevated)",
-                    color: activityView===v ? "#fff" : "#6b7280" }}>
+                    color: activityView===v ? "#fff" : "var(--text-muted)" }}>
                   {lbl}
                 </button>
               ))}
@@ -232,7 +232,7 @@ export default function Dashboard() {
             <div style={{ display:"grid", gridTemplateColumns:"220px 1fr", gap:20 }}>
               {/* Left: period list */}
               <div style={{ background:"var(--bg-elevated)", borderRadius:10, padding:12, maxHeight:520, overflowY:"auto" }}>
-                <div style={{ fontSize:11, color:"#6b7280", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>
+                <div style={{ fontSize:11, color:"var(--text-muted)", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>
                   {activityView==="day"?"Days":activityView==="week"?"Weeks":activityView==="month"?"Months":"Years"}
                 </div>
                 {drillDown.map(([key, ords]) => (
@@ -270,7 +270,7 @@ export default function Dashboard() {
                             <div style={{ fontSize:13, fontWeight:600, color:"var(--text-primary)" }}>
                               #{o.refNumber} — {o.customerName || "—"}
                             </div>
-                            <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>
+                            <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:2 }}>
                               {[o.year,o.make,o.model].filter(Boolean).join(" ")||o.vin||"—"}
                               {" · "}{new Date(o.createdAt).toLocaleString()}
                             </div>
@@ -371,7 +371,7 @@ export default function Dashboard() {
               {topCats.map(([cat, amt]) => (
                 <div key={cat} style={{ display:"flex", alignItems:"center", gap:6, padding:"4px 12px",
                   background:"var(--bg-panel)", borderRadius:20, border:"1px solid var(--border)" }}>
-                  <span style={{ width:8, height:8, borderRadius:"50%", background: CAT_COLORS[cat] || "#9ca3af", flexShrink:0 }} />
+                  <span style={{ width:8, height:8, borderRadius:"50%", background: CAT_COLORS[cat] || "var(--text-secondary)", flexShrink:0 }} />
                   <span style={{ fontSize:12, color:"var(--text-secondary)" }}>{cat}</span>
                   <span style={{ fontSize:12, color:"var(--text-primary)", fontWeight:600 }}>{fmt$(amt)}</span>
                 </div>

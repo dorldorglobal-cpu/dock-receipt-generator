@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -72,7 +72,7 @@ export default function Containers() {
         </div>
         <button onClick={() => navigate("/orders/new")}
           style={{ padding: "10px 18px", borderRadius: 10, border: "none",
-            background: "linear-gradient(135deg,#1a6ef7,#0e4db5)", color: "#fff",
+            background: "linear-gradient(135deg,#2563eb,#0e4db5)", color: "#fff",
             cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
           + New Order
         </button>

@@ -24,7 +24,7 @@ export default function Login({ onLogin }) {
       background: "var(--bg-base)",
     }}>
       <div style={{
-        background: "#161b22", border: "1px solid #21262d", borderRadius: 16,
+        background: "var(--bg-elevated)", border: "1px solid var(--border-muted)", borderRadius: 16,
         padding: "48px 40px", width: 340, textAlign: "center",
         boxShadow: "0 8px 40px #0008",
       }}>
@@ -41,7 +41,7 @@ export default function Login({ onLogin }) {
           autoFocus
           style={{
             width: "100%", padding: "11px 14px", borderRadius: 8, fontSize: 14,
-            background: "var(--bg-base)", border: `1px solid ${error ? "#f85149" : "#30363d"}`,
+            background: "var(--bg-base)", border: `1px solid ${error ? "#f85149" : "var(--border)"}`,
             color: "var(--text-primary)", outline: "none", marginBottom: 12, boxSizing: "border-box",
             transition: "border-color 0.2s",
           }}
@@ -57,7 +57,7 @@ export default function Login({ onLogin }) {
           onClick={attempt}
           style={{
             width: "100%", padding: "11px", borderRadius: 8, fontSize: 14, fontWeight: 600,
-            background: "linear-gradient(135deg,#1a6ef7,#0e4db5)", border: "none",
+            background: "linear-gradient(135deg,#2563eb,#0e4db5)", border: "none",
             color: "#fff", cursor: "pointer",
           }}
         >

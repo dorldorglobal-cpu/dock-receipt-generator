@@ -22,7 +22,7 @@ const CAT_COLORS = {
   "Software":             "#38bdf8",
   "Legal Fees":           "#f472b6",
   "Office & Admin":       "#fbbf24",
-  "General Overhead":     "#9ca3af",
+  "General Overhead":     "var(--text-secondary)",
 };
 
 function fmt$(n) {
@@ -46,7 +46,7 @@ function Modal({ title, onClose, children, wide }) {
         onClick={e=>e.stopPropagation()}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
           <h2 style={{ margin:0,fontSize:18,color:"var(--text-primary)" }}>{title}</h2>
-          <button onClick={onClose} style={{ background:"none",border:"none",color:"#9ca3af",fontSize:22,cursor:"pointer",lineHeight:1 }}>✕</button>
+          <button onClick={onClose} style={{ background:"none",border:"none",color:"var(--text-secondary)",fontSize:22,cursor:"pointer",lineHeight:1 }}>✕</button>
         </div>
         {children}
       </div>
@@ -55,7 +55,7 @@ function Modal({ title, onClose, children, wide }) {
 }
 
 const inputStyle = { width:"100%",padding:"8px 10px",background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-primary)",fontSize:13,boxSizing:"border-box",marginTop:4 };
-const labelStyle = { display:"block",fontSize:12,color:"#9ca3af",marginBottom:2 };
+const labelStyle = { display:"block",fontSize:12,color:"var(--text-secondary)",marginBottom:2 };
 
 // ── Vendor Form ───────────────────────────────────────────────────────────────
 const EMPTY_VENDOR = { name:"",contactName:"",phone:"",email:"",address:"",city:"",state:"",zip:"",category:"",notes:"" };
@@ -166,7 +166,7 @@ function ExpenseForm({ form, setForm, onSubmit, saving, receiptFile, setReceiptF
           <input type="file" accept="image/*,.pdf"
             onChange={e=>setReceiptFile(e.target.files[0]||null)}
             style={{ ...inputStyle,padding:"6px 10px",cursor:"pointer" }} />
-          {receiptFile && <div style={{ fontSize:11,color:"#9ca3af",marginTop:4 }}>{receiptFile.name}</div>}
+          {receiptFile && <div style={{ fontSize:11,color:"var(--text-secondary)",marginTop:4 }}>{receiptFile.name}</div>}
         </div>
       </div>
       <div style={{ display:"flex",justifyContent:"flex-end",marginTop:20 }}>
@@ -336,7 +336,7 @@ export default function Vendors() {
   };
 
   const td = { padding:"11px 14px",fontSize:13,color:"var(--text-primary)",borderTop:"1px solid var(--bg-panel)" };
-  const th = { padding:"10px 14px",textAlign:"left",color:"#9ca3af",fontSize:12,fontWeight:600,whiteSpace:"nowrap" };
+  const th = { padding:"10px 14px",textAlign:"left",color:"var(--text-secondary)",fontSize:12,fontWeight:600,whiteSpace:"nowrap" };
 
   return (
     <div style={{ padding:"28px 32px",maxWidth:1300,margin:"0 auto" }}>
@@ -345,7 +345,7 @@ export default function Vendors() {
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24 }}>
         <div>
           <h1 style={{ margin:0,fontSize:24,fontWeight:700,color:"var(--text-primary)" }}>Vendors</h1>
-          <p style={{ margin:"4px 0 0",color:"#9ca3af",fontSize:13 }}>
+          <p style={{ margin:"4px 0 0",color:"var(--text-secondary)",fontSize:13 }}>
             {vendors.length} vendor{vendors.length!==1?"s":""} · manage contacts &amp; track spending
           </p>
         </div>
@@ -366,24 +366,24 @@ export default function Vendors() {
       <div style={{ display:"flex",gap:10,marginBottom:18 }}>
         <input placeholder="Search vendors…" value={search} onChange={e=>setSearch(e.target.value)}
           style={{ background:"var(--bg-panel)",border:"1px solid var(--border)",borderRadius:7,color:"var(--text-primary)",padding:"8px 12px",fontSize:13,width:260 }} />
-        <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ background:"var(--bg-panel)",border:"1px solid var(--border)",borderRadius:7,color:filterCat?"var(--text-primary)":"#9ca3af",padding:"8px 12px",fontSize:13 }}>
+        <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ background:"var(--bg-panel)",border:"1px solid var(--border)",borderRadius:7,color:filterCat?"var(--text-primary)":"var(--text-secondary)",padding:"8px 12px",fontSize:13 }}>
           <option value="">All Categories</option>
           {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
         {(search||filterCat) && (
-          <button onClick={()=>{setSearch("");setFilterCat("");}} style={{ background:"none",border:"1px solid var(--border)",borderRadius:7,color:"#9ca3af",padding:"8px 12px",fontSize:12,cursor:"pointer" }}>Clear</button>
+          <button onClick={()=>{setSearch("");setFilterCat("");}} style={{ background:"none",border:"1px solid var(--border)",borderRadius:7,color:"var(--text-secondary)",padding:"8px 12px",fontSize:12,cursor:"pointer" }}>Clear</button>
         )}
       </div>
 
       <div style={{ display:"flex",gap:20 }}>
         {/* Vendor Table */}
-        <div style={{ flex:1,background:"#161d2c",borderRadius:12,overflow:"hidden",border:"1px solid var(--bg-panel)" }}>
+        <div style={{ flex:1,background:"var(--bg-elevated)",borderRadius:12,overflow:"hidden",border:"1px solid var(--bg-panel)" }}>
           {loading ? (
-            <div style={{ padding:40,textAlign:"center",color:"#6b7280" }}>Loading…</div>
+            <div style={{ padding:40,textAlign:"center",color:"var(--text-muted)" }}>Loading…</div>
           ) : vendors.length === 0 ? (
             <div style={{ padding:60,textAlign:"center" }}>
               <div style={{ fontSize:40,marginBottom:12 }}>🏢</div>
-              <div style={{ color:"#9ca3af",fontSize:14,marginBottom:16 }}>No vendors yet</div>
+              <div style={{ color:"var(--text-secondary)",fontSize:14,marginBottom:16 }}>No vendors yet</div>
               <div style={{ display:"flex",gap:10,justifyContent:"center" }}>
                 <button onClick={()=>setShowWave(true)} style={{ background:"#0f766e",color:"#fff",border:"none",borderRadius:7,padding:"9px 16px",fontSize:13,cursor:"pointer" }}>Import from Wave</button>
                 <button onClick={openAdd} style={{ background:"#3b82f6",color:"#fff",border:"none",borderRadius:7,padding:"9px 16px",fontSize:13,cursor:"pointer" }}>Add manually</button>
@@ -407,29 +407,29 @@ export default function Vendors() {
                 <tbody>
                   {vendors.map(v => (
                     <tr key={v._id}
-                      style={{ background: detailVendor?._id===v._id ? "var(--bg-hover)" : "#161d2c", cursor:"pointer" }}
+                      style={{ background: detailVendor?._id===v._id ? "var(--bg-hover)" : "var(--bg-elevated)", cursor:"pointer" }}
                       onMouseEnter={e=>e.currentTarget.style.background="var(--bg-hover)"}
-                      onMouseLeave={e=>e.currentTarget.style.background=detailVendor?._id===v._id?"var(--bg-hover)":"#161d2c"}
+                      onMouseLeave={e=>e.currentTarget.style.background=detailVendor?._id===v._id?"var(--bg-hover)":"var(--bg-elevated)"}
                       onClick={()=>openDetail(v)}>
                       <td style={td}>
                         <div style={{ fontWeight:600,color:"var(--text-primary)" }}>{v.name}</div>
                       </td>
                       <td style={td}>
                         {v.category ? (
-                          <span style={{ display:"inline-block",padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:(CAT_COLORS[v.category]||"#9ca3af")+"22",color:CAT_COLORS[v.category]||"#9ca3af",whiteSpace:"nowrap" }}>
+                          <span style={{ display:"inline-block",padding:"2px 8px",borderRadius:5,fontSize:11,fontWeight:600,background:(CAT_COLORS[v.category]||"var(--text-secondary)")+"22",color:CAT_COLORS[v.category]||"var(--text-secondary)",whiteSpace:"nowrap" }}>
                             {v.category}
                           </span>
                         ) : <span style={{ color:"#4b5563",fontSize:12 }}>—</span>}
                       </td>
-                      <td style={{ ...td,color:"#9ca3af" }}>{v.contactName||"—"}</td>
-                      <td style={{ ...td,color:"#9ca3af" }}>{v.phone||"—"}</td>
+                      <td style={{ ...td,color:"var(--text-secondary)" }}>{v.contactName||"—"}</td>
+                      <td style={{ ...td,color:"var(--text-secondary)" }}>{v.phone||"—"}</td>
                       <td style={{ ...td,textAlign:"right",fontWeight:600,color:"var(--text-primary)" }}>{fmt$(v.totalPaid)}</td>
                       <td style={{ ...td,textAlign:"right" }}>
                         {v.unpaidAmount > 0 ? (
                           <span style={{ color:"#f87171",fontWeight:600 }}>{fmt$(v.unpaidAmount)}</span>
                         ) : <span style={{ color:"#4b5563" }}>—</span>}
                       </td>
-                      <td style={{ ...td,color:"#9ca3af" }}>{v.expenseCount||0}</td>
+                      <td style={{ ...td,color:"var(--text-secondary)" }}>{v.expenseCount||0}</td>
                       <td style={{ ...td,textAlign:"right" }}>
                         <div style={{ display:"flex",gap:6,justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
                           <button onClick={()=>openEdit(v)} style={{ background:"#3b82f620",color:"#60a5fa",border:"none",borderRadius:5,padding:"4px 10px",fontSize:11,cursor:"pointer" }}>Edit</button>
@@ -446,37 +446,37 @@ export default function Vendors() {
 
         {/* Detail Panel */}
         {detailVendor && (
-          <div style={{ width:360,background:"#161d2c",borderRadius:12,border:"1px solid var(--bg-panel)",padding:20,flexShrink:0,maxHeight:"75vh",overflowY:"auto" }}>
+          <div style={{ width:360,background:"var(--bg-elevated)",borderRadius:12,border:"1px solid var(--bg-panel)",padding:20,flexShrink:0,maxHeight:"75vh",overflowY:"auto" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16 }}>
               <div>
                 <div style={{ fontWeight:700,fontSize:16,color:"var(--text-primary)" }}>{detailVendor.name}</div>
-                {detailVendor.contactName && <div style={{ fontSize:12,color:"#9ca3af",marginTop:3 }}>{detailVendor.contactName}</div>}
-                {detailVendor.phone && <div style={{ fontSize:12,color:"#9ca3af" }}>{detailVendor.phone}</div>}
+                {detailVendor.contactName && <div style={{ fontSize:12,color:"var(--text-secondary)",marginTop:3 }}>{detailVendor.contactName}</div>}
+                {detailVendor.phone && <div style={{ fontSize:12,color:"var(--text-secondary)" }}>{detailVendor.phone}</div>}
                 {detailVendor.email && <div style={{ fontSize:12,color:"#60a5fa" }}>{detailVendor.email}</div>}
               </div>
-              <button onClick={()=>setDetailVendor(null)} style={{ background:"none",border:"none",color:"#9ca3af",fontSize:18,cursor:"pointer" }}>✕</button>
+              <button onClick={()=>setDetailVendor(null)} style={{ background:"none",border:"none",color:"var(--text-secondary)",fontSize:18,cursor:"pointer" }}>✕</button>
             </div>
 
             {/* Summary */}
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16 }}>
               <div style={{ background:"var(--bg-hover)",borderRadius:8,padding:"10px 12px" }}>
-                <div style={{ fontSize:11,color:"#9ca3af",marginBottom:4 }}>TOTAL SPENT</div>
+                <div style={{ fontSize:11,color:"var(--text-secondary)",marginBottom:4 }}>TOTAL SPENT</div>
                 <div style={{ fontSize:18,fontWeight:700,color:"var(--text-primary)" }}>{fmt$(detailVendor.totalPaid)}</div>
               </div>
               <div style={{ background:"var(--bg-hover)",borderRadius:8,padding:"10px 12px" }}>
-                <div style={{ fontSize:11,color:"#9ca3af",marginBottom:4 }}>UNPAID</div>
+                <div style={{ fontSize:11,color:"var(--text-secondary)",marginBottom:4 }}>UNPAID</div>
                 <div style={{ fontSize:18,fontWeight:700,color: detailVendor.unpaidAmount>0?"#f87171":"#34d399" }}>
                   {fmt$(detailVendor.unpaidAmount)}
                 </div>
               </div>
             </div>
 
-            <div style={{ fontSize:12,color:"#9ca3af",marginBottom:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em" }}>
+            <div style={{ fontSize:12,color:"var(--text-secondary)",marginBottom:10,fontWeight:600,textTransform:"uppercase",letterSpacing:"0.05em" }}>
               Expense History
             </div>
 
             {detailLoading ? (
-              <div style={{ color:"#6b7280",fontSize:13,padding:"20px 0",textAlign:"center" }}>Loading…</div>
+              <div style={{ color:"var(--text-muted)",fontSize:13,padding:"20px 0",textAlign:"center" }}>Loading…</div>
             ) : detailExpenses.length === 0 ? (
               <div style={{ color:"#4b5563",fontSize:13,textAlign:"center",padding:"20px 0" }}>No expenses recorded yet</div>
             ) : (
@@ -488,7 +488,7 @@ export default function Vendors() {
                       <div style={{ fontSize:13,fontWeight:700,color:"var(--text-primary)",marginLeft:8,flexShrink:0 }}>{fmt$(e.amount)}</div>
                     </div>
                     <div style={{ display:"flex",justifyContent:"space-between",marginTop:5 }}>
-                      <span style={{ fontSize:11,color:"#6b7280" }}>
+                      <span style={{ fontSize:11,color:"var(--text-muted)" }}>
                         {new Date(e.date).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
                         {e.orderRef ? ` · #${e.orderRef}` : ""}
                       </span>
@@ -512,7 +512,7 @@ export default function Vendors() {
           {!importResult ? (
             <>
               <div style={{ background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:8,padding:14,marginBottom:16 }}>
-                <div style={{ fontSize:13,color:"#9ca3af",lineHeight:1.6 }}>
+                <div style={{ fontSize:13,color:"var(--text-secondary)",lineHeight:1.6 }}>
                   <strong style={{ color:"var(--text-primary)" }}>How to export from Wave:</strong><br/>
                   1. Go to <strong>Purchases → Vendors</strong> in Wave<br/>
                   2. Press <code style={{ background:"var(--bg-panel)",padding:"1px 5px",borderRadius:3,color:"#60a5fa" }}>Ctrl+A</code> to select all, then <code style={{ background:"var(--bg-panel)",padding:"1px 5px",borderRadius:3,color:"#60a5fa" }}>Ctrl+C</code> to copy<br/>
@@ -530,7 +530,7 @@ export default function Vendors() {
                 />
               </label>
               <div style={{ display:"flex",justifyContent:"flex-end",marginTop:16,gap:10 }}>
-                <button onClick={closeWave} style={{ background:"var(--border)",color:"#9ca3af",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
+                <button onClick={closeWave} style={{ background:"var(--border)",color:"var(--text-secondary)",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
                 <button onClick={doWaveImport} disabled={importing||!wavePaste.trim()} style={{ background:"#0f766e",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:importing||!wavePaste.trim()?0.5:1 }}>
                   {importing ? "Importing…" : "Import Vendors"}
                 </button>
@@ -543,15 +543,15 @@ export default function Vendors() {
               <div style={{ display:"flex",justifyContent:"center",gap:24,marginBottom:20 }}>
                 <div style={{ textAlign:"center" }}>
                   <div style={{ fontSize:28,fontWeight:700,color:"#34d399" }}>{importResult.created}</div>
-                  <div style={{ fontSize:12,color:"#9ca3af" }}>Created</div>
+                  <div style={{ fontSize:12,color:"var(--text-secondary)" }}>Created</div>
                 </div>
                 <div style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:28,fontWeight:700,color:"#9ca3af" }}>{importResult.skipped}</div>
-                  <div style={{ fontSize:12,color:"#9ca3af" }}>Already existed</div>
+                  <div style={{ fontSize:28,fontWeight:700,color:"var(--text-secondary)" }}>{importResult.skipped}</div>
+                  <div style={{ fontSize:12,color:"var(--text-secondary)" }}>Already existed</div>
                 </div>
                 <div style={{ textAlign:"center" }}>
                   <div style={{ fontSize:28,fontWeight:700,color:"var(--text-primary)" }}>{importResult.total}</div>
-                  <div style={{ fontSize:12,color:"#9ca3af" }}>Total parsed</div>
+                  <div style={{ fontSize:12,color:"var(--text-secondary)" }}>Total parsed</div>
                 </div>
               </div>
               <button onClick={closeWave} style={{ background:"#3b82f6",color:"#fff",border:"none",borderRadius:7,padding:"10px 28px",fontSize:14,fontWeight:600,cursor:"pointer" }}>Done</button>
@@ -565,7 +565,7 @@ export default function Vendors() {
         <Modal title="📄 Add from Invoice / Dispatch" onClose={closeDoc} wide>
           {parseStep === "paste" ? (
             <>
-              <div style={{ background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:8,padding:12,marginBottom:14,fontSize:13,color:"#9ca3af",lineHeight:1.6 }}>
+              <div style={{ background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:8,padding:12,marginBottom:14,fontSize:13,color:"var(--text-secondary)",lineHeight:1.6 }}>
                 Paste the text from any <strong style={{ color:"var(--text-primary)" }}>invoice, dispatch sheet, or bill</strong> below.
                 The app will automatically extract the vendor, amount, date, and description — then let you confirm before saving.
               </div>
@@ -580,7 +580,7 @@ export default function Vendors() {
                 />
               </label>
               <div style={{ display:"flex",justifyContent:"flex-end",marginTop:16,gap:10 }}>
-                <button onClick={closeDoc} style={{ background:"var(--border)",color:"#9ca3af",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
+                <button onClick={closeDoc} style={{ background:"var(--border)",color:"var(--text-secondary)",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
                 <button onClick={doParse} disabled={parsing||!docPaste.trim()} style={{ background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:parsing||!docPaste.trim()?0.5:1 }}>
                   {parsing ? "Parsing…" : "Parse Document →"}
                 </button>
@@ -668,7 +668,7 @@ export default function Vendors() {
               </div>
 
               <div style={{ display:"flex",justifyContent:"space-between",marginTop:20 }}>
-                <button type="button" onClick={()=>setParseStep("paste")} style={{ background:"none",border:"1px solid var(--border)",borderRadius:7,color:"#9ca3af",padding:"9px 16px",fontSize:13,cursor:"pointer" }}>
+                <button type="button" onClick={()=>setParseStep("paste")} style={{ background:"none",border:"1px solid var(--border)",borderRadius:7,color:"var(--text-secondary)",padding:"9px 16px",fontSize:13,cursor:"pointer" }}>
                   ← Back
                 </button>
                 <button type="submit" disabled={saving} style={{ background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontSize:13,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1 }}>
@@ -694,7 +694,7 @@ export default function Vendors() {
             Delete <strong>{confirmDelete.name}</strong>? This cannot be undone.
           </p>
           <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
-            <button onClick={()=>setConfirmDelete(null)} style={{ background:"var(--border)",color:"#9ca3af",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
+            <button onClick={()=>setConfirmDelete(null)} style={{ background:"var(--border)",color:"var(--text-secondary)",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
             <button onClick={()=>doDelete(confirmDelete._id)} style={{ background:"#ef4444",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer" }}>Delete</button>
           </div>
         </Modal>

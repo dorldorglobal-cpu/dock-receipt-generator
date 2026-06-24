@@ -643,7 +643,7 @@ export default function OrderDetails() {
     "Software":             "#22d3ee",
     "Legal Fees":           "#f43f5e",
     "Office & Admin":       "#fbbf24",
-    "General Overhead":     "#9ca3af",
+    "General Overhead":     "var(--text-secondary)",
   };
 
   const openAddBill = (mode = "manual") => {
@@ -1624,7 +1624,7 @@ export default function OrderDetails() {
 
   const statusStyle = (s) => {
     const map = {
-      "New Order":         { bg:"rgba(107,114,128,0.18)", color:"#9ca3af", border:"rgba(107,114,128,0.35)" },
+      "New Order":         { bg:"rgba(107,114,128,0.18)", color:"var(--text-secondary)", border:"rgba(107,114,128,0.35)" },
       "Awaiting Pickup":   { bg:"rgba(217,119,6,0.18)",   color:"#fbbf24", border:"rgba(251,191,36,0.35)" },
       "Picked Up":         { bg:"rgba(37,99,235,0.18)",   color:"#60a5fa", border:"rgba(96,165,250,0.35)" },
       "Delivered": { bg:"rgba(124,58,237,0.18)",  color:"#a78bfa", border:"rgba(167,139,250,0.35)" },
@@ -1634,7 +1634,7 @@ export default function OrderDetails() {
       "Paid":              { bg:"rgba(22,163,74,0.18)",   color:"#4ade80", border:"rgba(74,222,128,0.35)" },
       "Completed":         { bg:"rgba(21,128,61,0.22)",   color:"#86efac", border:"rgba(134,239,172,0.35)" },
       "Problem / Hold":    { bg:"rgba(220,38,38,0.18)",   color:"#f87171", border:"rgba(248,113,113,0.35)" },
-      "Canceled":          { bg:"rgba(75,85,99,0.25)",    color:"#9ca3af", border:"rgba(156,163,175,0.4)" },
+      "Canceled":          { bg:"rgba(75,85,99,0.25)",    color:"var(--text-secondary)", border:"rgba(156,163,175,0.4)" },
     };
     return map[s] || map["New Order"];
   };
@@ -1874,7 +1874,7 @@ export default function OrderDetails() {
       {orderInvoices.length > 0 && (
         <div style={{ display: "flex", gap: 8, marginBottom: 20, flexWrap: "wrap" }}>
           {orderInvoices.map(inv => {
-            const statusClr = inv.status === "paid" ? "#34d399" : inv.status === "sent" ? "#60a5fa" : "#9ca3af";
+            const statusClr = inv.status === "paid" ? "#34d399" : inv.status === "sent" ? "#60a5fa" : "var(--text-secondary)";
             const statusBg  = inv.status === "paid" ? "rgba(5,150,105,0.12)" : inv.status === "sent" ? "rgba(37,99,235,0.12)" : "rgba(107,114,128,0.12)";
             return (
               <div key={inv._id} style={{
@@ -3096,9 +3096,9 @@ export default function OrderDetails() {
                   </td>
                   <td>
                     <span style={{ fontSize:11, padding:"2px 8px", borderRadius:12, fontWeight:600,
-                      background:`${BILL_CAT_COLORS[bill.category]||"#9ca3af"}22`,
-                      color:BILL_CAT_COLORS[bill.category]||"#9ca3af",
-                      border:`1px solid ${BILL_CAT_COLORS[bill.category]||"#9ca3af"}44` }}>
+                      background:`${BILL_CAT_COLORS[bill.category]||"var(--text-secondary)"}22`,
+                      color:BILL_CAT_COLORS[bill.category]||"var(--text-secondary)",
+                      border:`1px solid ${BILL_CAT_COLORS[bill.category]||"var(--text-secondary)"}44` }}>
                       {bill.category}
                     </span>
                   </td>
@@ -4201,9 +4201,9 @@ export default function OrderDetails() {
           <div className="modal-card" onClick={(e) => e.stopPropagation()} style={{ width: "760px" }}>
             <h2 style={{ marginTop: 0 }}>Generate Invoice</h2>
 
-            <p style={{ color: "#6b7280", fontSize: "13px", marginTop: 0 }}>
+            <p style={{ color: "var(--text-muted)", fontSize: "13px", marginTop: 0 }}>
               Order #{order.refNumber} &mdash; {order.year} {order.make} {order.model}
-              {order.vin && <span style={{ fontFamily: "monospace", marginLeft: 6, color: "#9ca3af" }}>
+              {order.vin && <span style={{ fontFamily: "monospace", marginLeft: 6, color: "var(--text-secondary)" }}>
                 {order.vin}
               </span>}
             </p>

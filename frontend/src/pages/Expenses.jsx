@@ -25,7 +25,7 @@ const CAT_COLORS = {
   "Software":             "#38bdf8",
   "Legal Fees":           "#f472b6",
   "Office & Admin":       "#fbbf24",
-  "General Overhead":     "#9ca3af",
+  "General Overhead":     "var(--text-secondary)",
 };
 
 function fmt$(n) {
@@ -65,7 +65,7 @@ function DropZone({ label, file, setFile, existingUrl, existingName, onRemoveExi
 
   return (
     <div>
-      {label && <div style={{ fontSize:12, color:"#9ca3af", marginBottom:5 }}>{label}</div>}
+      {label && <div style={{ fontSize:12, color:"var(--text-secondary)", marginBottom:5 }}>{label}</div>}
       <div
         onClick={() => ref.current?.click()}
         onDragOver={e => { e.preventDefault(); setDrag(true); }}
@@ -85,7 +85,7 @@ function DropZone({ label, file, setFile, existingUrl, existingName, onRemoveExi
         {hasNew ? (
           <>
             <span style={{ fontSize:13, color:"#34d399" }}>📎 {file.name}</span>
-            <span style={{ fontSize:11, color:"#6b7280" }}>{(file.size/1024).toFixed(0)} KB</span>
+            <span style={{ fontSize:11, color:"var(--text-muted)" }}>{(file.size/1024).toFixed(0)} KB</span>
             <button type="button" onClick={e => { e.stopPropagation(); setFile(null); }}
               style={{ fontSize:11, color:"#f87171", background:"none", border:"none", cursor:"pointer", padding:0, marginTop:2 }}>
               Remove
@@ -99,7 +99,7 @@ function DropZone({ label, file, setFile, existingUrl, existingName, onRemoveExi
             </a>
             <div style={{ display:"flex", gap:12, marginTop:4 }}>
               <button type="button" onClick={e => { e.stopPropagation(); ref.current?.click(); }}
-                style={{ fontSize:11, color:"#9ca3af", background:"none", border:"none", cursor:"pointer", padding:0 }}>
+                style={{ fontSize:11, color:"var(--text-secondary)", background:"none", border:"none", cursor:"pointer", padding:0 }}>
                 Replace
               </button>
               {onRemoveExisting && (
@@ -113,7 +113,7 @@ function DropZone({ label, file, setFile, existingUrl, existingName, onRemoveExi
         ) : (
           <>
             <span style={{ fontSize:22 }}>📂</span>
-            <span style={{ fontSize:12, color:"#9ca3af" }}>{hint || "Drop file or click to browse"}</span>
+            <span style={{ fontSize:12, color:"var(--text-secondary)" }}>{hint || "Drop file or click to browse"}</span>
             <span style={{ fontSize:11, color:"#4b5563" }}>PDF · JPG · PNG up to 20 MB</span>
           </>
         )}
@@ -143,7 +143,7 @@ function Modal({ title, onClose, children }) {
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
           <h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>{title}</h2>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer", padding: 4 }}>✕</button>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: 20, cursor: "pointer", padding: 4 }}>✕</button>
         </div>
         {children}
       </div>
@@ -201,7 +201,7 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)",
     fontSize: 13, boxSizing: "border-box", marginTop: 4,
   };
-  const labelStyle = { display: "block", fontSize: 12, color: "#9ca3af", marginBottom: 2 };
+  const labelStyle = { display: "block", fontSize: 12, color: "var(--text-secondary)", marginBottom: 2 };
 
   return (
     <form onSubmit={onSubmit}>
@@ -1059,7 +1059,7 @@ export default function Expenses() {
     ? sorted.filter(e => e.status === activeFilter)
     : sorted;
 
-  const th = { padding: "6px 12px", textAlign: "left", color: "#9ca3af", fontSize: 11, fontWeight: 600, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" };
+  const th = { padding: "6px 12px", textAlign: "left", color: "var(--text-secondary)", fontSize: 11, fontWeight: 600, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" };
   const td = { padding: "5px 12px", fontSize: 12, color: "var(--text-primary)", borderTop: "1px solid var(--bg-panel)", lineHeight: 1.25 };
 
   const SortArrow = ({ k }) => {
@@ -1074,7 +1074,7 @@ export default function Expenses() {
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
           <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Expenses</h1>
-          <p style={{ margin: "4px 0 0", color: "#9ca3af", fontSize: 13 }}>
+          <p style={{ margin: "4px 0 0", color: "var(--text-secondary)", fontSize: 13 }}>
             Track and manage all business expenses
           </p>
         </div>
@@ -1089,7 +1089,7 @@ export default function Expenses() {
               if (dateTo)       params.set("to", dateTo);
               window.open(`${API}/api/expenses/export?${params}`, "_blank");
             }}
-            style={{ background:"var(--bg-panel)", color:"#9ca3af", border:"1px solid var(--border)", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+            style={{ background:"var(--bg-panel)", color:"var(--text-secondary)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
             ⬇ Export CSV
           </button>
           <button onClick={openAdd} style={{
@@ -1130,7 +1130,7 @@ export default function Expenses() {
               onMouseLeave={e => e.currentTarget.style.borderColor = dz.hasFiles ? dz.color : "var(--border)"}>
               <span style={{ fontSize: 32 }}>{dz.loading ? "⏳" : dz.hasFiles ? "✅" : "📂"}</span>
               <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{dz.label}</span>
-              <span style={{ fontSize: 12, color: dz.hasFiles ? "#34d399" : "#6b7280", marginBottom: 4 }}>
+              <span style={{ fontSize: 12, color: dz.hasFiles ? "#34d399" : "var(--text-muted)", marginBottom: 4 }}>
                 {dz.loading ? "Parsing…" : dz.hasFiles ? dz.fileName : dz.sub}
               </span>
               <div style={{ display: "flex", gap: 6, marginTop: 2 }} onClick={e => e.stopPropagation()}>
@@ -1140,7 +1140,7 @@ export default function Expenses() {
                     onChange={e => { const files = Array.from(e.target.files); if (files.length) dz.onFiles(files); }} />
                 </label>
                 <button onClick={() => openManualForm(dz.manualKey)}
-                  style={{ fontSize: 11, color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
+                  style={{ fontSize: 11, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
                   ✏️ Manual
                 </button>
               </div>
@@ -1157,7 +1157,7 @@ export default function Expenses() {
             onMouseLeave={e => e.currentTarget.style.borderColor = containerFiles.length > 0 ? "#ec4899" : "var(--border)"}>
             <span style={{ fontSize: 32 }}>{containerLoading ? "⏳" : containerFiles.length > 0 ? "✅" : "📦"}</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>📦 Container</span>
-            <span style={{ fontSize: 12, color: containerFiles.length > 0 ? "#34d399" : "#6b7280", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: containerFiles.length > 0 ? "#34d399" : "var(--text-muted)", marginBottom: 4 }}>
               {containerLoading ? "Parsing…" : containerFiles.length > 0 ? `${containerFiles.length} file(s)` : "Drop loader invoice PDF(s)"}
             </span>
             <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
@@ -1167,7 +1167,7 @@ export default function Expenses() {
                   onChange={e => { const files = Array.from(e.target.files); if (files.length) { setContainerFiles(files); parseContainerBills(files); }}} />
               </label>
               <button onClick={() => openManualForm("other")}
-                style={{ fontSize: 11, color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
+                style={{ fontSize: 11, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
                 ✏️ Manual
               </button>
             </div>
@@ -1183,7 +1183,7 @@ export default function Expenses() {
             onMouseLeave={e => e.currentTarget.style.borderColor = showManualForm === "other" || manualFile ? "#10b981" : "var(--border)"}>
             <span style={{ fontSize: 32 }}>{manualFile ? "✅" : "📋"}</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>📋 Other</span>
-            <span style={{ fontSize: 12, color: manualFile ? "#34d399" : "#6b7280", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: manualFile ? "#34d399" : "var(--text-muted)", marginBottom: 4 }}>
               {manualFile ? manualFile.name : "Drop bill or browse / enter manually"}
             </span>
             <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
@@ -1193,7 +1193,7 @@ export default function Expenses() {
                   onChange={e => { const files = Array.from(e.target.files); if (files.length) { setManualFile(files[0]); parseMiscBills(files); } }} />
               </label>
               <button onClick={() => openManualForm("other")}
-                style={{ fontSize: 11, color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
+                style={{ fontSize: 11, color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
                 ✏️ Manual
               </button>
             </div>
@@ -1209,7 +1209,7 @@ export default function Expenses() {
             onMouseLeave={e => e.currentTarget.style.borderColor = proofFile ? "#06b6d4" : "var(--border)"}>
             <span style={{ fontSize: 32 }}>{proofLoading ? "⏳" : proofFile ? "✅" : "🏦"}</span>
             <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>🏦 Payment Proof</span>
-            <span style={{ fontSize: 12, color: proofFile ? "#34d399" : "#6b7280", marginBottom: 4 }}>
+            <span style={{ fontSize: 12, color: proofFile ? "#34d399" : "var(--text-muted)", marginBottom: 4 }}>
               {proofLoading ? "Parsing…" : proofFile ? proofFile.name : "Drop bank ACH confirmation PDF"}
             </span>
             <div style={{ display: "flex", gap: 6 }} onClick={e => e.stopPropagation()}>
@@ -1231,7 +1231,7 @@ export default function Expenses() {
             onMouseLeave={e => e.currentTarget.style.borderColor=showSplitForm?"#a855f7":"var(--border)"}>
             <span style={{ fontSize:32 }}>✂</span>
             <span style={{ fontSize:14, fontWeight:700, color:"var(--text-primary)" }}>Split Bill</span>
-            <span style={{ fontSize:12, color:"#6b7280", marginBottom:4 }}>One bill, multiple orders</span>
+            <span style={{ fontSize:12, color:"var(--text-muted)", marginBottom:4 }}>One bill, multiple orders</span>
             <div style={{ fontSize:11, color:"#a855f7", border:"1px solid #a855f7", borderRadius:6, padding:"3px 10px" }}>
               ✏️ Manual
             </div>
@@ -1243,36 +1243,36 @@ export default function Expenses() {
           <div style={{ marginTop:16, padding:"18px 20px", background:"var(--bg-elevated)", borderRadius:10, border:"1px solid #a855f7" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
               <div style={{ fontSize:13, fontWeight:700, color:"#a855f7" }}>✂ Split Bill — Manual Entry</div>
-              <button onClick={() => setShowSplitForm(false)} style={{ background:"none", border:"none", color:"#9ca3af", fontSize:16, cursor:"pointer" }}>✕</button>
+              <button onClick={() => setShowSplitForm(false)} style={{ background:"none", border:"none", color:"var(--text-secondary)", fontSize:16, cursor:"pointer" }}>✕</button>
             </div>
             {/* Header fields */}
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr 1fr", gap:12, marginBottom:12 }}>
               <div>
-                <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Vendor / Paid To *</div>
+                <div style={{ fontSize:11, color:"var(--text-secondary)", marginBottom:4 }}>Vendor / Paid To *</div>
                 <input value={splitVendor} onChange={e => setSplitVendor(e.target.value)} placeholder="Vendor name"
                   style={{ width:"100%", background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"7px 10px", color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </div>
               <div>
-                <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Date</div>
+                <div style={{ fontSize:11, color:"var(--text-secondary)", marginBottom:4 }}>Date</div>
                 <input type="date" value={splitDate} onChange={e => setSplitDate(e.target.value)}
                   style={{ width:"100%", background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"7px 10px", color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </div>
               <div>
-                <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Invoice # (optional)</div>
+                <div style={{ fontSize:11, color:"var(--text-secondary)", marginBottom:4 }}>Invoice # (optional)</div>
                 <input value={splitInvoice} onChange={e => setSplitInvoice(e.target.value)} placeholder="e.g. INV-0042"
                   style={{ width:"100%", background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"7px 10px", color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </div>
             </div>
             {/* Bill file */}
             <div style={{ marginBottom:12 }}>
-              <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Bill Document (shared across all lines)</div>
+              <div style={{ fontSize:11, color:"var(--text-secondary)", marginBottom:4 }}>Bill Document (shared across all lines)</div>
               {splitFile ? (
                 <div style={{ display:"flex", alignItems:"center", gap:10, background:"var(--bg-panel)", borderRadius:6, padding:"6px 12px" }}>
                   <span style={{ fontSize:13, color:"#34d399" }}>📄 {splitFile.name}</span>
                   <button onClick={() => setSplitFile(null)} style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:12 }}>✕ Remove</button>
                 </div>
               ) : (
-                <label style={{ display:"inline-flex", alignItems:"center", gap:6, background:"var(--bg-panel)", border:"1px dashed var(--border)", borderRadius:6, padding:"6px 14px", cursor:"pointer", fontSize:12, color:"#9ca3af" }}>
+                <label style={{ display:"inline-flex", alignItems:"center", gap:6, background:"var(--bg-panel)", border:"1px dashed var(--border)", borderRadius:6, padding:"6px 14px", cursor:"pointer", fontSize:12, color:"var(--text-secondary)" }}>
                   📎 Attach bill PDF / image
                   <input type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={e => { if (e.target.files[0]) setSplitFile(e.target.files[0]); }} />
                 </label>
@@ -1281,14 +1281,14 @@ export default function Expenses() {
             {/* Split lines */}
             <div style={{ marginBottom:8 }}>
               <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6 }}>
-                <div style={{ fontSize:11, color:"#9ca3af", fontWeight:600 }}>Split Lines</div>
+                <div style={{ fontSize:11, color:"var(--text-secondary)", fontWeight:600 }}>Split Lines</div>
                 <button onClick={() => setSplitLines(ls => [...ls, { orderRef:"", category:"Towing / Transport", description:"", amount:"" }])}
                   style={{ fontSize:11, padding:"3px 10px", borderRadius:6, border:"1px solid #a855f7", background:"none", color:"#a855f7", cursor:"pointer" }}>+ Add Line</button>
               </div>
               {/* Column headers */}
               <div style={{ display:"grid", gridTemplateColumns:"90px 1fr 180px 90px 28px", gap:6, marginBottom:4 }}>
                 {["Order Ref","Description","Category","Amount",""].map(h => (
-                  <div key={h} style={{ fontSize:10, color:"#6b7280", fontWeight:600 }}>{h}</div>
+                  <div key={h} style={{ fontSize:10, color:"var(--text-muted)", fontWeight:600 }}>{h}</div>
                 ))}
               </div>
               {splitLines.map((line, i) => (
@@ -1311,7 +1311,7 @@ export default function Expenses() {
                 </div>
               ))}
               {/* Total */}
-              <div style={{ textAlign:"right", fontSize:12, color:"#9ca3af", marginTop:4 }}>
+              <div style={{ textAlign:"right", fontSize:12, color:"var(--text-secondary)", marginTop:4 }}>
                 Total: <strong style={{ color:"#34d399" }}>
                   ${splitLines.reduce((s,l) => s + Number(l.amount||0), 0).toFixed(2)}
                 </strong>
@@ -1332,7 +1332,7 @@ export default function Expenses() {
               <div style={{ fontSize: 13, fontWeight: 700, color: CARD_DEFAULTS[showManualForm]?.color || "#10b981" }}>
                 {{ sallaum: "🚢 Sallaum", acl: "⚓ ACL / Grimaldi", dispatch: "🚛 Dispatch", other: "📋 Other" }[showManualForm]} — Manual Entry
               </div>
-              <button onClick={() => { setShowManualForm(null); setManualFile(null); }} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 16, cursor: "pointer" }}>✕</button>
+              <button onClick={() => { setShowManualForm(null); setManualFile(null); }} style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: 16, cursor: "pointer" }}>✕</button>
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
               {[
@@ -1344,7 +1344,7 @@ export default function Expenses() {
                 { key: "invoiceNumber", label: "Invoice # (optional)", type: "text",   placeholder: "Invoice or ref #",     color: "var(--text-primary)" },
               ].map(f => (
                 <div key={f.key}>
-                  <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>{f.label}</div>
+                  <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>{f.label}</div>
                   <input type={f.type} min={f.type==="number"?"0":undefined} step={f.type==="number"?"0.01":undefined}
                     value={manualForm[f.key]}
                     onChange={e => {
@@ -1357,14 +1357,14 @@ export default function Expenses() {
                 </div>
               ))}
               <div>
-                <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Category</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>Category</div>
                 <select value={manualForm.category} onChange={e => setManualForm(f => ({...f, category: e.target.value}))}
                   style={{ width: "100%", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div style={{ gridColumn: "span 3" }}>
-                <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Description / Notes</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>Description / Notes</div>
                 <input value={manualForm.description} onChange={e => setManualForm(f => ({...f, description: e.target.value}))} placeholder="What is this bill for?"
                   style={{ width: "100%", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
               </div>
@@ -1372,7 +1372,7 @@ export default function Expenses() {
             {/* ── Extra Charge Lines ── */}
             <div style={{ marginBottom: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
-                <div style={{ fontSize: 11, color: "#9ca3af" }}>Extra Charges (optional)</div>
+                <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>Extra Charges (optional)</div>
                 <button
                   onClick={() => setExtraLines(l => [...l, { description: "", amount: "" }])}
                   style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "#34d399", cursor: "pointer" }}>
@@ -1399,7 +1399,7 @@ export default function Expenses() {
                         style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 16, padding: 0 }}>✕</button>
                     </div>
                   ))}
-                  <div style={{ textAlign: "right", fontSize: 12, color: "#9ca3af", marginTop: 2 }}>
+                  <div style={{ textAlign: "right", fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
                     Total incl. extras: <strong style={{ color: "#34d399" }}>
                       ${(Number(manualForm.amount || 0) + extraLines.reduce((s, l) => s + Number(l.amount || 0), 0)).toFixed(2)}
                     </strong>
@@ -1410,14 +1410,14 @@ export default function Expenses() {
 
             {/* Attached file */}
             <div style={{ marginBottom: 12 }}>
-              <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Bill Document (optional)</div>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)", marginBottom: 4 }}>Bill Document (optional)</div>
               {manualFile ? (
                 <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg-panel)", borderRadius: 6, padding: "6px 12px" }}>
                   <span style={{ fontSize: 13, color: "#34d399" }}>📄 {manualFile.name}</span>
                   <button onClick={() => setManualFile(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 12 }}>✕ Remove</button>
                 </div>
               ) : (
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-panel)", border: "1px dashed var(--border)", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-panel)", border: "1px dashed var(--border)", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 12, color: "var(--text-secondary)" }}>
                   📎 Attach bill PDF / image
                   <input type="file" accept=".pdf,image/*" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) setManualFile(e.target.files[0]); }} />
                 </label>
@@ -1438,28 +1438,28 @@ export default function Expenses() {
             {sallaumMsg && <div style={{ marginBottom: 10, fontSize: 13, color: sallaumMsg.startsWith("✅") ? "#34d399" : sallaumMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{sallaumMsg}</div>}
             {sallaumParsed && sallaumRows.length > 0 && (
               <>
-                <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
                   Invoice <strong style={{ color: "var(--text-primary)" }}>{sallaumParsed.invoiceNumber}</strong>
                   {" · "}{sallaumParsed.vessel} · Voyage {sallaumParsed.voyage}
                   {" · "}{sallaumParsed.pol} → {sallaumParsed.pod} · {sallaumParsed.invoiceDate}
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr>{["✓","VIN","Vehicle","Booking","Order Ref","Customer","Amount","Charges","Status"].map(h => <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","VIN","Vehicle","Booking","Order Ref","Customer","Amount","Charges","Status"].map(h => <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:"var(--text-muted)", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                     <tbody>
                       {sallaumRows.map((row, i) => (
                         <tr key={row.vin} style={{ opacity: row.skip ? 0.4 : 1 }}>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}><input type="checkbox" checked={!row.skip} onChange={e => setSallaumRows(rs => rs.map((r,j) => j===i?{...r,skip:!e.target.checked}:r))} /></td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-primary)" }}>{row.ymm||"—"}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:11, color:"#6b7280" }}>{row.bookingRef||"—"}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:11, color:"var(--text-muted)" }}>{row.bookingRef||"—"}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setSallaumRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:110}}/>}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"#9ca3af", fontSize:12 }}>{row.customerName||"—"}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-secondary)", fontSize:12 }}>{row.customerName||"—"}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"#34d399", fontWeight:600 }}>${row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontSize:11 }}>
                             <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                              {row.freight>0 && <span style={{color:"#6b7280"}}>Freight ${row.freight?.toFixed(2)}</span>}
-                              {row.baf>0     && <span style={{color:"#6b7280"}}>BAF ${row.baf?.toFixed(2)}</span>}
+                              {row.freight>0 && <span style={{color:"var(--text-muted)"}}>Freight ${row.freight?.toFixed(2)}</span>}
+                              {row.baf>0     && <span style={{color:"var(--text-muted)"}}>BAF ${row.baf?.toFixed(2)}</span>}
                               {row.thc>0     && <span style={{color:"#f59e0b",fontWeight:600}}>⚠ THC ${row.thc?.toFixed(2)}</span>}
                               {row.storage>0 && <span style={{color:"#f59e0b",fontWeight:600}}>⚠ Storage ${row.storage?.toFixed(2)}</span>}
                               {row.other>0   && <span style={{color:"#f59e0b",fontWeight:600}}>⚠ Other ${row.other?.toFixed(2)}</span>}
@@ -1481,7 +1481,7 @@ export default function Expenses() {
                   <button onClick={applySallaumBill} disabled={sallaumLoading} style={{ background:"#059669", color:"#fff", border:"none", borderRadius:8, padding:"10px 20px", fontSize:14, fontWeight:600, cursor:"pointer" }}>
                     {sallaumLoading?"Applying…":`✅ Create ${sallaumRows.filter(r=>!r.skip).length} Expenses`}
                   </button>
-                  {sallaumRows.filter(r=>!r.matched&&!r.orderRef).length>0&&<span style={{fontSize:12,color:"#6b7280"}}>{sallaumRows.filter(r=>!r.matched&&!r.orderRef).length} without order ref — will save unlinked</span>}
+                  {sallaumRows.filter(r=>!r.matched&&!r.orderRef).length>0&&<span style={{fontSize:12,color:"var(--text-muted)"}}>{sallaumRows.filter(r=>!r.matched&&!r.orderRef).length} without order ref — will save unlinked</span>}
                 </div>
               </>
             )}
@@ -1497,16 +1497,16 @@ export default function Expenses() {
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead><tr>{["✓","File","VIN","Vehicle","Vessel / Voyage","POD","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","File","VIN","Vehicle","Vessel / Voyage","POD","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"var(--text-muted)",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {aclRows.map((row,i)=>(
                         <tr key={i} style={{opacity:row.skip?0.4:1}}>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#6b7280",fontSize:11,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-muted)",fontSize:11,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:12,color:"#94a3b8"}}>{row.vin||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:12,whiteSpace:"nowrap"}}>{[row.vessel,row.voyage].filter(Boolean).join(" / ")||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:11,whiteSpace:"nowrap"}}>{row.pod||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{[row.vessel,row.voyage].filter(Boolean).join(" / ")||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,whiteSpace:"nowrap"}}>{row.pod||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:140}}/></td>
@@ -1520,7 +1520,7 @@ export default function Expenses() {
                   <button onClick={applyAclBills} disabled={aclLoading} style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                     {aclLoading?"Applying…":`✅ Create ${aclRows.filter(r=>!r.skip&&(r.matched||r.orderRef)).length} Expenses`}
                   </button>
-                  {aclRows.filter(r=>!r.matched&&!r.error).length>0&&<span style={{fontSize:12,color:"#6b7280"}}>{aclRows.filter(r=>!r.matched).length} unmatched — enter ref or uncheck to skip</span>}
+                  {aclRows.filter(r=>!r.matched&&!r.error).length>0&&<span style={{fontSize:12,color:"var(--text-muted)"}}>{aclRows.filter(r=>!r.matched).length} unmatched — enter ref or uncheck to skip</span>}
                 </div>
               </>
             )}
@@ -1536,18 +1536,18 @@ export default function Expenses() {
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead><tr>{["✓","File","Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","File","Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"var(--text-muted)",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {dispatchRows.map((row,i)=>(
                         <React.Fragment key={i}>
                         <tr style={{opacity:row.skip?0.4:1}}>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#6b7280",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-muted)",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#a78bfa",fontWeight:600,fontSize:13}}>{row.loadId||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:12,color:"#94a3b8"}}>{row.vin||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:11,whiteSpace:"nowrap"}}>{row.origin||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,whiteSpace:"nowrap"}}>{row.origin||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:130}}/></td>
@@ -1587,7 +1587,7 @@ export default function Expenses() {
                   <button onClick={applyDispatchBills} disabled={dispatchLoading} style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                     {dispatchLoading?"Applying…":`✅ Create ${dispatchRows.filter(r=>!r.skip&&!r.error).length} Expenses`}
                   </button>
-                  {dispatchRows.filter(r=>!r.matched&&!r.error).length>0&&<span style={{fontSize:12,color:"#6b7280"}}>{dispatchRows.filter(r=>!r.matched).length} unmatched — enter ref or uncheck to skip</span>}
+                  {dispatchRows.filter(r=>!r.matched&&!r.error).length>0&&<span style={{fontSize:12,color:"var(--text-muted)"}}>{dispatchRows.filter(r=>!r.matched).length} unmatched — enter ref or uncheck to skip</span>}
                 </div>
               </>
             )}
@@ -1601,7 +1601,7 @@ export default function Expenses() {
             {containerMsg && <div style={{ marginBottom: 10, fontSize: 13, color: containerMsg.startsWith("✅") ? "#34d399" : containerMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{containerMsg}</div>}
             {containerResults.map((inv, ii) => (
               <div key={ii} style={{ marginBottom: 20 }}>
-                <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
                   Invoice <strong style={{ color: "var(--text-primary)" }}>{inv.invoiceNumber}</strong>
                   {inv.container && <> · Container <strong style={{ color: "var(--text-primary)" }}>{inv.container}</strong></>}
                   {inv.booking && <> · Booking {inv.booking}</>}
@@ -1610,7 +1610,7 @@ export default function Expenses() {
                 {inv.error ? <div style={{ color: "#f87171", fontSize: 13 }}>❌ {inv.error}</div> : (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead><tr>{["✓","VIN","Vehicle","Booking #","Order Ref","Customer","Amount","Status"].map(h => <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                      <thead><tr>{["✓","VIN","Vehicle","Booking #","Order Ref","Customer","Amount","Status"].map(h => <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"var(--text-muted)", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {inv.rows?.map((row, i) => (
                           <tr key={i} style={{ opacity: row.skip ? 0.4 : 1 }}>
@@ -1624,7 +1624,7 @@ export default function Expenses() {
                                     onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, orderRef: e.target.value } : rr) }))}
                                     style={{ background:"var(--bg-elevated)", border:"1px solid #f59e0b", borderRadius:6, padding:"3px 8px", color:"#fbbf24", fontSize:12, width:100 }}/>}
                             </td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"#9ca3af", fontSize:12 }}>{row.customerName || "—"}</td>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-secondary)", fontSize:12 }}>{row.customerName || "—"}</td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               <input type="number" value={row.total} min="0" step="0.01"
                                 onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, total: parseFloat(e.target.value)||0 } : rr) }))}
@@ -1661,12 +1661,12 @@ export default function Expenses() {
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr>{["✓","File","Vendor","Invoice #","VIN","Category","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","File","Vendor","Invoice #","VIN","Category","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"var(--text-muted)",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {miscResults.map((row, i) => (
                         <tr key={i} style={{ opacity: row.skip ? 0.4 : 1 }}>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#6b7280",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-muted)",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.vendor||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#a78bfa",fontSize:12}}>{row.invoiceNumber||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:11,color:"#94a3b8"}}>{row.vin||"—"}</td>
@@ -1732,7 +1732,7 @@ export default function Expenses() {
                       <col style={{ width: "40%" }} />
                       <col style={{ width: "17%" }} />
                     </colgroup>
-                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:"#6b7280",fontSize:10,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:"var(--text-muted)",fontSize:10,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {proofRows.map((row, i) => (
                         <React.Fragment key={i}>
@@ -1743,9 +1743,9 @@ export default function Expenses() {
                           </td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis"}}>{row.payeeName}</td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"#60a5fa",fontWeight:600,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.orderRef || "—"}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:11,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"#34d399",fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${row.amount.toFixed(2)}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",fontSize:11,color:"#9ca3af",lineHeight:1.2,overflow:"hidden"}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",fontSize:11,color:"var(--text-secondary)",lineHeight:1.2,overflow:"hidden"}}>
                             {(() => {
                               const list = row.matchedIds?.length
                                 ? row.candidates.filter(c=>row.matchedIds.includes(c._id))
@@ -1793,7 +1793,7 @@ export default function Expenses() {
                                       </button>
                                 )}
                                 {row.alreadyPaid?.length > 0 && row.alreadyPaid.every(c=>c.receiptFileName) && (
-                                  <span style={{color:"#6b7280",fontSize:10}}>📎 Receipt on file</span>
+                                  <span style={{color:"var(--text-muted)",fontSize:10}}>📎 Receipt on file</span>
                                 )}
                               </div>
                             )}
@@ -1856,7 +1856,7 @@ export default function Expenses() {
                                   ✓ Ready
                                 </button>
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill:false, selected:false } : r))}
-                                  style={{ fontSize:10, color:"#9ca3af", background:"none", border:"1px solid var(--border)", borderRadius:5, padding:"4px 10px", cursor:"pointer", alignSelf:"flex-end" }}>
+                                  style={{ fontSize:10, color:"var(--text-secondary)", background:"none", border:"1px solid var(--border)", borderRadius:5, padding:"4px 10px", cursor:"pointer", alignSelf:"flex-end" }}>
                                   Cancel
                                 </button>
                               </div>
@@ -1873,7 +1873,7 @@ export default function Expenses() {
                               <div style={{ background:"var(--bg-base)", border:`1px solid ${balanced ? "#34d399" : "#fbbf24"}`, borderRadius:6, padding:"8px 10px" }}>
                                 {row.splitBills.map((split, k) => (
                                   <div key={k} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6 }}>
-                                    <span style={{ fontSize:10, color:"#6b7280", width:14 }}>{k+1}.</span>
+                                    <span style={{ fontSize:10, color:"var(--text-muted)", width:14 }}>{k+1}.</span>
                                     <input value={split.orderRef} placeholder="Order ref" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,orderRef:e.target.value}:s)}:r))}
                                       style={{ width:80, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"#60a5fa", fontSize:11 }} />
                                     <select value={split.category} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,category:e.target.value}:s)}:r))}
@@ -1959,9 +1959,9 @@ export default function Expenses() {
               opacity: activeFilter && activeFilter !== "unpaid" ? 0.45 : 1,
               transition: "all 0.15s",
             }}>
-            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Unpaid</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Unpaid</div>
             <div style={{ fontSize: 26, fontWeight: 700, color: "#f87171" }}>{fmt$(summary.totalUnpaid)}</div>
-            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>Outstanding</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>Outstanding</div>
           </div>
 
           {/* Paid this month */}
@@ -1973,9 +1973,9 @@ export default function Expenses() {
               opacity: activeFilter && activeFilter !== "paid" ? 0.45 : 1,
               transition: "all 0.15s",
             }}>
-            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Paid This Month</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Paid This Month</div>
             <div style={{ fontSize: 26, fontWeight: 700, color: "#34d399" }}>{fmt$(summary.totalPaidMonth)}</div>
-            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>
               {new Date().toLocaleString("default", { month: "long", year: "numeric" })}
             </div>
           </div>
@@ -1985,9 +1985,9 @@ export default function Expenses() {
             background: "var(--bg-panel)", borderRadius: 12, padding: "18px 22px",
             opacity: activeFilter ? 0.45 : 1, transition: "all 0.15s",
           }}>
-            <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Total All Time</div>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Total All Time</div>
             <div style={{ fontSize: 26, fontWeight: 700, color: "var(--text-primary)" }}>{fmt$(summary.totalAllTime)}</div>
-            <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>{summary.count} expenses recorded</div>
+            <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 4 }}>{summary.count} expenses recorded</div>
           </div>
         </div>
       )}
@@ -1995,15 +1995,15 @@ export default function Expenses() {
       {/* Category breakdown mini-bar */}
       {summary?.byCategory && Object.keys(summary.byCategory).length > 0 && (
         <div style={{ background: "var(--bg-panel)", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
-          <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>By Category</div>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>By Category</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {Object.entries(summary.byCategory)
               .sort((a, b) => b[1] - a[1])
               .map(([cat, amt]) => (
                 <div key={cat} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: CAT_COLORS[cat] || "#9ca3af", flexShrink: 0 }} />
+                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: CAT_COLORS[cat] || "var(--text-secondary)", flexShrink: 0 }} />
                   <span style={{ fontSize: 12, color: "var(--text-primary)" }}>{cat}</span>
-                  <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmt$(amt)}</span>
+                  <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmt$(amt)}</span>
                 </div>
               ))}
           </div>
@@ -2022,14 +2022,14 @@ export default function Expenses() {
         />
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{
           background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
-          color: filterCat ? "var(--text-primary)" : "#9ca3af", padding: "8px 12px", fontSize: 13,
+          color: filterCat ? "var(--text-primary)" : "var(--text-secondary)", padding: "8px 12px", fontSize: 13,
         }}>
           <option value="">All Categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{
           background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
-          color: filterStatus ? "var(--text-primary)" : "#9ca3af", padding: "8px 12px", fontSize: 13,
+          color: filterStatus ? "var(--text-primary)" : "var(--text-secondary)", padding: "8px 12px", fontSize: 13,
         }}>
           <option value="">All Statuses</option>
           <option value="unpaid">Unpaid</option>
@@ -2038,30 +2038,30 @@ export default function Expenses() {
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
           style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-primary)", padding: "8px 12px", fontSize: 13 }}
         />
-        <span style={{ color: "#6b7280", fontSize: 13 }}>to</span>
+        <span style={{ color: "var(--text-muted)", fontSize: 13 }}>to</span>
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
           style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-primary)", padding: "8px 12px", fontSize: 13 }}
         />
         {(search || filterCat || filterStatus || dateFrom || dateTo || activeFilter) && (
           <button onClick={() => { setSearch(""); setFilterCat(""); setFilterStatus(""); setDateFrom(""); setDateTo(""); setActiveFilter(null); }}
-            style={{ background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "#9ca3af", padding: "8px 12px", fontSize: 12, cursor: "pointer" }}>
+            style={{ background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-secondary)", padding: "8px 12px", fontSize: 12, cursor: "pointer" }}>
             Clear filters
           </button>
         )}
-        <span style={{ marginLeft: "auto", fontSize: 12, color: "#6b7280" }}>
+        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
           {displayList.length} expense{displayList.length !== 1 ? "s" : ""}
           {activeFilter ? ` (${activeFilter})` : ""}
         </span>
       </div>
 
       {/* Table */}
-      <div style={{ background: "#161d2c", borderRadius: 12, overflow: "hidden", border: "1px solid var(--bg-panel)" }}>
+      <div style={{ background: "var(--bg-elevated)", borderRadius: 12, overflow: "hidden", border: "1px solid var(--border)" }}>
         {loading ? (
-          <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Loading…</div>
+          <div style={{ padding: 40, textAlign: "center", color: "var(--text-muted)" }}>Loading…</div>
         ) : displayList.length === 0 ? (
           <div style={{ padding: 60, textAlign: "center" }}>
             <div style={{ fontSize: 40, marginBottom: 12 }}>💸</div>
-            <div style={{ color: "#9ca3af", fontSize: 14 }}>No expenses found</div>
+            <div style={{ color: "var(--text-secondary)", fontSize: 14 }}>No expenses found</div>
             <button onClick={openAdd} style={{ marginTop: 16, background: "#3b82f6", color: "#fff", border: "none", borderRadius: 7, padding: "9px 18px", fontSize: 13, cursor: "pointer" }}>
               Add your first expense
             </button>
@@ -2093,9 +2093,9 @@ export default function Expenses() {
                 {displayList.map(exp => (
                   <React.Fragment key={exp._id}>
                   <tr
-                    style={{ background: selected[exp._id] ? "#1a2f1a" : "#161d2c", cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.background = selected[exp._id] ? "#1a2f1a" : "var(--bg-hover)"}
-                    onMouseLeave={e => e.currentTarget.style.background = selected[exp._id] ? "#1a2f1a" : "#161d2c"}
+                    style={{ background: selected[exp._id] ? "var(--success-dim)" : "var(--bg-elevated)", cursor: "pointer" }}
+                    onMouseEnter={e => e.currentTarget.style.background = selected[exp._id] ? "var(--success-dim)" : "var(--bg-hover)"}
+                    onMouseLeave={e => e.currentTarget.style.background = selected[exp._id] ? "var(--success-dim)" : "var(--bg-elevated)"}
                     onClick={() => toggleSelect(exp._id)}>
 
                     <td style={{ ...td, width: 40 }} onClick={e => e.stopPropagation()}>
@@ -2117,7 +2117,7 @@ export default function Expenses() {
                         {exp.vin || exp.orderId?.vin || (exp.description?.match(/[A-HJ-NPR-Z0-9]{17}/) || [])[0] || "—"}
                       </div>
                       {exp.notes && (
-                        <div style={{ fontSize: 10, color: "#6b7280", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        <div style={{ fontSize: 10, color: "var(--text-muted)", maxWidth: 160, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                           {exp.notes}
                         </div>
                       )}
@@ -2129,10 +2129,10 @@ export default function Expenses() {
                     </td>
 
                     {/* Vendor */}
-                    <td style={{ ...td, color: "#9ca3af", fontSize: 12, whiteSpace: "nowrap", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis" }}
+                    <td style={{ ...td, color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis" }}
                       title={exp.vendor || ""}>
                       {exp.vendor || "—"}
-                      {exp.invoiceNumber && <span style={{ fontSize: 10, color: "#6b7280", marginLeft: 5 }}>#{exp.invoiceNumber}</span>}
+                      {exp.invoiceNumber && <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 5 }}>#{exp.invoiceNumber}</span>}
                     </td>
 
                     {/* Amount */}
@@ -2154,7 +2154,7 @@ export default function Expenses() {
                             </span>
                           )}
                           {exp.paidDate && (
-                            <span style={{ fontSize: 10, color: "#6b7280" }}>{fmtDate(exp.paidDate)}</span>
+                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{fmtDate(exp.paidDate)}</span>
                           )}
                           {exp.paymentMethod && (
                             <span style={{ fontSize: 10, color: "#60a5fa" }}>{exp.paymentMethod}</span>
@@ -2225,7 +2225,7 @@ export default function Expenses() {
                       <td style={{ ...td, borderTop: "none" }} />
                       <td style={{ ...td, borderTop: "none", fontSize: 10, color: "#4b5563" }} />
                       <td style={{ ...td, borderTop: "none" }} />
-                      <td style={{ ...td, borderTop: "none", fontSize: 11, color: "#6b7280", paddingLeft: 20 }}>
+                      <td style={{ ...td, borderTop: "none", fontSize: 11, color: "var(--text-muted)", paddingLeft: 20 }}>
                         ↳ {li.description}
                       </td>
                       <td style={{ ...td, borderTop: "none" }} />
@@ -2244,7 +2244,7 @@ export default function Expenses() {
               {displayList.length > 1 && (
                 <tfoot>
                   <tr style={{ background: "var(--bg-hover)", borderTop: "2px solid var(--border)" }}>
-                    <td colSpan={4} style={{ ...td, color: "#9ca3af", fontWeight: 600 }}>
+                    <td colSpan={4} style={{ ...td, color: "var(--text-secondary)", fontWeight: 600 }}>
                       Total ({displayList.length} items)
                     </td>
                     <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "var(--text-primary)", fontSize: 14 }}>
@@ -2264,19 +2264,19 @@ export default function Expenses() {
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"var(--bg-panel)", border:"1px solid #f59e0b", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
             <div style={{ fontSize:20, marginBottom:12 }}>⚠️ Possible Duplicate</div>
-            <p style={{ fontSize:13, color:"#9ca3af", marginBottom:16 }}>
+            <p style={{ fontSize:13, color:"var(--text-secondary)", marginBottom:16 }}>
               A similar expense already exists:
             </p>
             <div style={{ background:"var(--bg-elevated)", borderRadius:8, padding:"12px 14px", marginBottom:20, fontSize:13 }}>
               <div style={{ color:"var(--text-primary)", fontWeight:600 }}>{dupWarning.description}</div>
               <div style={{ color:"#34d399", fontWeight:700, fontSize:15, marginTop:4 }}>${Number(dupWarning.amount).toFixed(2)}</div>
-              <div style={{ color:"#9ca3af", fontSize:11, marginTop:4 }}>
+              <div style={{ color:"var(--text-secondary)", fontSize:11, marginTop:4 }}>
                 {dupWarning.date ? new Date(dupWarning.date).toLocaleDateString() : ""}{dupWarning.orderRef ? ` · Order #${dupWarning.orderRef}` : ""}{" · "}{dupWarning.status}
               </div>
             </div>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={() => setDupWarning(null)}
-                style={{ padding:"9px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"#9ca3af", cursor:"pointer" }}>
+                style={{ padding:"9px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>
                 Cancel
               </button>
               <button onClick={() => { setDupWarning(null); handleSubmit(null, true); }}
@@ -2309,7 +2309,7 @@ export default function Expenses() {
           {editing && (
             <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
-                <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>Extra Charges (new expense lines)</div>
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600 }}>Extra Charges (new expense lines)</div>
                 <button
                   type="button"
                   onClick={() => setEditExtraLines(l => [...l, { description: "", amount: "" }])}
@@ -2342,7 +2342,7 @@ export default function Expenses() {
                 </div>
               ))}
               {editExtraLines.length > 0 && (
-                <div style={{ textAlign: "right", fontSize: 12, color: "#9ca3af", marginTop: 4 }}>
+                <div style={{ textAlign: "right", fontSize: 12, color: "var(--text-secondary)", marginTop: 4 }}>
                   Extra total: <strong style={{ color: "#34d399" }}>
                     ${editExtraLines.reduce((s, l) => s + Number(l.amount || 0), 0).toFixed(2)}
                   </strong>
@@ -2363,13 +2363,13 @@ export default function Expenses() {
         }}>
           <div style={{ flex: 1, minWidth: 300 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: 6 }}>
-              <span style={{ fontSize: 13, color: "#9ca3af" }}>Selected: <strong style={{ color: "var(--text-primary)" }}>{selectedIds.length} bill{selectedIds.length !== 1 ? "s" : ""}</strong></span>
-              <span style={{ fontSize: 13, color: "#9ca3af" }}>Total: <strong style={{ color: "#34d399", fontSize: 18 }}>{fmt$(selectedTotal)}</strong></span>
+              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Selected: <strong style={{ color: "var(--text-primary)" }}>{selectedIds.length} bill{selectedIds.length !== 1 ? "s" : ""}</strong></span>
+              <span style={{ fontSize: 13, color: "var(--text-secondary)" }}>Total: <strong style={{ color: "#34d399", fontSize: 18 }}>{fmt$(selectedTotal)}</strong></span>
             </div>
             {Object.keys(selectedByVendor).length > 1 && (
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 {Object.entries(selectedByVendor).map(([vendor, amt]) => (
-                  <span key={vendor} style={{ fontSize: 11, color: "#9ca3af", background: "var(--bg-panel)", borderRadius: 5, padding: "2px 8px", border: "1px solid var(--border)" }}>
+                  <span key={vendor} style={{ fontSize: 11, color: "var(--text-secondary)", background: "var(--bg-panel)", borderRadius: 5, padding: "2px 8px", border: "1px solid var(--border)" }}>
                     <span style={{ color: "var(--text-primary)" }}>{vendor}</span>
                     <span style={{ color: "#f59e0b", marginLeft: 6, fontWeight: 600 }}>{fmt$(amt)}</span>
                   </span>
@@ -2377,18 +2377,18 @@ export default function Expenses() {
               </div>
             )}
             {Object.keys(selectedByVendor).length === 1 && (
-              <div style={{ fontSize: 11, color: "#9ca3af" }}>
+              <div style={{ fontSize: 11, color: "var(--text-secondary)" }}>
                 Vendor: <span style={{ color: "var(--text-primary)" }}>{Object.keys(selectedByVendor)[0]}</span>
               </div>
             )}
           </div>
 
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
-            <label style={{ fontSize: 12, color: "#9ca3af" }}>Date Paid</label>
+            <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>Date Paid</label>
             <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)}
               style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13 }} />
 
-            <label style={{ fontSize: 12, color: "#9ca3af" }}>Method</label>
+            <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>Method</label>
             <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
               style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "7px 12px", color: "var(--text-primary)", fontSize: 13, minWidth: 130 }}>
               <option>Bank ACH</option>
@@ -2418,7 +2418,7 @@ export default function Expenses() {
               🗑 Delete Unpaid
             </button>
             <button onClick={() => setSelected({})}
-              style={{ background: "transparent", color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>
+              style={{ background: "transparent", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>
               Clear
             </button>
           </div>
@@ -2476,7 +2476,7 @@ export default function Expenses() {
           </p>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button onClick={() => setConfirmDelete(null)} style={{
-              background: "var(--border)", color: "#9ca3af", border: "none", borderRadius: 7,
+              background: "var(--border)", color: "var(--text-secondary)", border: "none", borderRadius: 7,
               padding: "8px 18px", fontSize: 13, cursor: "pointer",
             }}>Cancel</button>
             <button onClick={() => doDelete(confirmDelete._id)} style={{

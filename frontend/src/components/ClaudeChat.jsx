@@ -50,21 +50,21 @@ export default function ClaudeChat() {
     btn: {
       position: "fixed", bottom: 24, right: 24, zIndex: 1000,
       width: 52, height: 52, borderRadius: "50%",
-      background: "linear-gradient(135deg, #1a6ef7, #0e4db5)",
+      background: "linear-gradient(135deg, #2563eb, #0e4db5)",
       border: "none", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center",
-      boxShadow: "0 4px 20px #1a6ef755", fontSize: 22, color: "#fff",
+      boxShadow: "0 4px 20px #2563eb55", fontSize: 22, color: "#fff",
       transition: "transform 0.15s",
     },
     panel: {
       position: "fixed", bottom: 88, right: 24, zIndex: 999,
       width: 360, height: 520, borderRadius: 14,
-      background: "var(--bg-base)", border: "1px solid #21262d",
+      background: "var(--bg-base)", border: "1px solid var(--border-muted)",
       display: "flex", flexDirection: "column",
       boxShadow: "0 8px 40px #000a",
       overflow: "hidden",
     },
     header: {
-      padding: "12px 16px", background: "#161b22", borderBottom: "1px solid #21262d",
+      padding: "12px 16px", background: "var(--bg-elevated)", borderBottom: "1px solid var(--border-muted)",
       display: "flex", alignItems: "center", justifyContent: "space-between",
     },
     messages: {
@@ -74,28 +74,28 @@ export default function ClaudeChat() {
     bubble: (role) => ({
       maxWidth: "85%", padding: "8px 12px", borderRadius: 10, fontSize: 13, lineHeight: 1.5,
       alignSelf: role === "user" ? "flex-end" : "flex-start",
-      background: role === "user" ? "#1a6ef7" : "#161b22",
-      color: "var(--text-primary)", border: role === "user" ? "none" : "1px solid #21262d",
+      background: role === "user" ? "#2563eb" : "var(--bg-elevated)",
+      color: "var(--text-primary)", border: role === "user" ? "none" : "1px solid var(--border-muted)",
       whiteSpace: "pre-wrap",
     }),
     inputRow: {
-      display: "flex", gap: 8, padding: "10px 12px", borderTop: "1px solid #21262d",
+      display: "flex", gap: 8, padding: "10px 12px", borderTop: "1px solid var(--border-muted)",
       background: "var(--bg-base)",
     },
     input: {
-      flex: 1, background: "#161b22", border: "1px solid #30363d",
+      flex: 1, background: "var(--bg-elevated)", border: "1px solid var(--border)",
       borderRadius: 8, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13,
       outline: "none",
     },
     sendBtn: {
-      background: "#1a6ef7", border: "none", borderRadius: 8, color: "#fff",
+      background: "#2563eb", border: "none", borderRadius: 8, color: "#fff",
       padding: "7px 13px", cursor: "pointer", fontSize: 14,
     },
     chips: {
       display: "flex", flexWrap: "wrap", gap: 5, padding: "6px 12px 10px",
     },
     chip: {
-      background: "#161b22", border: "1px solid #30363d", borderRadius: 20,
+      background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 20,
       padding: "4px 10px", fontSize: 11, color: "var(--text-secondary)", cursor: "pointer",
     },
   };

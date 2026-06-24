@@ -18,11 +18,11 @@ const TABS = [
   { label: "Paid",             value: "Paid",             color: "#86efac" },
   { label: "Completed",        value: "Completed",        color: "#94a3b8" },
   { label: "Problem / Hold",   value: "Problem / Hold",   color: "#f87171" },
-  { label: "Canceled",         value: "Canceled",         color: "#9ca3af" },
+  { label: "Canceled",         value: "Canceled",         color: "var(--text-secondary)" },
 ];
 
 const STATUS_COLORS = {
-  "New Order":       { bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.35)", text: "#9ca3af" },
+  "New Order":       { bg: "rgba(107,114,128,0.12)", border: "rgba(107,114,128,0.35)", text: "var(--text-secondary)" },
   "Awaiting Pickup": { bg: "rgba(249,115,22,0.12)",  border: "rgba(249,115,22,0.35)",  text: "#f97316" },
   "Picked Up":       { bg: "rgba(96,165,250,0.12)",  border: "rgba(96,165,250,0.35)",  text: "#60a5fa" },
   "Delivered":       { bg: "rgba(167,139,250,0.12)", border: "rgba(167,139,250,0.35)", text: "#a78bfa" },
@@ -33,7 +33,7 @@ const STATUS_COLORS = {
   "Paid":            { bg: "rgba(22,163,74,0.12)",   border: "rgba(22,163,74,0.35)",   text: "#4ade80" },
   "Completed":       { bg: "rgba(148,163,184,0.12)", border: "rgba(148,163,184,0.35)", text: "#94a3b8" },
   "Problem / Hold":  { bg: "rgba(239,68,68,0.12)",   border: "rgba(239,68,68,0.35)",   text: "#f87171" },
-  "Canceled":        { bg: "rgba(156,163,175,0.12)", border: "rgba(156,163,175,0.35)", text: "#9ca3af" },
+  "Canceled":        { bg: "rgba(156,163,175,0.12)", border: "rgba(156,163,175,0.35)", text: "var(--text-secondary)" },
 };
 
 export default function Orders() {
@@ -114,7 +114,7 @@ export default function Orders() {
         </div>
         <button onClick={() => navigate("/orders/new")}
           style={{ padding: "10px 18px", borderRadius: 10, border: "none",
-            background: "linear-gradient(135deg,#1a6ef7,#0e4db5)", color: "#fff",
+            background: "linear-gradient(135deg,#2563eb,#0e4db5)", color: "#fff",
             cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
           + New Order
         </button>
@@ -301,7 +301,7 @@ export default function Orders() {
       </table>
 
       {filtered.length === 0 && (
-        <p style={{ marginTop: 20, color: "#6b7280", textAlign: "center" }}>
+        <p style={{ marginTop: 20, color: "var(--text-muted)", textAlign: "center" }}>
           No orders found{activeTab !== "all" ? ` in "${activeTab}"` : ""}.
         </p>
       )}

@@ -816,7 +816,7 @@ export default function CreateOrder() {
                   style={{
                     width: 130, padding: "8px 12px", borderRadius: 8, fontSize: 20, fontWeight: 700,
                     background: refLocked ? "var(--bg-panel)" : "var(--bg-input)",
-                    border: `2px solid ${refLocked ? "var(--border)" : "#1a6ef7"}`,
+                    border: `2px solid ${refLocked ? "var(--border)" : "#2563eb"}`,
                     color: refLocked ? "var(--text-muted)" : "#60a5fa",
                     outline: "none", textAlign: "center",
                     cursor: refLocked ? "default" : "text",
@@ -1671,7 +1671,7 @@ export default function CreateOrder() {
                             onMouseEnter={e => e.currentTarget.style.background = "var(--border)"}
                             onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                             <strong>{c.companyName || c.name}</strong>
-                            {c.country && <span style={{ color:"#6b7280", marginLeft:6 }}>{c.country}</span>}
+                            {c.country && <span style={{ color:"var(--text-muted)", marginLeft:6 }}>{c.country}</span>}
                           </div>
                         ))}
                       </div>

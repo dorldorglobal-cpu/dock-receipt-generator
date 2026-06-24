@@ -12,7 +12,7 @@ const toInput = (d) => d ? new Date(d).toISOString().slice(0, 10) : "";
 const PAYMENT_METHODS = ["Bank ACH", "Wire", "Zelle", "Venmo", "Check", "Cash", "Other"];
 
 const STATUS_STYLES = {
-  draft: { bg: "rgba(107,114,128,0.15)", color: "#9ca3af", border: "rgba(107,114,128,0.3)", label: "Draft" },
+  draft: { bg: "rgba(107,114,128,0.15)", color: "var(--text-secondary)", border: "rgba(107,114,128,0.3)", label: "Draft" },
   sent:  { bg: "rgba(37,99,235,0.15)",   color: "#60a5fa", border: "rgba(96,165,250,0.3)",  label: "Sent" },
   paid:  { bg: "rgba(5,150,105,0.15)",   color: "#34d399", border: "rgba(52,211,153,0.3)",  label: "Paid" },
 };
@@ -194,7 +194,7 @@ export default function Invoices() {
           <span style={{ fontSize:18 }}>🚨</span>
           <div style={{ flex:1 }}>
             <strong style={{ color:"#f87171" }}>{overdue.length} overdue invoice{overdue.length !== 1 ? "s" : ""}</strong>
-            <span style={{ color:"#9ca3af", fontSize:13, marginLeft:8 }}>
+            <span style={{ color:"var(--text-secondary)", fontSize:13, marginLeft:8 }}>
               — {f$(overdue.reduce((s,i) => s + (i.total||0), 0))} outstanding past due date
             </span>
           </div>
@@ -560,7 +560,7 @@ export default function Invoices() {
                 </tbody>
                 <tfoot>
                   <tr style={{ background: "var(--bg-elevated)" }}>
-                    <td style={{ padding: "10px 12px", fontWeight: 700, fontSize: 12, color: "#9ca3af", borderRadius: "0 0 0 6px" }}>Total Due</td>
+                    <td style={{ padding: "10px 12px", fontWeight: 700, fontSize: 12, color: "var(--text-secondary)", borderRadius: "0 0 0 6px" }}>Total Due</td>
                     <td style={{ padding: "10px 12px", fontWeight: 900, fontSize: 18, textAlign: "right", fontFamily: "monospace", color: "white", borderRadius: "0 0 6px 0" }}>{f$(previewInv.total)}</td>
                   </tr>
                 </tfoot>

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -294,7 +294,7 @@ function AgedReceivables({ d, sub, filter }) {
     <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{r.vehicle}</span>,
     <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{r.status}</span>,
     <span style={{ fontWeight: 600 }}>{f$(r.amount)}</span>,
-    <span style={{ color: BCLR[r.bucket] || "#9ca3af" }}>{r.age}d</span>,
+    <span style={{ color: BCLR[r.bucket] || "var(--text-secondary)" }}>{r.age}d</span>,
     <span style={{ color: BCLR[r.bucket], fontWeight: 700 }}>{r.bucket}</span>,
   ]);
   const F    = ["", "", "", "TOTAL", f$(total), "", ""];
@@ -322,7 +322,7 @@ function AgedPayables({ d, sub, filter }) {
     <span style={{ fontFamily: "monospace", fontSize: 11 }}>{r.invoiceNumber || "—"}</span>,
     <span style={{ color: "#f87171", fontWeight: 600 }}>{f$(r.amount)}</span>,
     fD(r.date),
-    <span style={{ color: BCLR[r.bucket] || "#9ca3af" }}>{r.age}d</span>,
+    <span style={{ color: BCLR[r.bucket] || "var(--text-secondary)" }}>{r.age}d</span>,
     <span style={{ color: BCLR[r.bucket], fontWeight: 700 }}>{r.bucket}</span>,
   ]);
   const F    = ["", "", "", "", f$(total), "", "", ""];
@@ -619,7 +619,7 @@ function IncomeDetail({ d, sub, filter, activeReport }) {
       <span style={{ fontSize: 11 }}>{r.vehicle}<span style={{ color: "var(--text-muted)" }}>{vinSuffix}</span></span>,
       <span style={{ fontSize: 11 }}>{r.pol} {" > "} {r.pod}</span>,
       <span style={{ fontSize: 11, color: r.status === "Completed" ? "#34d399" : "var(--text-secondary)" }}>{r.status}</span>,
-      <span style={{ fontSize: 11, color: BCLR[bkt] || "#9ca3af" }}>{r.age}d</span>,
+      <span style={{ fontSize: 11, color: BCLR[bkt] || "var(--text-secondary)" }}>{r.age}d</span>,
       r.towingCharge ? <span style={{ fontFamily: "monospace" }}>{f$(r.towingCharge)}</span> : <span style={{ color: "var(--text-muted)" }}>—</span>,
       r.oceanFreight ? <span style={{ fontFamily: "monospace" }}>{f$(r.oceanFreight)}</span> : <span style={{ color: "var(--text-muted)" }}>—</span>,
       <span style={{ fontWeight: 700, fontFamily: "monospace" }}>{f$(r.total)}</span>,

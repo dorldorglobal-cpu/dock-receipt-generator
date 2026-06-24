@@ -644,7 +644,7 @@ export default function DockReceiptPage() {
                       onClick={createOrderFromDR}
                       disabled={creatingOrder}
                       style={{ padding: "6px 16px", borderRadius: 7, border: "none", cursor: creatingOrder ? "not-allowed" : "pointer",
-                        background: "#1a6ef7", color: "#fff", fontWeight: 600, fontSize: 12 }}>
+                        background: "#2563eb", color: "#fff", fontWeight: 600, fontSize: 12 }}>
                       {creatingOrder ? "Creating…" : "📋 Create Order"}
                     </button>
                   </div>
