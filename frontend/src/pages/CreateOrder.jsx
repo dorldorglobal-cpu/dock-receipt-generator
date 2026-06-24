@@ -27,6 +27,7 @@ export default function CreateOrder() {
   const [popupType, setPopupType]           = useState("RORO");
   const [popupContainerSize, setPopupContainerSize] = useState("");
   const [popupWarehouse, setPopupWarehouse] = useState(null);
+  const [popupCustomerName, setPopupCustomerName] = useState("");
 
   // ── Order number lock ─────────────────────────────────────────────────
   const [refLocked, setRefLocked]           = useState(true);
@@ -527,6 +528,7 @@ export default function CreateOrder() {
     setPopupType(detectedType);
     setPopupContainerSize(data.containerSize || "");
     setPopupWarehouse(null);
+    setPopupCustomerName(data.customerName || "");
     setParsePopup({ data, file, label });
   };
 
@@ -1621,7 +1623,18 @@ export default function CreateOrder() {
             {/* Parsed data summary */}
             <div style={{ background:"var(--bg-panel)", borderRadius:8, padding:"12px 14px", fontSize:12,
               border:"1px solid var(--border)", marginBottom:18, display:"flex", flexDirection:"column", gap:4 }}>
-              {parsePopup.data.customerName && <div><span style={{ color:"var(--text-muted)" }}>Customer: </span><strong>{parsePopup.data.customerName}</strong></div>}
+              {parsePopup.data.customerName && (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ color:"var(--text-muted)", whiteSpace:"nowrap" }}>Customer: </span>
+                  <input
+                    value={popupCustomerName}
+                    onChange={e => setPopupCustomerName(e.target.value)}
+                    style={{ flex:1, background:"transparent", border:"none", borderBottom:"1px solid #374151",
+                      color:"#f1f5f9", fontWeight:700, fontSize:12, padding:"1px 4px", outline:"none", cursor:"text" }}
+                    title="Click to edit customer name"
+                  />
+                </div>
+              )}
               {parsePopup.data.vin          && <div><span style={{ color:"var(--text-muted)" }}>VIN: </span><strong style={{ fontFamily:"monospace" }}>{parsePopup.data.vin}</strong></div>}
               {(parsePopup.data.year||parsePopup.data.make) && <div><span style={{ color:"var(--text-muted)" }}>Vehicle: </span><strong>{[parsePopup.data.year,parsePopup.data.make,parsePopup.data.model].filter(Boolean).join(" ")}</strong></div>}
               {parsePopup.data.pickupLocation && <div><span style={{ color:"var(--text-muted)" }}>Pickup: </span><strong>{parsePopup.data.pickupLocation}</strong></div>}
@@ -1633,7 +1646,10 @@ export default function CreateOrder() {
             <div style={{ display:"flex", gap:10 }}>
               <button type="button"
                 onClick={() => {
-                  applyParsedData(parsePopup.data, popupType, popupContainerSize, popupWarehouse);
+                  applyParsedData(
+                    { ...parsePopup.data, customerName: popupCustomerName || parsePopup.data.customerName },
+                    popupType, popupContainerSize, popupWarehouse
+                  );
                   setParsePopup(null);
                 }}
                 style={{ flex:1, padding:"10px 0", borderRadius:8, border:"none",
