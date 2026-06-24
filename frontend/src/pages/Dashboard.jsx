@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -39,6 +39,73 @@ export default function Dashboard() {
       setLoading(false);
     });
   }, []);
+
+  const [activityModal, setActivityModal] = useState(false);
+  const [activityView, setActivityView]   = useState("month"); // "day"|"week"|"month"|"year"
+  const [activityDate, setActivityDate]   = useState(() => new Date().toISOString().slice(0, 10));
+
+  const now = new Date();
+
+  const activity = useMemo(() => {
+    const startOf = (unit) => {
+      const d = new Date(now);
+      if (unit === "day")   { d.setHours(0,0,0,0); }
+      if (unit === "week")  { d.setHours(0,0,0,0); d.setDate(d.getDate() - d.getDay()); }
+      if (unit === "month") { d.setDate(1); d.setHours(0,0,0,0); }
+      if (unit === "year")  { d.setMonth(0,1); d.setHours(0,0,0,0); }
+      return d;
+    };
+    const countSince = (d) => orders.filter(o => new Date(o.createdAt) >= d).length;
+    return {
+      today:   countSince(startOf("day")),
+      week:    countSince(startOf("week")),
+      month:   countSince(startOf("month")),
+      year:    countSince(startOf("year")),
+    };
+  }, [orders]);
+
+  // Drill-down: group orders by chosen view
+  const drillDown = useMemo(() => {
+    if (!activityModal) return [];
+    const groups = {};
+    orders.forEach(o => {
+      const d = new Date(o.createdAt);
+      let key;
+      if (activityView === "day") {
+        key = d.toISOString().slice(0, 10);
+      } else if (activityView === "week") {
+        const day = new Date(d); day.setHours(0,0,0,0);
+        day.setDate(day.getDate() - day.getDay());
+        key = day.toISOString().slice(0, 10);
+      } else if (activityView === "month") {
+        key = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      } else {
+        key = String(d.getFullYear());
+      }
+      if (!groups[key]) groups[key] = [];
+      groups[key].push(o);
+    });
+    return Object.entries(groups).sort((a,b) => b[0].localeCompare(a[0]));
+  }, [orders, activityModal, activityView]);
+
+  // Orders in selected date
+  const selectedOrders = useMemo(() => {
+    if (!activityDate) return [];
+    return orders.filter(o => {
+      const d = new Date(o.createdAt);
+      if (activityView === "day")   return d.toISOString().slice(0,10) === activityDate;
+      if (activityView === "week")  { const w = new Date(d); w.setHours(0,0,0,0); w.setDate(w.getDate()-w.getDay()); return w.toISOString().slice(0,10) === activityDate; }
+      if (activityView === "month") return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}` === activityDate;
+      return String(d.getFullYear()) === activityDate;
+    });
+  }, [orders, activityDate, activityView]);
+
+  const fmtGroupLabel = (key) => {
+    if (activityView === "day")   return new Date(key+"T12:00:00").toLocaleDateString("en-US",{weekday:"short",month:"short",day:"numeric",year:"numeric"});
+    if (activityView === "week")  { const d = new Date(key+"T12:00:00"); const e = new Date(d); e.setDate(e.getDate()+6); return `${d.toLocaleDateString("en-US",{month:"short",day:"numeric"})} – ${e.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}`; }
+    if (activityView === "month") { const [y,m] = key.split("-"); return new Date(+y,+m-1,1).toLocaleDateString("en-US",{month:"long",year:"numeric"}); }
+    return key;
+  };
 
   const countStatus = (status) => orders.filter(o => o.status === status).length;
 
@@ -102,6 +169,129 @@ export default function Dashboard() {
           </div>
         ))}
       </div>
+
+      {/* ── New Orders Activity Card ─────────────────────────────────────────── */}
+      {!loading && (
+        <div onClick={() => setActivityModal(true)} style={{
+          background:"linear-gradient(135deg,#1e2433 0%,#0f1623 100%)",
+          borderRadius:14, padding:"22px 28px", marginBottom:24,
+          border:"1px solid #374151", cursor:"pointer", transition:"border-color 0.15s",
+          display:"grid", gridTemplateColumns:"1fr auto", gap:20, alignItems:"center",
+        }}
+          onMouseEnter={e=>e.currentTarget.style.borderColor="#60a5fa"}
+          onMouseLeave={e=>e.currentTarget.style.borderColor="#374151"}>
+          <div>
+            <div style={{ fontSize:11, fontWeight:700, color:"#60a5fa", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:10 }}>
+              📊 New Orders Activity
+            </div>
+            <div style={{ display:"flex", gap:32, flexWrap:"wrap" }}>
+              {[
+                { label:"Today",        value: activity.today,  color:"#34d399" },
+                { label:"This Week",    value: activity.week,   color:"#60a5fa" },
+                { label:"This Month",   value: activity.month,  color:"#a78bfa" },
+                { label:"This Year",    value: activity.year,   color:"#fbbf24" },
+              ].map(({ label, value, color }) => (
+                <div key={label}>
+                  <div style={{ fontSize:11, color:"#6b7280", marginBottom:3 }}>{label}</div>
+                  <div style={{ fontSize:36, fontWeight:800, color, lineHeight:1 }}>{value}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div style={{ textAlign:"right" }}>
+            <div style={{ fontSize:12, color:"#374151", marginBottom:6 }}>Click to drill down</div>
+            <div style={{ fontSize:28, color:"#374151" }}>→</div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Activity Drill-Down Modal ─────────────────────────────────────────── */}
+      {activityModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:24, overflowY:"auto" }}
+          onClick={() => setActivityModal(false)}>
+          <div style={{ background:"#1e2433", borderRadius:14, width:"100%", maxWidth:860, padding:28, boxShadow:"0 24px 60px rgba(0,0,0,0.5)", marginTop:20 }}
+            onClick={e => e.stopPropagation()}>
+            {/* Header */}
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
+              <h2 style={{ margin:0, fontSize:20, color:"#f1f5f9" }}>📊 New Orders Activity</h2>
+              <button onClick={() => setActivityModal(false)} style={{ background:"none", border:"none", color:"#6b7280", fontSize:22, cursor:"pointer" }}>✕</button>
+            </div>
+
+            {/* View toggle */}
+            <div style={{ display:"flex", gap:8, marginBottom:20 }}>
+              {[["day","By Day"],["week","By Week"],["month","By Month"],["year","By Year"]].map(([v,lbl]) => (
+                <button key={v} onClick={() => { setActivityView(v); setActivityDate(""); }}
+                  style={{ padding:"7px 18px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:600,
+                    background: activityView===v ? "#3b82f6" : "#111827",
+                    color: activityView===v ? "#fff" : "#6b7280" }}>
+                  {lbl}
+                </button>
+              ))}
+            </div>
+
+            <div style={{ display:"grid", gridTemplateColumns:"220px 1fr", gap:20 }}>
+              {/* Left: period list */}
+              <div style={{ background:"#111827", borderRadius:10, padding:12, maxHeight:520, overflowY:"auto" }}>
+                <div style={{ fontSize:11, color:"#6b7280", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>
+                  {activityView==="day"?"Days":activityView==="week"?"Weeks":activityView==="month"?"Months":"Years"}
+                </div>
+                {drillDown.map(([key, ords]) => (
+                  <div key={key} onClick={() => setActivityDate(key)}
+                    style={{ padding:"8px 10px", borderRadius:7, cursor:"pointer", marginBottom:4,
+                      background: activityDate===key ? "#1e3a5f" : "transparent",
+                      border: `1px solid ${activityDate===key ? "#3b82f6" : "transparent"}` }}
+                    onMouseEnter={e=>e.currentTarget.style.background=activityDate===key?"#1e3a5f":"#1a2235"}
+                    onMouseLeave={e=>e.currentTarget.style.background=activityDate===key?"#1e3a5f":"transparent"}>
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span style={{ fontSize:12, color:"#e2e8f0" }}>{fmtGroupLabel(key)}</span>
+                      <span style={{ fontSize:15, fontWeight:800, color:"#60a5fa" }}>{ords.length}</span>
+                    </div>
+                  </div>
+                ))}
+                {drillDown.length === 0 && <div style={{ fontSize:12, color:"#4b5563" }}>No orders yet</div>}
+              </div>
+
+              {/* Right: orders in selected period */}
+              <div>
+                {activityDate ? (
+                  <>
+                    <div style={{ fontSize:13, fontWeight:700, color:"#f1f5f9", marginBottom:12 }}>
+                      {fmtGroupLabel(activityDate)} — <span style={{ color:"#60a5fa" }}>{selectedOrders.length} order{selectedOrders.length!==1?"s":""}</span>
+                    </div>
+                    {selectedOrders.length === 0 && <div style={{ fontSize:13, color:"#4b5563" }}>No orders in this period.</div>}
+                    <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:480, overflowY:"auto" }}>
+                      {selectedOrders.map(o => (
+                        <div key={o._id} onClick={() => { navigate(`/orders/${o._id}`); setActivityModal(false); }}
+                          style={{ background:"#111827", borderRadius:8, padding:"10px 14px", cursor:"pointer", border:"1px solid #374151",
+                            display:"flex", justifyContent:"space-between", alignItems:"center" }}
+                          onMouseEnter={e=>e.currentTarget.style.borderColor="#60a5fa"}
+                          onMouseLeave={e=>e.currentTarget.style.borderColor="#374151"}>
+                          <div>
+                            <div style={{ fontSize:13, fontWeight:600, color:"#f1f5f9" }}>
+                              #{o.refNumber} — {o.customerName || "—"}
+                            </div>
+                            <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>
+                              {[o.year,o.make,o.model].filter(Boolean).join(" ")||o.vin||"—"}
+                              {" · "}{new Date(o.createdAt).toLocaleString()}
+                            </div>
+                          </div>
+                          <span style={{ fontSize:11, padding:"2px 8px", borderRadius:5, background:"rgba(96,165,250,0.1)", color:"#60a5fa", fontWeight:600 }}>
+                            {o.status}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ display:"flex", alignItems:"center", justifyContent:"center", height:200, color:"#4b5563", fontSize:14 }}>
+                    ← Select a period to see orders
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ── Financial summary ─────────────────────────────────────────────────── */}
       {!loading && (
