@@ -28,6 +28,8 @@ export default function CreateOrder() {
   const [popupContainerSize, setPopupContainerSize] = useState("");
   const [popupWarehouse, setPopupWarehouse] = useState(null);
   const [popupCustomerName, setPopupCustomerName] = useState("");
+  const [popupCustSuggestions, setPopupCustSuggestions] = useState([]);
+  const [popupCustRecord, setPopupCustRecord]     = useState(null);
 
   // ── Order number lock ─────────────────────────────────────────────────
   const [refLocked, setRefLocked]           = useState(true);
@@ -529,6 +531,8 @@ export default function CreateOrder() {
     setPopupContainerSize(data.containerSize || "");
     setPopupWarehouse(null);
     setPopupCustomerName(data.customerName || "");
+    setPopupCustSuggestions([]);
+    setPopupCustRecord(null);
     setParsePopup({ data, file, label });
   };
 
@@ -1624,15 +1628,55 @@ export default function CreateOrder() {
             <div style={{ background:"var(--bg-panel)", borderRadius:8, padding:"12px 14px", fontSize:12,
               border:"1px solid var(--border)", marginBottom:18, display:"flex", flexDirection:"column", gap:4 }}>
               {parsePopup.data.customerName && (
-                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <div style={{ display:"flex", alignItems:"center", gap:6, position:"relative" }}>
                   <span style={{ color:"var(--text-muted)", whiteSpace:"nowrap" }}>Customer: </span>
-                  <input
-                    value={popupCustomerName}
-                    onChange={e => setPopupCustomerName(e.target.value)}
-                    style={{ flex:1, background:"transparent", border:"none", borderBottom:"1px solid #374151",
-                      color:"#f1f5f9", fontWeight:700, fontSize:12, padding:"1px 4px", outline:"none", cursor:"text" }}
-                    title="Click to edit customer name"
-                  />
+                  <div style={{ flex:1, position:"relative" }}>
+                    <input
+                      value={popupCustomerName}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setPopupCustomerName(val);
+                        setPopupCustRecord(null);
+                        if (val.length >= 2) {
+                          clearTimeout(window._popupCustTimer);
+                          window._popupCustTimer = setTimeout(async () => {
+                            try {
+                              const r = await fetch(`${API}/api/address-book?search=${encodeURIComponent(val)}&type=customer`);
+                              const d = await r.json();
+                              setPopupCustSuggestions(Array.isArray(d) ? d.slice(0, 6) : []);
+                            } catch {}
+                          }, 250);
+                        } else {
+                          setPopupCustSuggestions([]);
+                        }
+                      }}
+                      style={{ width:"100%", background:"transparent", border:"none", borderBottom:"1px solid #374151",
+                        color:"#f1f5f9", fontWeight:700, fontSize:12, padding:"1px 4px", outline:"none", cursor:"text", boxSizing:"border-box" }}
+                      title="Click to edit customer name"
+                    />
+                    {popupCustSuggestions.length > 0 && (
+                      <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:200,
+                        background:"#1e2433", border:"1px solid #374151", borderRadius:6,
+                        boxShadow:"0 8px 24px rgba(0,0,0,0.4)", maxHeight:180, overflowY:"auto" }}>
+                        {popupCustSuggestions.map(c => (
+                          <div key={c._id}
+                            onMouseDown={e => {
+                              e.preventDefault();
+                              setPopupCustomerName(c.companyName || c.name || "");
+                              setPopupCustRecord(c);
+                              setPopupCustSuggestions([]);
+                            }}
+                            style={{ padding:"8px 12px", cursor:"pointer", fontSize:12,
+                              color:"#f1f5f9", borderBottom:"1px solid #374151" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "#2d3748"}
+                            onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
+                            <strong>{c.companyName || c.name}</strong>
+                            {c.country && <span style={{ color:"#6b7280", marginLeft:6 }}>{c.country}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
               {parsePopup.data.vin          && <div><span style={{ color:"var(--text-muted)" }}>VIN: </span><strong style={{ fontFamily:"monospace" }}>{parsePopup.data.vin}</strong></div>}
@@ -1647,7 +1691,11 @@ export default function CreateOrder() {
               <button type="button"
                 onClick={() => {
                   applyParsedData(
-                    { ...parsePopup.data, customerName: popupCustomerName || parsePopup.data.customerName },
+                    {
+                      ...parsePopup.data,
+                      customerName:   popupCustomerName || parsePopup.data.customerName,
+                      customerRecord: popupCustRecord   || parsePopup.data.customerRecord,
+                    },
                     popupType, popupContainerSize, popupWarehouse
                   );
                   setParsePopup(null);
