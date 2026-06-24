@@ -286,6 +286,9 @@ export default function OrderDetails() {
 
   const [showEdit, setShowEdit] = useState(false);
   const [editForm, setEditForm] = useState({});
+  const [cardPopup, setCardPopup] = useState(null); // { card: 'customer'|'vin'|'orderType', form: {} }
+  const [cardSaving, setCardSaving] = useState(false);
+  const [cardCustSuggestions, setCardCustSuggestions] = useState([]);
 
   const [showDrPreview, setShowDrPreview] = useState(false);
   const [drPayload, setDrPayload] = useState(null);
@@ -1927,15 +1930,18 @@ export default function OrderDetails() {
 
       {/* ── Dashboard Cards ──────────────────────────── */}
       <div className="dashboard-grid">
-        <div className="dashboard-card">
+        <div className="dashboard-card" onClick={() => setCardPopup({ card: "customer", form: { customerName: order.customerName || "", customerPhone: order.customerPhone || "", customerEmail: order.customerEmail || "" } })}
+          style={{ cursor: "pointer" }} title="Click to edit">
           <span>Customer</span>
           <strong className="small">{order.customerName || "—"}</strong>
         </div>
-        <div className="dashboard-card">
+        <div className="dashboard-card" onClick={() => setCardPopup({ card: "requestDate", form: { createdAt: order.createdAt ? new Date(order.createdAt).toISOString().slice(0,16) : "" } })}
+          style={{ cursor: "pointer" }} title="Click to edit">
           <span>Request Date</span>
           <strong className="small">{order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</strong>
         </div>
-        <div className="dashboard-card">
+        <div className="dashboard-card" onClick={() => setCardPopup({ card: "vin", form: { vin: order.vin || "", lotNumber: order.lotNumber || "", pin: order.pin || "" } })}
+          style={{ cursor: "pointer" }} title="Click to edit">
           <span>VIN / Chassis</span>
           <strong className="small" style={{ fontFamily: "monospace", letterSpacing: "0.04em" }}>
             {order.vin || "—"}
@@ -1992,7 +1998,8 @@ export default function OrderDetails() {
             </button>
           </div>
         </div>
-        <div className="dashboard-card">
+        <div className="dashboard-card" onClick={() => setCardPopup({ card: "orderType", form: { requestType: order.requestType || "RORO" } })}
+          style={{ cursor: "pointer" }} title="Click to edit">
           <span>Order Type</span>
           <strong>{order.requestType || "—"}</strong>
         </div>
@@ -3258,6 +3265,152 @@ export default function OrderDetails() {
           <p>No activity yet.</p>
         )}
       </section>
+
+      {/* ── Card quick-edit popup ── */}
+      {cardPopup && (
+        <div className="modal-backdrop" onClick={() => { setCardPopup(null); setCardCustSuggestions([]); }}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 420 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:18 }}>
+              <h2 style={{ margin:0, fontSize:17 }}>
+                {{ customer:"Edit Customer", requestDate:"Edit Request Date", vin:"Edit VIN / Chassis", orderType:"Edit Order Type" }[cardPopup.card]}
+              </h2>
+              <button onClick={() => { setCardPopup(null); setCardCustSuggestions([]); }}
+                style={{ background:"none", border:"none", color:"var(--text-muted)", fontSize:20, cursor:"pointer" }}>✕</button>
+            </div>
+
+            {cardPopup.card === "customer" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  Customer Name
+                  <div style={{ position:"relative", marginTop:4 }}>
+                    <input autoFocus value={cardPopup.form.customerName}
+                      onChange={e => {
+                        const val = e.target.value;
+                        setCardPopup(p => ({ ...p, form: { ...p.form, customerName: val } }));
+                        setCardCustSuggestions([]);
+                        if (val.length >= 2) {
+                          clearTimeout(window._cardCustTimer);
+                          window._cardCustTimer = setTimeout(async () => {
+                            try {
+                              const r = await fetch(`${API}/api/address-book?search=${encodeURIComponent(val)}&type=customer`);
+                              const d = await r.json();
+                              setCardCustSuggestions(Array.isArray(d) ? d.slice(0, 6) : []);
+                            } catch {}
+                          }, 250);
+                        }
+                      }}
+                      style={{ width:"100%", padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                    {cardCustSuggestions.length > 0 && (
+                      <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:200,
+                        background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:6,
+                        boxShadow:"0 8px 24px rgba(0,0,0,0.4)", maxHeight:180, overflowY:"auto" }}>
+                        {cardCustSuggestions.map(c => (
+                          <div key={c._id}
+                            onMouseDown={e => {
+                              e.preventDefault();
+                              setCardPopup(p => ({ ...p, form: { ...p.form,
+                                customerName:  c.companyName || c.name || "",
+                                customerPhone: c.phone || p.form.customerPhone,
+                                customerEmail: c.email || p.form.customerEmail,
+                              }}));
+                              setCardCustSuggestions([]);
+                            }}
+                            style={{ padding:"8px 12px", cursor:"pointer", fontSize:12, color:"var(--text-primary)", borderBottom:"1px solid var(--border-muted)" }}
+                            onMouseEnter={e => e.currentTarget.style.background="var(--accent-dim)"}
+                            onMouseLeave={e => e.currentTarget.style.background="transparent"}>
+                            <strong>{c.companyName || c.name}</strong>
+                            {c.country && <span style={{ color:"var(--text-muted)", marginLeft:6 }}>{c.country}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </label>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  Phone
+                  <input value={cardPopup.form.customerPhone}
+                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, customerPhone: e.target.value } }))}
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                </label>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  Email
+                  <input value={cardPopup.form.customerEmail}
+                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, customerEmail: e.target.value } }))}
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                </label>
+              </div>
+            )}
+
+            {cardPopup.card === "requestDate" && (
+              <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                Request Date & Time
+                <input type="datetime-local" value={cardPopup.form.createdAt}
+                  onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, createdAt: e.target.value } }))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+            )}
+
+            {cardPopup.card === "vin" && (
+              <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  VIN / Chassis
+                  <input autoFocus value={cardPopup.form.vin}
+                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, vin: e.target.value.toUpperCase() } }))}
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, fontFamily:"monospace", letterSpacing:"0.04em", boxSizing:"border-box" }} />
+                </label>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  Lot #
+                  <input value={cardPopup.form.lotNumber}
+                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, lotNumber: e.target.value } }))}
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                </label>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  PIN
+                  <input value={cardPopup.form.pin}
+                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, pin: e.target.value.toUpperCase() } }))}
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"#fbbf24", fontSize:14, fontWeight:700, fontFamily:"monospace", boxSizing:"border-box" }} />
+                </label>
+              </div>
+            )}
+
+            {cardPopup.card === "orderType" && (
+              <div style={{ display:"flex", gap:10 }}>
+                {["RORO","Container"].map(t => (
+                  <button key={t} type="button"
+                    onClick={() => setCardPopup(p => ({ ...p, form: { requestType: t } }))}
+                    style={{ flex:1, padding:"12px 0", borderRadius:8, border:"none", cursor:"pointer", fontWeight:700, fontSize:14,
+                      background: cardPopup.form.requestType === t ? "#059669" : "var(--bg-panel)",
+                      color: cardPopup.form.requestType === t ? "#fff" : "var(--text-muted)" }}>
+                    {t}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            <div style={{ display:"flex", gap:10, marginTop:22 }}>
+              <button onClick={async () => {
+                setCardSaving(true);
+                try {
+                  await fetch(`${API}/api/orders/${id}`, {
+                    method: "PUT", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(cardPopup.form),
+                  });
+                  fetchOrder();
+                  setCardPopup(null);
+                  setCardCustSuggestions([]);
+                } finally { setCardSaving(false); }
+              }} disabled={cardSaving}
+                style={{ flex:1, padding:"10px 0", borderRadius:8, border:"none", background:"#059669", color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer", opacity: cardSaving ? 0.6 : 1 }}>
+                {cardSaving ? "Saving…" : "Save"}
+              </button>
+              <button onClick={() => { setCardPopup(null); setCardCustSuggestions([]); }}
+                style={{ padding:"10px 18px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {showEdit && (
         <div className="modal-backdrop" onClick={() => setShowEdit(false)}>
