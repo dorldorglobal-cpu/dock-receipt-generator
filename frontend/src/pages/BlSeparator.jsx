@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+﻿import { useState, useRef } from "react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -192,12 +192,12 @@ export default function BlSeparator() {
           onDrop={onDrop}
           onClick={() => fileRef.current?.click()}
           style={{
-            border: `2px dashed ${dragging ? "#6366f1" : "#374151"}`,
+            border: `2px dashed ${dragging ? "#6366f1" : "var(--border)"}`,
             borderRadius: 12,
             padding: "60px 40px",
             textAlign: "center",
             cursor: "pointer",
-            background: dragging ? "#1e1b4b22" : "#111827",
+            background: dragging ? "#1e1b4b22" : "var(--bg-elevated)",
             transition: "border-color 0.2s, background 0.2s",
           }}
         >
@@ -236,13 +236,13 @@ export default function BlSeparator() {
 
             <div style={{ marginLeft: "auto", display: "flex", gap: 8, flexWrap: "wrap" }}>
               <button onClick={() => toggleAll(true)} style={btnStyle("#1e3a5f", "#60a5fa")}>Select All</button>
-              <button onClick={() => toggleAll(false)} style={btnStyle("#374151", "#9ca3af")}>Deselect All</button>
-              <button onClick={reset} style={btnStyle("#374151", "#9ca3af")}>Reset</button>
+              <button onClick={() => toggleAll(false)} style={btnStyle("var(--border)", "#9ca3af")}>Deselect All</button>
+              <button onClick={reset} style={btnStyle("var(--border)", "#9ca3af")}>Reset</button>
 
               <button
                 onClick={downloadSelected}
                 disabled={downloading || selectedAll === 0}
-                style={btnStyle(selectedAll > 0 ? "#1a2e1a" : "#374151", selectedAll > 0 ? "#4ade80" : "#6b7280", downloading || selectedAll === 0)}
+                style={btnStyle(selectedAll > 0 ? "#1a2e1a" : "var(--border)", selectedAll > 0 ? "#4ade80" : "#6b7280", downloading || selectedAll === 0)}
               >
                 {downloading ? "Downloading…" : `⬇ Download Selected (${selectedAll})`}
               </button>
@@ -250,7 +250,7 @@ export default function BlSeparator() {
               <button
                 onClick={attachSelected}
                 disabled={attaching || selectedMatched === 0}
-                style={btnStyle(selectedMatched > 0 ? "#312e81" : "#374151", selectedMatched > 0 ? "#818cf8" : "#6b7280", attaching || selectedMatched === 0)}
+                style={btnStyle(selectedMatched > 0 ? "#312e81" : "var(--border)", selectedMatched > 0 ? "#818cf8" : "#6b7280", attaching || selectedMatched === 0)}
               >
                 {attaching ? "Uploading…" : `☁ Upload to Orders (${selectedMatched})`}
               </button>
@@ -259,7 +259,7 @@ export default function BlSeparator() {
 
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
             <thead>
-              <tr style={{ borderBottom: "1px solid #374151", color: "#6b7280", textAlign: "left" }}>
+              <tr style={{ borderBottom: "1px solid var(--border)", color: "#6b7280", textAlign: "left" }}>
                 <th style={th}>✓</th>
                 <th style={th}>BL #</th>
                 <th style={th}>Order</th>
@@ -354,7 +354,7 @@ export default function BlSeparator() {
                             style={{ accentColor: "#f59e0b", width: 14, height: 14, cursor: "pointer" }}
                           />
                         ) : (
-                          <span style={{ color: "#374151" }}>—</span>
+                          <span style={{ color: "var(--border)" }}>—</span>
                         )}
                       </td>
                     )}
@@ -369,7 +369,7 @@ export default function BlSeparator() {
                           <span style={{ color: "#ef4444", fontSize: 12 }}>✗ {result.error}</span>
                         )
                       ) : (
-                        <span style={{ color: "#374151" }}>—</span>
+                        <span style={{ color: "var(--border)" }}>—</span>
                       )}
                     </td>
                   </tr>

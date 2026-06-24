@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -173,13 +173,13 @@ export default function Dashboard() {
       {/* ── New Orders Activity Card ─────────────────────────────────────────── */}
       {!loading && (
         <div onClick={() => setActivityModal(true)} style={{
-          background:"linear-gradient(135deg,#1e2433 0%,#0f1623 100%)",
+          background:"linear-gradient(135deg,var(--bg-panel) 0%,var(--bg-base) 100%)",
           borderRadius:14, padding:"22px 28px", marginBottom:24,
-          border:"1px solid #374151", cursor:"pointer", transition:"border-color 0.15s",
+          border:"1px solid var(--border)", cursor:"pointer", transition:"border-color 0.15s",
           display:"grid", gridTemplateColumns:"1fr auto", gap:20, alignItems:"center",
         }}
           onMouseEnter={e=>e.currentTarget.style.borderColor="#60a5fa"}
-          onMouseLeave={e=>e.currentTarget.style.borderColor="#374151"}>
+          onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
           <div>
             <div style={{ fontSize:11, fontWeight:700, color:"#60a5fa", textTransform:"uppercase", letterSpacing:"0.1em", marginBottom:10 }}>
               📊 New Orders Activity
@@ -199,8 +199,8 @@ export default function Dashboard() {
             </div>
           </div>
           <div style={{ textAlign:"right" }}>
-            <div style={{ fontSize:12, color:"#374151", marginBottom:6 }}>Click to drill down</div>
-            <div style={{ fontSize:28, color:"#374151" }}>→</div>
+            <div style={{ fontSize:12, color:"var(--border)", marginBottom:6 }}>Click to drill down</div>
+            <div style={{ fontSize:28, color:"var(--border)" }}>→</div>
           </div>
         </div>
       )}
@@ -209,11 +209,11 @@ export default function Dashboard() {
       {activityModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"flex-start", justifyContent:"center", padding:24, overflowY:"auto" }}
           onClick={() => setActivityModal(false)}>
-          <div style={{ background:"#1e2433", borderRadius:14, width:"100%", maxWidth:860, padding:28, boxShadow:"0 24px 60px rgba(0,0,0,0.5)", marginTop:20 }}
+          <div style={{ background:"var(--bg-panel)", borderRadius:14, width:"100%", maxWidth:860, padding:28, boxShadow:"0 24px 60px rgba(0,0,0,0.5)", marginTop:20 }}
             onClick={e => e.stopPropagation()}>
             {/* Header */}
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20 }}>
-              <h2 style={{ margin:0, fontSize:20, color:"#f1f5f9" }}>📊 New Orders Activity</h2>
+              <h2 style={{ margin:0, fontSize:20, color:"var(--text-primary)" }}>📊 New Orders Activity</h2>
               <button onClick={() => setActivityModal(false)} style={{ background:"none", border:"none", color:"#6b7280", fontSize:22, cursor:"pointer" }}>✕</button>
             </div>
 
@@ -222,7 +222,7 @@ export default function Dashboard() {
               {[["day","By Day"],["week","By Week"],["month","By Month"],["year","By Year"]].map(([v,lbl]) => (
                 <button key={v} onClick={() => { setActivityView(v); setActivityDate(""); }}
                   style={{ padding:"7px 18px", borderRadius:8, border:"none", cursor:"pointer", fontSize:13, fontWeight:600,
-                    background: activityView===v ? "#3b82f6" : "#111827",
+                    background: activityView===v ? "#3b82f6" : "var(--bg-elevated)",
                     color: activityView===v ? "#fff" : "#6b7280" }}>
                   {lbl}
                 </button>
@@ -231,7 +231,7 @@ export default function Dashboard() {
 
             <div style={{ display:"grid", gridTemplateColumns:"220px 1fr", gap:20 }}>
               {/* Left: period list */}
-              <div style={{ background:"#111827", borderRadius:10, padding:12, maxHeight:520, overflowY:"auto" }}>
+              <div style={{ background:"var(--bg-elevated)", borderRadius:10, padding:12, maxHeight:520, overflowY:"auto" }}>
                 <div style={{ fontSize:11, color:"#6b7280", fontWeight:700, textTransform:"uppercase", letterSpacing:"0.07em", marginBottom:8 }}>
                   {activityView==="day"?"Days":activityView==="week"?"Weeks":activityView==="month"?"Months":"Years"}
                 </div>
@@ -240,10 +240,10 @@ export default function Dashboard() {
                     style={{ padding:"8px 10px", borderRadius:7, cursor:"pointer", marginBottom:4,
                       background: activityDate===key ? "#1e3a5f" : "transparent",
                       border: `1px solid ${activityDate===key ? "#3b82f6" : "transparent"}` }}
-                    onMouseEnter={e=>e.currentTarget.style.background=activityDate===key?"#1e3a5f":"#1a2235"}
+                    onMouseEnter={e=>e.currentTarget.style.background=activityDate===key?"#1e3a5f":"var(--bg-hover)"}
                     onMouseLeave={e=>e.currentTarget.style.background=activityDate===key?"#1e3a5f":"transparent"}>
                     <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
-                      <span style={{ fontSize:12, color:"#e2e8f0" }}>{fmtGroupLabel(key)}</span>
+                      <span style={{ fontSize:12, color:"var(--text-primary)" }}>{fmtGroupLabel(key)}</span>
                       <span style={{ fontSize:15, fontWeight:800, color:"#60a5fa" }}>{ords.length}</span>
                     </div>
                   </div>
@@ -255,19 +255,19 @@ export default function Dashboard() {
               <div>
                 {activityDate ? (
                   <>
-                    <div style={{ fontSize:13, fontWeight:700, color:"#f1f5f9", marginBottom:12 }}>
+                    <div style={{ fontSize:13, fontWeight:700, color:"var(--text-primary)", marginBottom:12 }}>
                       {fmtGroupLabel(activityDate)} — <span style={{ color:"#60a5fa" }}>{selectedOrders.length} order{selectedOrders.length!==1?"s":""}</span>
                     </div>
                     {selectedOrders.length === 0 && <div style={{ fontSize:13, color:"#4b5563" }}>No orders in this period.</div>}
                     <div style={{ display:"flex", flexDirection:"column", gap:8, maxHeight:480, overflowY:"auto" }}>
                       {selectedOrders.map(o => (
                         <div key={o._id} onClick={() => { navigate(`/orders/${o._id}`); setActivityModal(false); }}
-                          style={{ background:"#111827", borderRadius:8, padding:"10px 14px", cursor:"pointer", border:"1px solid #374151",
+                          style={{ background:"var(--bg-elevated)", borderRadius:8, padding:"10px 14px", cursor:"pointer", border:"1px solid var(--border)",
                             display:"flex", justifyContent:"space-between", alignItems:"center" }}
                           onMouseEnter={e=>e.currentTarget.style.borderColor="#60a5fa"}
-                          onMouseLeave={e=>e.currentTarget.style.borderColor="#374151"}>
+                          onMouseLeave={e=>e.currentTarget.style.borderColor="var(--border)"}>
                           <div>
-                            <div style={{ fontSize:13, fontWeight:600, color:"#f1f5f9" }}>
+                            <div style={{ fontSize:13, fontWeight:600, color:"var(--text-primary)" }}>
                               #{o.refNumber} — {o.customerName || "—"}
                             </div>
                             <div style={{ fontSize:11, color:"#6b7280", marginTop:2 }}>

@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -72,12 +72,12 @@ function DropZone({ label, file, setFile, existingUrl, existingName, onRemoveExi
         onDragLeave={() => setDrag(false)}
         onDrop={e => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files[0]; if (f) setFile(f); }}
         style={{
-          border: `2px dashed ${drag ? "#60a5fa" : (hasNew||hasOld) ? "#34d399" : "#374151"}`,
+          border: `2px dashed ${drag ? "#60a5fa" : (hasNew||hasOld) ? "#34d399" : "var(--border)"}`,
           borderRadius: 8, padding: "12px 14px", textAlign: "center",
           cursor: "pointer", transition: "all 0.15s", minHeight: 72,
           display: "flex", alignItems: "center", justifyContent: "center",
           flexDirection: "column", gap: 4,
-          background: drag ? "rgba(96,165,250,0.07)" : (hasNew||hasOld) ? "rgba(52,211,153,0.05)" : "#111827",
+          background: drag ? "rgba(96,165,250,0.07)" : (hasNew||hasOld) ? "rgba(52,211,153,0.05)" : "var(--bg-elevated)",
         }}
       >
         <input ref={ref} type="file" accept={accept} style={{ display:"none" }}
@@ -137,12 +137,12 @@ function Modal({ title, onClose, children }) {
       zIndex: 1000, padding: 16,
     }} onClick={onClose}>
       <div style={{
-        background: "#1e2433", borderRadius: 12, padding: 28,
+        background: "var(--bg-panel)", borderRadius: 12, padding: 28,
         width: "100%", maxWidth: 640, maxHeight: "90vh", overflowY: "auto",
         boxShadow: "0 24px 60px rgba(0,0,0,0.5)",
       }} onClick={e => e.stopPropagation()}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
-          <h2 style={{ margin: 0, fontSize: 18, color: "#f1f5f9" }}>{title}</h2>
+          <h2 style={{ margin: 0, fontSize: 18, color: "var(--text-primary)" }}>{title}</h2>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "#9ca3af", fontSize: 20, cursor: "pointer", padding: 4 }}>✕</button>
         </div>
         {children}
@@ -197,8 +197,8 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
   };
 
   const inputStyle = {
-    width: "100%", padding: "8px 10px", background: "#111827",
-    border: "1px solid #374151", borderRadius: 6, color: "#f1f5f9",
+    width: "100%", padding: "8px 10px", background: "var(--bg-elevated)",
+    border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)",
     fontSize: 13, boxSizing: "border-box", marginTop: 4,
   };
   const labelStyle = { display: "block", fontSize: 12, color: "#9ca3af", marginBottom: 2 };
@@ -1060,10 +1060,10 @@ export default function Expenses() {
     : sorted;
 
   const th = { padding: "6px 12px", textAlign: "left", color: "#9ca3af", fontSize: 11, fontWeight: 600, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" };
-  const td = { padding: "5px 12px", fontSize: 12, color: "#e2e8f0", borderTop: "1px solid #1e2433", lineHeight: 1.25 };
+  const td = { padding: "5px 12px", fontSize: 12, color: "var(--text-primary)", borderTop: "1px solid var(--bg-panel)", lineHeight: 1.25 };
 
   const SortArrow = ({ k }) => {
-    if (sortKey !== k) return <span style={{ color: "#374151", marginLeft: 4 }}>↕</span>;
+    if (sortKey !== k) return <span style={{ color: "var(--border)", marginLeft: 4 }}>↕</span>;
     return <span style={{ color: "#60a5fa", marginLeft: 4 }}>{sortDir === 1 ? "↑" : "↓"}</span>;
   };
 
@@ -1073,7 +1073,7 @@ export default function Expenses() {
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
-          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "#f1f5f9" }}>Expenses</h1>
+          <h1 style={{ margin: 0, fontSize: 24, fontWeight: 700, color: "var(--text-primary)" }}>Expenses</h1>
           <p style={{ margin: "4px 0 0", color: "#9ca3af", fontSize: 13 }}>
             Track and manage all business expenses
           </p>
@@ -1089,7 +1089,7 @@ export default function Expenses() {
               if (dateTo)       params.set("to", dateTo);
               window.open(`${API}/api/expenses/export?${params}`, "_blank");
             }}
-            style={{ background:"#1e2433", color:"#9ca3af", border:"1px solid #374151", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+            style={{ background:"var(--bg-panel)", color:"#9ca3af", border:"1px solid var(--border)", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
             ⬇ Export CSV
           </button>
           <button onClick={openAdd} style={{
@@ -1103,8 +1103,8 @@ export default function Expenses() {
       </div>
 
       {/* ── Import Bill Panel ── */}
-      <div style={{ background: "#1e2433", borderRadius: 12, padding: "20px 24px", marginBottom: 24, border: "1px solid #374151" }}>
-        <div style={{ fontSize: 15, fontWeight: 700, color: "#f1f5f9", marginBottom: 16 }}>📥 Import Bill</div>
+      <div style={{ background: "var(--bg-panel)", borderRadius: 12, padding: "20px 24px", marginBottom: 24, border: "1px solid var(--border)" }}>
+        <div style={{ fontSize: 15, fontWeight: 700, color: "var(--text-primary)", marginBottom: 16 }}>📥 Import Bill</div>
 
         {/* Seven dropzones side by side */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", gap: 14, marginBottom: 6 }}>
@@ -1123,13 +1123,13 @@ export default function Expenses() {
           ].map(dz => (
             <div key={dz.label}
               onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = dz.color; }}
-              onDragLeave={e => { e.currentTarget.style.borderColor = dz.hasFiles ? dz.color : "#374151"; }}
-              onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = dz.hasFiles ? dz.color : "#374151"; const files = Array.from(e.dataTransfer.files); if (files.length) dz.onFiles(files); }}
-              style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "#111827", border: `2px dashed ${dz.hasFiles ? dz.color : "#374151"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
+              onDragLeave={e => { e.currentTarget.style.borderColor = dz.hasFiles ? dz.color : "var(--border)"; }}
+              onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = dz.hasFiles ? dz.color : "var(--border)"; const files = Array.from(e.dataTransfer.files); if (files.length) dz.onFiles(files); }}
+              style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--bg-elevated)", border: `2px dashed ${dz.hasFiles ? dz.color : "var(--border)"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
               onMouseEnter={e => e.currentTarget.style.borderColor = dz.color}
-              onMouseLeave={e => e.currentTarget.style.borderColor = dz.hasFiles ? dz.color : "#374151"}>
+              onMouseLeave={e => e.currentTarget.style.borderColor = dz.hasFiles ? dz.color : "var(--border)"}>
               <span style={{ fontSize: 32 }}>{dz.loading ? "⏳" : dz.hasFiles ? "✅" : "📂"}</span>
-              <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>{dz.label}</span>
+              <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>{dz.label}</span>
               <span style={{ fontSize: 12, color: dz.hasFiles ? "#34d399" : "#6b7280", marginBottom: 4 }}>
                 {dz.loading ? "Parsing…" : dz.hasFiles ? dz.fileName : dz.sub}
               </span>
@@ -1140,7 +1140,7 @@ export default function Expenses() {
                     onChange={e => { const files = Array.from(e.target.files); if (files.length) dz.onFiles(files); }} />
                 </label>
                 <button onClick={() => openManualForm(dz.manualKey)}
-                  style={{ fontSize: 11, color: "#9ca3af", border: "1px solid #374151", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
+                  style={{ fontSize: 11, color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
                   ✏️ Manual
                 </button>
               </div>
@@ -1150,13 +1150,13 @@ export default function Expenses() {
           {/* Container / Loader card */}
           <div
             onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#ec4899"; }}
-            onDragLeave={e => { e.currentTarget.style.borderColor = containerFiles.length > 0 ? "#ec4899" : "#374151"; }}
+            onDragLeave={e => { e.currentTarget.style.borderColor = containerFiles.length > 0 ? "#ec4899" : "var(--border)"; }}
             onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#ec4899"; const files = Array.from(e.dataTransfer.files); if (files.length) { setContainerFiles(files); parseContainerBills(files); }}}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "#111827", border: `2px dashed ${containerFiles.length > 0 ? "#ec4899" : "#374151"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--bg-elevated)", border: `2px dashed ${containerFiles.length > 0 ? "#ec4899" : "var(--border)"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
             onMouseEnter={e => e.currentTarget.style.borderColor = "#ec4899"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = containerFiles.length > 0 ? "#ec4899" : "#374151"}>
+            onMouseLeave={e => e.currentTarget.style.borderColor = containerFiles.length > 0 ? "#ec4899" : "var(--border)"}>
             <span style={{ fontSize: 32 }}>{containerLoading ? "⏳" : containerFiles.length > 0 ? "✅" : "📦"}</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>📦 Container</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>📦 Container</span>
             <span style={{ fontSize: 12, color: containerFiles.length > 0 ? "#34d399" : "#6b7280", marginBottom: 4 }}>
               {containerLoading ? "Parsing…" : containerFiles.length > 0 ? `${containerFiles.length} file(s)` : "Drop loader invoice PDF(s)"}
             </span>
@@ -1167,7 +1167,7 @@ export default function Expenses() {
                   onChange={e => { const files = Array.from(e.target.files); if (files.length) { setContainerFiles(files); parseContainerBills(files); }}} />
               </label>
               <button onClick={() => openManualForm("other")}
-                style={{ fontSize: 11, color: "#9ca3af", border: "1px solid #374151", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
+                style={{ fontSize: 11, color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
                 ✏️ Manual
               </button>
             </div>
@@ -1176,13 +1176,13 @@ export default function Expenses() {
           {/* Other card */}
           <div
             onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#10b981"; }}
-            onDragLeave={e => { e.currentTarget.style.borderColor = showManualForm === "other" || manualFile ? "#10b981" : "#374151"; }}
+            onDragLeave={e => { e.currentTarget.style.borderColor = showManualForm === "other" || manualFile ? "#10b981" : "var(--border)"; }}
             onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#10b981"; const files = Array.from(e.dataTransfer.files); if (files.length) { setManualFile(files[0]); parseMiscBills(files); } }}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "#111827", border: `2px dashed ${manualFile || showManualForm === "other" ? "#10b981" : "#374151"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--bg-elevated)", border: `2px dashed ${manualFile || showManualForm === "other" ? "#10b981" : "var(--border)"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
             onMouseEnter={e => e.currentTarget.style.borderColor = "#10b981"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = showManualForm === "other" || manualFile ? "#10b981" : "#374151"}>
+            onMouseLeave={e => e.currentTarget.style.borderColor = showManualForm === "other" || manualFile ? "#10b981" : "var(--border)"}>
             <span style={{ fontSize: 32 }}>{manualFile ? "✅" : "📋"}</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>📋 Other</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>📋 Other</span>
             <span style={{ fontSize: 12, color: manualFile ? "#34d399" : "#6b7280", marginBottom: 4 }}>
               {manualFile ? manualFile.name : "Drop bill or browse / enter manually"}
             </span>
@@ -1193,7 +1193,7 @@ export default function Expenses() {
                   onChange={e => { const files = Array.from(e.target.files); if (files.length) { setManualFile(files[0]); parseMiscBills(files); } }} />
               </label>
               <button onClick={() => openManualForm("other")}
-                style={{ fontSize: 11, color: "#9ca3af", border: "1px solid #374151", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
+                style={{ fontSize: 11, color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 6, padding: "3px 10px", background: "none", cursor: "pointer" }}>
                 ✏️ Manual
               </button>
             </div>
@@ -1202,13 +1202,13 @@ export default function Expenses() {
           {/* Payment Proof card */}
           <div
             onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#06b6d4"; }}
-            onDragLeave={e => { e.currentTarget.style.borderColor = proofFile ? "#06b6d4" : "#374151"; }}
+            onDragLeave={e => { e.currentTarget.style.borderColor = proofFile ? "#06b6d4" : "var(--border)"; }}
             onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor = "#06b6d4"; const files = Array.from(e.dataTransfer.files); if (files.length) { setProofFile(files[0]); parseProofFile(files[0]); } }}
-            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "#111827", border: `2px dashed ${proofFile ? "#06b6d4" : "#374151"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
+            style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 8, background: "var(--bg-elevated)", border: `2px dashed ${proofFile ? "#06b6d4" : "var(--border)"}`, borderRadius: 12, padding: "24px 16px", transition: "border-color 0.15s", textAlign: "center" }}
             onMouseEnter={e => e.currentTarget.style.borderColor = "#06b6d4"}
-            onMouseLeave={e => e.currentTarget.style.borderColor = proofFile ? "#06b6d4" : "#374151"}>
+            onMouseLeave={e => e.currentTarget.style.borderColor = proofFile ? "#06b6d4" : "var(--border)"}>
             <span style={{ fontSize: 32 }}>{proofLoading ? "⏳" : proofFile ? "✅" : "🏦"}</span>
-            <span style={{ fontSize: 14, fontWeight: 700, color: "#f1f5f9" }}>🏦 Payment Proof</span>
+            <span style={{ fontSize: 14, fontWeight: 700, color: "var(--text-primary)" }}>🏦 Payment Proof</span>
             <span style={{ fontSize: 12, color: proofFile ? "#34d399" : "#6b7280", marginBottom: 4 }}>
               {proofLoading ? "Parsing…" : proofFile ? proofFile.name : "Drop bank ACH confirmation PDF"}
             </span>
@@ -1225,12 +1225,12 @@ export default function Expenses() {
           <div
             onClick={() => setShowSplitForm(s => !s)}
             style={{ display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:8,
-              background:"#111827", border:`2px dashed ${showSplitForm ? "#a855f7" : "#374151"}`,
+              background:"var(--bg-elevated)", border:`2px dashed ${showSplitForm ? "#a855f7" : "var(--border)"}`,
               borderRadius:12, padding:"24px 16px", textAlign:"center", cursor:"pointer", transition:"border-color 0.15s" }}
             onMouseEnter={e => e.currentTarget.style.borderColor="#a855f7"}
-            onMouseLeave={e => e.currentTarget.style.borderColor=showSplitForm?"#a855f7":"#374151"}>
+            onMouseLeave={e => e.currentTarget.style.borderColor=showSplitForm?"#a855f7":"var(--border)"}>
             <span style={{ fontSize:32 }}>✂</span>
-            <span style={{ fontSize:14, fontWeight:700, color:"#f1f5f9" }}>Split Bill</span>
+            <span style={{ fontSize:14, fontWeight:700, color:"var(--text-primary)" }}>Split Bill</span>
             <span style={{ fontSize:12, color:"#6b7280", marginBottom:4 }}>One bill, multiple orders</span>
             <div style={{ fontSize:11, color:"#a855f7", border:"1px solid #a855f7", borderRadius:6, padding:"3px 10px" }}>
               ✏️ Manual
@@ -1240,7 +1240,7 @@ export default function Expenses() {
 
         {/* ── Split Bill manual form ── */}
         {showSplitForm && (
-          <div style={{ marginTop:16, padding:"18px 20px", background:"#111827", borderRadius:10, border:"1px solid #a855f7" }}>
+          <div style={{ marginTop:16, padding:"18px 20px", background:"var(--bg-elevated)", borderRadius:10, border:"1px solid #a855f7" }}>
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:14 }}>
               <div style={{ fontSize:13, fontWeight:700, color:"#a855f7" }}>✂ Split Bill — Manual Entry</div>
               <button onClick={() => setShowSplitForm(false)} style={{ background:"none", border:"none", color:"#9ca3af", fontSize:16, cursor:"pointer" }}>✕</button>
@@ -1250,29 +1250,29 @@ export default function Expenses() {
               <div>
                 <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Vendor / Paid To *</div>
                 <input value={splitVendor} onChange={e => setSplitVendor(e.target.value)} placeholder="Vendor name"
-                  style={{ width:"100%", background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"7px 10px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box" }} />
+                  style={{ width:"100%", background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"7px 10px", color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </div>
               <div>
                 <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Date</div>
                 <input type="date" value={splitDate} onChange={e => setSplitDate(e.target.value)}
-                  style={{ width:"100%", background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"7px 10px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box" }} />
+                  style={{ width:"100%", background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"7px 10px", color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </div>
               <div>
                 <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Invoice # (optional)</div>
                 <input value={splitInvoice} onChange={e => setSplitInvoice(e.target.value)} placeholder="e.g. INV-0042"
-                  style={{ width:"100%", background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"7px 10px", color:"#f1f5f9", fontSize:13, boxSizing:"border-box" }} />
+                  style={{ width:"100%", background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"7px 10px", color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </div>
             </div>
             {/* Bill file */}
             <div style={{ marginBottom:12 }}>
               <div style={{ fontSize:11, color:"#9ca3af", marginBottom:4 }}>Bill Document (shared across all lines)</div>
               {splitFile ? (
-                <div style={{ display:"flex", alignItems:"center", gap:10, background:"#1e2433", borderRadius:6, padding:"6px 12px" }}>
+                <div style={{ display:"flex", alignItems:"center", gap:10, background:"var(--bg-panel)", borderRadius:6, padding:"6px 12px" }}>
                   <span style={{ fontSize:13, color:"#34d399" }}>📄 {splitFile.name}</span>
                   <button onClick={() => setSplitFile(null)} style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:12 }}>✕ Remove</button>
                 </div>
               ) : (
-                <label style={{ display:"inline-flex", alignItems:"center", gap:6, background:"#1e2433", border:"1px dashed #374151", borderRadius:6, padding:"6px 14px", cursor:"pointer", fontSize:12, color:"#9ca3af" }}>
+                <label style={{ display:"inline-flex", alignItems:"center", gap:6, background:"var(--bg-panel)", border:"1px dashed var(--border)", borderRadius:6, padding:"6px 14px", cursor:"pointer", fontSize:12, color:"#9ca3af" }}>
                   📎 Attach bill PDF / image
                   <input type="file" accept=".pdf,image/*" style={{ display:"none" }} onChange={e => { if (e.target.files[0]) setSplitFile(e.target.files[0]); }} />
                 </label>
@@ -1295,17 +1295,17 @@ export default function Expenses() {
                 <div key={i} style={{ display:"grid", gridTemplateColumns:"90px 1fr 180px 90px 28px", gap:6, alignItems:"center", marginBottom:6 }}>
                   <input value={line.orderRef} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,orderRef:e.target.value}:l))}
                     placeholder="Order #"
-                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 8px", color:"#60a5fa", fontSize:12, boxSizing:"border-box" }} />
+                    style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"6px 8px", color:"#60a5fa", fontSize:12, boxSizing:"border-box" }} />
                   <input value={line.description} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,description:e.target.value}:l))}
                     placeholder="e.g. Port fee, storage…"
-                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 8px", color:"#f1f5f9", fontSize:12, boxSizing:"border-box" }} />
+                    style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"6px 8px", color:"var(--text-primary)", fontSize:12, boxSizing:"border-box" }} />
                   <select value={line.category} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,category:e.target.value}:l))}
-                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 6px", color:"#f1f5f9", fontSize:12 }}>
+                    style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"6px 6px", color:"var(--text-primary)", fontSize:12 }}>
                     {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                   </select>
                   <input type="number" min="0" step="0.01" value={line.amount} onChange={e => setSplitLines(ls => ls.map((l,j)=>j===i?{...l,amount:e.target.value}:l))}
                     placeholder="0.00"
-                    style={{ background:"#1e2433", border:"1px solid #374151", borderRadius:6, padding:"6px 8px", color:"#34d399", fontSize:12, fontWeight:600, boxSizing:"border-box" }} />
+                    style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, padding:"6px 8px", color:"#34d399", fontSize:12, fontWeight:600, boxSizing:"border-box" }} />
                   <button onClick={() => setSplitLines(ls => ls.filter((_,j)=>j!==i))}
                     style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:15, padding:0 }}>✕</button>
                 </div>
@@ -1319,7 +1319,7 @@ export default function Expenses() {
             </div>
             {splitMsg && <div style={{ marginBottom:10, fontSize:13, color: splitMsg.startsWith("✅") ? "#34d399" : "#f87171" }}>{splitMsg}</div>}
             <button onClick={submitSplitBill} disabled={splitSaving || !splitVendor.trim()}
-              style={{ background: splitVendor.trim() ? "#7c3aed" : "#374151", color:"#fff", border:"none", borderRadius:8, padding:"9px 20px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
+              style={{ background: splitVendor.trim() ? "#7c3aed" : "var(--border)", color:"#fff", border:"none", borderRadius:8, padding:"9px 20px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
               {splitSaving ? "Saving…" : `✅ Create ${splitLines.filter(l=>Number(l.amount)>0).length} Expenses`}
             </button>
           </div>
@@ -1327,7 +1327,7 @@ export default function Expenses() {
 
         {/* ── Other manual entry form ── */}
         {showManualForm && (
-          <div style={{ marginTop: 16, padding: "18px 20px", background: "#111827", borderRadius: 10, border: `1px solid ${CARD_DEFAULTS[showManualForm]?.color || "#374151"}` }}>
+          <div style={{ marginTop: 16, padding: "18px 20px", background: "var(--bg-elevated)", borderRadius: 10, border: `1px solid ${CARD_DEFAULTS[showManualForm]?.color || "var(--border)"}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ fontSize: 13, fontWeight: 700, color: CARD_DEFAULTS[showManualForm]?.color || "#10b981" }}>
                 {{ sallaum: "🚢 Sallaum", acl: "⚓ ACL / Grimaldi", dispatch: "🚛 Dispatch", other: "📋 Other" }[showManualForm]} — Manual Entry
@@ -1336,12 +1336,12 @@ export default function Expenses() {
             </div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, marginBottom: 12 }}>
               {[
-                { key: "vendor",        label: "Vendor *",             type: "text",   placeholder: "Vendor name",         color: "#f1f5f9" },
+                { key: "vendor",        label: "Vendor *",             type: "text",   placeholder: "Vendor name",         color: "var(--text-primary)" },
                 { key: "amount",        label: "Amount ($) *",         type: "number", placeholder: "0.00",                color: "#34d399" },
-                { key: "date",          label: "Date",                 type: "date",   placeholder: "",                    color: "#f1f5f9" },
+                { key: "date",          label: "Date",                 type: "date",   placeholder: "",                    color: "var(--text-primary)" },
                 { key: "orderRef",      label: "Order Ref (optional)", type: "text",   placeholder: "Leave blank if none",  color: "#fbbf24" },
                 { key: "vin",           label: "VIN (optional)",        type: "text",   placeholder: "17-digit VIN",         color: "#a78bfa" },
-                { key: "invoiceNumber", label: "Invoice # (optional)", type: "text",   placeholder: "Invoice or ref #",     color: "#f1f5f9" },
+                { key: "invoiceNumber", label: "Invoice # (optional)", type: "text",   placeholder: "Invoice or ref #",     color: "var(--text-primary)" },
               ].map(f => (
                 <div key={f.key}>
                   <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>{f.label}</div>
@@ -1353,20 +1353,20 @@ export default function Expenses() {
                       if (f.key === "vin" && val.length === 17) lookupOrderByVin(val);
                     }}
                     placeholder={f.placeholder}
-                    style={{ width: "100%", background: "#1e2433", border: "1px solid #374151", borderRadius: 6, padding: "7px 10px", color: f.color, fontSize: 13, boxSizing: "border-box", fontWeight: f.key==="amount"?600:400, fontFamily: f.key==="vin"?"monospace":"inherit", textTransform: f.key==="vin"?"uppercase":"none" }} />
+                    style={{ width: "100%", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: f.color, fontSize: 13, boxSizing: "border-box", fontWeight: f.key==="amount"?600:400, fontFamily: f.key==="vin"?"monospace":"inherit", textTransform: f.key==="vin"?"uppercase":"none" }} />
                 </div>
               ))}
               <div>
                 <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Category</div>
                 <select value={manualForm.category} onChange={e => setManualForm(f => ({...f, category: e.target.value}))}
-                  style={{ width: "100%", background: "#1e2433", border: "1px solid #374151", borderRadius: 6, padding: "7px 10px", color: "#f1f5f9", fontSize: 13, boxSizing: "border-box" }}>
+                  style={{ width: "100%", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }}>
                   {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div style={{ gridColumn: "span 3" }}>
                 <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Description / Notes</div>
                 <input value={manualForm.description} onChange={e => setManualForm(f => ({...f, description: e.target.value}))} placeholder="What is this bill for?"
-                  style={{ width: "100%", background: "#1e2433", border: "1px solid #374151", borderRadius: 6, padding: "7px 10px", color: "#f1f5f9", fontSize: 13, boxSizing: "border-box" }} />
+                  style={{ width: "100%", background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
               </div>
             </div>
             {/* ── Extra Charge Lines ── */}
@@ -1375,7 +1375,7 @@ export default function Expenses() {
                 <div style={{ fontSize: 11, color: "#9ca3af" }}>Extra Charges (optional)</div>
                 <button
                   onClick={() => setExtraLines(l => [...l, { description: "", amount: "" }])}
-                  style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid #374151", background: "none", color: "#34d399", cursor: "pointer" }}>
+                  style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "#34d399", cursor: "pointer" }}>
                   + Add Line
                 </button>
               </div>
@@ -1387,13 +1387,13 @@ export default function Expenses() {
                         value={line.description}
                         onChange={e => setExtraLines(ls => ls.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
                         placeholder="e.g. Storage Fee, Gate Fee…"
-                        style={{ background: "#1e2433", border: "1px solid #374151", borderRadius: 6, padding: "6px 10px", color: "#f1f5f9", fontSize: 13, boxSizing: "border-box" }} />
+                        style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 10px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
                       <input
                         type="number" min="0" step="0.01"
                         value={line.amount}
                         onChange={e => setExtraLines(ls => ls.map((l, j) => j === i ? { ...l, amount: e.target.value } : l))}
                         placeholder="0.00"
-                        style={{ background: "#1e2433", border: "1px solid #374151", borderRadius: 6, padding: "6px 10px", color: "#34d399", fontSize: 13, fontWeight: 600, boxSizing: "border-box" }} />
+                        style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, padding: "6px 10px", color: "#34d399", fontSize: 13, fontWeight: 600, boxSizing: "border-box" }} />
                       <button
                         onClick={() => setExtraLines(ls => ls.filter((_, j) => j !== i))}
                         style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 16, padding: 0 }}>✕</button>
@@ -1412,12 +1412,12 @@ export default function Expenses() {
             <div style={{ marginBottom: 12 }}>
               <div style={{ fontSize: 11, color: "#9ca3af", marginBottom: 4 }}>Bill Document (optional)</div>
               {manualFile ? (
-                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "#1e2433", borderRadius: 6, padding: "6px 12px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, background: "var(--bg-panel)", borderRadius: 6, padding: "6px 12px" }}>
                   <span style={{ fontSize: 13, color: "#34d399" }}>📄 {manualFile.name}</span>
                   <button onClick={() => setManualFile(null)} style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 12 }}>✕ Remove</button>
                 </div>
               ) : (
-                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "#1e2433", border: "1px dashed #374151", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>
+                <label style={{ display: "inline-flex", alignItems: "center", gap: 6, background: "var(--bg-panel)", border: "1px dashed var(--border)", borderRadius: 6, padding: "6px 14px", cursor: "pointer", fontSize: 12, color: "#9ca3af" }}>
                   📎 Attach bill PDF / image
                   <input type="file" accept=".pdf,image/*" style={{ display: "none" }} onChange={e => { if (e.target.files[0]) setManualFile(e.target.files[0]); }} />
                 </label>
@@ -1425,7 +1425,7 @@ export default function Expenses() {
             </div>
             {manualMsg && <div style={{ marginBottom: 10, fontSize: 13, color: manualMsg.startsWith("✅") ? "#34d399" : "#f87171" }}>{manualMsg}</div>}
             <button onClick={submitManualBill} disabled={manualSaving || !manualForm.vendor || !manualForm.amount}
-              style={{ background: manualForm.vendor && manualForm.amount ? "#059669" : "#374151", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
+              style={{ background: manualForm.vendor && manualForm.amount ? "#059669" : "var(--border)", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 13, fontWeight: 600, cursor: "pointer" }}>
               {manualSaving ? "Saving…" : "✅ Add Expense"}
             </button>
           </div>
@@ -1433,30 +1433,30 @@ export default function Expenses() {
 
         {/* ── Sallaum results ── */}
         {(sallaumMsg || (sallaumParsed && sallaumRows.length > 0)) && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #374151" }}>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", marginBottom: 10 }}>🚢 Sallaum Results</div>
             {sallaumMsg && <div style={{ marginBottom: 10, fontSize: 13, color: sallaumMsg.startsWith("✅") ? "#34d399" : sallaumMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{sallaumMsg}</div>}
             {sallaumParsed && sallaumRows.length > 0 && (
               <>
                 <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>
-                  Invoice <strong style={{ color: "#f1f5f9" }}>{sallaumParsed.invoiceNumber}</strong>
+                  Invoice <strong style={{ color: "var(--text-primary)" }}>{sallaumParsed.invoiceNumber}</strong>
                   {" · "}{sallaumParsed.vessel} · Voyage {sallaumParsed.voyage}
                   {" · "}{sallaumParsed.pol} → {sallaumParsed.pod} · {sallaumParsed.invoiceDate}
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr>{["✓","VIN","Vehicle","Booking","Order Ref","Customer","Amount","Charges","Status"].map(h => <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid #374151", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","VIN","Vehicle","Booking","Order Ref","Customer","Amount","Charges","Status"].map(h => <th key={h} style={{ padding:"8px 12px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                     <tbody>
                       {sallaumRows.map((row, i) => (
                         <tr key={row.vin} style={{ opacity: row.skip ? 0.4 : 1 }}>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030" }}><input type="checkbox" checked={!row.skip} onChange={e => setSallaumRows(rs => rs.map((r,j) => j===i?{...r,skip:!e.target.checked}:r))} /></td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", color:"#e2e8f0" }}>{row.ymm||"—"}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", fontFamily:"monospace", fontSize:11, color:"#6b7280" }}>{row.bookingRef||"—"}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030" }}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setSallaumRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"#111827",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:110}}/>}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", color:"#9ca3af", fontSize:12 }}>{row.customerName||"—"}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", color:"#34d399", fontWeight:600 }}>${row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030", fontSize:11 }}>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}><input type="checkbox" checked={!row.skip} onChange={e => setSallaumRows(rs => rs.map((r,j) => j===i?{...r,skip:!e.target.checked}:r))} /></td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-primary)" }}>{row.ymm||"—"}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:11, color:"#6b7280" }}>{row.bookingRef||"—"}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setSallaumRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:110}}/>}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"#9ca3af", fontSize:12 }}>{row.customerName||"—"}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"#34d399", fontWeight:600 }}>${row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontSize:11 }}>
                             <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                               {row.freight>0 && <span style={{color:"#6b7280"}}>Freight ${row.freight?.toFixed(2)}</span>}
                               {row.baf>0     && <span style={{color:"#6b7280"}}>BAF ${row.baf?.toFixed(2)}</span>}
@@ -1465,7 +1465,7 @@ export default function Expenses() {
                               {row.other>0   && <span style={{color:"#f59e0b",fontWeight:600}}>⚠ Other ${row.other?.toFixed(2)}</span>}
                             </div>
                           </td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid #1a2030" }}>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}>
                             {row.duplicate
                               ? <span style={{color:"#f87171",fontSize:12}}>🔁 Already expensed</span>
                               : row.matched
@@ -1490,27 +1490,27 @@ export default function Expenses() {
 
         {/* ── ACL results ── */}
         {(aclMsg || aclRows.length > 0) && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #374151" }}>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", marginBottom: 10 }}>⚓ ACL / Grimaldi Results</div>
             {aclMsg && <div style={{ marginBottom: 10, fontSize: 13, color: aclMsg.startsWith("✅") ? "#34d399" : aclMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{aclMsg}</div>}
             {aclRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead><tr>{["✓","File","VIN","Vehicle","Vessel / Voyage","POD","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","File","VIN","Vehicle","Vessel / Voyage","POD","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {aclRows.map((row,i)=>(
                         <tr key={i} style={{opacity:row.skip?0.4:1}}>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}><input type="checkbox" checked={!row.skip} onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#6b7280",fontSize:11,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",fontFamily:"monospace",fontSize:12,color:"#94a3b8"}}>{row.vin||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:12,whiteSpace:"nowrap"}}>{[row.vessel,row.voyage].filter(Boolean).join(" / ")||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:11,whiteSpace:"nowrap"}}>{row.pod||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"#111827",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",fontSize:12,width:140}}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>{row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#6b7280",fontSize:11,maxWidth:110,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:12,color:"#94a3b8"}}>{row.vin||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:12,whiteSpace:"nowrap"}}>{[row.vessel,row.voyage].filter(Boolean).join(" / ")||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:11,whiteSpace:"nowrap"}}>{row.pod||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:140}}/></td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1529,48 +1529,48 @@ export default function Expenses() {
 
         {/* ── Dispatch results ── */}
         {(dispatchMsg || dispatchRows.length > 0) && (
-          <div id="dispatch-section" style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #374151" }}>
+          <div id="dispatch-section" style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#f59e0b", marginBottom: 10 }}>🚛 Dispatch Results</div>
             {dispatchMsg && <div style={{ marginBottom: 10, fontSize: 13, color: dispatchMsg.startsWith("✅") ? "#34d399" : dispatchMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{dispatchMsg}</div>}
             {dispatchRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead><tr>{["✓","File","Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","File","Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {dispatchRows.map((row,i)=>(
                         <React.Fragment key={i}>
                         <tr style={{opacity:row.skip?0.4:1}}>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}><input type="checkbox" checked={!row.skip} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#6b7280",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#a78bfa",fontWeight:600,fontSize:13}}>{row.loadId||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",fontFamily:"monospace",fontSize:12,color:"#94a3b8"}}>{row.vin||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:11,whiteSpace:"nowrap"}}>{row.origin||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"#111827",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",fontSize:12,width:130}}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#6b7280",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#a78bfa",fontWeight:600,fontSize:13}}>{row.loadId||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:12,color:"#94a3b8"}}>{row.vin||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:11,whiteSpace:"nowrap"}}>{row.origin||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:130}}/></td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             {row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}
                             <button onClick={()=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,lineItems:[...(r.lineItems||[]),{description:"",amount:""}]}:r))}
-                              style={{marginLeft:8,fontSize:10,padding:"1px 7px",borderRadius:5,border:"1px solid #374151",background:"none",color:"#34d399",cursor:"pointer"}}>
+                              style={{marginLeft:8,fontSize:10,padding:"1px 7px",borderRadius:5,border:"1px solid var(--border)",background:"none",color:"#34d399",cursor:"pointer"}}>
                               + Extra
                             </button>
                           </td>
                         </tr>
                         {(row.lineItems||[]).map((li,li_i)=>(
-                          <tr key={`li-${i}-${li_i}`} style={{background:"#0d1117",opacity:row.skip?0.4:1}}>
+                          <tr key={`li-${i}-${li_i}`} style={{background:"var(--bg-base)",opacity:row.skip?0.4:1}}>
                             <td colSpan={8}></td>
                             <td style={{padding:"4px 8px"}} colSpan={1}>
                               <input value={li.description} placeholder="Extra charge description…"
                                 onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j!==i?r:{...r,lineItems:r.lineItems.map((l,k)=>k===li_i?{...l,description:e.target.value}:l)}))}
-                                style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",fontSize:12,width:"100%"}}/>
+                                style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:"100%"}}/>
                             </td>
                             <td style={{padding:"4px 8px"}}>
                               <input type="number" value={li.amount} min="0" step="0.01" placeholder="0.00"
                                 onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j!==i?r:{...r,lineItems:r.lineItems.map((l,k)=>k===li_i?{...l,amount:e.target.value}:l)}))}
-                                style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:12,width:80,fontWeight:600}}/>
+                                style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:12,width:80,fontWeight:600}}/>
                             </td>
                             <td style={{padding:"4px 8px"}}>
                               <button onClick={()=>setDispatchRows(rs=>rs.map((r,j)=>j!==i?r:{...r,lineItems:r.lineItems.filter((_,k)=>k!==li_i)}))}
@@ -1596,41 +1596,41 @@ export default function Expenses() {
 
         {/* ── Container results ── */}
         {(containerMsg || containerResults.length > 0) && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #374151" }}>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#ec4899", marginBottom: 10 }}>📦 Container Results</div>
             {containerMsg && <div style={{ marginBottom: 10, fontSize: 13, color: containerMsg.startsWith("✅") ? "#34d399" : containerMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{containerMsg}</div>}
             {containerResults.map((inv, ii) => (
               <div key={ii} style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10 }}>
-                  Invoice <strong style={{ color: "#f1f5f9" }}>{inv.invoiceNumber}</strong>
-                  {inv.container && <> · Container <strong style={{ color: "#f1f5f9" }}>{inv.container}</strong></>}
+                  Invoice <strong style={{ color: "var(--text-primary)" }}>{inv.invoiceNumber}</strong>
+                  {inv.container && <> · Container <strong style={{ color: "var(--text-primary)" }}>{inv.container}</strong></>}
                   {inv.booking && <> · Booking {inv.booking}</>}
                   {" · "}{inv.vendor} · <strong style={{ color: "#34d399" }}>${inv.total?.toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong> ÷ {inv.rows?.length} VINs = <strong style={{ color: "#34d399" }}>${(inv.rows?.[0]?.total || 0).toLocaleString("en-US", { minimumFractionDigits: 2 })}</strong> each
                 </div>
                 {inv.error ? <div style={{ color: "#f87171", fontSize: 13 }}>❌ {inv.error}</div> : (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead><tr>{["✓","VIN","Vehicle","Booking #","Order Ref","Customer","Amount","Status"].map(h => <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid #374151", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                      <thead><tr>{["✓","VIN","Vehicle","Booking #","Order Ref","Customer","Amount","Status"].map(h => <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"#6b7280", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {inv.rows?.map((row, i) => (
                           <tr key={i} style={{ opacity: row.skip ? 0.4 : 1 }}>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030" }}><input type="checkbox" checked={!row.skip} onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, skip: !e.target.checked } : rr) }))}/></td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030", color:"#e2e8f0", whiteSpace:"nowrap" }}>{row.ymm || "—"}</td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030", color:"#a78bfa", fontWeight:600, fontSize:12 }}>{inv.booking || "—"}</td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030" }}>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}><input type="checkbox" checked={!row.skip} onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, skip: !e.target.checked } : rr) }))}/></td>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{row.ymm || "—"}</td>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"#a78bfa", fontWeight:600, fontSize:12 }}>{inv.booking || "—"}</td>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               {row.matched ? <span style={{ color:"#60a5fa", fontWeight:600 }}>{row.orderRef}</span>
                                 : <input value={row.orderRef} placeholder="Enter ref…"
                                     onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, orderRef: e.target.value } : rr) }))}
-                                    style={{ background:"#111827", border:"1px solid #f59e0b", borderRadius:6, padding:"3px 8px", color:"#fbbf24", fontSize:12, width:100 }}/>}
+                                    style={{ background:"var(--bg-elevated)", border:"1px solid #f59e0b", borderRadius:6, padding:"3px 8px", color:"#fbbf24", fontSize:12, width:100 }}/>}
                             </td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030", color:"#9ca3af", fontSize:12 }}>{row.customerName || "—"}</td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030" }}>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"#9ca3af", fontSize:12 }}>{row.customerName || "—"}</td>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               <input type="number" value={row.total} min="0" step="0.01"
                                 onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, total: parseFloat(e.target.value)||0 } : rr) }))}
-                                style={{ background:"#111827", border:"1px solid #374151", borderRadius:6, padding:"3px 8px", color:"#34d399", fontSize:13, width:80, fontWeight:600 }}/>
+                                style={{ background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:6, padding:"3px 8px", color:"#34d399", fontSize:13, width:80, fontWeight:600 }}/>
                             </td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid #1a2030" }}>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               {row.matched ? <span style={{ color:"#34d399", fontSize:12 }}>✅ Matched</span> : <span style={{ color:"#f59e0b", fontSize:12 }}>⚠ No match</span>}
                             </td>
                           </tr>
@@ -1654,43 +1654,43 @@ export default function Expenses() {
 
         {/* ── Misc / Other results ── */}
         {(miscMsg || miscResults.length > 0) && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #374151" }}>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#10b981", marginBottom: 10 }}>📋 Other / Misc Results</div>
             {miscMsg && <div style={{ marginBottom: 10, fontSize: 13, color: miscMsg.startsWith("✅") ? "#34d399" : miscMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{miscMsg}</div>}
             {miscResults.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                    <thead><tr>{["✓","File","Vendor","Invoice #","VIN","Category","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","File","Vendor","Invoice #","VIN","Category","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"#6b7280",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {miscResults.map((row, i) => (
                         <tr key={i} style={{ opacity: row.skip ? 0.4 : 1 }}>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}><input type="checkbox" checked={!row.skip} onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#6b7280",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap"}}>{row.vendor||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",color:"#a78bfa",fontSize:12}}>{row.invoiceNumber||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030",fontFamily:"monospace",fontSize:11,color:"#94a3b8"}}>{row.vin||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#6b7280",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.vendor||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#a78bfa",fontSize:12}}>{row.invoiceNumber||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:11,color:"#94a3b8"}}>{row.vin||"—"}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             <select value={row.category||"Port / Terminal Fees"} onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,category:e.target.value}:r))}
-                              style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#f1f5f9",fontSize:11}}>
+                              style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:11}}>
                               {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
                             </select>
                           </td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             {row.matched
                               ? <span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>
                               : <input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))}
-                                  style={{background:"#111827",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}
+                                  style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}
                           </td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             <input type="number" value={row.total} min="0" step="0.01" onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))}
-                              style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/>
+                              style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/>
                           </td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             <input value={row.notes} placeholder="notes…" onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))}
-                              style={{background:"#111827",border:"1px solid #374151",borderRadius:6,padding:"3px 8px",color:"#e2e8f0",fontSize:12,width:130}}/>
+                              style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:130}}/>
                           </td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid #1a2030"}}>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             {row.error ? <span style={{color:"#f87171",fontSize:11}}>❌ Error</span>
                               : <div style={{display:"flex",flexDirection:"column",gap:3}}>
                                   <span style={{color:row.matched?"#34d399":"#f59e0b",fontSize:12}}>{row.matched?"✅ Matched":"⚠ No match"}</span>
@@ -1716,7 +1716,7 @@ export default function Expenses() {
 
         {/* ── Payment Proof results ── */}
         {(proofMsg || proofRows.length > 0) && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid #374151" }}>
+          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#06b6d4", marginBottom: 10 }}>🏦 Payment Proof Results</div>
             {proofMsg && <div style={{ marginBottom: 10, fontSize: 13, color: proofMsg.startsWith("✅") ? "#34d399" : proofMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{proofMsg}</div>}
             {proofRows.length > 0 && (
@@ -1732,20 +1732,20 @@ export default function Expenses() {
                       <col style={{ width: "40%" }} />
                       <col style={{ width: "17%" }} />
                     </colgroup>
-                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:"#6b7280",fontSize:10,fontWeight:600,borderBottom:"1px solid #374151",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","Payee (Bank)","Order Ref","Note","Amount","Matched Bill(s)","Status"].map(h=><th key={h} style={{padding:"4px 8px",textAlign:"left",color:"#6b7280",fontSize:10,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {proofRows.map((row, i) => (
                         <React.Fragment key={i}>
                         <tr style={{ opacity: row.selected ? 1 : 0.5 }}>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",lineHeight:1.2}}>
                             <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill && !row.splitBills && !row.attachOnly}
                               onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked, ...(e.target.checked?{}:{attachOnly:false})}:r))}/>
                           </td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#e2e8f0",whiteSpace:"nowrap",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis"}}>{row.payeeName}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#60a5fa",fontWeight:600,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.orderRef || "—"}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#9ca3af",fontSize:11,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",color:"#34d399",fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${row.amount.toFixed(2)}</td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",fontSize:11,color:"#9ca3af",lineHeight:1.2,overflow:"hidden"}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap",lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis"}}>{row.payeeName}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"#60a5fa",fontWeight:600,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.orderRef || "—"}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"#9ca3af",fontSize:11,lineHeight:1.2,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.note || "—"}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",color:"#34d399",fontWeight:600,lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>${row.amount.toFixed(2)}</td>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",fontSize:11,color:"#9ca3af",lineHeight:1.2,overflow:"hidden"}}>
                             {(() => {
                               const list = row.matchedIds?.length
                                 ? row.candidates.filter(c=>row.matchedIds.includes(c._id))
@@ -1776,7 +1776,7 @@ export default function Expenses() {
                               return <span style={{display:"block",color:"#f87171",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>No bill on file for #{row.orderRef}</span>;
                             })()}
                           </td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid #1a2030",lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
+                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
                             {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact</span>}
                             {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:11}}>✅ Combined</span>}
                             {(row.matchType === "already_paid" || row.matchType === "already_paid_mismatch") && (
@@ -1835,28 +1835,28 @@ export default function Expenses() {
                         {row.createBill && (
                           <tr>
                             <td></td>
-                            <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid #1a2030" }}>
-                              <div style={{ display:"flex", gap:8, alignItems:"center", background:"#0d1117", border:"1px solid #06b6d4", borderRadius:6, padding:"6px 10px" }}>
-                                <label style={{ fontSize:10, color:"#8b949e" }}>Order Ref
+                            <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid var(--border-muted)" }}>
+                              <div style={{ display:"flex", gap:8, alignItems:"center", background:"var(--bg-base)", border:"1px solid #06b6d4", borderRadius:6, padding:"6px 10px" }}>
+                                <label style={{ fontSize:10, color:"var(--text-secondary)" }}>Order Ref
                                   <input value={row.orderRef} placeholder="e.g. 13798" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))}
-                                    style={{ display:"block", width:80, marginTop:2, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"2px 6px", color:"#60a5fa", fontSize:11, boxSizing:"border-box" }} />
+                                    style={{ display:"block", width:80, marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"#60a5fa", fontSize:11, boxSizing:"border-box" }} />
                                 </label>
-                                <label style={{ fontSize:10, color:"#8b949e" }}>Category
+                                <label style={{ fontSize:10, color:"var(--text-secondary)" }}>Category
                                   <select value={row.newCategory} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newCategory:e.target.value}:r))}
-                                    style={{ display:"block", marginTop:2, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"2px 6px", color:"#f1f5f9", fontSize:11 }}>
+                                    style={{ display:"block", marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"var(--text-primary)", fontSize:11 }}>
                                     {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
                                   </select>
                                 </label>
-                                <label style={{ fontSize:10, color:"#8b949e", flex:1 }}>Description
+                                <label style={{ fontSize:10, color:"var(--text-secondary)", flex:1 }}>Description
                                   <input value={row.newDescription} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newDescription:e.target.value}:r))}
-                                    style={{ display:"block", width:"100%", marginTop:2, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"2px 6px", color:"#f1f5f9", fontSize:11, boxSizing:"border-box" }} />
+                                    style={{ display:"block", width:"100%", marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"var(--text-primary)", fontSize:11, boxSizing:"border-box" }} />
                                 </label>
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, selected:true } : r))}
                                   style={{ fontSize:10, color:"#fff", background:"#059669", border:"none", borderRadius:5, padding:"4px 10px", cursor:"pointer", fontWeight:600, alignSelf:"flex-end" }}>
                                   ✓ Ready
                                 </button>
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill:false, selected:false } : r))}
-                                  style={{ fontSize:10, color:"#9ca3af", background:"none", border:"1px solid #374151", borderRadius:5, padding:"4px 10px", cursor:"pointer", alignSelf:"flex-end" }}>
+                                  style={{ fontSize:10, color:"#9ca3af", background:"none", border:"1px solid var(--border)", borderRadius:5, padding:"4px 10px", cursor:"pointer", alignSelf:"flex-end" }}>
                                   Cancel
                                 </button>
                               </div>
@@ -1869,26 +1869,26 @@ export default function Expenses() {
                           return (
                           <tr>
                             <td></td>
-                            <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid #1a2030" }}>
-                              <div style={{ background:"#0d1117", border:`1px solid ${balanced ? "#34d399" : "#fbbf24"}`, borderRadius:6, padding:"8px 10px" }}>
+                            <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid var(--border-muted)" }}>
+                              <div style={{ background:"var(--bg-base)", border:`1px solid ${balanced ? "#34d399" : "#fbbf24"}`, borderRadius:6, padding:"8px 10px" }}>
                                 {row.splitBills.map((split, k) => (
                                   <div key={k} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6 }}>
                                     <span style={{ fontSize:10, color:"#6b7280", width:14 }}>{k+1}.</span>
                                     <input value={split.orderRef} placeholder="Order ref" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,orderRef:e.target.value}:s)}:r))}
-                                      style={{ width:80, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#60a5fa", fontSize:11 }} />
+                                      style={{ width:80, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"#60a5fa", fontSize:11 }} />
                                     <select value={split.category} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,category:e.target.value}:s)}:r))}
-                                      style={{ background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#f1f5f9", fontSize:11 }}>
+                                      style={{ background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"var(--text-primary)", fontSize:11 }}>
                                       {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
                                     </select>
                                     <input value={split.description} placeholder="Description" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,description:e.target.value}:s)}:r))}
-                                      style={{ flex:1, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#f1f5f9", fontSize:11 }} />
+                                      style={{ flex:1, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"var(--text-primary)", fontSize:11 }} />
                                     <input type="number" step="0.01" value={split.amount} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,amount:e.target.value}:s)}:r))}
-                                      style={{ width:80, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#34d399", fontSize:11, fontWeight:600 }} />
+                                      style={{ width:80, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"#34d399", fontSize:11, fontWeight:600 }} />
                                     {/* Create Bill toggle per line */}
                                     <button
                                       title={split.createBill !== false ? "Will create a new bill — click to skip" : "Click to create a new bill for this line"}
                                       onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,createBill:s.createBill===false?true:false}:s)}:r))}
-                                      style={{ fontSize:10, padding:"2px 6px", borderRadius:5, border:`1px solid ${split.createBill===false ? "#374151" : "#06b6d4"}`, background:"none", color: split.createBill===false ? "#4b5563" : "#06b6d4", cursor:"pointer", whiteSpace:"nowrap" }}>
+                                      style={{ fontSize:10, padding:"2px 6px", borderRadius:5, border:`1px solid ${split.createBill===false ? "var(--border)" : "#06b6d4"}`, background:"none", color: split.createBill===false ? "#4b5563" : "#06b6d4", cursor:"pointer", whiteSpace:"nowrap" }}>
                                       {split.createBill === false ? "📝 Skip" : "📝 New Bill"}
                                     </button>
                                     <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills: r.splitBills.filter((_,sk)=>sk!==k) } : r))}
@@ -1908,7 +1908,7 @@ export default function Expenses() {
                                   </span>
                                   <div style={{ display:"flex", gap:6 }}>
                                     <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, selected:true } : r))} disabled={!balanced}
-                                      style={{ fontSize:10, color:"#fff", background: balanced ? "#059669" : "#374151", border:"none", borderRadius:5, padding:"4px 10px", cursor: balanced ? "pointer" : "not-allowed", fontWeight:600 }}>
+                                      style={{ fontSize:10, color:"#fff", background: balanced ? "#059669" : "var(--border)", border:"none", borderRadius:5, padding:"4px 10px", cursor: balanced ? "pointer" : "not-allowed", fontWeight:600 }}>
                                       ✓ Ready
                                     </button>
                                   </div>
@@ -1954,7 +1954,7 @@ export default function Expenses() {
           <div
             onClick={() => setActiveFilter(a => a === "unpaid" ? null : "unpaid")}
             style={{
-              background: "#1e2433", borderRadius: 12, padding: "18px 22px", cursor: "pointer",
+              background: "var(--bg-panel)", borderRadius: 12, padding: "18px 22px", cursor: "pointer",
               border: `2px solid ${activeFilter === "unpaid" ? "#f87171" : "transparent"}`,
               opacity: activeFilter && activeFilter !== "unpaid" ? 0.45 : 1,
               transition: "all 0.15s",
@@ -1968,7 +1968,7 @@ export default function Expenses() {
           <div
             onClick={() => setActiveFilter(a => a === "paid" ? null : "paid")}
             style={{
-              background: "#1e2433", borderRadius: 12, padding: "18px 22px", cursor: "pointer",
+              background: "var(--bg-panel)", borderRadius: 12, padding: "18px 22px", cursor: "pointer",
               border: `2px solid ${activeFilter === "paid" ? "#34d399" : "transparent"}`,
               opacity: activeFilter && activeFilter !== "paid" ? 0.45 : 1,
               transition: "all 0.15s",
@@ -1982,11 +1982,11 @@ export default function Expenses() {
 
           {/* All time total */}
           <div style={{
-            background: "#1e2433", borderRadius: 12, padding: "18px 22px",
+            background: "var(--bg-panel)", borderRadius: 12, padding: "18px 22px",
             opacity: activeFilter ? 0.45 : 1, transition: "all 0.15s",
           }}>
             <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 6, textTransform: "uppercase", letterSpacing: "0.05em" }}>Total All Time</div>
-            <div style={{ fontSize: 26, fontWeight: 700, color: "#f1f5f9" }}>{fmt$(summary.totalAllTime)}</div>
+            <div style={{ fontSize: 26, fontWeight: 700, color: "var(--text-primary)" }}>{fmt$(summary.totalAllTime)}</div>
             <div style={{ fontSize: 11, color: "#6b7280", marginTop: 4 }}>{summary.count} expenses recorded</div>
           </div>
         </div>
@@ -1994,7 +1994,7 @@ export default function Expenses() {
 
       {/* Category breakdown mini-bar */}
       {summary?.byCategory && Object.keys(summary.byCategory).length > 0 && (
-        <div style={{ background: "#1e2433", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
+        <div style={{ background: "var(--bg-panel)", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
           <div style={{ fontSize: 12, color: "#9ca3af", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>By Category</div>
           <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
             {Object.entries(summary.byCategory)
@@ -2002,7 +2002,7 @@ export default function Expenses() {
               .map(([cat, amt]) => (
                 <div key={cat} style={{ display: "flex", alignItems: "center", gap: 6 }}>
                   <span style={{ width: 10, height: 10, borderRadius: "50%", background: CAT_COLORS[cat] || "#9ca3af", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: "#e2e8f0" }}>{cat}</span>
+                  <span style={{ fontSize: 12, color: "var(--text-primary)" }}>{cat}</span>
                   <span style={{ fontSize: 12, color: "#9ca3af" }}>{fmt$(amt)}</span>
                 </div>
               ))}
@@ -2016,35 +2016,35 @@ export default function Expenses() {
           placeholder="Search description, vendor, order…"
           value={search} onChange={e => setSearch(e.target.value)}
           style={{
-            background: "#1e2433", border: "1px solid #374151", borderRadius: 7,
-            color: "#f1f5f9", padding: "8px 12px", fontSize: 13, width: 260,
+            background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
+            color: "var(--text-primary)", padding: "8px 12px", fontSize: 13, width: 260,
           }}
         />
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{
-          background: "#1e2433", border: "1px solid #374151", borderRadius: 7,
-          color: filterCat ? "#f1f5f9" : "#9ca3af", padding: "8px 12px", fontSize: 13,
+          background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
+          color: filterCat ? "var(--text-primary)" : "#9ca3af", padding: "8px 12px", fontSize: 13,
         }}>
           <option value="">All Categories</option>
           {CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
         <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{
-          background: "#1e2433", border: "1px solid #374151", borderRadius: 7,
-          color: filterStatus ? "#f1f5f9" : "#9ca3af", padding: "8px 12px", fontSize: 13,
+          background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
+          color: filterStatus ? "var(--text-primary)" : "#9ca3af", padding: "8px 12px", fontSize: 13,
         }}>
           <option value="">All Statuses</option>
           <option value="unpaid">Unpaid</option>
           <option value="paid">Paid</option>
         </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
-          style={{ background: "#1e2433", border: "1px solid #374151", borderRadius: 7, color: "#f1f5f9", padding: "8px 12px", fontSize: 13 }}
+          style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-primary)", padding: "8px 12px", fontSize: 13 }}
         />
         <span style={{ color: "#6b7280", fontSize: 13 }}>to</span>
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
-          style={{ background: "#1e2433", border: "1px solid #374151", borderRadius: 7, color: "#f1f5f9", padding: "8px 12px", fontSize: 13 }}
+          style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-primary)", padding: "8px 12px", fontSize: 13 }}
         />
         {(search || filterCat || filterStatus || dateFrom || dateTo || activeFilter) && (
           <button onClick={() => { setSearch(""); setFilterCat(""); setFilterStatus(""); setDateFrom(""); setDateTo(""); setActiveFilter(null); }}
-            style={{ background: "none", border: "1px solid #374151", borderRadius: 7, color: "#9ca3af", padding: "8px 12px", fontSize: 12, cursor: "pointer" }}>
+            style={{ background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "#9ca3af", padding: "8px 12px", fontSize: 12, cursor: "pointer" }}>
             Clear filters
           </button>
         )}
@@ -2055,7 +2055,7 @@ export default function Expenses() {
       </div>
 
       {/* Table */}
-      <div style={{ background: "#161d2c", borderRadius: 12, overflow: "hidden", border: "1px solid #1e2433" }}>
+      <div style={{ background: "#161d2c", borderRadius: 12, overflow: "hidden", border: "1px solid var(--bg-panel)" }}>
         {loading ? (
           <div style={{ padding: 40, textAlign: "center", color: "#6b7280" }}>Loading…</div>
         ) : displayList.length === 0 ? (
@@ -2070,7 +2070,7 @@ export default function Expenses() {
           <div style={{ overflowX: "auto" }}>
             <table style={{ width: "100%", borderCollapse: "collapse" }}>
               <thead>
-                <tr style={{ background: "#1a2235" }}>
+                <tr style={{ background: "var(--bg-hover)" }}>
                   <th style={{ ...th, width: 40 }}>
                     <input type="checkbox"
                       checked={displayList.length > 0 && displayList.every(x => selected[x._id])}
@@ -2094,7 +2094,7 @@ export default function Expenses() {
                   <React.Fragment key={exp._id}>
                   <tr
                     style={{ background: selected[exp._id] ? "#1a2f1a" : "#161d2c", cursor: "pointer" }}
-                    onMouseEnter={e => e.currentTarget.style.background = selected[exp._id] ? "#1a2f1a" : "#1a2235"}
+                    onMouseEnter={e => e.currentTarget.style.background = selected[exp._id] ? "#1a2f1a" : "var(--bg-hover)"}
                     onMouseLeave={e => e.currentTarget.style.background = selected[exp._id] ? "#1a2f1a" : "#161d2c"}
                     onClick={() => toggleSelect(exp._id)}>
 
@@ -2136,7 +2136,7 @@ export default function Expenses() {
                     </td>
 
                     {/* Amount */}
-                    <td style={{ ...td, textAlign: "right", fontWeight: 600, color: "#f1f5f9", fontVariantNumeric: "tabular-nums" }}>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 600, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>
                       {fmt$(exp.amount)}
                     </td>
 
@@ -2171,10 +2171,10 @@ export default function Expenses() {
                     <td style={{ ...td, whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
                       {exp.billFileName
                         ? <a href={`${API}/api/expenses/${exp._id}/bill`} target="_blank" rel="noopener noreferrer" title="View bill" style={{ color: "#a78bfa", fontSize: 16, textDecoration: "none", marginRight: 6 }}>📄</a>
-                        : <span style={{ color: "#2d3748", marginRight: 6 }}>📄</span>}
+                        : <span style={{ color: "var(--border)", marginRight: 6 }}>📄</span>}
                       {exp.receiptFileName
                         ? <a href={`${API}/api/expenses/${exp._id}/receipt`} target="_blank" rel="noopener noreferrer" title="View receipt" style={{ color: "#60a5fa", fontSize: 16, textDecoration: "none" }}>📎</a>
-                        : <span style={{ color: "#2d3748" }}>📎</span>}
+                        : <span style={{ color: "var(--border)" }}>📎</span>}
                     </td>
 
                     {/* Actions */}
@@ -2208,7 +2208,7 @@ export default function Expenses() {
                           Edit
                         </button>
                         {exp.status === "paid"
-                          ? <span title="Mark as unpaid first to delete" style={{ color: "#374151", fontSize: 11, padding: "4px 8px", cursor: "not-allowed" }}>🔒</span>
+                          ? <span title="Mark as unpaid first to delete" style={{ color: "var(--border)", fontSize: 11, padding: "4px 8px", cursor: "not-allowed" }}>🔒</span>
                           : <button onClick={() => setConfirmDelete(exp)} title="Delete" style={{
                               background: "#f8717120", color: "#f87171", border: "none", borderRadius: 5,
                               padding: "4px 8px", fontSize: 11, cursor: "pointer",
@@ -2243,11 +2243,11 @@ export default function Expenses() {
               {/* Totals row */}
               {displayList.length > 1 && (
                 <tfoot>
-                  <tr style={{ background: "#1a2235", borderTop: "2px solid #2d3748" }}>
+                  <tr style={{ background: "var(--bg-hover)", borderTop: "2px solid var(--border)" }}>
                     <td colSpan={4} style={{ ...td, color: "#9ca3af", fontWeight: 600 }}>
                       Total ({displayList.length} items)
                     </td>
-                    <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "#f1f5f9", fontSize: 14 }}>
+                    <td style={{ ...td, textAlign: "right", fontWeight: 700, color: "var(--text-primary)", fontSize: 14 }}>
                       {fmt$(displayList.reduce((s, e) => s + (e.amount || 0), 0))}
                     </td>
                     <td colSpan={4} />
@@ -2262,13 +2262,13 @@ export default function Expenses() {
       {/* ── Duplicate Warning Modal ── */}
       {dupWarning && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#1c2130", border:"1px solid #f59e0b", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #f59e0b", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
             <div style={{ fontSize:20, marginBottom:12 }}>⚠️ Possible Duplicate</div>
             <p style={{ fontSize:13, color:"#9ca3af", marginBottom:16 }}>
               A similar expense already exists:
             </p>
-            <div style={{ background:"#111827", borderRadius:8, padding:"12px 14px", marginBottom:20, fontSize:13 }}>
-              <div style={{ color:"#f1f5f9", fontWeight:600 }}>{dupWarning.description}</div>
+            <div style={{ background:"var(--bg-elevated)", borderRadius:8, padding:"12px 14px", marginBottom:20, fontSize:13 }}>
+              <div style={{ color:"var(--text-primary)", fontWeight:600 }}>{dupWarning.description}</div>
               <div style={{ color:"#34d399", fontWeight:700, fontSize:15, marginTop:4 }}>${Number(dupWarning.amount).toFixed(2)}</div>
               <div style={{ color:"#9ca3af", fontSize:11, marginTop:4 }}>
                 {dupWarning.date ? new Date(dupWarning.date).toLocaleDateString() : ""}{dupWarning.orderRef ? ` · Order #${dupWarning.orderRef}` : ""}{" · "}{dupWarning.status}
@@ -2276,7 +2276,7 @@ export default function Expenses() {
             </div>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={() => setDupWarning(null)}
-                style={{ padding:"9px 18px", background:"none", border:"1px solid #374151", borderRadius:8, color:"#9ca3af", cursor:"pointer" }}>
+                style={{ padding:"9px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"#9ca3af", cursor:"pointer" }}>
                 Cancel
               </button>
               <button onClick={() => { setDupWarning(null); handleSubmit(null, true); }}
@@ -2307,13 +2307,13 @@ export default function Expenses() {
 
           {/* Extra charge lines — only shown when editing */}
           {editing && (
-            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid #374151" }}>
+            <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
                 <div style={{ fontSize: 12, color: "#9ca3af", fontWeight: 600 }}>Extra Charges (new expense lines)</div>
                 <button
                   type="button"
                   onClick={() => setEditExtraLines(l => [...l, { description: "", amount: "" }])}
-                  style={{ fontSize: 12, padding: "4px 12px", borderRadius: 6, border: "1px solid #374151", background: "none", color: "#34d399", cursor: "pointer" }}>
+                  style={{ fontSize: 12, padding: "4px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "none", color: "#34d399", cursor: "pointer" }}>
                   + Add Line
                 </button>
               </div>
@@ -2328,13 +2328,13 @@ export default function Expenses() {
                     value={line.description}
                     onChange={e => setEditExtraLines(ls => ls.map((l, j) => j === i ? { ...l, description: e.target.value } : l))}
                     placeholder="e.g. Storage fee, gate fee, wait time…"
-                    style={{ background: "#111827", border: "1px solid #374151", borderRadius: 6, padding: "7px 10px", color: "#f1f5f9", fontSize: 13, boxSizing: "border-box" }} />
+                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13, boxSizing: "border-box" }} />
                   <input
                     type="number" min="0" step="0.01"
                     value={line.amount}
                     onChange={e => setEditExtraLines(ls => ls.map((l, j) => j === i ? { ...l, amount: e.target.value } : l))}
                     placeholder="0.00"
-                    style={{ background: "#111827", border: "1px solid #374151", borderRadius: 6, padding: "7px 10px", color: "#34d399", fontSize: 13, fontWeight: 600, boxSizing: "border-box" }} />
+                    style={{ background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 6, padding: "7px 10px", color: "#34d399", fontSize: 13, fontWeight: 600, boxSizing: "border-box" }} />
                   <button
                     type="button"
                     onClick={() => setEditExtraLines(ls => ls.filter((_, j) => j !== i))}
@@ -2357,20 +2357,20 @@ export default function Expenses() {
       {selectedIds.length > 0 && (
         <div style={{
           position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
-          background: "#0f1623", borderTop: "2px solid #f59e0b",
+          background: "var(--bg-base)", borderTop: "2px solid #f59e0b",
           padding: "14px 32px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
           boxShadow: "0 -4px 24px rgba(0,0,0,0.5)",
         }}>
           <div style={{ flex: 1, minWidth: 300 }}>
             <div style={{ display: "flex", alignItems: "baseline", gap: 16, flexWrap: "wrap", marginBottom: 6 }}>
-              <span style={{ fontSize: 13, color: "#9ca3af" }}>Selected: <strong style={{ color: "#f1f5f9" }}>{selectedIds.length} bill{selectedIds.length !== 1 ? "s" : ""}</strong></span>
+              <span style={{ fontSize: 13, color: "#9ca3af" }}>Selected: <strong style={{ color: "var(--text-primary)" }}>{selectedIds.length} bill{selectedIds.length !== 1 ? "s" : ""}</strong></span>
               <span style={{ fontSize: 13, color: "#9ca3af" }}>Total: <strong style={{ color: "#34d399", fontSize: 18 }}>{fmt$(selectedTotal)}</strong></span>
             </div>
             {Object.keys(selectedByVendor).length > 1 && (
               <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
                 {Object.entries(selectedByVendor).map(([vendor, amt]) => (
-                  <span key={vendor} style={{ fontSize: 11, color: "#9ca3af", background: "#1e2433", borderRadius: 5, padding: "2px 8px", border: "1px solid #374151" }}>
-                    <span style={{ color: "#f1f5f9" }}>{vendor}</span>
+                  <span key={vendor} style={{ fontSize: 11, color: "#9ca3af", background: "var(--bg-panel)", borderRadius: 5, padding: "2px 8px", border: "1px solid var(--border)" }}>
+                    <span style={{ color: "var(--text-primary)" }}>{vendor}</span>
                     <span style={{ color: "#f59e0b", marginLeft: 6, fontWeight: 600 }}>{fmt$(amt)}</span>
                   </span>
                 ))}
@@ -2378,7 +2378,7 @@ export default function Expenses() {
             )}
             {Object.keys(selectedByVendor).length === 1 && (
               <div style={{ fontSize: 11, color: "#9ca3af" }}>
-                Vendor: <span style={{ color: "#f1f5f9" }}>{Object.keys(selectedByVendor)[0]}</span>
+                Vendor: <span style={{ color: "var(--text-primary)" }}>{Object.keys(selectedByVendor)[0]}</span>
               </div>
             )}
           </div>
@@ -2386,11 +2386,11 @@ export default function Expenses() {
           <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
             <label style={{ fontSize: 12, color: "#9ca3af" }}>Date Paid</label>
             <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)}
-              style={{ background: "#1e2433", border: "1px solid #374151", borderRadius: 7, padding: "7px 10px", color: "#f1f5f9", fontSize: 13 }} />
+              style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13 }} />
 
             <label style={{ fontSize: 12, color: "#9ca3af" }}>Method</label>
             <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
-              style={{ background: "#1e2433", border: "1px solid #374151", borderRadius: 7, padding: "7px 12px", color: "#f1f5f9", fontSize: 13, minWidth: 130 }}>
+              style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "7px 12px", color: "var(--text-primary)", fontSize: 13, minWidth: 130 }}>
               <option>Bank ACH</option>
               <option>Zelle</option>
               <option>Venmo</option>
@@ -2418,7 +2418,7 @@ export default function Expenses() {
               🗑 Delete Unpaid
             </button>
             <button onClick={() => setSelected({})}
-              style={{ background: "transparent", color: "#9ca3af", border: "1px solid #374151", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>
+              style={{ background: "transparent", color: "#9ca3af", border: "1px solid var(--border)", borderRadius: 8, padding: "9px 16px", fontSize: 13, cursor: "pointer" }}>
               Clear
             </button>
           </div>
@@ -2428,16 +2428,16 @@ export default function Expenses() {
       {/* Confirm Delete */}
       {payConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:360, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 4px", color:"#e6edf3" }}>{payConfirm.addTo != null ? "Add Payment" : "Mark Bill Paid"}</h3>
-            <p style={{ margin:"0 0 18px", fontSize:12, color:"#8b949e" }}>{payConfirm.exp.description}</p>
-            <label style={{ display:"block", marginBottom:14, fontSize:12, color:"#8b949e" }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:360, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 4px", color:"var(--text-primary)" }}>{payConfirm.addTo != null ? "Add Payment" : "Mark Bill Paid"}</h3>
+            <p style={{ margin:"0 0 18px", fontSize:12, color:"var(--text-secondary)" }}>{payConfirm.exp.description}</p>
+            <label style={{ display:"block", marginBottom:14, fontSize:12, color:"var(--text-secondary)" }}>
               Amount Paid
               <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                <span style={{ color:"#e6edf3" }}>$</span>
+                <span style={{ color:"var(--text-primary)" }}>$</span>
                 <input type="number" min="0" step="0.01" value={payConfirmAmt}
                   onChange={e => setPayConfirmAmt(e.target.value)} autoFocus
-                  style={{ flex:1, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13 }} />
+                  style={{ flex:1, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13 }} />
               </div>
               {(() => {
                 const entered = parseFloat(payConfirmAmt);
@@ -2455,13 +2455,13 @@ export default function Expenses() {
                 return null;
               })()}
             </label>
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Paid Date
               <input type="date" value={payConfirmDate} onChange={e => setPayConfirmDate(e.target.value)}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
             </label>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+              <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
               <button onClick={submitMarkPaid} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Confirm Paid</button>
             </div>
           </div>
@@ -2470,13 +2470,13 @@ export default function Expenses() {
 
       {confirmDelete && (
         <Modal title="Delete Expense" onClose={() => setConfirmDelete(null)}>
-          <p style={{ color: "#e2e8f0", fontSize: 14, marginTop: 0 }}>
+          <p style={{ color: "var(--text-primary)", fontSize: 14, marginTop: 0 }}>
             Delete <strong>{confirmDelete.description}</strong> ({fmt$(confirmDelete.amount)})?
             This cannot be undone.
           </p>
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button onClick={() => setConfirmDelete(null)} style={{
-              background: "#374151", color: "#9ca3af", border: "none", borderRadius: 7,
+              background: "var(--border)", color: "#9ca3af", border: "none", borderRadius: 7,
               padding: "8px 18px", fontSize: 13, cursor: "pointer",
             }}>Cancel</button>
             <button onClick={() => doDelete(confirmDelete._id)} style={{

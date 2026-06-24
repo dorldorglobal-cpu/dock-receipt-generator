@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -7,7 +7,7 @@ const ACTIVE_EXCLUDED = ["Completed", "Canceled", "Waiting to Sail", "Sailed", "
 
 const TABS = [
   { label: "Active",           value: "active",           color: "#34d399" },
-  { label: "All",              value: "all",              color: "#8b949e" },
+  { label: "All",              value: "all",              color: "var(--text-secondary)" },
   { label: "New Order",        value: "New Order",        color: "#60a5fa" },
   { label: "Awaiting Pickup",  value: "Awaiting Pickup",  color: "#f97316" },
   { label: "Picked Up",        value: "Picked Up",        color: "#60a5fa" },

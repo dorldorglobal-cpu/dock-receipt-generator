@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -172,8 +172,8 @@ export default function Invoices() {
   ];
 
   const inputStyle = {
-    padding: "8px 10px", background: "#111827", border: "1px solid #374151",
-    borderRadius: 6, color: "#f1f5f9", fontSize: 13, width: "100%", boxSizing: "border-box",
+    padding: "8px 10px", background: "var(--bg-elevated)", border: "1px solid var(--border)",
+    borderRadius: 6, color: "var(--text-primary)", fontSize: 13, width: "100%", boxSizing: "border-box",
   };
 
   return (
@@ -211,12 +211,12 @@ export default function Invoices() {
         </div>
       )}
       {showOverdue && overdue.length > 0 && (
-        <div style={{ background:"#1c2130", border:"1px solid rgba(220,38,38,0.25)", borderRadius:10, padding:16, marginBottom:18 }}>
+        <div style={{ background:"var(--bg-panel)", border:"1px solid rgba(220,38,38,0.25)", borderRadius:10, padding:16, marginBottom:18 }}>
           <div style={{ fontSize:11, fontWeight:700, color:"#f87171", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Overdue Invoices</div>
           {overdue.map(inv => (
             <div key={inv._id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:13 }}>
               <span style={{ fontFamily:"monospace", color:"var(--accent)", fontWeight:700, minWidth:120 }}>{inv.invoiceNumber}</span>
-              <span style={{ flex:1, color:"#e6edf3" }}>{inv.customerName || "—"}</span>
+              <span style={{ flex:1, color:"var(--text-primary)" }}>{inv.customerName || "—"}</span>
               <span style={{ color:"#f87171", fontSize:11 }}>Due {fD(inv.dueDate)}</span>
               <span style={{ fontFamily:"monospace", fontWeight:700, color:"#f87171" }}>{f$(inv.total)}</span>
             </div>
@@ -438,15 +438,15 @@ export default function Invoices() {
           zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
         }}>
           <div onClick={e => e.stopPropagation()} style={{
-            background: "#1c2130", border: "1px solid #2a3245", borderRadius: 14,
+            background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 14,
             padding: 28, width: "100%", maxWidth: 400,
           }}>
-            <h3 style={{ margin: "0 0 20px", color: "#e6edf3", fontSize: 17 }}>
+            <h3 style={{ margin: "0 0 20px", color: "var(--text-primary)", fontSize: 17 }}>
               {payModal.editPayment ? "✎ Edit Payment" : "💳 Record Payment"}
             </h3>
-            <div style={{ fontSize: 12, color: "#8b949e", marginBottom: 16 }}>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 16 }}>
               Invoice <strong style={{ color: "#60a5fa" }}>{payModal.inv.invoiceNumber}</strong>
-              {" — Total "}<strong style={{ color: "#e6edf3" }}>{f$(payModal.inv.total)}</strong>
+              {" — Total "}<strong style={{ color: "var(--text-primary)" }}>{f$(payModal.inv.total)}</strong>
               {(() => {
                 const payments = payModal.inv.payments || [];
                 const paid = payments.reduce((s, p) => s + p.amount, 0);
@@ -457,22 +457,22 @@ export default function Invoices() {
               })()}
             </div>
             <div style={{ display: "grid", gap: 14 }}>
-              <label style={{ display: "block", fontSize: 12, color: "#8b949e" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)" }}>
                 Amount *
                 <input type="number" min="0.01" step="0.01" value={payAmount}
                   onChange={e => setPayAmount(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
               </label>
-              <label style={{ display: "block", fontSize: 12, color: "#8b949e" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)" }}>
                 Payment Method
                 <select value={payMethod} onChange={e => setPayMethod(e.target.value)} style={{ ...inputStyle, marginTop: 4 }}>
                   {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
                 </select>
               </label>
-              <label style={{ display: "block", fontSize: 12, color: "#8b949e" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)" }}>
                 Date
                 <input type="date" value={payDate} onChange={e => setPayDate(e.target.value)} style={{ ...inputStyle, marginTop: 4 }} />
               </label>
-              <label style={{ display: "block", fontSize: 12, color: "#8b949e" }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)" }}>
                 Notes (optional)
                 <input value={payNotes} onChange={e => setPayNotes(e.target.value)}
                   placeholder="e.g. ref #12345" style={{ ...inputStyle, marginTop: 4 }} />
@@ -480,7 +480,7 @@ export default function Invoices() {
             </div>
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 22 }}>
               <button onClick={() => setPayModal(null)}
-                style={{ padding: "9px 20px", background: "none", border: "1px solid #374151", borderRadius: 8, color: "#8b949e", cursor: "pointer" }}>
+                style={{ padding: "9px 20px", background: "none", border: "1px solid var(--border)", borderRadius: 8, color: "var(--text-secondary)", cursor: "pointer" }}>
                 Cancel
               </button>
               <button onClick={savePayment} disabled={paySaving}
@@ -559,7 +559,7 @@ export default function Invoices() {
                   ))}
                 </tbody>
                 <tfoot>
-                  <tr style={{ background: "#111827" }}>
+                  <tr style={{ background: "var(--bg-elevated)" }}>
                     <td style={{ padding: "10px 12px", fontWeight: 700, fontSize: 12, color: "#9ca3af", borderRadius: "0 0 0 6px" }}>Total Due</td>
                     <td style={{ padding: "10px 12px", fontWeight: 900, fontSize: 18, textAlign: "right", fontFamily: "monospace", color: "white", borderRadius: "0 0 6px 0" }}>{f$(previewInv.total)}</td>
                   </tr>

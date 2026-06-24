@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from "react";
+﻿import { useEffect, useState, useCallback, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import "../App.css";
 
@@ -47,19 +47,19 @@ function DarkSelect({ value, onChange, options }) {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
   const selected = options.find(o => o.value === value) || options[0];
-  const s = { background: "#1c2130", border: "1px solid #2a3245", borderRadius: 6, color: "#e6edf3", fontSize: 13 };
+  const s = { background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 6, color: "var(--text-primary)", fontSize: 13 };
   return (
     <div ref={ref} style={{ position: "relative", width: "100%" }}>
       <div onClick={() => setOpen(o => !o)}
         style={{ ...s, padding: "6px 32px 6px 10px", cursor: "pointer", userSelect: "none", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <span>{selected?.label}</span>
-        <span style={{ fontSize: 10, color: "#8b949e" }}>▾</span>
+        <span style={{ fontSize: 10, color: "var(--text-secondary)" }}>▾</span>
       </div>
       {open && (
         <div style={{ ...s, position: "absolute", top: "100%", left: 0, right: 0, zIndex: 999, marginTop: 2, boxShadow: "0 4px 16px #0008" }}>
           {options.map(o => (
             <div key={o.value} onClick={() => { onChange(o.value); setOpen(false); }}
-              style={{ padding: "7px 10px", cursor: "pointer", background: o.value === value ? "#2a3a5a" : "transparent", color: "#e6edf3" }}
+              style={{ padding: "7px 10px", cursor: "pointer", background: o.value === value ? "#2a3a5a" : "transparent", color: "var(--text-primary)" }}
               onMouseEnter={e => e.currentTarget.style.background = "#232d42"}
               onMouseLeave={e => e.currentTarget.style.background = o.value === value ? "#2a3a5a" : "transparent"}>
               {o.label}
@@ -688,7 +688,7 @@ export default function DockReceiptPage() {
                     <input
                       value={result[key] || ""}
                       onChange={e => updateField(key, e.target.value)}
-                      style={{ fontSize: 13, padding: "6px 10px", background: "#1c2130", color: "#e6edf3", border: "1px solid #2a3245", borderRadius: 6 }}
+                      style={{ fontSize: 13, padding: "6px 10px", background: "var(--bg-panel)", color: "var(--text-primary)", border: "1px solid var(--border)", borderRadius: 6 }}
                     />
                   )}
                 </div>
@@ -719,26 +719,26 @@ export default function DockReceiptPage() {
       {/* ── Send DR Modal ── */}
       {sendModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center" }}>
-          <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Dock Receipt</h3>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 18px", color:"var(--text-primary)" }}>✉️ Send Dock Receipt</h3>
             {[
               { label:"Customer Email", value: sendTo, set: setSendTo, placeholder:"customer@example.com" },
               { label:"Trucker Email (optional)", value: sendTrucker, set: setSendTrucker, placeholder:"trucker@example.com" },
               { label:"Subject", value: sendSubject, set: setSendSubject, placeholder:"Subject" },
             ].map(({ label, value, set, placeholder }) => (
-              <label key={label} style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+              <label key={label} style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
                 {label}
                 <input value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
-                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </label>
             ))}
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Message
               <textarea value={sendBody} onChange={e => setSendBody(e.target.value)} rows={5}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
             </label>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+              <button onClick={() => setSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
               <button onClick={sendEmails} disabled={sending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {sending ? "Sending…" : "Send"}
               </button>

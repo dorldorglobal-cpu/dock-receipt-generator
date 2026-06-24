@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -154,7 +154,7 @@ export default function AiAssistant() {
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 22 }}>✦</span>
           <div>
-            <div style={{ color: "#e6edf3", fontWeight: 700, fontSize: 17 }}>DDG AI Assistant</div>
+            <div style={{ color: "var(--text-primary)", fontWeight: 700, fontSize: 17 }}>DDG AI Assistant</div>
             <div style={{ color: "#3fb950", fontSize: 11 }}>● Powered by Groq · Live orders, expenses & schedules</div>
           </div>
         </div>
@@ -167,11 +167,11 @@ export default function AiAssistant() {
           {extractedFields && (
             <button
               onClick={() => navigator.clipboard.writeText(JSON.stringify(extractedFields, null, 2))}
-              style={{ background: "#161b22", border: "1px solid #30363d", color: "#8b949e", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}
+              style={{ background: "#161b22", border: "1px solid #30363d", color: "var(--text-secondary)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}
               title="Copy extracted fields as JSON"
             >Copy fields</button>
           )}
-          <button onClick={clearChat} style={{ background: "#161b22", border: "1px solid #30363d", color: "#8b949e", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}>
+          <button onClick={clearChat} style={{ background: "#161b22", border: "1px solid #30363d", color: "var(--text-secondary)", borderRadius: 8, padding: "5px 12px", cursor: "pointer", fontSize: 11 }}>
             Clear
           </button>
         </div>
@@ -186,7 +186,7 @@ export default function AiAssistant() {
             style={{
               border: "2px dashed #1a6ef755", borderRadius: 10, padding: "14px 18px",
               marginBottom: 10, cursor: "pointer", textAlign: "center",
-              color: "#8b949e", fontSize: 13, transition: "border-color 0.15s",
+              color: "var(--text-secondary)", fontSize: 13, transition: "border-color 0.15s",
             }}
             onMouseEnter={e => e.currentTarget.style.borderColor = "#1a6ef7"}
             onMouseLeave={e => e.currentTarget.style.borderColor = "#1a6ef755"}
@@ -201,10 +201,10 @@ export default function AiAssistant() {
             {SUGGESTIONS.map(s => (
               <button key={s} onClick={() => send(s)} style={{
                 background: "#161b22", border: "1px solid #30363d", borderRadius: 20,
-                padding: "5px 12px", fontSize: 11, color: "#8b949e", cursor: "pointer",
+                padding: "5px 12px", fontSize: 11, color: "var(--text-secondary)", cursor: "pointer",
               }}
-                onMouseEnter={e => { e.currentTarget.style.borderColor = "#1a6ef7"; e.currentTarget.style.color = "#e6edf3"; }}
-                onMouseLeave={e => { e.currentTarget.style.borderColor = "#30363d"; e.currentTarget.style.color = "#8b949e"; }}
+                onMouseEnter={e => { e.currentTarget.style.borderColor = "#1a6ef7"; e.currentTarget.style.color = "var(--text-primary)"; }}
+                onMouseLeave={e => { e.currentTarget.style.borderColor = "#30363d"; e.currentTarget.style.color = "var(--text-secondary)"; }}
               >{s}</button>
             ))}
           </div>
@@ -222,7 +222,7 @@ export default function AiAssistant() {
               <div style={{
                 padding: "10px 14px", borderRadius: 12, fontSize: 13, lineHeight: 1.65,
                 background: m.role === "user" ? "#1a6ef7" : "#161b22",
-                color: "#e6edf3",
+                color: "var(--text-primary)",
                 border: m.role === "user" ? "none" : "1px solid #21262d",
                 whiteSpace: "pre-wrap",
               }}>
@@ -231,7 +231,7 @@ export default function AiAssistant() {
 
               {/* Extracted fields card */}
               {m.extractedFields && (
-                <div style={{ background: "#0d1117", border: "1px solid #1a6ef755", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
+                <div style={{ background: "var(--bg-base)", border: "1px solid #1a6ef755", borderRadius: 10, padding: "10px 14px", fontSize: 12 }}>
                   <div style={{ color: "#1a6ef7", fontWeight: 600, marginBottom: 8, fontSize: 11 }}>✦ EXTRACTED FIELDS</div>
                   {[
                     { label: "Vehicle", keys: ["year","make","model","vin","color","mileage","lotNumber","bidAmount"] },
@@ -250,8 +250,8 @@ export default function AiAssistant() {
                         <div style={{ color: "#484f58", fontSize: 10, fontWeight: 600, textTransform: "uppercase", marginBottom: 4 }}>{group.label}</div>
                         {items.map(k => (
                           <div key={k} style={{ display: "flex", gap: 8, marginBottom: 2 }}>
-                            <span style={{ color: "#8b949e", minWidth: 120 }}>{k}</span>
-                            <span style={{ color: "#e6edf3" }}>{m.extractedFields[k]}</span>
+                            <span style={{ color: "var(--text-secondary)", minWidth: 120 }}>{k}</span>
+                            <span style={{ color: "var(--text-primary)" }}>{m.extractedFields[k]}</span>
                           </div>
                         ))}
                       </div>
@@ -267,7 +267,7 @@ export default function AiAssistant() {
                     >✦ Create Order</button>
                     <button
                       onClick={saveRules}
-                      style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, color: "#8b949e", padding: "7px 14px", cursor: "pointer", fontSize: 12 }}
+                      style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 8, color: "var(--text-secondary)", padding: "7px 14px", cursor: "pointer", fontSize: 12 }}
                     >💾 Save Rules</button>
                   </div>
                 </div>
@@ -279,7 +279,7 @@ export default function AiAssistant() {
         {loading && (
           <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
             <div style={{ width: 26, height: 26, borderRadius: "50%", background: "linear-gradient(135deg,#1a6ef7,#0e4db5)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#fff", flexShrink: 0 }}>✦</div>
-            <div style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: 12, padding: "10px 14px", color: "#8b949e", fontSize: 13 }}>Thinking…</div>
+            <div style={{ background: "#161b22", border: "1px solid #21262d", borderRadius: 12, padding: "10px 14px", color: "var(--text-secondary)", fontSize: 13 }}>Thinking…</div>
           </div>
         )}
         <div ref={bottomRef} />
@@ -291,7 +291,7 @@ export default function AiAssistant() {
         <button
           onClick={() => fileInputRef.current?.click()}
           title="Upload document"
-          style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 10, color: "#8b949e", padding: "10px 12px", cursor: "pointer", fontSize: 16, flexShrink: 0 }}
+          style={{ background: "#161b22", border: "1px solid #30363d", borderRadius: 10, color: "var(--text-secondary)", padding: "10px 12px", cursor: "pointer", fontSize: 16, flexShrink: 0 }}
         >📎</button>
         <input ref={fileInputRef} type="file" accept=".pdf,.txt" style={{ display: "none" }}
           onChange={e => { if (e.target.files[0]) { send("", e.target.files[0]); e.target.value = ""; } }} />
@@ -302,7 +302,7 @@ export default function AiAssistant() {
           onChange={e => setInput(e.target.value)}
           onKeyDown={e => e.key === "Enter" && !e.shiftKey && send()}
           placeholder={hasDoc ? `Ask about ${docContext.docType}, correct a field, or say "remember this"…` : "Ask about orders, or drop a document above…"}
-          style={{ flex: 1, background: "#161b22", border: "1px solid #30363d", borderRadius: 10, padding: "10px 14px", color: "#e6edf3", fontSize: 13, outline: "none" }}
+          style={{ flex: 1, background: "#161b22", border: "1px solid #30363d", borderRadius: 10, padding: "10px 14px", color: "var(--text-primary)", fontSize: 13, outline: "none" }}
           onFocus={e => e.target.style.borderColor = "#1a6ef7"}
           onBlur={e => e.target.style.borderColor = "#30363d"}
         />

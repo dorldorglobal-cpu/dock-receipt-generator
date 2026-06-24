@@ -1,4 +1,4 @@
-const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+﻿const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 import { useEffect, useState, useRef } from "react";
 
@@ -42,10 +42,10 @@ function Modal({ title, onClose, children, wide }) {
   return (
     <div style={{ position:"fixed",inset:0,background:"rgba(0,0,0,0.65)",display:"flex",alignItems:"center",justifyContent:"center",zIndex:1000,padding:16 }}
       onClick={onClose}>
-      <div style={{ background:"#1e2433",borderRadius:12,padding:28,width:"100%",maxWidth:wide?780:600,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.5)" }}
+      <div style={{ background:"var(--bg-panel)",borderRadius:12,padding:28,width:"100%",maxWidth:wide?780:600,maxHeight:"92vh",overflowY:"auto",boxShadow:"0 24px 60px rgba(0,0,0,0.5)" }}
         onClick={e=>e.stopPropagation()}>
         <div style={{ display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:20 }}>
-          <h2 style={{ margin:0,fontSize:18,color:"#f1f5f9" }}>{title}</h2>
+          <h2 style={{ margin:0,fontSize:18,color:"var(--text-primary)" }}>{title}</h2>
           <button onClick={onClose} style={{ background:"none",border:"none",color:"#9ca3af",fontSize:22,cursor:"pointer",lineHeight:1 }}>✕</button>
         </div>
         {children}
@@ -54,7 +54,7 @@ function Modal({ title, onClose, children, wide }) {
   );
 }
 
-const inputStyle = { width:"100%",padding:"8px 10px",background:"#111827",border:"1px solid #374151",borderRadius:6,color:"#f1f5f9",fontSize:13,boxSizing:"border-box",marginTop:4 };
+const inputStyle = { width:"100%",padding:"8px 10px",background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-primary)",fontSize:13,boxSizing:"border-box",marginTop:4 };
 const labelStyle = { display:"block",fontSize:12,color:"#9ca3af",marginBottom:2 };
 
 // ── Vendor Form ───────────────────────────────────────────────────────────────
@@ -335,7 +335,7 @@ export default function Vendors() {
     fetchVendors();
   };
 
-  const td = { padding:"11px 14px",fontSize:13,color:"#e2e8f0",borderTop:"1px solid #1e2433" };
+  const td = { padding:"11px 14px",fontSize:13,color:"var(--text-primary)",borderTop:"1px solid var(--bg-panel)" };
   const th = { padding:"10px 14px",textAlign:"left",color:"#9ca3af",fontSize:12,fontWeight:600,whiteSpace:"nowrap" };
 
   return (
@@ -344,7 +344,7 @@ export default function Vendors() {
       {/* Header */}
       <div style={{ display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:24 }}>
         <div>
-          <h1 style={{ margin:0,fontSize:24,fontWeight:700,color:"#f1f5f9" }}>Vendors</h1>
+          <h1 style={{ margin:0,fontSize:24,fontWeight:700,color:"var(--text-primary)" }}>Vendors</h1>
           <p style={{ margin:"4px 0 0",color:"#9ca3af",fontSize:13 }}>
             {vendors.length} vendor{vendors.length!==1?"s":""} · manage contacts &amp; track spending
           </p>
@@ -365,19 +365,19 @@ export default function Vendors() {
       {/* Filters */}
       <div style={{ display:"flex",gap:10,marginBottom:18 }}>
         <input placeholder="Search vendors…" value={search} onChange={e=>setSearch(e.target.value)}
-          style={{ background:"#1e2433",border:"1px solid #374151",borderRadius:7,color:"#f1f5f9",padding:"8px 12px",fontSize:13,width:260 }} />
-        <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ background:"#1e2433",border:"1px solid #374151",borderRadius:7,color:filterCat?"#f1f5f9":"#9ca3af",padding:"8px 12px",fontSize:13 }}>
+          style={{ background:"var(--bg-panel)",border:"1px solid var(--border)",borderRadius:7,color:"var(--text-primary)",padding:"8px 12px",fontSize:13,width:260 }} />
+        <select value={filterCat} onChange={e=>setFilterCat(e.target.value)} style={{ background:"var(--bg-panel)",border:"1px solid var(--border)",borderRadius:7,color:filterCat?"var(--text-primary)":"#9ca3af",padding:"8px 12px",fontSize:13 }}>
           <option value="">All Categories</option>
           {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
         </select>
         {(search||filterCat) && (
-          <button onClick={()=>{setSearch("");setFilterCat("");}} style={{ background:"none",border:"1px solid #374151",borderRadius:7,color:"#9ca3af",padding:"8px 12px",fontSize:12,cursor:"pointer" }}>Clear</button>
+          <button onClick={()=>{setSearch("");setFilterCat("");}} style={{ background:"none",border:"1px solid var(--border)",borderRadius:7,color:"#9ca3af",padding:"8px 12px",fontSize:12,cursor:"pointer" }}>Clear</button>
         )}
       </div>
 
       <div style={{ display:"flex",gap:20 }}>
         {/* Vendor Table */}
-        <div style={{ flex:1,background:"#161d2c",borderRadius:12,overflow:"hidden",border:"1px solid #1e2433" }}>
+        <div style={{ flex:1,background:"#161d2c",borderRadius:12,overflow:"hidden",border:"1px solid var(--bg-panel)" }}>
           {loading ? (
             <div style={{ padding:40,textAlign:"center",color:"#6b7280" }}>Loading…</div>
           ) : vendors.length === 0 ? (
@@ -393,7 +393,7 @@ export default function Vendors() {
             <div style={{ overflowX:"auto" }}>
               <table style={{ width:"100%",borderCollapse:"collapse" }}>
                 <thead>
-                  <tr style={{ background:"#1a2235" }}>
+                  <tr style={{ background:"var(--bg-hover)" }}>
                     <th style={th}>Vendor</th>
                     <th style={th}>Category</th>
                     <th style={th}>Contact</th>
@@ -407,12 +407,12 @@ export default function Vendors() {
                 <tbody>
                   {vendors.map(v => (
                     <tr key={v._id}
-                      style={{ background: detailVendor?._id===v._id ? "#1a2235" : "#161d2c", cursor:"pointer" }}
-                      onMouseEnter={e=>e.currentTarget.style.background="#1a2235"}
-                      onMouseLeave={e=>e.currentTarget.style.background=detailVendor?._id===v._id?"#1a2235":"#161d2c"}
+                      style={{ background: detailVendor?._id===v._id ? "var(--bg-hover)" : "#161d2c", cursor:"pointer" }}
+                      onMouseEnter={e=>e.currentTarget.style.background="var(--bg-hover)"}
+                      onMouseLeave={e=>e.currentTarget.style.background=detailVendor?._id===v._id?"var(--bg-hover)":"#161d2c"}
                       onClick={()=>openDetail(v)}>
                       <td style={td}>
-                        <div style={{ fontWeight:600,color:"#f1f5f9" }}>{v.name}</div>
+                        <div style={{ fontWeight:600,color:"var(--text-primary)" }}>{v.name}</div>
                       </td>
                       <td style={td}>
                         {v.category ? (
@@ -423,7 +423,7 @@ export default function Vendors() {
                       </td>
                       <td style={{ ...td,color:"#9ca3af" }}>{v.contactName||"—"}</td>
                       <td style={{ ...td,color:"#9ca3af" }}>{v.phone||"—"}</td>
-                      <td style={{ ...td,textAlign:"right",fontWeight:600,color:"#f1f5f9" }}>{fmt$(v.totalPaid)}</td>
+                      <td style={{ ...td,textAlign:"right",fontWeight:600,color:"var(--text-primary)" }}>{fmt$(v.totalPaid)}</td>
                       <td style={{ ...td,textAlign:"right" }}>
                         {v.unpaidAmount > 0 ? (
                           <span style={{ color:"#f87171",fontWeight:600 }}>{fmt$(v.unpaidAmount)}</span>
@@ -446,10 +446,10 @@ export default function Vendors() {
 
         {/* Detail Panel */}
         {detailVendor && (
-          <div style={{ width:360,background:"#161d2c",borderRadius:12,border:"1px solid #1e2433",padding:20,flexShrink:0,maxHeight:"75vh",overflowY:"auto" }}>
+          <div style={{ width:360,background:"#161d2c",borderRadius:12,border:"1px solid var(--bg-panel)",padding:20,flexShrink:0,maxHeight:"75vh",overflowY:"auto" }}>
             <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start",marginBottom:16 }}>
               <div>
-                <div style={{ fontWeight:700,fontSize:16,color:"#f1f5f9" }}>{detailVendor.name}</div>
+                <div style={{ fontWeight:700,fontSize:16,color:"var(--text-primary)" }}>{detailVendor.name}</div>
                 {detailVendor.contactName && <div style={{ fontSize:12,color:"#9ca3af",marginTop:3 }}>{detailVendor.contactName}</div>}
                 {detailVendor.phone && <div style={{ fontSize:12,color:"#9ca3af" }}>{detailVendor.phone}</div>}
                 {detailVendor.email && <div style={{ fontSize:12,color:"#60a5fa" }}>{detailVendor.email}</div>}
@@ -459,11 +459,11 @@ export default function Vendors() {
 
             {/* Summary */}
             <div style={{ display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:16 }}>
-              <div style={{ background:"#1a2235",borderRadius:8,padding:"10px 12px" }}>
+              <div style={{ background:"var(--bg-hover)",borderRadius:8,padding:"10px 12px" }}>
                 <div style={{ fontSize:11,color:"#9ca3af",marginBottom:4 }}>TOTAL SPENT</div>
-                <div style={{ fontSize:18,fontWeight:700,color:"#f1f5f9" }}>{fmt$(detailVendor.totalPaid)}</div>
+                <div style={{ fontSize:18,fontWeight:700,color:"var(--text-primary)" }}>{fmt$(detailVendor.totalPaid)}</div>
               </div>
-              <div style={{ background:"#1a2235",borderRadius:8,padding:"10px 12px" }}>
+              <div style={{ background:"var(--bg-hover)",borderRadius:8,padding:"10px 12px" }}>
                 <div style={{ fontSize:11,color:"#9ca3af",marginBottom:4 }}>UNPAID</div>
                 <div style={{ fontSize:18,fontWeight:700,color: detailVendor.unpaidAmount>0?"#f87171":"#34d399" }}>
                   {fmt$(detailVendor.unpaidAmount)}
@@ -482,10 +482,10 @@ export default function Vendors() {
             ) : (
               <div style={{ display:"flex",flexDirection:"column",gap:8 }}>
                 {detailExpenses.map(e => (
-                  <div key={e._id} style={{ background:"#1a2235",borderRadius:8,padding:"10px 12px" }}>
+                  <div key={e._id} style={{ background:"var(--bg-hover)",borderRadius:8,padding:"10px 12px" }}>
                     <div style={{ display:"flex",justifyContent:"space-between",alignItems:"flex-start" }}>
-                      <div style={{ fontSize:12,color:"#e2e8f0",fontWeight:500 }}>{e.description}</div>
-                      <div style={{ fontSize:13,fontWeight:700,color:"#f1f5f9",marginLeft:8,flexShrink:0 }}>{fmt$(e.amount)}</div>
+                      <div style={{ fontSize:12,color:"var(--text-primary)",fontWeight:500 }}>{e.description}</div>
+                      <div style={{ fontSize:13,fontWeight:700,color:"var(--text-primary)",marginLeft:8,flexShrink:0 }}>{fmt$(e.amount)}</div>
                     </div>
                     <div style={{ display:"flex",justifyContent:"space-between",marginTop:5 }}>
                       <span style={{ fontSize:11,color:"#6b7280" }}>
@@ -511,11 +511,11 @@ export default function Vendors() {
         <Modal title="🌊 Import Vendors from Wave" onClose={closeWave} wide>
           {!importResult ? (
             <>
-              <div style={{ background:"#111827",border:"1px solid #374151",borderRadius:8,padding:14,marginBottom:16 }}>
+              <div style={{ background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:8,padding:14,marginBottom:16 }}>
                 <div style={{ fontSize:13,color:"#9ca3af",lineHeight:1.6 }}>
-                  <strong style={{ color:"#f1f5f9" }}>How to export from Wave:</strong><br/>
+                  <strong style={{ color:"var(--text-primary)" }}>How to export from Wave:</strong><br/>
                   1. Go to <strong>Purchases → Vendors</strong> in Wave<br/>
-                  2. Press <code style={{ background:"#1e2433",padding:"1px 5px",borderRadius:3,color:"#60a5fa" }}>Ctrl+A</code> to select all, then <code style={{ background:"#1e2433",padding:"1px 5px",borderRadius:3,color:"#60a5fa" }}>Ctrl+C</code> to copy<br/>
+                  2. Press <code style={{ background:"var(--bg-panel)",padding:"1px 5px",borderRadius:3,color:"#60a5fa" }}>Ctrl+A</code> to select all, then <code style={{ background:"var(--bg-panel)",padding:"1px 5px",borderRadius:3,color:"#60a5fa" }}>Ctrl+C</code> to copy<br/>
                   3. Paste below — the app will extract all vendor names automatically
                 </div>
               </div>
@@ -530,7 +530,7 @@ export default function Vendors() {
                 />
               </label>
               <div style={{ display:"flex",justifyContent:"flex-end",marginTop:16,gap:10 }}>
-                <button onClick={closeWave} style={{ background:"#374151",color:"#9ca3af",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
+                <button onClick={closeWave} style={{ background:"var(--border)",color:"#9ca3af",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
                 <button onClick={doWaveImport} disabled={importing||!wavePaste.trim()} style={{ background:"#0f766e",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:importing||!wavePaste.trim()?0.5:1 }}>
                   {importing ? "Importing…" : "Import Vendors"}
                 </button>
@@ -539,7 +539,7 @@ export default function Vendors() {
           ) : (
             <div style={{ textAlign:"center",padding:"20px 0" }}>
               <div style={{ fontSize:48,marginBottom:12 }}>✅</div>
-              <div style={{ fontSize:20,fontWeight:700,color:"#f1f5f9",marginBottom:8 }}>Import Complete</div>
+              <div style={{ fontSize:20,fontWeight:700,color:"var(--text-primary)",marginBottom:8 }}>Import Complete</div>
               <div style={{ display:"flex",justifyContent:"center",gap:24,marginBottom:20 }}>
                 <div style={{ textAlign:"center" }}>
                   <div style={{ fontSize:28,fontWeight:700,color:"#34d399" }}>{importResult.created}</div>
@@ -550,7 +550,7 @@ export default function Vendors() {
                   <div style={{ fontSize:12,color:"#9ca3af" }}>Already existed</div>
                 </div>
                 <div style={{ textAlign:"center" }}>
-                  <div style={{ fontSize:28,fontWeight:700,color:"#f1f5f9" }}>{importResult.total}</div>
+                  <div style={{ fontSize:28,fontWeight:700,color:"var(--text-primary)" }}>{importResult.total}</div>
                   <div style={{ fontSize:12,color:"#9ca3af" }}>Total parsed</div>
                 </div>
               </div>
@@ -565,8 +565,8 @@ export default function Vendors() {
         <Modal title="📄 Add from Invoice / Dispatch" onClose={closeDoc} wide>
           {parseStep === "paste" ? (
             <>
-              <div style={{ background:"#111827",border:"1px solid #374151",borderRadius:8,padding:12,marginBottom:14,fontSize:13,color:"#9ca3af",lineHeight:1.6 }}>
-                Paste the text from any <strong style={{ color:"#f1f5f9" }}>invoice, dispatch sheet, or bill</strong> below.
+              <div style={{ background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:8,padding:12,marginBottom:14,fontSize:13,color:"#9ca3af",lineHeight:1.6 }}>
+                Paste the text from any <strong style={{ color:"var(--text-primary)" }}>invoice, dispatch sheet, or bill</strong> below.
                 The app will automatically extract the vendor, amount, date, and description — then let you confirm before saving.
               </div>
               <label style={labelStyle}>
@@ -580,7 +580,7 @@ export default function Vendors() {
                 />
               </label>
               <div style={{ display:"flex",justifyContent:"flex-end",marginTop:16,gap:10 }}>
-                <button onClick={closeDoc} style={{ background:"#374151",color:"#9ca3af",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
+                <button onClick={closeDoc} style={{ background:"var(--border)",color:"#9ca3af",border:"none",borderRadius:7,padding:"9px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
                 <button onClick={doParse} disabled={parsing||!docPaste.trim()} style={{ background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:parsing||!docPaste.trim()?0.5:1 }}>
                   {parsing ? "Parsing…" : "Parse Document →"}
                 </button>
@@ -592,7 +592,7 @@ export default function Vendors() {
 
                 {/* Vendor section */}
                 <div>
-                  <div style={{ fontSize:13,fontWeight:600,color:"#f1f5f9",marginBottom:12,paddingBottom:8,borderBottom:"1px solid #2d3748" }}>
+                  <div style={{ fontSize:13,fontWeight:600,color:"var(--text-primary)",marginBottom:12,paddingBottom:8,borderBottom:"1px solid var(--border)" }}>
                     Vendor {vendorForm.name ? <span style={{ fontSize:11,color:"#34d399",fontWeight:400 }}>— will be created if new</span> : ""}
                   </div>
                   <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
@@ -620,7 +620,7 @@ export default function Vendors() {
 
                 {/* Expense section */}
                 <div>
-                  <div style={{ fontSize:13,fontWeight:600,color:"#f1f5f9",marginBottom:12,paddingBottom:8,borderBottom:"1px solid #2d3748" }}>
+                  <div style={{ fontSize:13,fontWeight:600,color:"var(--text-primary)",marginBottom:12,paddingBottom:8,borderBottom:"1px solid var(--border)" }}>
                     Expense / Bill
                   </div>
                   <div style={{ display:"flex",flexDirection:"column",gap:10 }}>
@@ -668,7 +668,7 @@ export default function Vendors() {
               </div>
 
               <div style={{ display:"flex",justifyContent:"space-between",marginTop:20 }}>
-                <button type="button" onClick={()=>setParseStep("paste")} style={{ background:"none",border:"1px solid #374151",borderRadius:7,color:"#9ca3af",padding:"9px 16px",fontSize:13,cursor:"pointer" }}>
+                <button type="button" onClick={()=>setParseStep("paste")} style={{ background:"none",border:"1px solid var(--border)",borderRadius:7,color:"#9ca3af",padding:"9px 16px",fontSize:13,cursor:"pointer" }}>
                   ← Back
                 </button>
                 <button type="submit" disabled={saving} style={{ background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontSize:13,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1 }}>
@@ -690,11 +690,11 @@ export default function Vendors() {
       {/* ── Confirm Delete ───────────────────────────────────────────────────── */}
       {confirmDelete && (
         <Modal title="Delete Vendor" onClose={()=>setConfirmDelete(null)}>
-          <p style={{ color:"#e2e8f0",fontSize:14,marginTop:0 }}>
+          <p style={{ color:"var(--text-primary)",fontSize:14,marginTop:0 }}>
             Delete <strong>{confirmDelete.name}</strong>? This cannot be undone.
           </p>
           <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
-            <button onClick={()=>setConfirmDelete(null)} style={{ background:"#374151",color:"#9ca3af",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
+            <button onClick={()=>setConfirmDelete(null)} style={{ background:"var(--border)",color:"#9ca3af",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
             <button onClick={()=>doDelete(confirmDelete._id)} style={{ background:"#ef4444",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer" }}>Delete</button>
           </div>
         </Modal>

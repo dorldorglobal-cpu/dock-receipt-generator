@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
+﻿import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
@@ -1993,7 +1993,7 @@ export default function OrderDetails() {
             </div>
             <button onClick={createVoyageAndMove}
               style={{ padding:"8px 12px", borderRadius:8, border:"none",
-                background:"#111827", color:"white", cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
+                background:"var(--bg-elevated)", color:"white", cursor:"pointer", fontSize:12, whiteSpace:"nowrap" }}>
               + New Voyage
             </button>
           </div>
@@ -3252,7 +3252,7 @@ export default function OrderDetails() {
                   padding: "9px 14px",
                   borderRadius: "10px",
                   border: "none",
-                  background: "#111827",
+                  background: "var(--bg-elevated)",
                   color: "white",
                   cursor: "pointer",
                 }}
@@ -4568,8 +4568,8 @@ export default function OrderDetails() {
       {/* ── DR Send Modal ── */}
       {drSendModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Dock Receipt</h3>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 18px", color:"var(--text-primary)" }}>✉️ Send Dock Receipt</h3>
             <datalist id="contacts-list">
               {googleContacts.flatMap(c => c.emails.map(e => (
                 <option key={`${c.name}-${e}`} value={e} label={c.name} />
@@ -4580,20 +4580,20 @@ export default function OrderDetails() {
               { label:"Trucker Email (optional)", value: drSendTrucker, set: setDrSendTrucker, placeholder:"trucker@example.com", list:"contacts-list" },
               { label:"Subject", value: drSendSubject, set: setDrSendSubject, placeholder:"Subject" },
             ].map(({ label, value, set, placeholder, list }) => (
-              <label key={label} style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+              <label key={label} style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
                 {label}
                 <input value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
                   list={list}
-                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </label>
             ))}
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Message
               <textarea value={drSendBody} onChange={e => setDrSendBody(e.target.value)} rows={5}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
             </label>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setDrSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
+              <button onClick={() => setDrSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
               <button onClick={sendDrEmail} disabled={drSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {drSending ? "Sending…" : "Send DR"}
               </button>
@@ -4605,18 +4605,18 @@ export default function OrderDetails() {
       {/* ── Text Office Modal ── */}
       {textOfficeModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#1c2130", border:"1px solid #7c3aed", borderRadius:12, padding:28, width:440, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 6px", color:"#e6edf3" }}>📱 Text Office</h3>
-            <p style={{ margin:"0 0 16px", fontSize:12, color:"#8b949e" }}>
-              Sending to: <strong style={{color:"#e6edf3"}}>9172003998</strong> &amp; <strong style={{color:"#e6edf3"}}>9176811442</strong> (T-Mobile)
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #7c3aed", borderRadius:12, padding:28, width:440, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 6px", color:"var(--text-primary)" }}>📱 Text Office</h3>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
+              Sending to: <strong style={{color:"var(--text-primary)"}}>9172003998</strong> &amp; <strong style={{color:"var(--text-primary)"}}>9176811442</strong> (T-Mobile)
             </p>
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Message
               <textarea value={textOfficeMsg} onChange={e => setTextOfficeMsg(e.target.value)} rows={3}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:14, resize:"vertical", boxSizing:"border-box" }} />
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:14, resize:"vertical", boxSizing:"border-box" }} />
             </label>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setTextOfficeModal(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+              <button onClick={() => setTextOfficeModal(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
               <button onClick={sendOfficeText} disabled={textOfficeSending} style={{ padding:"8px 20px", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {textOfficeSending ? "Sending…" : "Send Text"}
               </button>
@@ -4628,24 +4628,24 @@ export default function OrderDetails() {
       {/* ── Sallaum Non-Runner / Forklift notify — independent popup ── */}
       {sallaumNotify && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2001, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#1c2130", border:"1px solid #f97316", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #f97316", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
             <h3 style={{ margin:"0 0 4px", color:"#f97316" }}>🚢 Notify Sallaum</h3>
-            <p style={{ margin:"0 0 16px", fontSize:12, color:"#8b949e" }}>
-              To: <strong style={{color:"#e6edf3"}}>Frontdesk@sallaumlines.us</strong>
-              &nbsp;· CC: <strong style={{color:"#e6edf3"}}>Office@sallaumlines.us</strong>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
+              To: <strong style={{color:"var(--text-primary)"}}>Frontdesk@sallaumlines.us</strong>
+              &nbsp;· CC: <strong style={{color:"var(--text-primary)"}}>Office@sallaumlines.us</strong>
             </p>
-            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
               Subject
               <input value={sallaumNotifySubject} onChange={e => setSallaumNotifySubject(e.target.value)}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
             </label>
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Message
               <textarea value={sallaumNotifyBody} onChange={e => setSallaumNotifyBody(e.target.value)} rows={8}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
             </label>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setSallaumNotify(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
+              <button onClick={() => setSallaumNotify(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
               <button onClick={sendSallaumNotify} disabled={sallaumSending} style={{ padding:"8px 20px", background:"#f97316", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {sallaumSending ? "Sending…" : "Send to Sallaum"}
               </button>
@@ -4657,17 +4657,17 @@ export default function OrderDetails() {
       {/* ── Mark Bill Paid Modal ── */}
       {payConfirm && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:340, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 16px", color:"#e6edf3" }}>{payConfirm.addTo != null ? "Add Payment" : "Mark Bill Paid"}</h3>
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:340, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 16px", color:"var(--text-primary)" }}>{payConfirm.addTo != null ? "Add Payment" : "Mark Bill Paid"}</h3>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Amount Paid
               <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                <span style={{ color:"#e6edf3" }}>$</span>
+                <span style={{ color:"var(--text-primary)" }}>$</span>
                 <input
                   type="number" min="0" step="0.01"
                   value={payConfirmAmt}
                   onChange={e => setPayConfirmAmt(e.target.value)}
-                  style={{ flex:1, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13 }}
+                  style={{ flex:1, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13 }}
                   autoFocus
                 />
               </div>
@@ -4688,7 +4688,7 @@ export default function OrderDetails() {
               })()}
             </label>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
+              <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
               <button onClick={submitMarkPaid} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Confirm Paid</button>
             </div>
           </div>
@@ -4748,8 +4748,8 @@ export default function OrderDetails() {
         };
         return (
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-            <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
-              <h3 style={{ margin:"0 0 16px", color:"#e6edf3" }}>🏬 Storage Receipt Parsed</h3>
+            <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
+              <h3 style={{ margin:"0 0 16px", color:"var(--text-primary)" }}>🏬 Storage Receipt Parsed</h3>
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 16px", marginBottom:20, fontSize:13 }}>
                 {[
                   ["Vendor", parsed.vendor],
@@ -4761,28 +4761,28 @@ export default function OrderDetails() {
                   ["Yard", parsed.yard || "—"],
                 ].map(([k,v]) => (
                   <div key={k}>
-                    <div style={{ fontSize:11, color:"#8b949e" }}>{k}</div>
-                    <div style={{ color:"#e6edf3", fontWeight:600 }}>{v}</div>
+                    <div style={{ fontSize:11, color:"var(--text-secondary)" }}>{k}</div>
+                    <div style={{ color:"var(--text-primary)", fontWeight:600 }}>{v}</div>
                   </div>
                 ))}
               </div>
-              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
                 Sell Price (adds to customer invoice — leave blank to skip)
                 <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                  <span style={{ color:"#e6edf3" }}>$</span>
+                  <span style={{ color:"var(--text-primary)" }}>$</span>
                   <input
                     type="number" min="0" step="0.01"
                     value={storageSellPrice}
                     onChange={e => setStorageSellPrice(e.target.value)}
                     placeholder="0.00"
-                    style={{ flex:1, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13 }}
+                    style={{ flex:1, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13 }}
                   />
                 </div>
               </label>
-              <p style={{ margin:"0 0 18px", fontSize:13, color:"#8b949e" }}>Mark this bill as <strong style={{color:"#34d399"}}>PAID</strong>? (You usually pay with credit card)</p>
+              <p style={{ margin:"0 0 18px", fontSize:13, color:"var(--text-secondary)" }}>Mark this bill as <strong style={{color:"#34d399"}}>PAID</strong>? (You usually pay with credit card)</p>
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-                <button onClick={() => setStorageConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Cancel</button>
-                <button onClick={() => submitStorageBill(false).catch(err => { setMessage("❌ Error: " + err.message); })} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#e6edf3", cursor:"pointer" }}>Save Unpaid</button>
+                <button onClick={() => setStorageConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
+                <button onClick={() => submitStorageBill(false).catch(err => { setMessage("❌ Error: " + err.message); })} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-primary)", cursor:"pointer" }}>Save Unpaid</button>
                 <button onClick={() => submitStorageBill(true).catch(err => { setMessage("❌ Error: " + err.message); })} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Mark Paid</button>
               </div>
             </div>
@@ -4795,40 +4795,40 @@ export default function OrderDetails() {
         const hasDraft = (order.files || []).some(f => (f.label || "").toLowerCase() === "draft");
         return (
           <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center" }}>
-            <div style={{ background:"#1c2130", border:"1px solid #2a3245", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
-              <h3 style={{ margin:"0 0 18px", color:"#e6edf3" }}>✉️ Send Invoice #{invoiceSendModal.invoiceNumber}</h3>
+            <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
+              <h3 style={{ margin:"0 0 18px", color:"var(--text-primary)" }}>✉️ Send Invoice #{invoiceSendModal.invoiceNumber}</h3>
 
               {/* Attachments preview */}
-              <div style={{ marginBottom:16, padding:"10px 14px", background:"#0d1117", borderRadius:8, border:"1px solid #2a3245" }}>
-                <div style={{ fontSize:11, color:"#8b949e", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:8 }}>Attachments</div>
+              <div style={{ marginBottom:16, padding:"10px 14px", background:"var(--bg-base)", borderRadius:8, border:"1px solid var(--border)" }}>
+                <div style={{ fontSize:11, color:"var(--text-secondary)", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:8 }}>Attachments</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"#e6edf3" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-primary)" }}>
                     <span style={{ color:"#34d399" }}>📄</span> Invoice-{invoiceSendModal.invoiceNumber}.pdf
                   </div>
-                  <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color: hasDraft ? "#e6edf3" : "#f87171" }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color: hasDraft ? "var(--text-primary)" : "#f87171" }}>
                     <span>{hasDraft ? "📝" : "⚠️"}</span>
                     {hasDraft ? "Draft.pdf" : "Draft — not uploaded on this order"}
                   </div>
                 </div>
               </div>
 
-              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
                 Customer Email
                 <input value={invSendTo} onChange={e => setInvSendTo(e.target.value)} placeholder="customer@example.com"
-                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </label>
-              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"#8b949e" }}>
+              <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
                 Subject
                 <input value={invSubject} onChange={e => setInvSubject(e.target.value)}
-                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, boxSizing:"border-box" }} />
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </label>
-              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"#8b949e" }}>
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
                 Message
                 <textarea value={invBody} onChange={e => setInvBody(e.target.value)} rows={5}
-                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"#0d1117", border:"1px solid #2a3245", borderRadius:6, color:"#e6edf3", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
               </label>
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-                <button onClick={() => setInvoiceSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid #2a3245", borderRadius:8, color:"#8b949e", cursor:"pointer" }}>Skip</button>
+                <button onClick={() => setInvoiceSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
                 <button onClick={sendInvoiceEmail} disabled={invSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                   {invSending ? "Sending…" : "Send Invoice"}
                 </button>
@@ -4944,7 +4944,7 @@ export default function OrderDetails() {
                   onMouseUp={onDragEnd}
                   onMouseLeave={onDragEnd}
                   style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center",
-                    background: "#0d1117", overflow: "hidden", position: "relative",
+                    background: "var(--bg-base)", overflow: "hidden", position: "relative",
                     cursor: previewZoom > 1 ? (previewDragRef.current ? "grabbing" : "grab") : "default" }}>
                   <img src={src} alt={docPreview.name} draggable={false}
                     style={{

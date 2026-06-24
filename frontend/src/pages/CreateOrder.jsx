@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AddressSearch from "../components/AddressSearch";
 
@@ -1650,13 +1650,13 @@ export default function CreateOrder() {
                           setPopupCustSuggestions([]);
                         }
                       }}
-                      style={{ width:"100%", background:"transparent", border:"none", borderBottom:"1px solid #374151",
-                        color:"#f1f5f9", fontWeight:700, fontSize:12, padding:"1px 4px", outline:"none", cursor:"text", boxSizing:"border-box" }}
+                      style={{ width:"100%", background:"transparent", border:"none", borderBottom:"1px solid var(--border)",
+                        color:"var(--text-primary)", fontWeight:700, fontSize:12, padding:"1px 4px", outline:"none", cursor:"text", boxSizing:"border-box" }}
                       title="Click to edit customer name"
                     />
                     {popupCustSuggestions.length > 0 && (
                       <div style={{ position:"absolute", top:"100%", left:0, right:0, zIndex:200,
-                        background:"#1e2433", border:"1px solid #374151", borderRadius:6,
+                        background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6,
                         boxShadow:"0 8px 24px rgba(0,0,0,0.4)", maxHeight:180, overflowY:"auto" }}>
                         {popupCustSuggestions.map(c => (
                           <div key={c._id}
@@ -1667,8 +1667,8 @@ export default function CreateOrder() {
                               setPopupCustSuggestions([]);
                             }}
                             style={{ padding:"8px 12px", cursor:"pointer", fontSize:12,
-                              color:"#f1f5f9", borderBottom:"1px solid #374151" }}
-                            onMouseEnter={e => e.currentTarget.style.background = "#2d3748"}
+                              color:"var(--text-primary)", borderBottom:"1px solid var(--border)" }}
+                            onMouseEnter={e => e.currentTarget.style.background = "var(--border)"}
                             onMouseLeave={e => e.currentTarget.style.background = "transparent"}>
                             <strong>{c.companyName || c.name}</strong>
                             {c.country && <span style={{ color:"#6b7280", marginLeft:6 }}>{c.country}</span>}

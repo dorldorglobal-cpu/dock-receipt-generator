@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+﻿import { useState, useRef, useEffect } from "react";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -58,7 +58,7 @@ export default function ClaudeChat() {
     panel: {
       position: "fixed", bottom: 88, right: 24, zIndex: 999,
       width: 360, height: 520, borderRadius: 14,
-      background: "#0d1117", border: "1px solid #21262d",
+      background: "var(--bg-base)", border: "1px solid #21262d",
       display: "flex", flexDirection: "column",
       boxShadow: "0 8px 40px #000a",
       overflow: "hidden",
@@ -75,16 +75,16 @@ export default function ClaudeChat() {
       maxWidth: "85%", padding: "8px 12px", borderRadius: 10, fontSize: 13, lineHeight: 1.5,
       alignSelf: role === "user" ? "flex-end" : "flex-start",
       background: role === "user" ? "#1a6ef7" : "#161b22",
-      color: "#e6edf3", border: role === "user" ? "none" : "1px solid #21262d",
+      color: "var(--text-primary)", border: role === "user" ? "none" : "1px solid #21262d",
       whiteSpace: "pre-wrap",
     }),
     inputRow: {
       display: "flex", gap: 8, padding: "10px 12px", borderTop: "1px solid #21262d",
-      background: "#0d1117",
+      background: "var(--bg-base)",
     },
     input: {
       flex: 1, background: "#161b22", border: "1px solid #30363d",
-      borderRadius: 8, padding: "7px 10px", color: "#e6edf3", fontSize: 13,
+      borderRadius: 8, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13,
       outline: "none",
     },
     sendBtn: {
@@ -96,7 +96,7 @@ export default function ClaudeChat() {
     },
     chip: {
       background: "#161b22", border: "1px solid #30363d", borderRadius: 20,
-      padding: "4px 10px", fontSize: 11, color: "#8b949e", cursor: "pointer",
+      padding: "4px 10px", fontSize: 11, color: "var(--text-secondary)", cursor: "pointer",
     },
   };
 
@@ -112,12 +112,12 @@ export default function ClaudeChat() {
             <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
               <span style={{ fontSize: 16 }}>✦</span>
               <div>
-                <div style={{ color: "#e6edf3", fontWeight: 600, fontSize: 13 }}>DDG Assistant</div>
+                <div style={{ color: "var(--text-primary)", fontWeight: 600, fontSize: 13 }}>DDG Assistant</div>
                 <div style={{ color: "#3fb950", fontSize: 11 }}>● Powered by Claude</div>
               </div>
             </div>
             <button onClick={() => setOpen(false)}
-              style={{ background: "none", border: "none", color: "#8b949e", cursor: "pointer", fontSize: 18 }}>✕</button>
+              style={{ background: "none", border: "none", color: "var(--text-secondary)", cursor: "pointer", fontSize: 18 }}>✕</button>
           </div>
 
           <div style={s.messages}>
