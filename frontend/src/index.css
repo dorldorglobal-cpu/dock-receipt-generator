@@ -47,6 +47,43 @@
   color-scheme: dark;
 }
 
+/* ─── Light Theme Overrides ─────────────────────────────────────────────── */
+[data-theme="light"] {
+  --bg-base:      #f0f2f5;
+  --bg-elevated:  #ffffff;
+  --bg-panel:     #f8f9fb;
+  --bg-input:     #ffffff;
+  --bg-hover:     #e8edf3;
+  --sidebar-bg:   #1a2235;
+  --sidebar-border: #2a3550;
+
+  --border:       #d0d7e3;
+  --border-muted: #e2e8f0;
+
+  --text-primary:   #0f172a;
+  --text-secondary: #4b5563;
+  --text-muted:     #9ca3af;
+
+  --accent:        #2563eb;
+  --accent-hover:  #3b82f6;
+  --accent-dim:    rgba(37,99,235,0.10);
+
+  --success:       #16a34a;
+  --success-dim:   rgba(22,163,74,0.10);
+  --warning:       #d97706;
+  --warning-dim:   rgba(217,119,6,0.10);
+  --danger:        #dc2626;
+  --danger-dim:    rgba(220,38,38,0.10);
+  --purple:        #7c3aed;
+  --purple-dim:    rgba(124,58,237,0.10);
+
+  --shadow-sm: 0 1px 3px rgba(0,0,0,0.10);
+  --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
+
+  color-scheme: light;
+}
+
 *, *::before, *::after {
   box-sizing: border-box;
 }

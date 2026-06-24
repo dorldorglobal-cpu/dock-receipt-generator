@@ -43,6 +43,7 @@ function NavItem({ to, iconKey, label, end = false, collapsed, onClick }) {
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [theme, setTheme] = useState("dark");
   const location = useLocation();
 
   // Close mobile drawer on navigation
@@ -53,6 +54,21 @@ export default function Sidebar() {
     const saved = localStorage.getItem("sidebarCollapsed");
     if (saved !== null) setCollapsed(saved === "true");
   }, []);
+
+  // Persist theme
+  useEffect(() => {
+    const saved = localStorage.getItem("theme") || "dark";
+    setTheme(saved);
+    document.documentElement.setAttribute("data-theme", saved);
+  }, []);
+  const toggleTheme = () => {
+    setTheme(t => {
+      const next = t === "dark" ? "light" : "dark";
+      localStorage.setItem("theme", next);
+      document.documentElement.setAttribute("data-theme", next);
+      return next;
+    });
+  };
   const toggleCollapsed = () => {
     setCollapsed(c => {
       localStorage.setItem("sidebarCollapsed", String(!c));
@@ -138,12 +154,21 @@ export default function Sidebar() {
 
         <div className="sidebar-spacer" />
 
-        {!collapsed && (
-          <div className="sidebar-footer">
-            <span className="status-dot" />
-            <span>System online</span>
-          </div>
-        )}
+        <div className="sidebar-footer" style={{ display:"flex", alignItems:"center", justifyContent: collapsed ? "center" : "space-between", gap:8 }}>
+          {!collapsed && (
+            <>
+              <span className="status-dot" />
+              <span>System online</span>
+            </>
+          )}
+          <button
+            onClick={toggleTheme}
+            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-secondary)", padding:"4px 6px", borderRadius:6, display:"flex", alignItems:"center", lineHeight:1, fontSize:16 }}
+          >
+            {theme === "dark" ? "☀️" : "🌙"}
+          </button>
+        </div>
       </aside>
 
       {/* ── Mobile top bar ──────────────────────────── */}
@@ -181,9 +206,18 @@ export default function Sidebar() {
             <div className="mobile-drawer-nav">
               {navItems(true)}
             </div>
-            <div className="mobile-drawer-footer">
-              <span className="status-dot" />
-              <span>System online</span>
+            <div className="mobile-drawer-footer" style={{ display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span className="status-dot" />
+                <span>System online</span>
+              </div>
+              <button
+                onClick={toggleTheme}
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-secondary)", padding:"4px 6px", borderRadius:6, fontSize:16 }}
+              >
+                {theme === "dark" ? "☀️" : "🌙"}
+              </button>
             </div>
           </div>
         </div>
