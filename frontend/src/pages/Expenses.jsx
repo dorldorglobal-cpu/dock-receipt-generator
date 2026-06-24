@@ -1798,16 +1798,19 @@ export default function Expenses() {
                               </div>
                             )}
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11,display:"block",marginBottom:2}}>⚠ Review</span>}
-                            {!row.createBill && !row.splitBills && (
-                              <div style={{ display:"flex", gap:4 }}>
-                                {(row.matchType === "none" || row.matchType === "review") && (
-                                  <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
-                                    style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
-                                    + Create Bill
-                                  </button>
-                                )}
+                            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                              {/* + Create Bill — shown when not already in createBill-only mode without split */}
+                              {!row.createBill && !row.splitBills && (row.matchType === "none" || row.matchType === "review") && (
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
+                                  style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  + Create Bill
+                                </button>
+                              )}
+                              {/* ✂ Split — available for any row not in createBill-only mode */}
+                              {!row.createBill && (
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => {
                                     if (j !== i) return r;
+                                    if (r.splitBills) return { ...r, splitBills: null, selected: false };
                                     const seed = r.splitSeed?.length ? r.splitSeed : ["", ""];
                                     const looksLikeOrderRef = /^\d{3,8}$/.test(seed[0]);
                                     const n = seed.length;
@@ -1817,15 +1820,16 @@ export default function Expenses() {
                                       category: "Port / Terminal Fees",
                                       description: looksLikeOrderRef ? "" : s,
                                       amount: k === n-1 ? Math.round((r.amount - each*(n-1))*100)/100 : each,
+                                      createBill: true,
                                     })) };
                                   }))}
-                                  style={{ fontSize:10, color:"#fbbf24", border:"1px solid #fbbf24", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
-                                  ✂ Split{row.splitSeed?.length > 1 ? ` (${row.splitSeed.length})` : ""}
+                                  style={{ fontSize:10, color: row.splitBills ? "#f87171" : "#fbbf24", border:`1px solid ${row.splitBills ? "#f87171" : "#fbbf24"}`, borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  {row.splitBills ? "✕ Cancel Split" : `✂ Split${row.splitSeed?.length > 1 ? ` (${row.splitSeed.length})` : ""}`}
                                 </button>
-                              </div>
-                            )}
-                            {row.createBill && <span style={{color:"#34d399",fontSize:11}}>📝 New bill</span>}
-                            {row.splitBills && <span style={{color:"#fbbf24",fontSize:11}}>✂ Split into {row.splitBills.length}</span>}
+                              )}
+                            </div>
+                            {row.createBill && !row.splitBills && <span style={{color:"#34d399",fontSize:11}}>📝 New bill</span>}
+                            {row.splitBills && <span style={{color:"#fbbf24",fontSize:11}}>✂ Split into {row.splitBills.length} — 📝 creates {row.splitBills.filter(s=>s.createBill!==false).length} new bill{row.splitBills.filter(s=>s.createBill!==false).length !== 1 ? "s" : ""}</span>}
                           </td>
                         </tr>
                         {row.createBill && (
@@ -1880,6 +1884,13 @@ export default function Expenses() {
                                       style={{ flex:1, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#f1f5f9", fontSize:11 }} />
                                     <input type="number" step="0.01" value={split.amount} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,amount:e.target.value}:s)}:r))}
                                       style={{ width:80, background:"#111827", border:"1px solid #374151", borderRadius:5, padding:"3px 6px", color:"#34d399", fontSize:11, fontWeight:600 }} />
+                                    {/* Create Bill toggle per line */}
+                                    <button
+                                      title={split.createBill !== false ? "Will create a new bill — click to skip" : "Click to create a new bill for this line"}
+                                      onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,createBill:s.createBill===false?true:false}:s)}:r))}
+                                      style={{ fontSize:10, padding:"2px 6px", borderRadius:5, border:`1px solid ${split.createBill===false ? "#374151" : "#06b6d4"}`, background:"none", color: split.createBill===false ? "#4b5563" : "#06b6d4", cursor:"pointer", whiteSpace:"nowrap" }}>
+                                      {split.createBill === false ? "📝 Skip" : "📝 New Bill"}
+                                    </button>
                                     <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills: r.splitBills.filter((_,sk)=>sk!==k) } : r))}
                                       title="Remove this line"
                                       style={{ fontSize:12, color:"#f87171", background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>
@@ -1899,10 +1910,6 @@ export default function Expenses() {
                                     <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, selected:true } : r))} disabled={!balanced}
                                       style={{ fontSize:10, color:"#fff", background: balanced ? "#059669" : "#374151", border:"none", borderRadius:5, padding:"4px 10px", cursor: balanced ? "pointer" : "not-allowed", fontWeight:600 }}>
                                       ✓ Ready
-                                    </button>
-                                    <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills:null, selected:false } : r))}
-                                      style={{ fontSize:10, color:"#9ca3af", background:"none", border:"1px solid #374151", borderRadius:5, padding:"4px 10px", cursor:"pointer" }}>
-                                      Cancel
                                     </button>
                                   </div>
                                 </div>

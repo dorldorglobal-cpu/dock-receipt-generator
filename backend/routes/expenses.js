@@ -1857,6 +1857,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       if (row.splitBills?.length) {
         for (const split of row.splitBills) {
           if (!split.amount) continue;
+          if (split.createBill === false) continue; // user opted to skip this line
           let orderId = null;
           if (split.orderRef) {
             const o = await Order.findOne({ refNumber: { $regex: `^${esc(split.orderRef)}$`, $options: "i" } })
