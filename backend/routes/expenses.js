@@ -1856,28 +1856,46 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
 
       // Payment covers multiple orders — create one bill per split line
       if (row.splitBills?.length) {
+        // Build a map of orderRef → candidate _id for unpaid candidates on this row
+        const candidateMap = {};
+        for (const c of (row.candidates || [])) {
+          if (c.status !== "paid" && c.orderRef) {
+            candidateMap[c.orderRef.trim().toLowerCase()] = c._id;
+          }
+        }
+
         for (const split of row.splitBills) {
           if (!split.amount) continue;
-          if (split.createBill === false) continue; // user opted to skip this line
+          if (split.createBill === false) continue;
 
-          // Check for an existing unpaid bill for this vendor + order ref first
+          const refKey = (split.orderRef || "").trim().toLowerCase();
+
+          // 1. Prefer marking a known candidate for this order ref as paid
+          if (refKey && candidateMap[refKey]) {
+            await Expense.updateOne(
+              { _id: candidateMap[refKey] },
+              { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
+            );
+            updated++;
+            continue;
+          }
+
+          // 2. Fall back: look for any existing unpaid bill with same vendor + orderRef
           const existingQuery = {
-            vendor:   { $regex: `^${esc((row.payeeName || "").trim())}$`, $options: "i" },
-            status:   { $in: ["unpaid", "partial"] },
+            vendor: { $regex: `^${esc((row.payeeName || "").trim())}$`, $options: "i" },
+            status: { $in: ["unpaid", "partial"] },
           };
           if (split.orderRef) existingQuery.orderRef = { $regex: `^${esc(split.orderRef.trim())}$`, $options: "i" };
-
           const existing = await Expense.findOne(existingQuery).lean();
 
           if (existing) {
-            // Mark the existing bill paid instead of creating a duplicate
             await Expense.updateOne(
               { _id: existing._id },
               { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
             );
             updated++;
           } else {
-            // No existing bill — create one
+            // 3. No existing bill found — create a new paid one
             let orderId = null;
             if (split.orderRef) {
               const o = await Order.findOne({ refNumber: { $regex: `^${esc(split.orderRef)}$`, $options: "i" } })
