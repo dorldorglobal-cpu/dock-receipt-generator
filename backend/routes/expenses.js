@@ -199,13 +199,14 @@ router.post("/", uploadFields, async (req, res) => {
       return res.status(400).json({ error: "Category, description, and amount are required." });
     }
 
-    // Duplicate detection — same vendor + amount + date within 7 days (skip if force=true)
-    if (req.query.force !== "true" && vendor && amount) {
+    // Duplicate detection — same vendor + amount + date + order within 7 days (skip if force=true)
+    if (req.query.force !== "true" && vendor && amount && orderRef) {
       const checkDate = date ? new Date(date) : new Date();
       const window7   = 7 * 24 * 60 * 60 * 1000;
       const existing  = await Expense.findOne({
         vendor:   { $regex: `^${vendor.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
         amount:   parseFloat(amount),
+        orderRef: { $regex: `^${orderRef.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
         date:     { $gte: new Date(checkDate - window7), $lte: new Date(+checkDate + window7) },
       }).lean();
       if (existing) {
