@@ -367,6 +367,7 @@ export default function OrderDetails() {
   const [billForm, setBillForm]               = useState({});
   const [billExtraLines, setBillExtraLines]   = useState([]); // [{ description, amount }]
   const [billSaving, setBillSaving]           = useState(false);
+  const [billError, setBillError]             = useState("");
   const [billDocPaste, setBillDocPaste]       = useState("");
   const [billParsing, setBillParsing]         = useState(false);
   const [billParseResult, setBillParseResult] = useState(null);
@@ -696,11 +697,12 @@ export default function OrderDetails() {
     setShowAddBill(true);
   };
 
-  const saveBill = async () => {
+  const saveBill = async (force = false) => {
     if (!billForm.category || !billForm.description || !billForm.amount) {
-      alert("Category, description, and amount are required.");
+      setBillError("Category, description, and amount are required.");
       return;
     }
+    setBillError("");
     setBillSaving(true);
     try {
       const fd = new FormData();
@@ -710,19 +712,26 @@ export default function OrderDetails() {
       if (billReceiptFile) fd.append("receipt", billReceiptFile);
       if (billDocFile)     fd.append("bill",    billDocFile);
 
-      const url    = editingBill ? `${API}/api/expenses/${editingBill._id}` : `${API}/api/expenses`;
+      const url    = editingBill ? `${API}/api/expenses/${editingBill._id}` : `${API}/api/expenses${force ? "?force=true" : ""}`;
       const method = editingBill ? "PUT" : "POST";
       const res    = await fetch(url, { method, body: fd });
       const data   = await res.json();
-      if (!res.ok) { setMessage(data.error || "Failed to save bill"); setBillSaving(false); return; }
-
-      // Extra lines are stored on the main bill — nothing extra to save here
+      if (!res.ok) {
+        if (res.status === 409) {
+          setBillError(`⚠️ Possible duplicate: ${data.existing?.description || "similar bill"} ($${data.existing?.amount}) already exists. Click "Save Anyway" to create it.`);
+        } else {
+          setBillError(data.error || "Failed to save bill");
+        }
+        setBillSaving(false);
+        return;
+      }
 
       setShowAddBill(false);
       setBillExtraLines([]);
+      setBillError("");
       fetchBills();
       setMessage(editingBill ? "Bill updated ✓" : `Bill added ✓${validExtras.length ? ` + ${validExtras.length} extra charge${validExtras.length > 1 ? "s" : ""}` : ""}`);
-    } catch { setMessage("Failed to save bill"); }
+    } catch (err) { setBillError("Save failed: " + (err.message || "network error")); }
     setBillSaving(false);
   };
 
@@ -4550,13 +4559,25 @@ export default function OrderDetails() {
                   />
                 </div>
 
-                <div style={{ display:"flex", gap:10 }}>
-                  <button type="button" onClick={saveBill} disabled={billSaving}
+                {billError && (
+                  <div style={{ padding:"8px 12px", background:"var(--danger-dim)", border:"1px solid var(--danger)", borderRadius:7, fontSize:12, color:"var(--danger)", marginBottom:4 }}>
+                    {billError}
+                  </div>
+                )}
+                <div style={{ display:"flex", gap:10, flexWrap:"wrap", alignItems:"center" }}>
+                  <button type="button" onClick={() => saveBill(false)} disabled={billSaving}
                     style={{ padding:"10px 20px", borderRadius:8, border:"none",
                       background:"#059669", color:"white", cursor:"pointer", fontWeight:700 }}>
                     {billSaving ? "Saving…" : editingBill ? "💾 Update Bill" : "💾 Save Bill"}
                   </button>
-                  <button type="button" onClick={() => setShowAddBill(false)}
+                  {billError && billError.includes("duplicate") && (
+                    <button type="button" onClick={() => saveBill(true)} disabled={billSaving}
+                      style={{ padding:"10px 16px", borderRadius:8, border:"1px solid var(--warning)",
+                        background:"none", color:"var(--warning)", cursor:"pointer", fontWeight:600, fontSize:12 }}>
+                      Save Anyway
+                    </button>
+                  )}
+                  <button type="button" onClick={() => { setShowAddBill(false); setBillError(""); }}
                     style={{ padding:"10px 14px", borderRadius:8, border:"1px solid var(--border)",
                       background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
                     Cancel
