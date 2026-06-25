@@ -2416,14 +2416,17 @@ export default function OrderDetails() {
                         🧮 Create Bill from Rated Draft
                       </button>
                     )}
-                    {isStoragePaid && (
-                      <button
-                        title="Create Bill from Storage Receipt"
-                        onClick={e => { e.stopPropagation(); createStorageBill(); }}
-                        style={{ background:"none", border:"none", cursor:"pointer", color:"#a78bfa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
-                        🏬 Create Storage Bill
-                      </button>
-                    )}
+                    {isStoragePaid && (() => {
+                      const hasStorageBill = bills.some(b => /storage/i.test(b.category) && b.orderRef === order.refNumber);
+                      return (
+                        <button
+                          title={hasStorageBill ? "Storage bill already created" : "Create Bill from Storage Receipt"}
+                          onClick={e => { e.stopPropagation(); if (!hasStorageBill) createStorageBill(); }}
+                          style={{ background:"none", border:"none", cursor: hasStorageBill ? "default" : "pointer", color: hasStorageBill ? "#34d399" : "#a78bfa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          {hasStorageBill ? "✅ Bill Created" : "🏬 Create Storage Bill"}
+                        </button>
+                      );
+                    })()}
                     <a href={f.webViewLink} download onClick={e => e.stopPropagation()}
                       style={{ background:"none", border:"1px solid var(--border)", borderRadius:5,
                         color:"var(--text-secondary)", fontSize:11, padding:"3px 9px",
