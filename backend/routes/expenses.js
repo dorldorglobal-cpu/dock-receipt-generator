@@ -1859,26 +1859,46 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
         for (const split of row.splitBills) {
           if (!split.amount) continue;
           if (split.createBill === false) continue; // user opted to skip this line
-          let orderId = null;
-          if (split.orderRef) {
-            const o = await Order.findOne({ refNumber: { $regex: `^${esc(split.orderRef)}$`, $options: "i" } })
-              .select("_id refNumber").lean();
-            if (o) orderId = o._id;
+
+          // Check for an existing unpaid bill for this vendor + order ref first
+          const existingQuery = {
+            vendor:   { $regex: `^${esc((row.payeeName || "").trim())}$`, $options: "i" },
+            status:   { $in: ["unpaid", "partial"] },
+          };
+          if (split.orderRef) existingQuery.orderRef = { $regex: `^${esc(split.orderRef.trim())}$`, $options: "i" };
+
+          const existing = await Expense.findOne(existingQuery).lean();
+
+          if (existing) {
+            // Mark the existing bill paid instead of creating a duplicate
+            await Expense.updateOne(
+              { _id: existing._id },
+              { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
+            );
+            updated++;
+          } else {
+            // No existing bill — create one
+            let orderId = null;
+            if (split.orderRef) {
+              const o = await Order.findOne({ refNumber: { $regex: `^${esc(split.orderRef)}$`, $options: "i" } })
+                .select("_id refNumber").lean();
+              if (o) orderId = o._id;
+            }
+            await Expense.create({
+              category:      split.category || "Port / Terminal Fees",
+              description:   split.description || row.payeeName,
+              vendor:        row.payeeName,
+              amount:        Number(split.amount) || 0,
+              date:          dateObj,
+              orderId,
+              orderRef:      split.orderRef || "",
+              status:        "paid",
+              paidDate:      dateObj,
+              paymentMethod: paymentMethod || "Bank ACH",
+              ...receiptFields,
+            });
+            created++;
           }
-          await Expense.create({
-            category:      split.category || "Port / Terminal Fees",
-            description:   split.description || row.payeeName,
-            vendor:        row.payeeName,
-            amount:        Number(split.amount) || 0,
-            date:          dateObj,
-            orderId,
-            orderRef:      split.orderRef || "",
-            status:        "paid",
-            paidDate:      dateObj,
-            paymentMethod: paymentMethod || "Bank ACH",
-            ...receiptFields,
-          });
-          created++;
         }
         continue;
       }
