@@ -1285,34 +1285,45 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     const accessToken = await getGmailAccessToken();
     const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
 
-    // Build MIME message
-    const boundary = "DDG_BOUNDARY_" + Date.now();
-    const mimeLines = [
-      `From: ${from}`,
-      `To: ${to}`,
-      ...(cc ? [`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`] : []),
-      `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-      `MIME-Version: 1.0`,
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
-      ``,
-      `--${boundary}`,
-      `Content-Type: text/plain; charset="UTF-8"`,
-      ``,
-      body || "",
-    ];
-
+    let mimeLines;
     if (pdfBase64) {
-      mimeLines.push(
+      // Full multipart/mixed for emails with PDF attachments
+      const boundary = "DDG_BOUNDARY_" + Date.now();
+      mimeLines = [
+        `From: ${from}`,
+        `To: ${to}`,
+        ...(cc ? [`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`] : []),
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+        `MIME-Version: 1.0`,
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
+        ``,
+        `--${boundary}`,
+        `Content-Type: text/plain; charset="UTF-8"`,
+        ``,
+        body || "",
         `--${boundary}`,
         `Content-Type: application/pdf; name="${pdfName || "document.pdf"}"`,
         `Content-Transfer-Encoding: base64`,
         `Content-Disposition: attachment; filename="${pdfName || "document.pdf"}"`,
         ``,
         pdfBase64,
-      );
+        `--${boundary}--`,
+      ];
+    } else {
+      // Bare text/plain for SMS gateway addresses and simple emails — multipart breaks tmomail.net
+      mimeLines = [
+        `From: ${from}`,
+        `To: ${to}`,
+        ...(cc ? [`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`] : []),
+        `Subject: ${subject}`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/plain; charset="UTF-8"`,
+        `Content-Transfer-Encoding: 7bit`,
+        ``,
+        body || "",
+      ];
     }
 
-    mimeLines.push(`--${boundary}--`);
     const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
 
     const gmailResp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
