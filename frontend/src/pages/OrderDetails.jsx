@@ -4630,7 +4630,7 @@ export default function OrderDetails() {
           <div style={{ background:"var(--bg-panel)", border:"1px solid #7c3aed", borderRadius:12, padding:28, width:440, maxWidth:"95vw" }}>
             <h3 style={{ margin:"0 0 6px", color:"var(--text-primary)" }}>📱 Text Office</h3>
             <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
-              Sending to: <strong style={{color:"var(--text-primary)"}}>732-503-9191</strong> (Google Voice)
+              Sending to: <strong style={{color:"var(--text-primary)"}}>9172003998</strong> &amp; <strong style={{color:"var(--text-primary)"}}>9176811442</strong> (T-Mobile)
             </p>
             <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Message

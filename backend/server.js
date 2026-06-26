@@ -1350,7 +1350,7 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
 app.post("/api/send-sms", express.json(), async (req, res) => {
   const { body } = req.body;
   if (!body) return res.status(400).json({ error: "body required" });
-  const numbers = ["7325039191@txt.voice.google.com"];
+  const numbers = ["9172003998@tmomail.net", "9176811442@tmomail.net"];
   try {
     const accessToken = await getGmailAccessToken();
     await Promise.all(numbers.map(to => {
