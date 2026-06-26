@@ -1346,11 +1346,11 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
   }
 });
 
-// POST /api/send-sms  { body }  — sends to office numbers via SMTP (more reliable for tmomail.net)
+// POST /api/send-sms  { body }  — sends via Google Voice gateway to office numbers
 app.post("/api/send-sms", express.json(), async (req, res) => {
   const { body } = req.body;
   if (!body) return res.status(400).json({ error: "body required" });
-  const numbers = ["9172003998@tmomail.net", "9176811442@tmomail.net"];
+  const numbers = ["9172003998@txt.voice.google.com", "9176811442@txt.voice.google.com"];
   try {
     await Promise.all(numbers.map(to =>
       mailer.sendMail({
@@ -1360,7 +1360,7 @@ app.post("/api/send-sms", express.json(), async (req, res) => {
         text: body,
       })
     ));
-    console.log("[SMS] Sent to office:", body.slice(0, 80));
+    console.log("[SMS] Sent via Google Voice to office:", body.slice(0, 80));
     res.json({ success: true });
   } catch (err) {
     console.error("[SMS] Error:", err.message);
