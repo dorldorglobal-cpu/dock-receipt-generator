@@ -1477,15 +1477,13 @@ export default function OrderDetails() {
 
   const sendOfficeText = async () => {
     setTextOfficeSending(true);
-    const numbers = ["9172003998@tmomail.net", "9176811442@tmomail.net"];
     try {
-      await Promise.all(numbers.map(to =>
-        fetch(`${API}/api/send-email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to, subject: " ", body: textOfficeMsg }),
-        })
-      ));
+      const res = await fetch(`${API}/api/send-sms`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: textOfficeMsg }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Send failed"); }
       await fetch(`${API}/api/orders/${id}/timeline`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },

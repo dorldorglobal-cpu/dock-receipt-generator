@@ -1346,6 +1346,28 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
   }
 });
 
+// POST /api/send-sms  { body }  — sends to office numbers via SMTP (more reliable for tmomail.net)
+app.post("/api/send-sms", express.json(), async (req, res) => {
+  const { body } = req.body;
+  if (!body) return res.status(400).json({ error: "body required" });
+  const numbers = ["9172003998@tmomail.net", "9176811442@tmomail.net"];
+  try {
+    await Promise.all(numbers.map(to =>
+      mailer.sendMail({
+        from: process.env.GMAIL_USER,
+        to,
+        subject: "",
+        text: body,
+      })
+    ));
+    console.log("[SMS] Sent to office:", body.slice(0, 80));
+    res.json({ success: true });
+  } catch (err) {
+    console.error("[SMS] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 mongoose
   .connect(process.env.MONGODB_URI || process.env.MONGO_URI)
   .then(() => {
