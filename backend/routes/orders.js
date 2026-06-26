@@ -772,6 +772,25 @@ router.post(
           `Auto-updated from "${prevStatus}" to "${autoStatus.to}" on ${label} upload.`);
       }
 
+      // ── When Draft is uploaded → auto-lookup schedule to populate sail/arrival dates ──
+      if (label === "Draft" && order.vessel) {
+        try {
+          const ScheduleRow = require("../models/Schedule");
+          const vesselRe = new RegExp(order.vessel.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+          const schedRow = await ScheduleRow.findOne({ vessel: vesselRe }).sort({ updatedAt: -1 }).lean();
+          if (schedRow) {
+            if (schedRow.sailDate    && !order.sailDate)    order.sailDate    = schedRow.sailDate;
+            if (schedRow.arrivalDate && !order.arrivalDate) order.arrivalDate = schedRow.arrivalDate;
+            if (schedRow.cutoffDate  && !order.cutoffDate)  order.cutoffDate  = schedRow.cutoffDate;
+            if (schedRow.voyage      && !order.voyage)      order.voyage      = schedRow.voyage;
+            addTimeline(order, "Schedule Populated",
+              `Auto-filled from schedule on Draft upload — Sail: ${schedRow.sailDate}, Arrival: ${schedRow.arrivalDate}`);
+          }
+        } catch (schedErr) {
+          console.warn("[Draft upload] schedule lookup failed:", schedErr.message);
+        }
+      }
+
       // Clean up temp file
       try { fs.unlinkSync(req.file.path); } catch (_) {}
 
