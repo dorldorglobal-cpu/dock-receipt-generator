@@ -1346,21 +1346,33 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
   }
 });
 
-// POST /api/send-sms  { body }  — sends via Google Voice gateway to office numbers
+// POST /api/send-sms  { body }  — sends via Google Voice gateway using Gmail REST API
 app.post("/api/send-sms", express.json(), async (req, res) => {
   const { body } = req.body;
   if (!body) return res.status(400).json({ error: "body required" });
   const numbers = ["9172003998@txt.voice.google.com", "9176811442@txt.voice.google.com"];
   try {
-    await Promise.all(numbers.map(to =>
-      mailer.sendMail({
-        from: process.env.GMAIL_USER,
-        to,
-        subject: "",
-        text: body,
-      })
-    ));
-    console.log("[SMS] Sent via Google Voice to office:", body.slice(0, 80));
+    const accessToken = await getGmailAccessToken();
+    await Promise.all(numbers.map(to => {
+      const mimeLines = [
+        `From: ${process.env.GMAIL_USER}`,
+        `To: ${to}`,
+        `Subject: `,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/plain; charset="UTF-8"`,
+        ``,
+        body,
+      ];
+      const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+      return fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${accessToken}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ raw }),
+      }).then(r => r.json()).then(r => {
+        if (r.error) throw new Error(r.error.message);
+      });
+    }));
+    console.log("[SMS] Sent via Google Voice:", body.slice(0, 80));
     res.json({ success: true });
   } catch (err) {
     console.error("[SMS] Error:", err.message);
