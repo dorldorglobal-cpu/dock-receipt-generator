@@ -18,7 +18,7 @@ const STATUS_STYLES = {
 };
 
 function StatusBadge({ status }) {
-  const s = STATUS_STYLES[status] || STATUS_STYLES.draft;
+  const s = STATUS_STYLES[status?.toLowerCase()] || STATUS_STYLES.draft;
   return (
     <span style={{
       fontSize: 11, fontWeight: 700, padding: "3px 10px", borderRadius: 20,
@@ -160,9 +160,9 @@ export default function Invoices() {
 
   // ── Summary stats ─────────────────────────────────────────────────────────
   const totalAmount  = invoices.reduce((s, i) => s + (i.total || 0), 0);
-  const outstanding  = invoices.filter(i => i.status !== "paid").reduce((s, i) => s + (i.total || 0), 0);
-  const paidAmount   = invoices.filter(i => i.status === "paid").reduce((s, i) => s + (i.total || 0), 0);
-  const overdueCount = invoices.filter(i => i.status !== "paid" && i.dueDate && new Date(i.dueDate) < new Date()).length;
+  const outstanding  = invoices.filter(i => i.status?.toLowerCase() !== "paid").reduce((s, i) => s + (i.total || 0), 0);
+  const paidAmount   = invoices.filter(i => i.status?.toLowerCase() === "paid").reduce((s, i) => s + (i.total || 0), 0);
+  const overdueCount = invoices.filter(i => i.status?.toLowerCase() !== "paid" && i.dueDate && new Date(i.dueDate) < new Date()).length;
 
   const TABS = [
     { key: "all",   label: "All" },

@@ -108,7 +108,7 @@ router.get("/", async (req, res) => {
     const { status, search, from, to } = req.query;
     const q = {};
 
-    if (status && status !== "all") q.status = status;
+    if (status && status !== "all") q.status = { $regex: `^${status}$`, $options: "i" };
 
     if (from || to) {
       q.createdAt = {};
@@ -689,7 +689,7 @@ router.post("/:id/send", async (req, res) => {
     if (!gmailResp.ok) throw new Error(gmailResult.error?.message || `Gmail API error ${gmailResp.status}`);
 
     // Mark invoice as sent
-    await Invoice.findByIdAndUpdate(req.params.id, { status: "Sent", sentAt: new Date() });
+    await Invoice.findByIdAndUpdate(req.params.id, { status: "sent", sentAt: new Date() });
 
     res.json({ success: true, attachments: attachments.map(a => a.filename) });
   } catch (err) {
