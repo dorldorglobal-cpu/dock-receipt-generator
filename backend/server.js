@@ -1338,9 +1338,10 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     const result = await gmailResp.json();
     if (!gmailResp.ok) throw new Error(result.error?.message || `Gmail API error ${gmailResp.status}`);
 
+    console.log(`[Email] Sent to ${to}`);
     res.json({ success: true });
   } catch (err) {
-    console.error("Email error:", err);
+    console.error("[Email] Error sending to", to, ":", err.message);
     res.status(500).json({ error: err.message });
   }
 });
