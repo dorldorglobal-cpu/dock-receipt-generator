@@ -49,11 +49,11 @@
 
 /* ─── Light Theme Overrides ─────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg-base:      #f0f2f5;
-  --bg-elevated:  #ffffff;
-  --bg-panel:     #f8f9fb;
-  --bg-input:     #ffffff;
-  --bg-hover:     #e4e9f0;
+  --bg-base:      #e8eef6;
+  --bg-elevated:  #ddeaf8;
+  --bg-panel:     #e4eef8;
+  --bg-input:     #f0f6ff;
+  --bg-hover:     #cdddf0;
   --sidebar-bg:   #ffffff;
   --sidebar-border: #d0d7e3;
 
