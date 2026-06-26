@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-const ACTIVE_EXCLUDED = ["Completed", "Canceled", "Waiting to Sail", "Sailed", "Delivered"];
+const ACTIVE_EXCLUDED = ["Completed", "Canceled", "Waiting to Sail", "Sailed", "Delivered", "Arrived"];
 
 const TABS = [
   { label: "Active",           value: "active",           color: "#34d399" },
