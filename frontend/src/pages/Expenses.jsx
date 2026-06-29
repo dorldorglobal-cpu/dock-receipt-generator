@@ -40,6 +40,9 @@ const KNOWN_VENDORS = [
   "US Customs", "Port Newark", "Port of NY/NJ", "Grimaldi",
   "Wallenius Wilhelmsen", "EUKOR", "Höegh Autoliners",
   "Cedars Express", "iShip", "Metro PCS", "Verizon", "FedEx",
+  "Neva 28", "MTV Trucking", "LJ Logistics", "FTS", "AMF", "LL Trans",
+  "ARC Trucking", "VS Transit", "Victory Towing", "SDM", "Vikstatus",
+  "4RG", "B Strong", "Ponce", "Central Dispatch", "ChatGPT", "Claude",
 ];
 
 const CAT_COLORS = {
@@ -301,10 +304,12 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
 
   const autoCategoryFromVendor = (vendor) => {
     const v = vendor.toLowerCase();
-    if (/dispatch|tow|transport/.test(v))                                        return "Towing / Transport";
+    if (/e-?z\s*cargo|savannah|i-?ship|cedars/.test(v))                          return "Loaders & Warehouses";
     if (/sallaum|acl\b|grimaldi|wallenius|eukor/.test(v))                        return "Ocean Freight";
-    if (/ezcargo|savannah auto export|cedars express|iship|i-ship/.test(v))      return "Loaders & Warehouses";
-    if (/copart|iaai|manheim|adesa/.test(v))                                     return "Storage";
+    if (/neva\s*28|mtv trucking|hey logistics|lj logistics|\bfts\b|\bamf\b|ll trans|arc trucking|vs transit|victory towing|golden carrier|\bsdm\b|vikstatus|\b4rg\b|b strong|ponce|dispatch|tow|transport/.test(v)) return "Towing / Transport";
+    if (/copart|\biaa\b|iaai/.test(v))                                           return "Storage";
+    if (/central dispatch|chatgpt|claude|openai|anthropic/.test(v))              return "Software";
+    if (/manheim|adesa/.test(v))                                                 return "Storage";
     return "";
   };
 
