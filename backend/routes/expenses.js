@@ -193,7 +193,7 @@ router.get("/export", async (req, res) => {
 router.post("/", uploadFields, async (req, res) => {
   try {
     const { category, description, vendor, amount, date, orderId, orderRef,
-            vin, invoiceNumber, status, paidDate, notes,
+            vin, invoiceNumber, status, paidDate, notes, bankAccount, taxCategory,
             billDriveId, billDriveUrl } = req.body;
 
     if (!category || !description || !amount) {
@@ -242,6 +242,8 @@ router.post("/", uploadFields, async (req, res) => {
       category, description, vendor, notes,
       vin:           (vin || "").toUpperCase().trim(),
       invoiceNumber: invoiceNumber || "",
+      bankAccount:   bankAccount || "Metropolitan Bank 8042 (Business)",
+      taxCategory:   taxCategory || "",
       amount:        parseFloat(amount) + extrasTotal,
       date:          date ? new Date(date) : new Date(),
       orderId:       resolvedOrderId,
@@ -284,7 +286,7 @@ router.post("/", uploadFields, async (req, res) => {
 router.put("/:id", uploadFields, async (req, res) => {
   try {
     const { category, description, vendor, amount, date, orderId, orderRef,
-            invoiceNumber, status, paidDate, notes, vin } = req.body;
+            invoiceNumber, status, paidDate, notes, vin, bankAccount, taxCategory } = req.body;
 
     let lineItems = [];
     if (req.body.lineItems) {
@@ -296,6 +298,8 @@ router.put("/:id", uploadFields, async (req, res) => {
       category, description, vendor, notes,
       vin:           vin !== undefined ? (vin || "") : undefined,
       invoiceNumber: invoiceNumber || "",
+      bankAccount:   bankAccount || "",
+      taxCategory:   taxCategory || "",
       amount:    parseFloat(amount) + extrasTotal,
       date:      date ? new Date(date) : undefined,
       orderId:   orderId || null,

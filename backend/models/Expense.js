@@ -59,6 +59,9 @@ const expenseSchema = new mongoose.Schema(
 
     notes: { type: String, default: "" },
 
+    bankAccount: { type: String, default: "Metropolitan Bank 8042 (Business)" },
+    taxCategory: { type: String, default: "" },
+
     // General attachments (extra docs, photos, etc.)
     attachments: [{
       name:       { type: String, default: "" },

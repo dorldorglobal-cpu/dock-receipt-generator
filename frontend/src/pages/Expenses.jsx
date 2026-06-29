@@ -16,6 +16,32 @@ const CATEGORIES = [
   "General Overhead",
 ];
 
+const TAX_CATEGORIES = [
+  "Cost of Goods Sold (COGS)",
+  "Operating Expense",
+  "Capital Expense",
+  "Non-Deductible",
+  "Owner Draw",
+  "Payroll",
+];
+
+const BANK_ACCOUNTS = [
+  "Metropolitan Bank 8042 (Business)",
+  "Personal",
+];
+
+const PAYMENT_METHODS = ["Bank ACH", "Wire", "Zelle", "Venmo", "PayPal", "Check", "Cash", "Credit Card", "Other"];
+
+const KNOWN_VENDORS = [
+  "ACL", "Sallaum Lines", "Savannah Auto Export", "Hey Logistics",
+  "Misaels Trucking", "Road Runner Transport", "Burgos Transport",
+  "Rayko Transport", "Iron Battalion", "Golden Carrier", "Lions Transport",
+  "S&JY Services", "E-Z Cargo", "Copart", "IAAI", "Manheim", "ADESA",
+  "US Customs", "Port Newark", "Port of NY/NJ", "Grimaldi",
+  "Wallenius Wilhelmsen", "EUKOR", "Höegh Autoliners",
+  "Cedars Express", "iShip", "Metro PCS", "Verizon", "FedEx",
+];
+
 const CAT_COLORS = {
   "Towing / Transport":   "#60a5fa",
   "Ocean Freight":        "#34d399",
@@ -54,6 +80,8 @@ const EMPTY_FORM = {
   status: "unpaid",
   paidDate: "",
   notes: "",
+  bankAccount: "Metropolitan Bank 8042 (Business)",
+  taxCategory: "",
 };
 
 // ── DropZone ──────────────────────────────────────────────────────────────────
@@ -333,15 +361,11 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
             placeholder="Type or select a vendor…"
             autoComplete="off"
           />
-          {vendors.length > 0 && (
-            <datalist id="vendor-list">
-              {vendors.map(v => (
-                <option key={v._id} value={v.name}>
-                  {v.category ? `${v.name} — ${v.category}` : v.name}
-                </option>
-              ))}
-            </datalist>
-          )}
+          <datalist id="vendor-list">
+            {[...new Set([...KNOWN_VENDORS, ...vendors.map(v => v.name)])].sort().map(v => (
+              <option key={v} value={v} />
+            ))}
+          </datalist>
         </label>
 
         {/* Amount */}
@@ -378,6 +402,24 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
         <label style={labelStyle}>
           Invoice # (optional)
           <input {...inp("invoiceNumber")} style={inputStyle} placeholder="e.g. INV-0042" />
+        </label>
+
+        {/* Bank Account */}
+        <label style={labelStyle}>
+          Bank Account
+          <select {...inp("bankAccount")} style={inputStyle}>
+            <option value="">— Select account —</option>
+            {BANK_ACCOUNTS.map(b => <option key={b} value={b}>{b}</option>)}
+          </select>
+        </label>
+
+        {/* Tax Category */}
+        <label style={labelStyle}>
+          Tax Category
+          <select {...inp("taxCategory")} style={inputStyle}>
+            <option value="">— Select tax category —</option>
+            {TAX_CATEGORIES.map(t => <option key={t} value={t}>{t}</option>)}
+          </select>
         </label>
 
         {/* Status */}
@@ -447,8 +489,10 @@ export default function Expenses() {
   const [search, setSearch]         = useState("");
   const [filterCat, setFilterCat]   = useState("");
   const [filterStatus, setFilterStatus] = useState("");
+  const [filterVendor, setFilterVendor] = useState("");
   const [dateFrom, setDateFrom]     = useState("");
   const [dateTo, setDateTo]         = useState("");
+  const [filterMonthYear, setFilterMonthYear] = useState(""); // "YYYY-MM" or ""
   const [showModal, setShowModal]   = useState(false);
   const [editing, setEditing]       = useState(null); // null = add, else expense obj
   const [form, setForm]             = useState(EMPTY_FORM);
@@ -1036,6 +1080,8 @@ export default function Expenses() {
       status:        exp.status        || "unpaid",
       paidDate:      exp.paidDate ? exp.paidDate.slice(0, 10) : "",
       notes:         exp.notes         || "",
+      bankAccount:   exp.bankAccount   || "Metropolitan Bank 8042 (Business)",
+      taxCategory:   exp.taxCategory   || "",
     });
     setReceiptFile(null);
     setBillFile(null);
@@ -1171,10 +1217,60 @@ export default function Expenses() {
     return 0;
   });
 
-  // Stat card filter
-  const displayList = activeFilter
-    ? sorted.filter(e => e.status === activeFilter)
-    : sorted;
+  // Apply all filters
+  const displayList = sorted.filter(e => {
+    if (activeFilter && e.status !== activeFilter) return false;
+    if (filterVendor && !(e.vendor || "").toLowerCase().includes(filterVendor.toLowerCase())) return false;
+    if (filterMonthYear) {
+      const d = new Date(e.date);
+      const ym = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`;
+      if (ym !== filterMonthYear) return false;
+    }
+    return true;
+  });
+
+  // Month quick-filter helpers
+  const currentMonthYear = (() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,"0")}`;
+  })();
+  const shiftMonth = (delta) => {
+    const base = filterMonthYear || currentMonthYear;
+    const [y, m] = base.split("-").map(Number);
+    const d = new Date(y, m - 1 + delta, 1);
+    setFilterMonthYear(`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}`);
+  };
+  const monthLabel = (ym) => {
+    if (!ym) return "All Time";
+    const [y, m] = ym.split("-").map(Number);
+    return new Date(y, m-1, 1).toLocaleString("default", { month: "long", year: "numeric" });
+  };
+
+  // CSV export (frontend — uses displayList so filters apply)
+  const exportCSV = () => {
+    const cols = ["Date","Order#","VIN","Vendor","Category","Description","Invoice#","Amount","Status","Paid Date","Payment Method","Bank Account","Tax Category","Notes"];
+    const rows = displayList.map(e => [
+      e.date ? new Date(e.date).toLocaleDateString() : "",
+      e.orderRef || "",
+      e.vin || "",
+      e.vendor || "",
+      e.category || "",
+      e.description || "",
+      e.invoiceNumber || "",
+      (e.amount || 0).toFixed(2),
+      e.status || "",
+      e.paidDate ? new Date(e.paidDate).toLocaleDateString() : "",
+      e.paymentMethod || "",
+      e.bankAccount || "",
+      e.taxCategory || "",
+      (e.notes || "").replace(/"/g,'""'),
+    ]);
+    const csv = [cols, ...rows].map(r => r.map(v => `"${v}"`).join(",")).join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv" }));
+    const a = document.createElement("a"); a.href = url;
+    a.download = `expenses-${filterMonthYear || "all"}.csv`; a.click();
+    URL.revokeObjectURL(url);
+  };
 
   const th = { padding: "6px 12px", textAlign: "left", color: "var(--text-secondary)", fontSize: 11, fontWeight: 600, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap" };
   const td = { padding: "5px 12px", fontSize: 12, color: "var(--text-primary)", borderTop: "1px solid var(--bg-panel)", lineHeight: 1.25 };
@@ -1196,16 +1292,7 @@ export default function Expenses() {
           </p>
         </div>
         <div style={{ display:"flex", gap:10 }}>
-          <button
-            onClick={() => {
-              const params = new URLSearchParams();
-              if (search)       params.set("search", search);
-              if (filterCat)    params.set("category", filterCat);
-              if (filterStatus) params.set("status", filterStatus);
-              if (dateFrom)     params.set("from", dateFrom);
-              if (dateTo)       params.set("to", dateTo);
-              window.open(`${API}/api/expenses/export?${params}`, "_blank");
-            }}
+          <button onClick={exportCSV}
             style={{ background:"var(--bg-panel)", color:"var(--text-secondary)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
             ⬇ Export CSV
           </button>
@@ -2128,23 +2215,56 @@ export default function Expenses() {
         </div>
       )}
 
-      {/* Category breakdown mini-bar */}
+      {/* Category breakdown — horizontal bar chart */}
       {summary?.byCategory && Object.keys(summary.byCategory).length > 0 && (
-        <div style={{ background: "var(--bg-panel)", borderRadius: 12, padding: "16px 20px", marginBottom: 24 }}>
-          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, textTransform: "uppercase", letterSpacing: "0.05em" }}>By Category</div>
-          <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-            {Object.entries(summary.byCategory)
-              .sort((a, b) => b[1] - a[1])
-              .map(([cat, amt]) => (
-                <div key={cat} style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                  <span style={{ width: 10, height: 10, borderRadius: "50%", background: CAT_COLORS[cat] || "var(--text-secondary)", flexShrink: 0 }} />
-                  <span style={{ fontSize: 12, color: "var(--text-primary)" }}>{cat}</span>
-                  <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>{fmt$(amt)}</span>
+        <div style={{ background: "var(--bg-panel)", borderRadius: 12, padding: "18px 22px", marginBottom: 24 }}>
+          <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 14, textTransform: "uppercase", letterSpacing: "0.05em", fontWeight: 600 }}>Spending by Category</div>
+          {(() => {
+            const entries = Object.entries(summary.byCategory).sort((a,b) => b[1]-a[1]);
+            const max = entries[0]?.[1] || 1;
+            return entries.map(([cat, amt]) => (
+              <div key={cat} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+                <div style={{ width:140, fontSize:11, color:"var(--text-secondary)", textAlign:"right", flexShrink:0, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}
+                  title={cat}>{cat}</div>
+                <div style={{ flex:1, background:"var(--bg-elevated)", borderRadius:4, height:16, overflow:"hidden" }}>
+                  <div style={{
+                    width:`${(amt/max)*100}%`, height:"100%",
+                    background: CAT_COLORS[cat] || "var(--text-secondary)",
+                    borderRadius:4, minWidth:4,
+                    transition:"width 0.4s ease",
+                  }} />
                 </div>
-              ))}
-          </div>
+                <div style={{ width:80, fontSize:11, fontWeight:600, color:"var(--text-primary)", textAlign:"right", flexShrink:0 }}>{fmt$(amt)}</div>
+              </div>
+            ));
+          })()}
         </div>
       )}
+
+      {/* Month quick-filter bar */}
+      <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:14, flexWrap:"wrap" }}>
+        <button onClick={() => shiftMonth(-1)}
+          style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-secondary)", padding:"6px 12px", fontSize:12, cursor:"pointer" }}>‹</button>
+        <button
+          onClick={() => setFilterMonthYear(filterMonthYear === currentMonthYear ? "" : currentMonthYear)}
+          style={{
+            background: filterMonthYear === currentMonthYear ? "#3b82f6" : "var(--bg-panel)",
+            border: "1px solid var(--border)", borderRadius:6,
+            color: filterMonthYear === currentMonthYear ? "#fff" : "var(--text-secondary)",
+            padding:"6px 14px", fontSize:12, fontWeight:600, cursor:"pointer",
+          }}>
+          {monthLabel(filterMonthYear)}
+        </button>
+        <button onClick={() => shiftMonth(1)} disabled={!filterMonthYear}
+          style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:6, color: filterMonthYear ? "var(--text-secondary)" : "var(--border)", padding:"6px 12px", fontSize:12, cursor: filterMonthYear ? "pointer" : "default" }}>›</button>
+        {filterMonthYear && (
+          <button onClick={() => setFilterMonthYear("")}
+            style={{ background:"none", border:"none", color:"var(--text-muted)", fontSize:11, cursor:"pointer", padding:"4px 6px" }}>✕ All Time</button>
+        )}
+        <span style={{ marginLeft:"auto", fontSize:11, color:"var(--text-muted)" }}>
+          {displayList.length} expense{displayList.length !== 1?"s":""} · {fmt$(displayList.reduce((s,e)=>s+(e.amount||0),0))} total
+        </span>
+      </div>
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
@@ -2153,9 +2273,18 @@ export default function Expenses() {
           value={search} onChange={e => setSearch(e.target.value)}
           style={{
             background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
-            color: "var(--text-primary)", padding: "8px 12px", fontSize: 13, width: 260,
+            color: "var(--text-primary)", padding: "8px 12px", fontSize: 13, width: 240,
           }}
         />
+        <input
+          placeholder="Filter by vendor…"
+          value={filterVendor} onChange={e => setFilterVendor(e.target.value)}
+          list="vendor-filter-list"
+          style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-primary)", padding: "8px 12px", fontSize: 13, width: 180 }}
+        />
+        <datalist id="vendor-filter-list">
+          {[...new Set([...KNOWN_VENDORS, ...vendors.map(v=>v.name)])].sort().map(v=><option key={v} value={v}/>)}
+        </datalist>
         <select value={filterCat} onChange={e => setFilterCat(e.target.value)} style={{
           background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7,
           color: filterCat ? "var(--text-primary)" : "var(--text-secondary)", padding: "8px 12px", fontSize: 13,
@@ -2169,6 +2298,7 @@ export default function Expenses() {
         }}>
           <option value="">All Statuses</option>
           <option value="unpaid">Unpaid</option>
+          <option value="partial">Partial</option>
           <option value="paid">Paid</option>
         </select>
         <input type="date" value={dateFrom} onChange={e => setDateFrom(e.target.value)}
@@ -2178,16 +2308,12 @@ export default function Expenses() {
         <input type="date" value={dateTo} onChange={e => setDateTo(e.target.value)}
           style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-primary)", padding: "8px 12px", fontSize: 13 }}
         />
-        {(search || filterCat || filterStatus || dateFrom || dateTo || activeFilter) && (
-          <button onClick={() => { setSearch(""); setFilterCat(""); setFilterStatus(""); setDateFrom(""); setDateTo(""); setActiveFilter(null); }}
+        {(search || filterCat || filterStatus || filterVendor || dateFrom || dateTo || activeFilter || filterMonthYear) && (
+          <button onClick={() => { setSearch(""); setFilterCat(""); setFilterStatus(""); setFilterVendor(""); setDateFrom(""); setDateTo(""); setActiveFilter(null); setFilterMonthYear(""); }}
             style={{ background: "none", border: "1px solid var(--border)", borderRadius: 7, color: "var(--text-secondary)", padding: "8px 12px", fontSize: 12, cursor: "pointer" }}>
             Clear filters
           </button>
         )}
-        <span style={{ marginLeft: "auto", fontSize: 12, color: "var(--text-muted)" }}>
-          {displayList.length} expense{displayList.length !== 1 ? "s" : ""}
-          {activeFilter ? ` (${activeFilter})` : ""}
-        </span>
       </div>
 
       {/* Table */}
@@ -2217,8 +2343,8 @@ export default function Expenses() {
                   <th style={th} onClick={() => toggleSort("date")}>Date <SortArrow k="date" /></th>
                   <th style={th}>Order #</th>
                   <th style={th}>VIN</th>
-                  <th style={th}>Booking #</th>
                   <th style={th} onClick={() => toggleSort("vendor")}>Vendor <SortArrow k="vendor" /></th>
+                  <th style={th} onClick={() => toggleSort("category")}>Category <SortArrow k="category" /></th>
                   <th style={{ ...th, textAlign: "right" }} onClick={() => toggleSort("amount")}>Amount <SortArrow k="amount" /></th>
                   <th style={th} onClick={() => toggleSort("status")}>Status <SortArrow k="status" /></th>
                   <th style={th}>Docs</th>
@@ -2259,16 +2385,24 @@ export default function Expenses() {
                       )}
                     </td>
 
-                    {/* Booking # */}
-                    <td style={{ ...td, color: "#a78bfa", fontSize: 11, fontFamily: "monospace", whiteSpace: "nowrap" }}>
-                      {exp.orderId?.bookingNumber || "—"}
-                    </td>
-
                     {/* Vendor */}
-                    <td style={{ ...td, color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap", maxWidth: 110, overflow: "hidden", textOverflow: "ellipsis" }}
+                    <td style={{ ...td, color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}
                       title={exp.vendor || ""}>
                       {exp.vendor || "—"}
-                      {exp.invoiceNumber && <span style={{ fontSize: 10, color: "var(--text-muted)", marginLeft: 5 }}>#{exp.invoiceNumber}</span>}
+                      {exp.invoiceNumber && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>#{exp.invoiceNumber}</div>}
+                    </td>
+
+                    {/* Category */}
+                    <td style={{ ...td, maxWidth: 120, overflow: "hidden" }}>
+                      {exp.category ? (
+                        <span style={{
+                          display: "inline-block", fontSize: 10, padding: "2px 7px", borderRadius: 5,
+                          background: (CAT_COLORS[exp.category] || "#888") + "22",
+                          color: CAT_COLORS[exp.category] || "var(--text-secondary)",
+                          fontWeight: 600, whiteSpace: "nowrap",
+                        }}>{exp.category}</span>
+                      ) : <span style={{ color: "var(--border)" }}>—</span>}
+                      {exp.taxCategory && <div style={{ fontSize: 10, color: "var(--text-muted)", marginTop: 2 }}>{exp.taxCategory}</div>}
                     </td>
 
                     {/* Amount */}
@@ -2647,7 +2781,7 @@ export default function Expenses() {
                 Payment Method
                 <select value={payConfirmMethod} onChange={e => setPayConfirmMethod(e.target.value)}
                   style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }}>
-                  {["Bank ACH","Wire","Zelle","Venmo","Check","Cash","Credit Card","Other"].map(m => <option key={m}>{m}</option>)}
+                  {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
                 </select>
               </label>
 
