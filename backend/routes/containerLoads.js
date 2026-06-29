@@ -17,7 +17,7 @@ router.get("/", async (req, res) => {
   }
 });
 
-// POST /api/container-loads  — create load + send loader email
+// POST /api/container-loads  — create load (no auto-email; frontend shows preview modal)
 router.post("/", express.json(), async (req, res) => {
   try {
     const {
@@ -32,13 +32,6 @@ router.post("/", express.json(), async (req, res) => {
       consigneeName, consigneeAddress, consigneePhone, consigneeEmail, consigneeTin,
       notifyName, notifyAddress, notifyPhone, notifyEmail, notifyTin,
     });
-
-    if (loaderEmail) {
-      const orders = await Order.find({ _id: { $in: orderIds } }).lean();
-      await sendLoaderEmail(load, orders);
-      load.emailSentAt = new Date();
-      await load.save();
-    }
 
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
     res.json(populated);
@@ -79,15 +72,24 @@ router.patch("/:id", express.json(), async (req, res) => {
   }
 });
 
-// POST /api/container-loads/:id/resend-email
-router.post("/:id/resend-email", express.json(), async (req, res) => {
+// POST /api/container-loads/:id/send-email  — send custom email (frontend provides to/cc/subject/body)
+router.post("/:id/send-email", express.json(), async (req, res) => {
   try {
-    const load = await ContainerLoad.findById(req.params.id).populate("orderIds").lean();
+    const { to, cc, subject, body } = req.body;
+    if (!to) return res.status(400).json({ error: "Recipient required" });
+
+    const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
-    await sendLoaderEmail(load, load.orderIds);
-    await ContainerLoad.findByIdAndUpdate(req.params.id, { emailSentAt: new Date() });
+
+    await sendRawEmail({ to, cc, subject, body });
+
+    load.emailSentAt = new Date();
+    if (to !== LOADER_TO) load.loaderEmail = to;
+    await load.save();
+
     res.json({ success: true });
   } catch (e) {
+    console.error("[ContainerLoad] send-email error:", e.message);
     res.status(500).json({ error: e.message });
   }
 });
@@ -102,68 +104,19 @@ router.delete("/:id", async (req, res) => {
   }
 });
 
-// ── Email helper ──────────────────────────────────────────────────────────────
-async function sendLoaderEmail(load, orders) {
-  const destination = load.pod || "DESTINATION";
-  const pol         = load.pol || "NJ";
-
-  // Subject: ref numbers, CONTAINER TO TEMA NJ CUSTOMER NAME
-  const refs = orders.map(o => o.refNumber).filter(Boolean).join(" / ");
-  const custName = orders[0]?.customerName || "";
-  const subject  = `${refs} CONTAINER TO ${destination.toUpperCase()} ${pol.toUpperCase()} ${custName}`.trim();
-
-  // Consignee block
-  const cLines = [
-    "CONSIGNEE INFO",
-    load.consigneeName    || "—",
-    load.consigneeAddress || "—",
-    load.consigneePhone   ? `TEL: ${load.consigneePhone}`   : "",
-    load.consigneeEmail   ? `EMAIL: ${load.consigneeEmail}` : "",
-    load.consigneeTin     ? `TIN#: ${load.consigneeTin}`    : "",
-  ].filter(l => l !== "").join("\n");
-
-  // Notify party block
-  const nLines = [
-    "NOTIFY PARTY INFO",
-    load.notifyName    || "—",
-    load.notifyAddress || "—",
-    load.notifyPhone   ? `TEL: ${load.notifyPhone}`   : "",
-    load.notifyEmail   ? `EMAIL: ${load.notifyEmail}` : "",
-    load.notifyTin     ? `TIN#: ${load.notifyTin}`    : "",
-  ].filter(l => l !== "").join("\n");
-
-  // Unit lines: YYM VIN
-  const unitLines = orders.map(o => {
-    const ymm = [o.year, o.make, o.model].filter(Boolean).join(" ") || "—";
-    return `${ymm}   ${o.vin || "—"}`;
-  }).join("\n");
-
-  const body = [
-    `SEE ATTACHED LOAD LIST FOR CONTAINER TO ${destination.toUpperCase()}`,
-    `PLEASE CONFIRM THIS UNIT AND ITS TITLE`,
-    ``,
-    cLines,
-    ``,
-    nLines,
-    ``,
-    unitLines,
-    ``,
-    `Thank you,`,
-    `Dor Ldor Global`,
-  ].join("\n");
-
+// ── Email sender ──────────────────────────────────────────────────────────────
+async function sendRawEmail({ to, cc, subject, body }) {
   const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
   const mimeLines = [
     `From: ${from}`,
-    `To: ${LOADER_TO}`,
-    `Cc: ${LOADER_CC}`,
+    `To: ${to}`,
+    ...(cc ? [`Cc: ${cc}`] : []),
     `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: text/plain; charset="UTF-8"`,
     ``,
     body,
   ];
-
   const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
   const accessToken = await getGmailAccessToken();
   const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
@@ -173,7 +126,67 @@ async function sendLoaderEmail(load, orders) {
   });
   const result = await resp.json();
   if (!resp.ok) throw new Error(result.error?.message || "Gmail error");
-  console.log(`[ContainerLoad] Email sent → ${LOADER_TO} (cc: ${LOADER_CC}) for load ${load.name}`);
+  console.log(`[ContainerLoad] Email sent → ${to}${cc ? " (cc: "+cc+")" : ""}`);
 }
 
 module.exports = router;
+module.exports.buildEmailDraft = buildEmailDraft;
+
+// ── Draft builder (exported so frontend can also call GET /draft) ─────────────
+function buildEmailDraft(load, orders) {
+  const destination = (load.pod || "DESTINATION").toUpperCase();
+  const pol         = (load.pol || "NJ").toUpperCase();
+  const refs        = orders.map(o => o.refNumber).filter(Boolean).join(" / ");
+  const custName    = orders[0]?.customerName || "";
+  const subject     = `${refs} CONTAINER TO ${destination} ${pol} ${custName}`.trim();
+
+  const cBlock = [
+    "CONSIGNEE INFO",
+    load.consigneeName    || "—",
+    load.consigneeAddress || "—",
+    load.consigneePhone   ? `TEL: ${load.consigneePhone}`   : null,
+    load.consigneeEmail   ? `EMAIL: ${load.consigneeEmail}` : null,
+    load.consigneeTin     ? `TIN#: ${load.consigneeTin}`    : null,
+  ].filter(Boolean).join("\n");
+
+  const nBlock = [
+    "NOTIFY PARTY INFO",
+    load.notifyName    || "—",
+    load.notifyAddress || "—",
+    load.notifyPhone   ? `TEL: ${load.notifyPhone}`   : null,
+    load.notifyEmail   ? `EMAIL: ${load.notifyEmail}` : null,
+    load.notifyTin     ? `TIN#: ${load.notifyTin}`    : null,
+  ].filter(Boolean).join("\n");
+
+  const unitLines = orders.map(o => {
+    const ymm = [o.year, o.make, o.model].filter(Boolean).join(" ") || "—";
+    return `${ymm}   ${o.vin || "—"}`;
+  }).join("\n");
+
+  const body = [
+    `SEE ATTACHED LOAD LIST FOR CONTAINER TO ${destination}`,
+    `PLEASE CONFIRM THIS UNIT AND ITS TITLE`,
+    ``,
+    cBlock,
+    ``,
+    nBlock,
+    ``,
+    unitLines,
+    ``,
+    `Thank you,`,
+    `Dor Ldor Global`,
+  ].join("\n");
+
+  return { to: LOADER_TO, cc: LOADER_CC, subject, body };
+}
+
+// GET /api/container-loads/:id/email-draft
+router.get("/:id/email-draft", async (req, res) => {
+  try {
+    const load = await ContainerLoad.findById(req.params.id).populate("orderIds").lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+    res.json(buildEmailDraft(load, load.orderIds));
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
