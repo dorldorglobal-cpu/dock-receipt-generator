@@ -156,19 +156,35 @@ function AttachmentsCard({ expId, attachments, onUpdate }) {
     return "📎";
   };
 
+  const [dragOver, setDragOver] = React.useState(false);
+
+  const handleDrop = (e) => {
+    e.preventDefault();
+    setDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    if (file) upload(file);
+  };
+
   return (
     <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
       <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600, marginBottom: 10 }}>Attachments</div>
 
-      {/* Upload card */}
-      <label style={{
-        display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
-        border: "1px dashed var(--border)", borderRadius: 8, cursor: uploading ? "wait" : "pointer",
-        background: "var(--bg-elevated)", marginBottom: 10,
-      }}>
-        <span style={{ fontSize: 18 }}>📎</span>
-        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-          {uploading ? "Uploading…" : "Click to attach a file (PDF, image, etc.)"}
+      {/* Upload card — drag or click */}
+      <label
+        onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+        onDragLeave={() => setDragOver(false)}
+        onDrop={handleDrop}
+        style={{
+          display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center",
+          gap: 6, padding: "18px 14px",
+          border: `2px dashed ${dragOver ? "#60a5fa" : "var(--border)"}`,
+          borderRadius: 8, cursor: uploading ? "wait" : "pointer",
+          background: dragOver ? "#60a5fa12" : "var(--bg-elevated)", marginBottom: 10,
+          transition: "border-color 0.15s, background 0.15s",
+        }}>
+        <span style={{ fontSize: 24 }}>{uploading ? "⏳" : "📎"}</span>
+        <span style={{ fontSize: 12, color: dragOver ? "#60a5fa" : "var(--text-secondary)", fontWeight: dragOver ? 600 : 400 }}>
+          {uploading ? "Uploading…" : dragOver ? "Drop to upload" : "Drag & drop a file here, or click to browse"}
         </span>
         <input type="file" accept="*/*" style={{ display: "none" }} disabled={uploading}
           onChange={e => { upload(e.target.files[0]); e.target.value = ""; }} />
