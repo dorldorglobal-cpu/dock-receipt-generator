@@ -180,14 +180,25 @@ router.get("/", async (req, res) => {
 
     const vendors = await Vendor.find(q).sort({ name: 1 }).lean();
 
+    // Also pull every distinct vendor name from expense history and merge in
+    // any that don't already have a Vendor record
+    const expVendorNames = await Expense.distinct("vendor", { vendor: { $nin: ["", null] } });
+    const knownNames = new Set(vendors.map(v => v.name.toLowerCase().trim()));
+    for (const name of expVendorNames) {
+      const key = (name || "").toLowerCase().trim();
+      if (key && !knownNames.has(key)) {
+        vendors.push({ _id: null, name, category: "", fromExpenses: true });
+        knownNames.add(key);
+      }
+    }
+    vendors.sort((a, b) => a.name.localeCompare(b.name));
+
     // Attach expense summary per vendor
-    const names = vendors.map(v => v.name);
-    const expenses = await Expense.find({
-      vendor: { $in: names }
-    }).select("vendor amount status").lean();
+    const allExpenses = await Expense.find({ vendor: { $nin: ["", null] } })
+      .select("vendor amount status").lean();
 
     const expMap = {};
-    for (const e of expenses) {
+    for (const e of allExpenses) {
       const key = (e.vendor || "").toLowerCase().trim();
       if (!expMap[key]) expMap[key] = { total: 0, unpaid: 0, count: 0 };
       expMap[key].total  += e.amount || 0;

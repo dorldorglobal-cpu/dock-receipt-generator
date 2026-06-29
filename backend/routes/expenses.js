@@ -8,6 +8,7 @@ const { execFile } = require("child_process");
 const pdfParse     = require("pdf-parse");
 const Expense      = require("../models/Expense");
 const Order        = require("../models/Order");
+const Vendor       = require("../models/Vendor");
 const { uploadBufferToDrive, getOrCreateFolder, deleteDriveFile } = require("../googleDrive");
 
 const TEMP_DIR     = path.join(__dirname, "..", "temp");
@@ -66,6 +67,18 @@ const uploadFields = upload.fields([
 ]);
 
 const esc = (s) => (s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+// Auto-save vendor name to Vendor collection when a new one is used on an expense
+async function ensureVendor(name, category) {
+  if (!name?.trim()) return;
+  try {
+    await Vendor.findOneAndUpdate(
+      { name: { $regex: `^${esc(name.trim())}$`, $options: "i" } },
+      { $setOnInsert: { name: name.trim(), category: category || "" } },
+      { upsert: true, new: false }
+    );
+  } catch (_) {}
+}
 
 // Legacy local file cleanup (for old records)
 const uploadDir = path.join(__dirname, "../uploads/receipts");
@@ -275,6 +288,7 @@ router.post("/", uploadFields, async (req, res) => {
     }
 
     const expense = await Expense.create(data);
+    ensureVendor(data.vendor, data.category);
     res.status(201).json(expense);
   } catch (err) {
     console.error("Expense create error:", err);
@@ -340,6 +354,7 @@ router.put("/:id", uploadFields, async (req, res) => {
       req.params.id, { $set: update }, { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ error: "Expense not found" });
+    ensureVendor(update.vendor, update.category);
     res.json(updated);
   } catch (err) {
     console.error("Expense update error:", err);
