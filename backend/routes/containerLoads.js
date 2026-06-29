@@ -136,9 +136,8 @@ module.exports.buildEmailDraft = buildEmailDraft;
 function buildEmailDraft(load, orders) {
   const destination = (load.pod || "DESTINATION").toUpperCase();
   const pol         = (load.pol || "NJ").toUpperCase();
-  const refs        = orders.map(o => o.refNumber).filter(Boolean).join(" / ");
   const custName    = orders[0]?.customerName || "";
-  const subject     = `${refs} CONTAINER TO ${destination} ${pol} ${custName}`.trim();
+  const subject     = `${load.name} CONTAINER TO ${destination} - ${custName}`.trim();
 
   const cBlock = [
     "CONSIGNEE INFO",

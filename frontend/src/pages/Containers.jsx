@@ -48,10 +48,8 @@ const BLANK = {
 // Build email draft on frontend (mirrors backend logic)
 function buildDraft(form, orders) {
   const dest    = (form.pod || "DESTINATION").toUpperCase();
-  const pol     = (form.pol || "NJ").toUpperCase();
-  const refs    = orders.map(o=>o.refNumber).filter(Boolean).join(" / ");
   const cust    = orders[0]?.customerName || "";
-  const subject = `${refs} CONTAINER TO ${dest} ${pol} ${cust}`.trim();
+  const subject = `${form.name} CONTAINER TO ${dest} - ${cust}`.trim();
 
   const cBlock = [
     "CONSIGNEE INFO",
