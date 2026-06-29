@@ -1872,11 +1872,31 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
 
       if (row.matchedIds?.length) {
-        const result = await Expense.updateMany(
-          { _id: { $in: row.matchedIds } },
-          { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
-        );
-        updated += result.modifiedCount;
+        if (row.markPartial) {
+          // Record bank amount as accumulated payment — may result in "partial" or "paid"
+          const expenses = await Expense.find({ _id: { $in: row.matchedIds } });
+          const bankAmt = Number(row.amount) || 0;
+          const perAmt = expenses.length > 1 ? bankAmt / expenses.length : bankAmt;
+          for (const exp of expenses) {
+            const prev = exp.paidAmount || 0;
+            const newTotal = prev + perAmt;
+            const fullyPaid = newTotal >= exp.amount - 0.005;
+            exp.payments.push({ amount: perAmt, date: dateObj, method: paymentMethod || "Bank ACH", notes: "" });
+            exp.paidAmount    = newTotal;
+            exp.paidDate      = dateObj;
+            exp.paymentMethod = paymentMethod || "Bank ACH";
+            exp.status        = fullyPaid ? "paid" : "partial";
+            if (receiptFields.receiptDriveId) Object.assign(exp, receiptFields);
+            await exp.save();
+            updated++;
+          }
+        } else {
+          const result = await Expense.updateMany(
+            { _id: { $in: row.matchedIds } },
+            { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
+          );
+          updated += result.modifiedCount;
+        }
         continue;
       }
 

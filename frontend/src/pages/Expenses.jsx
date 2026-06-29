@@ -1793,8 +1793,8 @@ export default function Expenses() {
                             })()}
                           </td>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                            {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact</span>}
-                            {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:11}}>✅ Combined</span>}
+                            {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact{row.markPartial ? " → ½ Partial" : ""}</span>}
+                            {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:11}}>✅ Combined{row.markPartial ? " → ½ Partial" : ""}</span>}
                             {(row.matchType === "already_paid" || row.matchType === "already_paid_mismatch") && (
                               <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                                 <span style={{color: row.matchType === "already_paid" ? "#60a5fa" : "#fbbf24", fontSize:11}}>
@@ -1814,7 +1814,24 @@ export default function Expenses() {
                               </div>
                             )}
                             {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11,display:"block",marginBottom:2}}>⚠ Review</span>}
+                            {row.markPartial && <span style={{color:"#fb923c",fontSize:10,display:"block",marginBottom:2}}>Will record ${row.amount.toFixed(2)} as partial</span>}
                             <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
+                              {/* ½ Partial — for matched rows or review rows with candidates */}
+                              {(row.matchedIds?.length > 0 || (row.matchType === "review" && row.candidates?.length > 0)) && !row.splitBills && (
+                                <button
+                                  onClick={() => setProofRows(rs => rs.map((r,j) => {
+                                    if (j !== i) return r;
+                                    const toggling = !r.markPartial;
+                                    // For review rows, wire up the first candidate as matchedIds when enabling partial
+                                    const extraIds = toggling && r.matchType === "review" && !r.matchedIds?.length && r.candidates?.length
+                                      ? { matchedIds: [r.candidates[0]._id], selected: true }
+                                      : {};
+                                    return { ...r, markPartial: toggling, ...extraIds };
+                                  }))}
+                                  style={{ fontSize:10, color: row.markPartial ? "#fb923c" : "#a78bfa", border:`1px solid ${row.markPartial ? "#fb923c" : "#a78bfa"}`, borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  {row.markPartial ? "½ Partial ✓" : "½ Partial"}
+                                </button>
+                              )}
                               {/* + Create Bill — shown when not already in createBill-only mode without split */}
                               {!row.createBill && !row.splitBills && (row.matchType === "none" || row.matchType === "review") && (
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
@@ -1944,11 +1961,13 @@ export default function Expenses() {
                     style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                     {proofLoading?"Applying…":(() => {
                       const sel = proofRows.filter(r=>r.selected);
-                      const toPay = sel.filter(r=>r.matchedIds?.length).length;
+                      const toPartial = sel.filter(r=>r.matchedIds?.length && r.markPartial).length;
+                      const toPay = sel.filter(r=>r.matchedIds?.length && !r.markPartial).length;
                       const toCreate = sel.filter(r=>r.createBill && !r.matchedIds?.length).length;
                       const toSplit = sel.filter(r=>r.splitBills?.length).reduce((s,r)=>s+r.splitBills.length, 0);
                       const toAttach = sel.filter(r=>r.attachOnly).length;
                       const parts = [];
+                      if (toPartial) parts.push(`Record ${toPartial} Partial`);
                       if (toPay) parts.push(`Mark ${toPay} Paid`);
                       if (toCreate) parts.push(`Create ${toCreate} New`);
                       if (toSplit) parts.push(`Create ${toSplit} Split`);
