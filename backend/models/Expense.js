@@ -59,6 +59,15 @@ const expenseSchema = new mongoose.Schema(
 
     notes: { type: String, default: "" },
 
+    // General attachments (extra docs, photos, etc.)
+    attachments: [{
+      name:       { type: String, default: "" },
+      driveId:    { type: String, default: "" },
+      driveUrl:   { type: String, default: "" },
+      mime:       { type: String, default: "" },
+      uploadedAt: { type: Date, default: Date.now },
+    }],
+
     // Extra charge lines attached to this bill
     lineItems: [{
       description: { type: String, default: "" },

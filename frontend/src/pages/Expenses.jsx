@@ -123,6 +123,90 @@ function DropZone({ label, file, setFile, existingUrl, existingName, onRemoveExi
 }
 
 // ── Modal ─────────────────────────────────────────────────────────────────────
+function AttachmentsCard({ expId, attachments, onUpdate }) {
+  const [uploading, setUploading] = React.useState(false);
+  const [deleting,  setDeleting]  = React.useState(null);
+
+  const upload = async (file) => {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const res = await fetch(`${API}/api/expenses/${expId}/attachments`, { method: "POST", body: fd });
+      const att  = await res.json();
+      if (!res.ok) throw new Error(att.error);
+      onUpdate([...attachments, att]);
+    } catch (e) { alert("Upload failed: " + e.message); }
+    finally { setUploading(false); }
+  };
+
+  const remove = async (idx) => {
+    setDeleting(idx);
+    try {
+      await fetch(`${API}/api/expenses/${expId}/attachments/${idx}`, { method: "DELETE" });
+      onUpdate(attachments.filter((_, i) => i !== idx));
+    } catch (e) { alert("Delete failed: " + e.message); }
+    finally { setDeleting(null); }
+  };
+
+  const icon = (mime = "") => {
+    if (mime.startsWith("image/")) return "🖼";
+    if (mime === "application/pdf") return "📄";
+    return "📎";
+  };
+
+  return (
+    <div style={{ marginTop: 20, paddingTop: 16, borderTop: "1px solid var(--border)" }}>
+      <div style={{ fontSize: 12, color: "var(--text-secondary)", fontWeight: 600, marginBottom: 10 }}>Attachments</div>
+
+      {/* Upload card */}
+      <label style={{
+        display: "flex", alignItems: "center", gap: 10, padding: "10px 14px",
+        border: "1px dashed var(--border)", borderRadius: 8, cursor: uploading ? "wait" : "pointer",
+        background: "var(--bg-elevated)", marginBottom: 10,
+      }}>
+        <span style={{ fontSize: 18 }}>📎</span>
+        <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+          {uploading ? "Uploading…" : "Click to attach a file (PDF, image, etc.)"}
+        </span>
+        <input type="file" accept="*/*" style={{ display: "none" }} disabled={uploading}
+          onChange={e => { upload(e.target.files[0]); e.target.value = ""; }} />
+      </label>
+
+      {/* File list */}
+      {attachments.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 4 }}>
+          {attachments.map((att, i) => (
+            <div key={i} style={{
+              display: "flex", alignItems: "center", gap: 10, padding: "7px 12px",
+              background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 7,
+            }}>
+              <span style={{ fontSize: 16 }}>{icon(att.mime)}</span>
+              <a href={`${API}/api/expenses/${expId}/attachments/${i}`} target="_blank" rel="noreferrer"
+                style={{ flex: 1, fontSize: 12, color: "#60a5fa", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                {att.name}
+              </a>
+              {att.uploadedAt && (
+                <span style={{ fontSize: 10, color: "var(--text-muted)", whiteSpace: "nowrap" }}>
+                  {new Date(att.uploadedAt).toLocaleDateString()}
+                </span>
+              )}
+              <button onClick={() => remove(i)} disabled={deleting === i}
+                style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 14, padding: "0 2px", flexShrink: 0 }}>
+                {deleting === i ? "…" : "✕"}
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+      {attachments.length === 0 && (
+        <div style={{ fontSize: 11, color: "var(--text-muted)", fontStyle: "italic" }}>No attachments yet.</div>
+      )}
+    </div>
+  );
+}
+
 function Modal({ title, onClose, children }) {
   useEffect(() => {
     const handler = (e) => e.key === "Escape" && onClose();
@@ -2215,6 +2299,12 @@ export default function Expenses() {
                       {exp.receiptFileName
                         ? <a href={`${API}/api/expenses/${exp._id}/receipt`} target="_blank" rel="noopener noreferrer" title="View receipt" style={{ color: "#60a5fa", fontSize: 16, textDecoration: "none" }}>📎</a>
                         : <span style={{ color: "var(--border)" }}>📎</span>}
+                      {exp.attachments?.length > 0 && (
+                        <span title={`${exp.attachments.length} attachment(s)`}
+                          style={{ marginLeft: 4, fontSize: 10, color: "#a78bfa", fontWeight: 700, background: "#a78bfa22", borderRadius: 4, padding: "1px 5px" }}>
+                          +{exp.attachments.length}
+                        </span>
+                      )}
                     </td>
 
                     {/* Actions */}
@@ -2384,6 +2474,12 @@ export default function Expenses() {
                 </div>
               )}
             </div>
+          )}
+
+          {/* Attachments card — only shown when editing */}
+          {editing && (
+            <AttachmentsCard expId={editing._id} attachments={editing.attachments || []}
+              onUpdate={atts => setEditing(e => ({ ...e, attachments: atts }))} />
           )}
         </Modal>
       )}

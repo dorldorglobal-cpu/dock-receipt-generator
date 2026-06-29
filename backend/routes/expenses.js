@@ -505,6 +505,55 @@ router.get("/:id/bill", serveFile("bill"));
 // ── DELETE /api/expenses/:id/bill ─────────────────────────────────────────────
 router.delete("/:id/bill", deleteFileRoute("bill"));
 
+// ── POST /api/expenses/:id/attachments — upload a general attachment ──────────
+router.post("/:id/attachments", upload.single("file"), async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ error: "Not found" });
+    if (!req.file) return res.status(400).json({ error: "No file" });
+    const saved = await saveUploadedFile(req.file.buffer, req.file.originalname, req.file.mimetype, expense.orderId || null);
+    expense.attachments.push({ name: saved.fname, driveId: saved.driveId, driveUrl: saved.driveUrl, mime: req.file.mimetype });
+    await expense.save();
+    res.json(expense.attachments[expense.attachments.length - 1]);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── GET /api/expenses/:id/attachments/:idx — serve one attachment ─────────────
+router.get("/:id/attachments/:idx", async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id).lean();
+    if (!expense) return res.status(404).json({ error: "Not found" });
+    const att = expense.attachments?.[Number(req.params.idx)];
+    if (!att?.driveId) return res.status(404).json({ error: "Not found" });
+    const { drive } = require("../googleDrive");
+    const fileRes = await drive.files.get({ fileId: att.driveId, alt: "media" }, { responseType: "stream" });
+    res.setHeader("Content-Type", att.mime || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${att.name}"`);
+    fileRes.data.pipe(res);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// ── DELETE /api/expenses/:id/attachments/:idx — remove one attachment ─────────
+router.delete("/:id/attachments/:idx", async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ error: "Not found" });
+    const idx = Number(req.params.idx);
+    const att = expense.attachments?.[idx];
+    if (!att) return res.status(404).json({ error: "Not found" });
+    if (att.driveId) { try { await deleteDriveFile(att.driveId); } catch (_) {} }
+    expense.attachments.splice(idx, 1);
+    await expense.save();
+    res.json({ success: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── Helper: save buffer to Drive and return filename ─────────────────────────
 // If orderId is given, the file is saved into that order's own Drive folder;
 // otherwise it falls back to the general Expenses > Bills folder.
