@@ -36,6 +36,10 @@ const expenseSchema = new mongoose.Schema(
       date:   { type: Date, default: Date.now },
       method: { type: String, default: "" },
       notes:  { type: String, default: "" },
+      receiptFileName: { type: String, default: "" },
+      receiptDriveId:  { type: String, default: "" },
+      receiptDriveUrl: { type: String, default: "" },
+      receiptMime:     { type: String, default: "" },
     }],
 
     vin:           { type: String, default: "" },

@@ -365,6 +365,7 @@ export default function Expenses() {
   const [payConfirmDate, setPayConfirmDate] = useState(todayISO());
   const [payConfirmMethod, setPayConfirmMethod] = useState("Bank ACH");
   const [payConfirmNotes, setPayConfirmNotes]   = useState("");
+  const [payConfirmFile, setPayConfirmFile]     = useState(null); // File object for proof
 
   // ── Pay Bills mode ────────────────────────────────────────────────────────────
   const [payMode, setPayMode]           = useState(false);
@@ -993,6 +994,7 @@ export default function Expenses() {
     setPayConfirmDate(todayISO());
     setPayConfirmMethod("Bank ACH");
     setPayConfirmNotes("");
+    setPayConfirmFile(null);
   };
 
   const openAddPayment = (exp) => {
@@ -1002,23 +1004,22 @@ export default function Expenses() {
     setPayConfirmDate(todayISO());
     setPayConfirmMethod(exp.paymentMethod || "Bank ACH");
     setPayConfirmNotes("");
+    setPayConfirmFile(null);
   };
 
   const submitMarkPaid = async () => {
     const { exp } = payConfirm;
     const entered = parseFloat(payConfirmAmt);
     if (isNaN(entered) || entered <= 0) return;
-    await fetch(`${API}/api/expenses/${exp._id}/pay`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        paidDate:      payConfirmDate || todayISO(),
-        paidAmount:    entered,
-        paymentMethod: payConfirmMethod,
-        notes:         payConfirmNotes,
-      }),
-    });
+    const fd = new FormData();
+    fd.append("paidDate",      payConfirmDate || todayISO());
+    fd.append("paidAmount",    entered);
+    fd.append("paymentMethod", payConfirmMethod);
+    fd.append("notes",         payConfirmNotes);
+    if (payConfirmFile) fd.append("proof", payConfirmFile);
+    await fetch(`${API}/api/expenses/${exp._id}/pay`, { method: "PATCH", body: fd });
     setPayConfirm(null);
+    setPayConfirmFile(null);
     fetchAll();
   };
 
@@ -2486,9 +2487,16 @@ export default function Expenses() {
                 <div style={{ background:"var(--bg-elevated)", borderRadius:8, padding:"8px 12px", marginBottom:14 }}>
                   <div style={{ fontSize:10, color:"var(--text-muted)", fontWeight:700, marginBottom:4, textTransform:"uppercase", letterSpacing:"0.05em" }}>Payment History</div>
                   {exp.payments.map((p, i) => (
-                    <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"var(--text-secondary)", padding:"2px 0" }}>
-                      <span>{new Date(p.date).toLocaleDateString()} {p.method && `· ${p.method}`}</span>
-                      <span style={{ color:"#34d399", fontWeight:600 }}>{fmt$(p.amount)}</span>
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", alignItems:"center", fontSize:11, color:"var(--text-secondary)", padding:"3px 0", borderBottom: i < exp.payments.length-1 ? "1px solid var(--border-muted)" : "none" }}>
+                      <span>{new Date(p.date).toLocaleDateString()} {p.method && `· ${p.method}`}{p.notes && ` · ${p.notes}`}</span>
+                      <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                        <span style={{ color:"#34d399", fontWeight:600 }}>{fmt$(p.amount)}</span>
+                        {p.receiptDriveId
+                          ? <a href={`${API}/api/expenses/${exp._id}/payments/${i}/receipt`} target="_blank" rel="noreferrer"
+                              style={{ fontSize:10, color:"#60a5fa", textDecoration:"none" }}>📎 Proof</a>
+                          : <span style={{ fontSize:10, color:"var(--text-muted)" }}>no proof</span>
+                        }
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -2532,10 +2540,26 @@ export default function Expenses() {
               </label>
 
               {/* Notes */}
-              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
+              <label style={{ display:"block", marginBottom:10, fontSize:12, color:"var(--text-secondary)" }}>
                 Notes (optional)
                 <input value={payConfirmNotes} onChange={e => setPayConfirmNotes(e.target.value)} placeholder="e.g. Check #1234"
                   style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+
+              {/* Proof of payment upload */}
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
+                Proof of Payment (optional)
+                <div style={{ marginTop:4, display:"flex", alignItems:"center", gap:8 }}>
+                  <label style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 14px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, cursor:"pointer", fontSize:12, color:"var(--text-secondary)" }}>
+                    📎 {payConfirmFile ? payConfirmFile.name : "Attach file…"}
+                    <input type="file" accept="image/*,application/pdf" style={{ display:"none" }}
+                      onChange={e => setPayConfirmFile(e.target.files[0] || null)} />
+                  </label>
+                  {payConfirmFile && (
+                    <button onClick={() => setPayConfirmFile(null)}
+                      style={{ fontSize:11, color:"#f87171", background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>✕ Remove</button>
+                  )}
+                </div>
               </label>
 
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>

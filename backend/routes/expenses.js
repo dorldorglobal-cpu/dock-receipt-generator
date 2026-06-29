@@ -361,7 +361,7 @@ router.post("/bulk-pay", async (req, res) => {
 });
 
 // ── PATCH /api/expenses/:id/pay — record a payment (full or partial) ─────────
-router.patch("/:id/pay", async (req, res) => {
+router.patch("/:id/pay", memUpload.single("proof"), async (req, res) => {
   try {
     const { paidDate, paidAmount, paymentMethod, notes } = req.body;
     const expense = await Expense.findById(req.params.id);
@@ -373,12 +373,30 @@ router.patch("/:id/pay", async (req, res) => {
     const newTotal   = prevPaid + payAmt;
     const isFullyPaid = newTotal >= expense.amount - 0.005;
 
-    // Add to payment history
+    // Upload proof file to Drive if provided
+    let proofFields = {};
+    if (req.file) {
+      try {
+        const saved = await saveUploadedFile(req.file.buffer, req.file.originalname, req.file.mimetype, expense.orderId || null);
+        proofFields = { receiptFileName: saved.fname, receiptDriveId: saved.driveId, receiptDriveUrl: saved.driveUrl, receiptMime: req.file.mimetype };
+        // Also set as the top-level receipt if none exists
+        if (!expense.receiptDriveId) {
+          expense.receiptFileName = saved.fname;
+          expense.receiptDriveId  = saved.driveId;
+          expense.receiptDriveUrl = saved.driveUrl;
+          expense.receiptMime     = req.file.mimetype;
+        }
+      } catch (uploadErr) {
+        console.warn("[pay] proof upload failed:", uploadErr.message);
+      }
+    }
+
     expense.payments.push({
       amount: payAmt,
       date:   payDate,
       method: paymentMethod || expense.paymentMethod || "",
       notes:  notes || "",
+      ...proofFields,
     });
 
     expense.paidAmount    = newTotal;
@@ -391,6 +409,27 @@ router.patch("/:id/pay", async (req, res) => {
   } catch (err) {
     console.error("pay error:", err);
     res.status(500).json({ error: "Failed to record payment" });
+  }
+});
+
+// ── GET /api/expenses/:id/payments/:idx/receipt — serve proof for one payment ─
+router.get("/:id/payments/:idx/receipt", async (req, res) => {
+  try {
+    const expense = await Expense.findById(req.params.id).lean();
+    if (!expense) return res.status(404).json({ error: "Not found" });
+    const payment = expense.payments?.[Number(req.params.idx)];
+    if (!payment?.receiptDriveId) return res.status(404).json({ error: "No proof on file" });
+    const { drive } = require("../googleDrive");
+    const fileRes = await drive.files.get(
+      { fileId: payment.receiptDriveId, alt: "media" },
+      { responseType: "stream" }
+    );
+    res.setHeader("Content-Type", payment.receiptMime || "application/octet-stream");
+    res.setHeader("Content-Disposition", `inline; filename="${payment.receiptFileName || "proof"}"`);
+    fileRes.data.pipe(res);
+  } catch (err) {
+    console.error("payment receipt error:", err.message);
+    res.status(500).json({ error: "Failed to serve file" });
   }
 });
 
