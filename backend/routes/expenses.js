@@ -361,7 +361,7 @@ router.post("/bulk-pay", async (req, res) => {
 });
 
 // ── PATCH /api/expenses/:id/pay — record a payment (full or partial) ─────────
-router.patch("/:id/pay", memUpload.single("proof"), async (req, res) => {
+router.patch("/:id/pay", upload.single("proof"), async (req, res) => {
   try {
     const { paidDate, paidAmount, paymentMethod, notes } = req.body;
     const expense = await Expense.findById(req.params.id);
