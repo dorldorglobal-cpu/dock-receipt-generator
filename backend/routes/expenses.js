@@ -123,7 +123,8 @@ router.get("/summary", async (req, res) => {
 
     for (const e of all) {
       totalAllTime += e.amount;
-      if (e.status === "unpaid") totalUnpaid += e.amount;
+      if (e.status === "unpaid")  totalUnpaid += e.amount;
+      if (e.status === "partial") totalUnpaid += (e.amount - (e.paidAmount || 0)); // remaining balance
       if (e.status === "paid" && e.paidDate && new Date(e.paidDate) >= monthStart) {
         totalPaidMonth += e.amount;
       }
@@ -359,21 +360,37 @@ router.post("/bulk-pay", async (req, res) => {
   }
 });
 
-// ── PATCH /api/expenses/:id/pay — quick mark as paid ─────────────────────────
+// ── PATCH /api/expenses/:id/pay — record a payment (full or partial) ─────────
 router.patch("/:id/pay", async (req, res) => {
   try {
-    const { paidDate, paidAmount } = req.body;
-    const fields = { status: "paid", paidDate: paidDate ? new Date(paidDate) : new Date() };
-    if (paidAmount != null && paidAmount !== "") fields.paidAmount = Number(paidAmount);
-    const updated = await Expense.findByIdAndUpdate(
-      req.params.id,
-      { $set: fields },
-      { new: true }
-    );
-    if (!updated) return res.status(404).json({ error: "Not found" });
-    res.json(updated);
+    const { paidDate, paidAmount, paymentMethod, notes } = req.body;
+    const expense = await Expense.findById(req.params.id);
+    if (!expense) return res.status(404).json({ error: "Not found" });
+
+    const payDate    = paidDate ? new Date(paidDate) : new Date();
+    const payAmt     = paidAmount != null && paidAmount !== "" ? Number(paidAmount) : expense.amount;
+    const prevPaid   = expense.paidAmount || 0;
+    const newTotal   = prevPaid + payAmt;
+    const isFullyPaid = newTotal >= expense.amount - 0.005;
+
+    // Add to payment history
+    expense.payments.push({
+      amount: payAmt,
+      date:   payDate,
+      method: paymentMethod || expense.paymentMethod || "",
+      notes:  notes || "",
+    });
+
+    expense.paidAmount    = newTotal;
+    expense.paidDate      = payDate;
+    expense.paymentMethod = paymentMethod || expense.paymentMethod || "";
+    expense.status        = isFullyPaid ? "paid" : "partial";
+
+    await expense.save();
+    res.json(expense);
   } catch (err) {
-    res.status(500).json({ error: "Failed to mark as paid" });
+    console.error("pay error:", err);
+    res.status(500).json({ error: "Failed to record payment" });
   }
 });
 

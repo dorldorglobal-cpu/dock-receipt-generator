@@ -360,9 +360,11 @@ export default function Expenses() {
   const [sortDir, setSortDir]       = useState(-1);
   const [confirmDelete, setConfirmDelete] = useState(null);
   const [dupWarning, setDupWarning]       = useState(null); // { existing } — duplicate detected
-  const [payConfirm, setPayConfirm]       = useState(null); // { exp } — single-bill pay modal
-  const [payConfirmAmt, setPayConfirmAmt] = useState("");
+  const [payConfirm, setPayConfirm]         = useState(null); // { exp, addTo? }
+  const [payConfirmAmt, setPayConfirmAmt]   = useState("");
   const [payConfirmDate, setPayConfirmDate] = useState(todayISO());
+  const [payConfirmMethod, setPayConfirmMethod] = useState("Bank ACH");
+  const [payConfirmNotes, setPayConfirmNotes]   = useState("");
 
   // ── Pay Bills mode ────────────────────────────────────────────────────────────
   const [payMode, setPayMode]           = useState(false);
@@ -983,23 +985,37 @@ export default function Expenses() {
     }
   };
 
-  // Mark as paid
+  // Mark as paid / add payment
   const markPaid = (exp) => {
+    const remaining = exp.amount - (exp.paidAmount || 0);
     setPayConfirm({ exp });
-    setPayConfirmAmt(exp.amount != null ? String(exp.amount) : "");
+    setPayConfirmAmt(remaining > 0 ? remaining.toFixed(2) : String(exp.amount));
     setPayConfirmDate(todayISO());
+    setPayConfirmMethod("Bank ACH");
+    setPayConfirmNotes("");
+  };
+
+  const openAddPayment = (exp) => {
+    const remaining = exp.amount - (exp.paidAmount || 0);
+    setPayConfirm({ exp, addTo: exp.paidAmount || 0 });
+    setPayConfirmAmt(remaining > 0 ? remaining.toFixed(2) : "");
+    setPayConfirmDate(todayISO());
+    setPayConfirmMethod(exp.paymentMethod || "Bank ACH");
+    setPayConfirmNotes("");
   };
 
   const submitMarkPaid = async () => {
-    const { exp, addTo } = payConfirm;
+    const { exp } = payConfirm;
     const entered = parseFloat(payConfirmAmt);
-    const paidAmount = isNaN(entered) ? undefined : (addTo != null ? Math.min(addTo + entered, exp.amount) : entered);
+    if (isNaN(entered) || entered <= 0) return;
     await fetch(`${API}/api/expenses/${exp._id}/pay`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        paidDate: payConfirmDate || todayISO(),
-        paidAmount,
+        paidDate:      payConfirmDate || todayISO(),
+        paidAmount:    entered,
+        paymentMethod: payConfirmMethod,
+        notes:         payConfirmNotes,
       }),
     });
     setPayConfirm(null);
@@ -2142,26 +2158,30 @@ export default function Expenses() {
 
                     {/* Status */}
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
-                      {exp.status === "paid" ? (
-                        <div style={{ display:"flex", alignItems:"center", gap:5 }}>
-                          {exp.paidAmount != null && exp.paidAmount < exp.amount ? (
-                            <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#f9731622", color: "#f97316" }}>
-                              Partial ({fmt$(exp.paidAmount)})
-                            </span>
-                          ) : (
-                            <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#34d39922", color: "#34d399" }}>
-                              Paid
-                            </span>
-                          )}
-                          {exp.paidDate && (
-                            <span style={{ fontSize: 10, color: "var(--text-muted)" }}>{fmtDate(exp.paidDate)}</span>
-                          )}
-                          {exp.paymentMethod && (
-                            <span style={{ fontSize: 10, color: "#60a5fa" }}>{exp.paymentMethod}</span>
-                          )}
+                      {exp.status === "paid" && (
+                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          <span style={{ display:"inline-block", padding:"1px 7px", borderRadius:5, fontSize:10, fontWeight:600, background:"#34d39922", color:"#34d399" }}>
+                            ✓ Paid
+                          </span>
+                          <div style={{ display:"flex", gap:4 }}>
+                            {exp.paidDate && <span style={{ fontSize:10, color:"var(--text-muted)" }}>{fmtDate(exp.paidDate)}</span>}
+                            {exp.paymentMethod && <span style={{ fontSize:10, color:"#60a5fa" }}>{exp.paymentMethod}</span>}
+                          </div>
                         </div>
-                      ) : (
-                        <span style={{ display: "inline-block", padding: "1px 7px", borderRadius: 5, fontSize: 10, fontWeight: 600, background: "#f8717122", color: "#f87171" }}>
+                      )}
+                      {exp.status === "partial" && (
+                        <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                          <span style={{ display:"inline-block", padding:"1px 7px", borderRadius:5, fontSize:10, fontWeight:600, background:"#f9731622", color:"#f97316" }}>
+                            Partial
+                          </span>
+                          <div style={{ fontSize:10, color:"var(--text-muted)" }}>
+                            Paid {fmt$(exp.paidAmount || 0)} · <span style={{ color:"#f87171" }}>Balance {fmt$(exp.amount - (exp.paidAmount || 0))}</span>
+                          </div>
+                          {exp.paymentMethod && <span style={{ fontSize:10, color:"#60a5fa" }}>{exp.paymentMethod}</span>}
+                        </div>
+                      )}
+                      {exp.status === "unpaid" && (
+                        <span style={{ display:"inline-block", padding:"1px 7px", borderRadius:5, fontSize:10, fontWeight:600, background:"#f8717122", color:"#f87171" }}>
                           Unpaid
                         </span>
                       )}
@@ -2188,13 +2208,8 @@ export default function Expenses() {
                             Mark Paid
                           </button>
                         )}
-                        {exp.status === "paid" && exp.paidAmount != null && exp.paidAmount < exp.amount && (
-                          <button onClick={() => {
-                            const remaining = exp.amount - exp.paidAmount;
-                            setPayConfirm({ exp, addTo: exp.paidAmount });
-                            setPayConfirmAmt(remaining.toFixed(2));
-                            setPayConfirmDate(todayISO());
-                          }} style={{
+                        {exp.status === "partial" && (
+                          <button onClick={() => openAddPayment(exp)} style={{
                             background: "#f9731620", color: "#f97316", border: "none", borderRadius: 5,
                             padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
                           }}>
@@ -2208,7 +2223,7 @@ export default function Expenses() {
                           Edit
                         </button>
                         {exp.status === "paid"
-                          ? <span title="Mark as unpaid first to delete" style={{ color: "var(--border)", fontSize: 11, padding: "4px 8px", cursor: "not-allowed" }}>🔒</span>
+                          ? <span title="Mark as unpaid first to delete" style={{ color:"var(--border)", fontSize:11, padding:"4px 8px", cursor:"not-allowed" }}>🔒</span>
                           : <button onClick={() => setConfirmDelete(exp)} title="Delete" style={{
                               background: "#f8717120", color: "#f87171", border: "none", borderRadius: 5,
                               padding: "4px 8px", fontSize: 11, cursor: "pointer",
@@ -2426,47 +2441,95 @@ export default function Expenses() {
       )}
 
       {/* Confirm Delete */}
-      {payConfirm && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:360, maxWidth:"95vw" }}>
-            <h3 style={{ margin:"0 0 4px", color:"var(--text-primary)" }}>{payConfirm.addTo != null ? "Add Payment" : "Mark Bill Paid"}</h3>
-            <p style={{ margin:"0 0 18px", fontSize:12, color:"var(--text-secondary)" }}>{payConfirm.exp.description}</p>
-            <label style={{ display:"block", marginBottom:14, fontSize:12, color:"var(--text-secondary)" }}>
-              Amount Paid
-              <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
-                <span style={{ color:"var(--text-primary)" }}>$</span>
-                <input type="number" min="0" step="0.01" value={payConfirmAmt}
-                  onChange={e => setPayConfirmAmt(e.target.value)} autoFocus
-                  style={{ flex:1, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13 }} />
-              </div>
-              {(() => {
-                const entered = parseFloat(payConfirmAmt);
-                const addTo = payConfirm.addTo || 0;
-                const newTotal = addTo + (isNaN(entered) ? 0 : entered);
-                const remaining = payConfirm.exp.amount - newTotal;
-                if (entered > 0 && remaining > 0.005) return (
-                  <div style={{ marginTop:6, fontSize:11, color:"#f97316" }}>
-                    {payConfirm.addTo != null ? `Total paid: $${newTotal.toFixed(2)} — ` : "Partial — "}${remaining.toFixed(2)} remaining
+      {payConfirm && (() => {
+        const { exp, addTo } = payConfirm;
+        const entered    = parseFloat(payConfirmAmt) || 0;
+        const prevPaid   = addTo != null ? addTo : (exp.paidAmount || 0);
+        const newTotal   = prevPaid + entered;
+        const balance    = exp.amount - newTotal;
+        const isPartial  = entered > 0 && balance > 0.005;
+        const isFull     = entered > 0 && balance <= 0.005;
+        const isAdding   = addTo != null;
+        return (
+          <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+            <div style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12, padding:28, width:400, maxWidth:"95vw" }}>
+              <h3 style={{ margin:"0 0 2px", color:"var(--text-primary)" }}>
+                {isAdding ? "Add Payment" : "Record Payment"}
+              </h3>
+              <p style={{ margin:"0 0 6px", fontSize:12, color:"var(--text-secondary)" }}>{exp.description}</p>
+              <p style={{ margin:"0 0 18px", fontSize:12, color:"var(--text-muted)" }}>
+                Invoice total: <strong style={{ color:"var(--text-primary)" }}>{fmt$(exp.amount)}</strong>
+                {isAdding && <> · Previously paid: <strong style={{ color:"#f97316" }}>{fmt$(prevPaid)}</strong> · Remaining: <strong style={{ color:"#f87171" }}>{fmt$(exp.amount - prevPaid)}</strong></>}
+              </p>
+
+              {/* Payment history */}
+              {isAdding && exp.payments?.length > 0 && (
+                <div style={{ background:"var(--bg-elevated)", borderRadius:8, padding:"8px 12px", marginBottom:14 }}>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", fontWeight:700, marginBottom:4, textTransform:"uppercase", letterSpacing:"0.05em" }}>Payment History</div>
+                  {exp.payments.map((p, i) => (
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", fontSize:11, color:"var(--text-secondary)", padding:"2px 0" }}>
+                      <span>{new Date(p.date).toLocaleDateString()} {p.method && `· ${p.method}`}</span>
+                      <span style={{ color:"#34d399", fontWeight:600 }}>{fmt$(p.amount)}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Amount */}
+              <label style={{ display:"block", marginBottom:10, fontSize:12, color:"var(--text-secondary)" }}>
+                Amount Paying Now
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                  <span style={{ color:"var(--text-primary)" }}>$</span>
+                  <input type="number" min="0" step="0.01" value={payConfirmAmt}
+                    onChange={e => setPayConfirmAmt(e.target.value)} autoFocus
+                    style={{ flex:1, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13 }} />
+                </div>
+                {isPartial && (
+                  <div style={{ marginTop:6, fontSize:11, color:"#f97316", fontWeight:600 }}>
+                    ⚠ Partial payment — {fmt$(balance)} still owed after this
                   </div>
-                );
-                if (entered > 0 && remaining <= 0.005 && payConfirm.addTo != null) return (
-                  <div style={{ marginTop:6, fontSize:11, color:"#34d399" }}>Fully paid!</div>
-                );
-                return null;
-              })()}
-            </label>
-            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
-              Paid Date
-              <input type="date" value={payConfirmDate} onChange={e => setPayConfirmDate(e.target.value)}
-                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
-            </label>
-            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-              <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
-              <button onClick={submitMarkPaid} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>✓ Confirm Paid</button>
+                )}
+                {isFull && (
+                  <div style={{ marginTop:6, fontSize:11, color:"#34d399", fontWeight:600 }}>
+                    ✓ Fully paid{isAdding ? ` (total ${fmt$(newTotal)})` : ""}
+                  </div>
+                )}
+              </label>
+
+              {/* Date */}
+              <label style={{ display:"block", marginBottom:10, fontSize:12, color:"var(--text-secondary)" }}>
+                Payment Date
+                <input type="date" value={payConfirmDate} onChange={e => setPayConfirmDate(e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+
+              {/* Method */}
+              <label style={{ display:"block", marginBottom:10, fontSize:12, color:"var(--text-secondary)" }}>
+                Payment Method
+                <select value={payConfirmMethod} onChange={e => setPayConfirmMethod(e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }}>
+                  {["Bank ACH","Wire","Zelle","Venmo","Check","Cash","Credit Card","Other"].map(m => <option key={m}>{m}</option>)}
+                </select>
+              </label>
+
+              {/* Notes */}
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
+                Notes (optional)
+                <input value={payConfirmNotes} onChange={e => setPayConfirmNotes(e.target.value)} placeholder="e.g. Check #1234"
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+
+              <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+                <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
+                <button onClick={submitMarkPaid} disabled={!entered || entered <= 0}
+                  style={{ padding:"8px 20px", background: entered > 0 ? "#059669" : "var(--border)", color:"#fff", border:"none", borderRadius:8, cursor: entered > 0 ? "pointer" : "not-allowed", fontWeight:600 }}>
+                  {isPartial ? "Record Partial Payment" : "✓ Mark Paid"}
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {confirmDelete && (
         <Modal title="Delete Expense" onClose={() => setConfirmDelete(null)}>

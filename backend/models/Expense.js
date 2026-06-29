@@ -24,11 +24,19 @@ const expenseSchema = new mongoose.Schema(
     orderId:  { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null },
     orderRef: { type: String, default: "" },
 
-    // Payment status
-    status:          { type: String, enum: ["unpaid", "paid"], default: "unpaid" },
-    paidDate:        { type: Date, default: null },
-    paidAmount:      { type: Number, default: null }, // null = full amount; set for partial payments
-    paymentMethod:   { type: String, default: "" }, // "Bank ACH", "Zelle", "Venmo", "Check", "Other"
+    // Payment status: unpaid → partial → paid
+    status:        { type: String, enum: ["unpaid", "partial", "paid"], default: "unpaid" },
+    paidDate:      { type: Date, default: null },   // date of most recent payment
+    paidAmount:    { type: Number, default: null }, // cumulative total paid so far
+    paymentMethod: { type: String, default: "" },
+
+    // Full payment history
+    payments: [{
+      amount: { type: Number, required: true },
+      date:   { type: Date, default: Date.now },
+      method: { type: String, default: "" },
+      notes:  { type: String, default: "" },
+    }],
 
     vin:           { type: String, default: "" },
     invoiceNumber: { type: String, default: "" },
