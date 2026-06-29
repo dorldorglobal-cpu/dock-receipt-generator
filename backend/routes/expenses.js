@@ -1759,11 +1759,10 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       if (orderRef) {
         candidates = await Expense.find({
           orderRef: { $regex: `^${esc(orderRef)}$`, $options: "i" },
-          status: "unpaid",
-        }).select("_id description vendor amount").lean();
+          status: { $in: ["unpaid", "partial"] },
+        }).select("_id description vendor amount paidAmount status").lean();
 
-        // If nothing unpaid, check whether it was already paid (covers bills
-        // marked paid manually before this proof was uploaded)
+        // If nothing unpaid/partial, check whether it was already fully paid
         if (!candidates.length) {
           alreadyPaid = await Expense.find({
             orderRef: { $regex: `^${esc(orderRef)}$`, $options: "i" },
@@ -1772,21 +1771,22 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         }
 
         if (candidates.length) {
-          // 1. Single expense exactly matching the payment amount
-          const exact = candidates.find(c => Math.abs(c.amount - amount) < 0.01);
+          // For partial bills, the amount owed is the remaining balance
+          const effectiveAmt = c => c.status === "partial" ? (c.amount - (c.paidAmount || 0)) : c.amount;
+          // 1. Single expense exactly matching the payment amount (or its remaining balance)
+          const exact = candidates.find(c => Math.abs(effectiveAmt(c) - amount) < 0.01);
           if (exact) {
             matchedIds = [exact._id];
             matchType = "exact";
           } else {
             // 2. Subset of candidates whose amounts sum to the payment amount
-            //    (covers combined payments, e.g. "PLUS WRAPPING")
             const n = candidates.length;
             let found = null;
             for (let mask = 1; mask < (1 << n) && !found; mask++) {
               let sum = 0;
               const subset = [];
               for (let b = 0; b < n; b++) {
-                if (mask & (1 << b)) { sum += candidates[b].amount; subset.push(candidates[b]); }
+                if (mask & (1 << b)) { sum += effectiveAmt(candidates[b]); subset.push(candidates[b]); }
               }
               if (Math.abs(sum - amount) < 0.01) found = subset;
             }
@@ -1812,9 +1812,9 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         }).select("_id description vendor amount orderRef status paidDate receiptFileName").lean();
 
         if (multi.length) {
-          const unpaidMulti = multi.filter(c => c.status === "unpaid");
+          const unpaidMulti = multi.filter(c => c.status === "unpaid" || c.status === "partial");
           const paidMulti   = multi.filter(c => c.status === "paid");
-          const sumUnpaid   = unpaidMulti.reduce((s, c) => s + c.amount, 0);
+          const sumUnpaid   = unpaidMulti.reduce((s, c) => s + (c.status === "partial" ? c.amount - (c.paidAmount||0) : c.amount), 0);
           const sumPaid     = paidMulti.reduce((s, c) => s + c.amount, 0);
 
           if (unpaidMulti.length && Math.abs(sumUnpaid - amount) < 0.01) {
@@ -1844,9 +1844,9 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
 
         if (byBooking.length) {
           const paidOnes   = byBooking.filter(c => c.status === "paid");
-          const unpaidOnes = byBooking.filter(c => c.status === "unpaid");
+          const unpaidOnes = byBooking.filter(c => c.status === "unpaid" || c.status === "partial");
           const sumPaid    = paidOnes.reduce((s, c) => s + c.amount, 0);
-          const sumUnpaid  = unpaidOnes.reduce((s, c) => s + c.amount, 0);
+          const sumUnpaid  = unpaidOnes.reduce((s, c) => s + (c.status === "partial" ? c.amount - (c.paidAmount||0) : c.amount), 0);
 
           if (paidOnes.length && Math.abs(sumPaid - amount) < 0.01 && !unpaidOnes.length) {
             alreadyPaid = paidOnes;
