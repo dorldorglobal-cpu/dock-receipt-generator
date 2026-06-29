@@ -2229,9 +2229,21 @@ export default function OrderDetails() {
                 defaultValue={order.vessel || ""}
                 key={order.vessel || "__empty__"}
                 placeholder="Type or select vessel…"
-                onBlur={async e => {
+                onChange={async e => {
                   const val = e.target.value.trim();
-                  if (val === (order.vessel || "")) return;
+                  // Save immediately when picking from the datalist dropdown
+                  if (scheduleVessels.includes(val)) {
+                    await fetch(`${API}/api/orders/${id}`, {
+                      method:"PUT", headers:{"Content-Type":"application/json"},
+                      body: JSON.stringify({ vessel: val }),
+                    });
+                    fetchOrder();
+                  }
+                }}
+                onBlur={async e => {
+                  // Save any free-typed vessel on blur
+                  const val = e.target.value.trim();
+                  if (!val || val === (order.vessel || "")) return;
                   await fetch(`${API}/api/orders/${id}`, {
                     method:"PUT", headers:{"Content-Type":"application/json"},
                     body: JSON.stringify({ vessel: val }),
