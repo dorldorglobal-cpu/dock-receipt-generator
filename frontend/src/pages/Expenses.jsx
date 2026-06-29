@@ -287,9 +287,28 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
   receiptFile, setReceiptFile, existingReceipt, onRemoveReceipt,
   billFile,    setBillFile,    existingBill,    onRemoveBill,
   vendors = [] }) {
+  const TAX_BY_CATEGORY = {
+    "Towing / Transport":   "Cost of Goods Sold (COGS)",
+    "Ocean Freight":        "Cost of Goods Sold (COGS)",
+    "Storage":              "Cost of Goods Sold (COGS)",
+    "Port / Terminal Fees": "Cost of Goods Sold (COGS)",
+    "Loaders & Warehouses": "Cost of Goods Sold (COGS)",
+    "Software":             "Cost of Goods Sold (COGS)",
+    "Legal Fees":           "Operating Expense",
+    "Office & Admin":       "Operating Expense",
+    "General Overhead":     "Operating Expense",
+  };
+
   const inp = (key) => ({
     value: form[key] ?? "",
-    onChange: (e) => setForm(f => ({ ...f, [key]: e.target.value })),
+    onChange: (e) => {
+      const val = e.target.value;
+      if (key === "category") {
+        setForm(f => ({ ...f, category: val, ...(!f.taxCategory ? { taxCategory: TAX_BY_CATEGORY[val] || "" } : {}) }));
+      } else {
+        setForm(f => ({ ...f, [key]: val }));
+      }
+    },
   });
 
   const autoCategoryFromDesc = (desc) => {
