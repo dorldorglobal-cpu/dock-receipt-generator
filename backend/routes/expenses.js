@@ -954,21 +954,37 @@ router.post("/parse-acl", memUpload.array("invoices", 50), async (req, res) => {
         const bookingMatch = text.match(/Booking\s+No\.?\s*([A-Z0-9]{6,})/i);
         const bookingNo = bookingMatch?.[1] || "";
 
-        // Vessel + Voyage (e.g. "GRANDE PORTOGALLO   GPO0426")
-        const vesselMatch = text.match(/Ocean vessel\s+(\S+)\s+([A-Z ]+(?:PORTOGALLO|ATLANTIC|EUROPA|VICTORIA|AMERICA|AFRICA|BENELUX|NIGERIA|GHANA|TOGO|SENEGAL|CAMEROON|CONAKRY|ABIDJAN|FREETOWN|\w+))/i)
-          || text.match(/Ocean vessel\s+(\S+)\s+(.+?)(?:\n|Port of)/i);
-        const voyage  = vesselMatch?.[1] || "";
-        const vessel  = vesselMatch?.[2]?.trim() || "";
+        // Vessel + Voyage
+        // Page 2 has a clean "GTE0326 - GRANDE TEMA" pattern — use that first
+        const vvMatch = text.match(/([A-Z]{2,5}\d{4})\s*[-–]\s*((?:GRANDE|GOOD|AUTO|SPIRIT|ASIA|AFRICA|ATLANTIC|EURO|AMERICA|CONGO|\w+)[A-Z \w]*?)(?:\r?\n|$)/i);
+        let voyage = vvMatch?.[1]?.trim() || "";
+        let vessel = vvMatch?.[2]?.trim() || "";
+        // Fallback: page 1 layout "Ocean vessel CODE\nVESSEL NAME" (code and name on separate lines)
+        if (!vessel) {
+          const vmLines = text.match(/Ocean vessel\s+([A-Z]{2,5}\d{4})\s*\r?\n\s*([A-Z][A-Z ]+)/i);
+          if (vmLines) { voyage = voyage || vmLines[1]; vessel = vmLines[2].trim(); }
+        }
 
-        // POL / POD
-        const polMatch = text.match(/Port of loading\s*\n([^\n]{3,60})/i);
-        const podMatch = text.match(/Port of discharge\s*\n([^\n]{3,60})/i);
-        const pol = polMatch?.[1]?.trim() || "";
-        const pod = podMatch?.[1]?.trim() || "";
+        // POL / POD — page 2 uses "POL: VALUE" / "POD: VALUE" labels (most reliable)
+        const polMatch = text.match(/\bPOL:\s*([^\n\r]+)/i)
+          || text.match(/Port of loading\s*\r?\n([^\n]{3,60})/i);
+        const podMatch = text.match(/\bPOD:\s*([^\n\r]+)/i)
+          || text.match(/Port of discharge\s*\r?\n([^\n]{3,60})/i);
+        const pol = (polMatch?.[1]?.trim() || "").replace(/\s+\d.*$/, ""); // strip any page numbers
+        const pod = (podMatch?.[1]?.trim() || "").replace(/\s+\d.*$/, "");
+
+        // Individual charge line items (Basic Frt, BAF, Emergency Bunker, MDR, Low Sulphur, etc.)
+        const chargeLines = [];
+        const chargeRe = /^\s*([A-Za-z][A-Za-z /().-]{2,35?})\s+([\d,]+\.\d{2})\s+USD/gm;
+        let cm;
+        while ((cm = chargeRe.exec(text)) !== null) {
+          const label = cm[1].trim();
+          const amt   = parseFloat(cm[2].replace(/,/g, ""));
+          if (/TOTAL/i.test(label)) continue; // skip the total summary line
+          chargeLines.push({ label, amount: amt });
+        }
 
         // YMM
-        const ymmMatch = text.match(/([A-Z][\w\s-]{2,30})\s*\nModel Year (\d{4})/i)
-          || text.match(/HONDA|TOYOTA|HYUNDAI|NISSAN|KIA|MAZDA|FORD|CHEVY|CHEVROLET|JEEP|BMW|MERCEDES|LEXUS|ACURA|INFINITI/i);
         const vehicleLineMatch = text.match(/\d USED UNPACKED VEHICLE.*?\n(.+?)\nModel Year (\d{4})/is);
         const ymm = vehicleLineMatch
           ? `${vehicleLineMatch[2]} ${vehicleLineMatch[1].trim()}`
@@ -998,6 +1014,7 @@ router.post("/parse-acl", memUpload.array("invoices", 50), async (req, res) => {
           pod,
           ymm,
           billDate,
+          chargeLines,
           billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl,
           billMime:     "application/pdf",
           orderId:      order?._id || null,
@@ -1056,6 +1073,9 @@ router.post("/apply-acl", express.json(), async (req, res) => {
         notes:         [
           row.bookingNo ? `Booking: ${row.bookingNo}` : "",
           row.pol && row.pod ? `${row.pol} → ${row.pod}` : "",
+          row.chargeLines?.length
+            ? row.chargeLines.map(c => `${c.label}: $${c.amount.toFixed(2)}`).join(", ")
+            : "",
           row.notes || "",
         ].filter(Boolean).join(" | "),
         billFileName:  row.billFileName || "",
