@@ -2224,25 +2224,27 @@ export default function OrderDetails() {
               </button>
             </div>
             <div style={{ marginBottom:6 }}>
-              <select
-                value={order.vessel || ""}
-                onChange={async e => {
+              <input
+                list="vessel-options"
+                defaultValue={order.vessel || ""}
+                key={order.vessel || "__empty__"}
+                placeholder="Type or select vessel…"
+                onBlur={async e => {
+                  const val = e.target.value.trim();
+                  if (val === (order.vessel || "")) return;
                   await fetch(`${API}/api/orders/${id}`, {
                     method:"PUT", headers:{"Content-Type":"application/json"},
-                    body: JSON.stringify({ vessel: e.target.value }),
+                    body: JSON.stringify({ vessel: val }),
                   });
                   fetchOrder();
-                  if (e.target.value && order.pol && order.pod)
-                    lookupAndApplySchedule(e.target.value, order.pol, order.pod);
                 }}
                 style={{ width:"100%", padding:"5px 8px", borderRadius:6, fontSize:13,
-                  border:"1px solid var(--border)", background:"var(--bg-input)", color:"var(--text-primary)" }}>
-                <option value="">Select vessel…</option>
-                {order.vessel && !scheduleVessels.includes(order.vessel) && (
-                  <option value={order.vessel}>{order.vessel}</option>
-                )}
-                {scheduleVessels.map(v => <option key={v} value={v}>{v}</option>)}
-              </select>
+                  border:"1px solid var(--border)", background:"var(--bg-input)", color:"var(--text-primary)",
+                  boxSizing:"border-box" }}
+              />
+              <datalist id="vessel-options">
+                {scheduleVessels.map(v => <option key={v} value={v} />)}
+              </datalist>
             </div>
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:6, fontSize:12 }}>
               <div style={{ display:"flex", alignItems:"center", gap:4 }}>
