@@ -4,6 +4,9 @@ const ContainerLoad = require("../models/ContainerLoad");
 const Order         = require("../models/Order");
 const { getGmailAccessToken } = require("../utils/gmail");
 
+const LOADER_TO = "info@e-zcargo.com";
+const LOADER_CC = "shipping@e-zcargo.com";
+
 // GET /api/container-loads
 router.get("/", async (req, res) => {
   try {
@@ -17,15 +20,22 @@ router.get("/", async (req, res) => {
 // POST /api/container-loads  — create load + send loader email
 router.post("/", express.json(), async (req, res) => {
   try {
-    const { name, orderIds, vessel, pol, pod, loaderEmail, notes } = req.body;
+    const {
+      name, orderIds, vessel, pol, pod, loaderEmail, notes,
+      consigneeName, consigneeAddress, consigneePhone, consigneeEmail, consigneeTin,
+      notifyName, notifyAddress, notifyPhone, notifyEmail, notifyTin,
+    } = req.body;
     if (!orderIds?.length) return res.status(400).json({ error: "Select at least one order" });
 
-    const load = await ContainerLoad.create({ name, orderIds, vessel, pol, pod, loaderEmail, notes });
+    const load = await ContainerLoad.create({
+      name, orderIds, vessel, pol, pod, loaderEmail, notes,
+      consigneeName, consigneeAddress, consigneePhone, consigneeEmail, consigneeTin,
+      notifyName, notifyAddress, notifyPhone, notifyEmail, notifyTin,
+    });
 
-    // Send loader email if address provided
     if (loaderEmail) {
       const orders = await Order.find({ _id: { $in: orderIds } }).lean();
-      await sendLoaderEmail(load, orders, loaderEmail, vessel, pol, pod);
+      await sendLoaderEmail(load, orders);
       load.emailSentAt = new Date();
       await load.save();
     }
@@ -38,29 +48,27 @@ router.post("/", express.json(), async (req, res) => {
   }
 });
 
-// PATCH /api/container-loads/:id  — update booking#, container#, seal#, status, etc.
+// PATCH /api/container-loads/:id
 router.patch("/:id", express.json(), async (req, res) => {
   try {
-    const { bookingNumber, containerNumber, sealNumber, status, vessel, pol, pod, loaderEmail, notes } = req.body;
+    const fields = [
+      "bookingNumber","containerNumber","sealNumber","status",
+      "vessel","pol","pod","loaderEmail","notes",
+      "consigneeName","consigneeAddress","consigneePhone","consigneeEmail","consigneeTin",
+      "notifyName","notifyAddress","notifyPhone","notifyEmail","notifyTin",
+    ];
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
 
-    if (bookingNumber  !== undefined) load.bookingNumber  = bookingNumber;
-    if (containerNumber!== undefined) load.containerNumber= containerNumber;
-    if (sealNumber     !== undefined) load.sealNumber     = sealNumber;
-    if (status         !== undefined) load.status         = status;
-    if (vessel         !== undefined) load.vessel         = vessel;
-    if (pol            !== undefined) load.pol            = pol;
-    if (pod            !== undefined) load.pod            = pod;
-    if (loaderEmail    !== undefined) load.loaderEmail    = loaderEmail;
-    if (notes          !== undefined) load.notes          = notes;
+    for (const f of fields) {
+      if (req.body[f] !== undefined) load[f] = req.body[f];
+    }
     await load.save();
 
-    // If booking number added, push it to all linked orders
-    if (bookingNumber) {
+    if (req.body.bookingNumber) {
       await Order.updateMany(
         { _id: { $in: load.orderIds } },
-        { $set: { bookingNumber, ...(vessel ? { vessel } : {}) } }
+        { $set: { bookingNumber: req.body.bookingNumber, ...(req.body.vessel ? { vessel: req.body.vessel } : {}) } }
       );
     }
 
@@ -76,10 +84,8 @@ router.post("/:id/resend-email", express.json(), async (req, res) => {
   try {
     const load = await ContainerLoad.findById(req.params.id).populate("orderIds").lean();
     if (!load) return res.status(404).json({ error: "Not found" });
-    const email = req.body.loaderEmail || load.loaderEmail;
-    if (!email) return res.status(400).json({ error: "No loader email" });
-    await sendLoaderEmail(load, load.orderIds, email, load.vessel, load.pol, load.pod);
-    await ContainerLoad.findByIdAndUpdate(req.params.id, { emailSentAt: new Date(), loaderEmail: email });
+    await sendLoaderEmail(load, load.orderIds);
+    await ContainerLoad.findByIdAndUpdate(req.params.id, { emailSentAt: new Date() });
     res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
@@ -97,52 +103,60 @@ router.delete("/:id", async (req, res) => {
 });
 
 // ── Email helper ──────────────────────────────────────────────────────────────
-async function sendLoaderEmail(load, orders, toEmail, vessel, pol, pod) {
-  const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
-  const subject = `Container Load Request — ${load.name}${vessel ? " / " + vessel : ""}`;
+async function sendLoaderEmail(load, orders) {
+  const destination = load.pod || "DESTINATION";
+  const pol         = load.pol || "NJ";
 
-  const unitLines = orders.map((o, i) => {
-    const ymm  = [o.year, o.make, o.model].filter(Boolean).join(" ") || "—";
-    const cons = [o.consigneeName, o.consigneeAddress, o.consigneeCity, o.consigneeCountry]
-      .filter(Boolean).join(", ") || "—";
-    return [
-      `Unit ${i + 1}:`,
-      `  Order:      ${o.refNumber}`,
-      `  Vehicle:    ${ymm}`,
-      `  VIN:        ${o.vin || "—"}`,
-      `  Condition:  ${o.condition || "Runner"}`,
-      `  Title:      ${o.titleStatus || "—"}`,
-      `  Consignee:  ${cons}`,
-      `  Destination:${o.pod || pod || "—"}`,
-    ].join("\n");
-  }).join("\n\n");
+  // Subject: ref numbers, CONTAINER TO TEMA NJ CUSTOMER NAME
+  const refs = orders.map(o => o.refNumber).filter(Boolean).join(" / ");
+  const custName = orders[0]?.customerName || "";
+  const subject  = `${refs} CONTAINER TO ${destination.toUpperCase()} ${pol.toUpperCase()} ${custName}`.trim();
+
+  // Consignee block
+  const cLines = [
+    "CONSIGNEE INFO",
+    load.consigneeName    || "—",
+    load.consigneeAddress || "—",
+    load.consigneePhone   ? `TEL: ${load.consigneePhone}`   : "",
+    load.consigneeEmail   ? `EMAIL: ${load.consigneeEmail}` : "",
+    load.consigneeTin     ? `TIN#: ${load.consigneeTin}`    : "",
+  ].filter(l => l !== "").join("\n");
+
+  // Notify party block
+  const nLines = [
+    "NOTIFY PARTY INFO",
+    load.notifyName    || "—",
+    load.notifyAddress || "—",
+    load.notifyPhone   ? `TEL: ${load.notifyPhone}`   : "",
+    load.notifyEmail   ? `EMAIL: ${load.notifyEmail}` : "",
+    load.notifyTin     ? `TIN#: ${load.notifyTin}`    : "",
+  ].filter(l => l !== "").join("\n");
+
+  // Unit lines: YYM VIN
+  const unitLines = orders.map(o => {
+    const ymm = [o.year, o.make, o.model].filter(Boolean).join(" ") || "—";
+    return `${ymm}   ${o.vin || "—"}`;
+  }).join("\n");
 
   const body = [
-    `Hello,`,
+    `SEE ATTACHED LOAD LIST FOR CONTAINER TO ${destination.toUpperCase()}`,
+    `PLEASE CONFIRM THIS UNIT AND ITS TITLE`,
     ``,
-    `Please find below the details for our upcoming container load.`,
+    cLines,
     ``,
-    `Load Reference: ${load.name}`,
-    `Vessel:         ${vessel || "TBD"}`,
-    `Port of Loading:${pol || "—"}`,
-    `Port of Discharge: ${pod || "—"}`,
+    nLines,
     ``,
-    `═══════════════════════════════`,
-    `UNITS`,
-    `═══════════════════════════════`,
     unitLines,
-    ``,
-    `═══════════════════════════════`,
-    ``,
-    `Please provide the booking number at your earliest convenience.`,
     ``,
     `Thank you,`,
     `Dor Ldor Global`,
   ].join("\n");
 
+  const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
   const mimeLines = [
     `From: ${from}`,
-    `To: ${toEmail}`,
+    `To: ${LOADER_TO}`,
+    `Cc: ${LOADER_CC}`,
     `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
     `MIME-Version: 1.0`,
     `Content-Type: text/plain; charset="UTF-8"`,
@@ -159,7 +173,7 @@ async function sendLoaderEmail(load, orders, toEmail, vessel, pol, pod) {
   });
   const result = await resp.json();
   if (!resp.ok) throw new Error(result.error?.message || "Gmail error");
-  console.log(`[ContainerLoad] Email sent to ${toEmail} for load ${load.name}`);
+  console.log(`[ContainerLoad] Email sent → ${LOADER_TO} (cc: ${LOADER_CC}) for load ${load.name}`);
 }
 
 module.exports = router;

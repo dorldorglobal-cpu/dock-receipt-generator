@@ -21,47 +21,58 @@ function loadSC(s) { return LOAD_STATUS_COLORS[s] || LOAD_STATUS_COLORS["Pending
 function orderSC(s) { return ORDER_STATUS_COLORS[s] || { bg:"rgba(99,102,241,0.1)", border:"rgba(99,102,241,0.3)", text:"#818cf8" }; }
 
 const inp = { padding:"8px 12px", borderRadius:8, border:"1px solid var(--border)",
-  background:"var(--bg-input)", color:"var(--text-primary)", fontSize:13, width:"100%" };
+  background:"var(--bg-input)", color:"var(--text-primary)", fontSize:13, width:"100%", boxSizing:"border-box" };
+const lbl = { fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4, fontWeight:600, letterSpacing:"0.04em" };
+const sec = { fontSize:12, fontWeight:700, color:"#a78bfa", margin:"20px 0 10px", textTransform:"uppercase", letterSpacing:"0.06em" };
+
+function Field({ label, value, onChange, placeholder, type="text" }) {
+  return (
+    <div>
+      <label style={lbl}>{label}</label>
+      <input type={type} value={value} onChange={e=>onChange(e.target.value)}
+        placeholder={placeholder||""} style={inp} />
+    </div>
+  );
+}
+
+const BLANK_FORM = {
+  name:"", vessel:"", pol:"NJ", pod:"", loaderEmail:"", notes:"",
+  consigneeName:"", consigneeAddress:"", consigneePhone:"", consigneeEmail:"", consigneeTin:"",
+  notifyName:"", notifyAddress:"", notifyPhone:"", notifyEmail:"", notifyTin:"",
+};
 
 export default function Containers() {
   const navigate = useNavigate();
-  const [loads,    setLoads]    = useState([]);
-  const [allOrders,setAllOrders]= useState([]);
-  const [search,   setSearch]   = useState("");
-  const [expanded, setExpanded] = useState({});
-  const [msg,      setMsg]      = useState("");
+  const [loads,     setLoads]     = useState([]);
+  const [allOrders, setAllOrders] = useState([]);
+  const [search,    setSearch]    = useState("");
+  const [expanded,  setExpanded]  = useState({});
+  const [msg,       setMsg]       = useState("");
 
   // New load modal
   const [showNew,     setShowNew]     = useState(false);
-  const [newName,     setNewName]     = useState("");
-  const [newVessel,   setNewVessel]   = useState("");
-  const [newPol,      setNewPol]      = useState("");
-  const [newPod,      setNewPod]      = useState("");
-  const [newEmail,    setNewEmail]    = useState("");
-  const [newNotes,    setNewNotes]    = useState("");
+  const [form,        setForm]        = useState(BLANK_FORM);
   const [orderSearch, setOrderSearch] = useState("");
-  const [picked,      setPicked]      = useState([]); // selected order _ids
+  const [picked,      setPicked]      = useState([]);
   const [creating,    setCreating]    = useState(false);
 
-  // Edit booking# modal
-  const [bookingModal, setBookingModal] = useState(null); // load object
-  const [bookingInput, setBookingInput] = useState("");
-  const [containerInput,setContainerInput]=useState("");
-  const [sealInput,    setSealInput]   = useState("");
-  const [statusInput,  setStatusInput] = useState("");
-  const [savingBooking,setSavingBooking]= useState(false);
+  // Edit modal
+  const [editModal,   setEditModal]   = useState(null);
+  const [editForm,    setEditForm]    = useState({});
+  const [savingEdit,  setSavingEdit]  = useState(false);
 
-  const load = () => {
+  const loadData = () => {
     fetch(`${API}/api/container-loads`).then(r=>r.json()).then(setLoads).catch(()=>{});
     fetch(`${API}/api/orders`).then(r=>r.json())
       .then(d => setAllOrders((Array.isArray(d)?d:[]).filter(o=>o.requestType==="Container")))
       .catch(()=>{});
   };
-  useEffect(load, []);
+  useEffect(loadData, []);
 
   const flash = (m) => { setMsg(m); setTimeout(()=>setMsg(""),4000); };
+  const setF   = (k) => (v) => setForm(f => ({ ...f, [k]: v }));
+  const setEF  = (k) => (v) => setEditForm(f => ({ ...f, [k]: v }));
 
-  // Orders not yet in any load (for picker)
   const loadedOrderIds = new Set(loads.flatMap(l=>(l.orderIds||[]).map(o=>o._id||o)));
   const availableOrders = allOrders.filter(o => !loadedOrderIds.has(o._id));
   const filteredAvailable = availableOrders.filter(o => {
@@ -69,12 +80,31 @@ export default function Containers() {
     return !s || `${o.refNumber} ${o.vin} ${o.customerName} ${o.make} ${o.model}`.toLowerCase().includes(s);
   });
 
-  const togglePick = (id) => setPicked(p => p.includes(id) ? p.filter(x=>x!==id) : [...p, id]);
+  const togglePick = (id) => {
+    setPicked(p => {
+      const next = p.includes(id) ? p.filter(x=>x!==id) : [...p, id];
+      // Auto-fill consignee from first picked order
+      if (!p.includes(id) && p.length === 0) {
+        const o = availableOrders.find(x => x._id === id);
+        if (o) {
+          const addr = [o.consigneeAddress, o.consigneeCity, o.consigneeCountry].filter(Boolean).join(", ");
+          setForm(f => ({
+            ...f,
+            consigneeName:    f.consigneeName    || o.consigneeName    || "",
+            consigneeAddress: f.consigneeAddress || addr || "",
+            pod:              f.pod              || o.pod               || "",
+            vessel:           f.vessel           || o.vessel            || "",
+          }));
+        }
+      }
+      return next;
+    });
+  };
 
   const openNew = () => {
     const d = new Date();
-    setNewName(`LOAD-${d.toLocaleString("en-US",{month:"short"}).toUpperCase()}${d.getDate()}`);
-    setNewVessel(""); setNewPol(""); setNewPod(""); setNewEmail(""); setNewNotes("");
+    const name = `LOAD-${d.toLocaleString("en-US",{month:"short"}).toUpperCase()}${d.getDate()}`;
+    setForm({ ...BLANK_FORM, name });
     setPicked([]); setOrderSearch(""); setShowNew(true);
   };
 
@@ -84,50 +114,72 @@ export default function Containers() {
     try {
       const res = await fetch(`${API}/api/container-loads`, {
         method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ name:newName, orderIds:picked, vessel:newVessel,
-          pol:newPol, pod:newPod, loaderEmail:newEmail, notes:newNotes }),
+        body: JSON.stringify({ ...form, orderIds: picked }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error||"Failed");
-      flash(newEmail ? `✅ Load created & email sent to ${newEmail}` : "✅ Load created");
+      flash(form.loaderEmail
+        ? `✅ Load created & email sent to ${form.loaderEmail}`
+        : "✅ Load created");
       setShowNew(false);
-      load();
+      loadData();
     } catch(e) { flash("❌ "+e.message); }
     setCreating(false);
   };
 
-  const saveBooking = async () => {
-    setSavingBooking(true);
+  const openEdit = (l) => {
+    setEditModal(l);
+    setEditForm({
+      bookingNumber:   l.bookingNumber   || "",
+      containerNumber: l.containerNumber || "",
+      sealNumber:      l.sealNumber      || "",
+      status:          l.status          || "Pending",
+      vessel:          l.vessel          || "",
+      pol:             l.pol             || "",
+      pod:             l.pod             || "",
+      loaderEmail:     l.loaderEmail     || "",
+      consigneeName:   l.consigneeName   || "",
+      consigneeAddress:l.consigneeAddress|| "",
+      consigneePhone:  l.consigneePhone  || "",
+      consigneeEmail:  l.consigneeEmail  || "",
+      consigneeTin:    l.consigneeTin    || "",
+      notifyName:      l.notifyName      || "",
+      notifyAddress:   l.notifyAddress   || "",
+      notifyPhone:     l.notifyPhone     || "",
+      notifyEmail:     l.notifyEmail     || "",
+      notifyTin:       l.notifyTin       || "",
+    });
+  };
+
+  const saveEdit = async () => {
+    setSavingEdit(true);
     try {
-      const res = await fetch(`${API}/api/container-loads/${bookingModal._id}`, {
+      const res = await fetch(`${API}/api/container-loads/${editModal._id}`, {
         method:"PATCH", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ bookingNumber:bookingInput, containerNumber:containerInput,
-          sealNumber:sealInput, status:statusInput }),
+        body: JSON.stringify(editForm),
       });
       if (!res.ok) { const d=await res.json(); throw new Error(d.error||"Failed"); }
-      flash("✅ Booking info saved");
-      setBookingModal(null);
-      load();
+      flash("✅ Load updated");
+      setEditModal(null);
+      loadData();
     } catch(e) { flash("❌ "+e.message); }
-    setSavingBooking(false);
+    setSavingEdit(false);
   };
 
   const deleteLoad = async (l) => {
     if (!window.confirm(`Delete load "${l.name}"?`)) return;
     await fetch(`${API}/api/container-loads/${l._id}`, { method:"DELETE" });
-    load();
+    loadData();
   };
 
   const resendEmail = async (l) => {
-    const email = prompt("Resend to:", l.loaderEmail||"");
-    if (!email) return;
     try {
       const res = await fetch(`${API}/api/container-loads/${l._id}/resend-email`, {
-        method:"POST", headers:{"Content-Type":"application/json"},
-        body: JSON.stringify({ loaderEmail:email }),
+        method:"POST", headers:{"Content-Type":"application/json"}, body:"{}",
       });
       if (!res.ok) { const d=await res.json(); throw new Error(d.error||"Failed"); }
-      flash("✅ Email resent");
+      flash("✅ Email resent to info@e-zcargo.com");
+      loadData();
     } catch(e) { flash("❌ "+e.message); }
   };
 
@@ -139,6 +191,40 @@ export default function Containers() {
       || (l.orderIds||[]).some(o =>
           `${o.vin||""} ${o.customerName||""} ${o.refNumber||""}`.toLowerCase().includes(s));
   });
+
+  // ── Shared consignee/notify form sections ────────────────────────────────
+  const ConsigneeFields = ({ vals, set }) => (
+    <>
+      <div style={sec}>Consignee Info</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div style={{ gridColumn:"1/-1" }}>
+          <Field label="CONSIGNEE NAME" value={vals.consigneeName} onChange={set("consigneeName")} />
+        </div>
+        <div style={{ gridColumn:"1/-1" }}>
+          <Field label="ADDRESS" value={vals.consigneeAddress} onChange={set("consigneeAddress")} placeholder="Street, City, Country" />
+        </div>
+        <Field label="PHONE" value={vals.consigneePhone} onChange={set("consigneePhone")} placeholder="+1 000 000 0000" />
+        <Field label="EMAIL" value={vals.consigneeEmail} onChange={set("consigneeEmail")} type="email" />
+        <div style={{ gridColumn:"1/-1" }}>
+          <Field label="TIN #" value={vals.consigneeTin} onChange={set("consigneeTin")} />
+        </div>
+      </div>
+      <div style={sec}>Notify Party Info</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <div style={{ gridColumn:"1/-1" }}>
+          <Field label="NOTIFY PARTY NAME" value={vals.notifyName} onChange={set("notifyName")} />
+        </div>
+        <div style={{ gridColumn:"1/-1" }}>
+          <Field label="ADDRESS" value={vals.notifyAddress} onChange={set("notifyAddress")} placeholder="Street, City, Country" />
+        </div>
+        <Field label="PHONE" value={vals.notifyPhone} onChange={set("notifyPhone")} placeholder="+1 000 000 0000" />
+        <Field label="EMAIL" value={vals.notifyEmail} onChange={set("notifyEmail")} type="email" />
+        <div style={{ gridColumn:"1/-1" }}>
+          <Field label="TIN #" value={vals.notifyTin} onChange={set("notifyTin")} />
+        </div>
+      </div>
+    </>
+  );
 
   return (
     <div>
@@ -163,7 +249,6 @@ export default function Containers() {
         </button>
       </div>
 
-      {/* Search */}
       <div style={{ marginBottom:18, display:"flex", alignItems:"center", gap:12 }}>
         <input placeholder="Search load name, booking #, VIN, customer…"
           value={search} onChange={e=>setSearch(e.target.value)}
@@ -173,7 +258,6 @@ export default function Containers() {
         </span>
       </div>
 
-      {/* Load cards */}
       <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
         {filtered.length === 0 && (
           <div style={{ textAlign:"center", padding:"60px 0", color:"var(--text-muted)" }}>
@@ -192,17 +276,14 @@ export default function Containers() {
             <div key={l._id} style={{ background:"var(--bg-panel)", border:"1px solid var(--border)",
               borderRadius:12, overflow:"hidden" }}>
 
-              {/* Header */}
               <div style={{ display:"flex", alignItems:"center", gap:16, padding:"14px 20px",
                 borderBottom: open ? "1px solid var(--border)" : "none" }}>
 
-                {/* Expand toggle */}
                 <div onClick={()=>setExpanded(p=>({...p,[l._id]:!p[l._id]}))}
                   style={{ cursor:"pointer", color:"var(--text-secondary)", fontSize:16, minWidth:18 }}>
                   {open ? "▲" : "▼"}
                 </div>
 
-                {/* Name + status */}
                 <div style={{ minWidth:140 }}>
                   <div style={{ fontWeight:700, fontSize:15, color:"var(--text-primary)" }}>{l.name}</div>
                   <span style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:20,
@@ -211,7 +292,6 @@ export default function Containers() {
                   </span>
                 </div>
 
-                {/* Booking # */}
                 <div style={{ flex:1 }}>
                   {l.bookingNumber
                     ? <div style={{ fontWeight:600, color:"#60a5fa", fontSize:14 }}>📋 {l.bookingNumber}</div>
@@ -224,7 +304,6 @@ export default function Containers() {
                   )}
                 </div>
 
-                {/* Vessel + route */}
                 <div style={{ minWidth:160 }}>
                   <div style={{ fontSize:13, color:"var(--text-primary)" }}>{l.vessel || "—"}</div>
                   <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
@@ -232,24 +311,19 @@ export default function Containers() {
                   </div>
                 </div>
 
-                {/* Unit count */}
                 <div style={{ textAlign:"center", minWidth:50 }}>
                   <div style={{ fontSize:22, fontWeight:700, color:"#a78bfa" }}>{orders.length}</div>
                   <div style={{ fontSize:10, color:"var(--text-secondary)" }}>UNIT{orders.length!==1?"S":""}</div>
                 </div>
 
-                {/* Email sent */}
-                <div style={{ fontSize:11, color:"var(--text-muted)", minWidth:100 }}>
+                <div style={{ fontSize:11, color:"var(--text-muted)", minWidth:120 }}>
                   {l.emailSentAt
-                    ? <>✉️ Sent<br/>{new Date(l.emailSentAt).toLocaleDateString()}</>
+                    ? <><span style={{ color:"#34d399" }}>✉️ Sent</span><br/>{new Date(l.emailSentAt).toLocaleDateString()}</>
                     : <span style={{ color:"var(--warning)" }}>No email sent</span>}
                 </div>
 
-                {/* Actions */}
                 <div style={{ display:"flex", gap:6 }}>
-                  <button onClick={()=>{ setBookingModal(l); setBookingInput(l.bookingNumber||"");
-                    setContainerInput(l.containerNumber||""); setSealInput(l.sealNumber||"");
-                    setStatusInput(l.status||"Pending"); }}
+                  <button onClick={()=>openEdit(l)}
                     style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
                       background:"rgba(37,99,235,0.15)", border:"1px solid rgba(37,99,235,0.4)",
                       color:"#60a5fa", cursor:"pointer" }}>
@@ -270,7 +344,6 @@ export default function Containers() {
                 </div>
               </div>
 
-              {/* VIN chips (collapsed) */}
               {!open && (
                 <div style={{ padding:"8px 20px 12px", display:"flex", gap:6, flexWrap:"wrap" }}>
                   {orders.map(o=>(
@@ -285,7 +358,6 @@ export default function Containers() {
                 </div>
               )}
 
-              {/* Expanded order rows */}
               {open && (
                 <div>
                   {orders.map((o, idx) => {
@@ -295,8 +367,7 @@ export default function Containers() {
                         style={{ display:"grid", gridTemplateColumns:"1fr 2fr 1.5fr 1.2fr 1fr",
                           gap:16, padding:"12px 20px", cursor:"pointer", alignItems:"center",
                           background: idx%2===0 ? "var(--bg-elevated)" : "transparent",
-                          borderBottom: idx<orders.length-1 ? "1px solid var(--border)" : "none",
-                          transition:"background 0.1s" }}
+                          borderBottom: idx<orders.length-1 ? "1px solid var(--border)" : "none" }}
                         onMouseEnter={e=>e.currentTarget.style.background="rgba(99,102,241,0.06)"}
                         onMouseLeave={e=>e.currentTarget.style.background=idx%2===0?"var(--bg-elevated)":"transparent"}>
                         <div>
@@ -333,86 +404,77 @@ export default function Containers() {
 
       {/* ── New Load Modal ── */}
       {showNew && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
-          display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:1000,
+          display:"flex", alignItems:"flex-start", justifyContent:"center", padding:20, overflowY:"auto" }}>
           <div style={{ background:"var(--bg-panel)", borderRadius:16, padding:28, width:"100%",
-            maxWidth:780, maxHeight:"90vh", overflowY:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }}>
+            maxWidth:860, margin:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }}>
 
             <h3 style={{ margin:"0 0 20px", color:"var(--text-primary)", fontSize:17 }}>📦 New Container Load</h3>
 
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14, marginBottom:16 }}>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>LOAD NAME / REFERENCE</label>
-                <input value={newName} onChange={e=>setNewName(e.target.value)} style={inp} placeholder="e.g. LOAD-JUN29" />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>VESSEL (optional)</label>
-                <input value={newVessel} onChange={e=>setNewVessel(e.target.value)} style={inp} placeholder="Vessel name" />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>PORT OF LOADING</label>
-                <input value={newPol} onChange={e=>setNewPol(e.target.value)} style={inp} placeholder="e.g. Baltimore" />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>PORT OF DISCHARGE</label>
-                <input value={newPod} onChange={e=>setNewPod(e.target.value)} style={inp} placeholder="e.g. Lagos" />
+            {/* Load Info */}
+            <div style={sec}>Load Details</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:4 }}>
+              <Field label="LOAD NAME / REFERENCE" value={form.name} onChange={setF("name")} placeholder="e.g. LOAD-JUN29" />
+              <Field label="VESSEL (optional)" value={form.vessel} onChange={setF("vessel")} placeholder="Vessel name" />
+              <Field label="PORT OF LOADING" value={form.pol} onChange={setF("pol")} placeholder="NJ" />
+              <Field label="PORT OF DISCHARGE" value={form.pod} onChange={setF("pod")} placeholder="e.g. Tema" />
+              <div style={{ gridColumn:"1/-1" }}>
+                <Field label="LOADER EMAIL (auto-sends on create)" value={form.loaderEmail} onChange={setF("loaderEmail")} type="email" placeholder="info@e-zcargo.com" />
+                <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:4 }}>
+                  Email goes to info@e-zcargo.com · CC: shipping@e-zcargo.com
+                </div>
               </div>
               <div style={{ gridColumn:"1/-1" }}>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>LOADER EMAIL (auto-sends on create)</label>
-                <input value={newEmail} onChange={e=>setNewEmail(e.target.value)} style={inp} placeholder="loader@company.com" />
-              </div>
-              <div style={{ gridColumn:"1/-1" }}>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>NOTES (optional)</label>
-                <textarea value={newNotes} onChange={e=>setNewNotes(e.target.value)} rows={2}
+                <label style={lbl}>NOTES (optional)</label>
+                <textarea value={form.notes} onChange={e=>setF("notes")(e.target.value)} rows={2}
                   style={{ ...inp, resize:"vertical" }} placeholder="Any special instructions…" />
               </div>
             </div>
 
+            {/* Consignee + Notify */}
+            <ConsigneeFields vals={form} set={setF} />
+
             {/* Order picker */}
-            <div style={{ marginBottom:16 }}>
-              <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:6 }}>
-                SELECT ORDERS TO INCLUDE
-                {picked.length > 0 && <span style={{ marginLeft:8, color:"#a78bfa", fontWeight:700 }}>({picked.length} selected)</span>}
-              </label>
-              <input placeholder="Search orders by ref, VIN, customer, make…"
-                value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}
-                style={{ ...inp, marginBottom:8 }} />
-              <div style={{ maxHeight:260, overflowY:"auto", border:"1px solid var(--border)", borderRadius:8 }}>
-                {filteredAvailable.length === 0 && (
-                  <div style={{ padding:16, color:"var(--text-muted)", fontSize:13, textAlign:"center" }}>
-                    No container orders available
-                  </div>
-                )}
-                {filteredAvailable.map((o, idx) => {
-                  const sel = picked.includes(o._id);
-                  return (
-                    <div key={o._id} onClick={()=>togglePick(o._id)}
-                      style={{ display:"grid", gridTemplateColumns:"32px 1fr 2fr 1.2fr 1fr",
-                        gap:12, padding:"10px 14px", cursor:"pointer", alignItems:"center",
-                        background: sel ? "rgba(124,58,237,0.12)" : idx%2===0 ? "var(--bg-elevated)" : "transparent",
-                        borderBottom:"1px solid var(--border)", transition:"background 0.1s" }}>
-                      <div style={{ width:18, height:18, borderRadius:4, border:`2px solid ${sel?"#a78bfa":"var(--border)"}`,
-                        background: sel ? "#7c3aed" : "transparent", display:"flex", alignItems:"center", justifyContent:"center" }}>
-                        {sel && <span style={{ color:"#fff", fontSize:11, fontWeight:700 }}>✓</span>}
-                      </div>
-                      <div>
-                        <div style={{ fontWeight:600, fontSize:12 }}>{o.refNumber}</div>
-                        <div style={{ fontSize:11, color:"var(--text-secondary)" }}>{o.customerName}</div>
-                      </div>
-                      <div>
-                        <div style={{ fontSize:12 }}>{o.year} {o.make} {o.model}</div>
-                        <div style={{ fontSize:11, color:"var(--text-secondary)", fontFamily:"monospace" }}>{o.vin||"—"}</div>
-                      </div>
-                      <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
-                        {o.consigneeName || "—"}
-                      </div>
-                      <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
-                        → {o.pod || "—"}
-                      </div>
-                    </div>
-                  );
-                })}
+            <div style={sec}>Select Orders to Include</div>
+            {picked.length > 0 && (
+              <div style={{ fontSize:12, color:"#a78bfa", fontWeight:700, marginBottom:6 }}>
+                {picked.length} order{picked.length!==1?"s":""} selected
               </div>
+            )}
+            <input placeholder="Search orders by ref, VIN, customer, make…"
+              value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}
+              style={{ ...inp, marginBottom:8 }} />
+            <div style={{ maxHeight:260, overflowY:"auto", border:"1px solid var(--border)", borderRadius:8, marginBottom:20 }}>
+              {filteredAvailable.length === 0 && (
+                <div style={{ padding:16, color:"var(--text-muted)", fontSize:13, textAlign:"center" }}>
+                  No container orders available
+                </div>
+              )}
+              {filteredAvailable.map((o, idx) => {
+                const sel = picked.includes(o._id);
+                return (
+                  <div key={o._id} onClick={()=>togglePick(o._id)}
+                    style={{ display:"grid", gridTemplateColumns:"32px 1fr 2fr 1.2fr 1fr",
+                      gap:12, padding:"10px 14px", cursor:"pointer", alignItems:"center",
+                      background: sel ? "rgba(124,58,237,0.12)" : idx%2===0 ? "var(--bg-elevated)" : "transparent",
+                      borderBottom:"1px solid var(--border)" }}>
+                    <div style={{ width:18, height:18, borderRadius:4, border:`2px solid ${sel?"#a78bfa":"var(--border)"}`,
+                      background: sel ? "#7c3aed" : "transparent", display:"flex", alignItems:"center", justifyContent:"center" }}>
+                      {sel && <span style={{ color:"#fff", fontSize:11, fontWeight:700 }}>✓</span>}
+                    </div>
+                    <div>
+                      <div style={{ fontWeight:600, fontSize:12 }}>{o.refNumber}</div>
+                      <div style={{ fontSize:11, color:"var(--text-secondary)" }}>{o.customerName}</div>
+                    </div>
+                    <div>
+                      <div style={{ fontSize:12 }}>{o.year} {o.make} {o.model}</div>
+                      <div style={{ fontSize:11, color:"var(--text-secondary)", fontFamily:"monospace" }}>{o.vin||"—"}</div>
+                    </div>
+                    <div style={{ fontSize:11, color:"var(--text-secondary)" }}>{o.consigneeName || "—"}</div>
+                    <div style={{ fontSize:11, color:"var(--text-secondary)" }}>→ {o.pod || "—"}</div>
+                  </div>
+                );
+              })}
             </div>
 
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
@@ -422,65 +484,69 @@ export default function Containers() {
                 Cancel
               </button>
               <button onClick={createLoad} disabled={creating||!picked.length}
-                style={{ padding:"8px 24px", background: picked.length?"#7c3aed":"var(--bg-elevated)",
-                  color: picked.length?"#fff":"var(--text-muted)",
+                style={{ padding:"8px 24px",
+                  background: picked.length ? "linear-gradient(135deg,#7c3aed,#5b21b6)" : "var(--bg-elevated)",
+                  color: picked.length ? "#fff" : "var(--text-muted)",
                   border:"none", borderRadius:8, fontWeight:600, cursor: picked.length?"pointer":"not-allowed" }}>
-                {creating ? "Creating…" : newEmail ? `Create & Send Email (${picked.length} units)` : `Create Load (${picked.length} units)`}
+                {creating ? "Creating…" : form.loaderEmail
+                  ? `Create & Send Email (${picked.length} units)`
+                  : `Create Load (${picked.length} units)`}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* ── Edit Booking Modal ── */}
-      {bookingModal && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
-          display:"flex", alignItems:"center", justifyContent:"center", padding:20 }}>
+      {/* ── Edit Modal ── */}
+      {editModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:1000,
+          display:"flex", alignItems:"flex-start", justifyContent:"center", padding:20, overflowY:"auto" }}>
           <div style={{ background:"var(--bg-panel)", borderRadius:16, padding:28, width:"100%",
-            maxWidth:480, boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }}>
+            maxWidth:620, margin:"auto", boxShadow:"0 20px 60px rgba(0,0,0,0.5)" }}>
 
-            <h3 style={{ margin:"0 0 20px", color:"var(--text-primary)", fontSize:17 }}>
-              ✏️ Update Load — {bookingModal.name}
+            <h3 style={{ margin:"0 0 4px", color:"var(--text-primary)", fontSize:17 }}>
+              ✏️ Edit Load — {editModal.name}
             </h3>
+            <p style={{ fontSize:12, color:"var(--text-muted)", margin:"0 0 16px" }}>
+              Saving a booking number will update all {(editModal.orderIds||[]).length} linked orders.
+            </p>
 
-            <div style={{ display:"flex", flexDirection:"column", gap:12 }}>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>BOOKING NUMBER</label>
-                <input value={bookingInput} onChange={e=>setBookingInput(e.target.value)} style={inp}
-                  placeholder="Enter booking # from loader" autoFocus />
+            <div style={sec}>Booking & Status</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <div style={{ gridColumn:"1/-1" }}>
+                <Field label="BOOKING NUMBER" value={editForm.bookingNumber} onChange={setEF("bookingNumber")} placeholder="From loader" />
               </div>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>CONTAINER NUMBER</label>
-                <input value={containerInput} onChange={e=>setContainerInput(e.target.value)} style={inp} placeholder="XXXX0000000" />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>SEAL NUMBER</label>
-                <input value={sealInput} onChange={e=>setSealInput(e.target.value)} style={inp} placeholder="Seal #" />
-              </div>
-              <div>
-                <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>STATUS</label>
-                <select value={statusInput} onChange={e=>setStatusInput(e.target.value)} style={inp}>
-                  {["Pending","Booked","Loaded","Sailed","Arrived"].map(s=>(
-                    <option key={s}>{s}</option>
-                  ))}
+              <Field label="CONTAINER NUMBER" value={editForm.containerNumber} onChange={setEF("containerNumber")} placeholder="XXXX0000000" />
+              <Field label="SEAL NUMBER" value={editForm.sealNumber} onChange={setEF("sealNumber")} />
+              <div style={{ gridColumn:"1/-1" }}>
+                <label style={lbl}>STATUS</label>
+                <select value={editForm.status} onChange={e=>setEF("status")(e.target.value)} style={inp}>
+                  {["Pending","Booked","Loaded","Sailed","Arrived"].map(s=><option key={s}>{s}</option>)}
                 </select>
               </div>
             </div>
 
-            <p style={{ fontSize:12, color:"var(--text-muted)", marginTop:12 }}>
-              Saving a booking number will automatically update all {(bookingModal.orderIds||[]).length} orders in this load.
-            </p>
+            <div style={sec}>Load Details</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+              <Field label="VESSEL" value={editForm.vessel} onChange={setEF("vessel")} />
+              <Field label="PORT OF LOADING" value={editForm.pol} onChange={setEF("pol")} />
+              <div style={{ gridColumn:"1/-1" }}>
+                <Field label="PORT OF DISCHARGE" value={editForm.pod} onChange={setEF("pod")} />
+              </div>
+            </div>
 
-            <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:20 }}>
-              <button onClick={()=>setBookingModal(null)}
+            <ConsigneeFields vals={editForm} set={setEF} />
+
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:24 }}>
+              <button onClick={()=>setEditModal(null)}
                 style={{ padding:"8px 20px", background:"none", border:"1px solid var(--border)",
                   borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>
                 Cancel
               </button>
-              <button onClick={saveBooking} disabled={savingBooking}
+              <button onClick={saveEdit} disabled={savingEdit}
                 style={{ padding:"8px 24px", background:"#2563eb", color:"#fff",
                   border:"none", borderRadius:8, fontWeight:600, cursor:"pointer" }}>
-                {savingBooking ? "Saving…" : "Save"}
+                {savingEdit ? "Saving…" : "Save Changes"}
               </button>
             </div>
           </div>

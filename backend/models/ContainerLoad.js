@@ -1,7 +1,7 @@
 const mongoose = require("mongoose");
 
 const containerLoadSchema = new mongoose.Schema({
-  name:          { type: String, required: true },   // e.g. "LOAD-JUN29" or auto-generated
+  name:          { type: String, required: true },
   orderIds:      [{ type: mongoose.Schema.Types.ObjectId, ref: "Order" }],
   vessel:        { type: String, default: "" },
   pol:           { type: String, default: "" },
@@ -12,7 +12,21 @@ const containerLoadSchema = new mongoose.Schema({
   sealNumber:    { type: String, default: "" },
   notes:         { type: String, default: "" },
   emailSentAt:   { type: Date },
-  status:        { type: String, default: "Pending" }, // Pending | Booked | Loaded | Sailed
+  status:        { type: String, default: "Pending" },
+
+  // Consignee info (for loader email)
+  consigneeName:    { type: String, default: "" },
+  consigneeAddress: { type: String, default: "" },
+  consigneePhone:   { type: String, default: "" },
+  consigneeEmail:   { type: String, default: "" },
+  consigneeTin:     { type: String, default: "" },
+
+  // Notify party info
+  notifyName:    { type: String, default: "" },
+  notifyAddress: { type: String, default: "" },
+  notifyPhone:   { type: String, default: "" },
+  notifyEmail:   { type: String, default: "" },
+  notifyTin:     { type: String, default: "" },
 }, { timestamps: true });
 
 module.exports = mongoose.model("ContainerLoad", containerLoadSchema);
