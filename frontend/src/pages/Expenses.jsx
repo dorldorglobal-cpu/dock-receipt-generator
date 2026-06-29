@@ -11,6 +11,7 @@ const CATEGORIES = [
   "Port / Terminal Fees",
   "Loaders & Warehouses",
   "Software",
+  "Mailing Fees",
   "Legal Fees",
   "Office & Admin",
   "General Overhead",
@@ -52,6 +53,7 @@ const CAT_COLORS = {
   "Port / Terminal Fees": "#a78bfa",
   "Loaders & Warehouses": "#fb923c",
   "Software":             "#38bdf8",
+  "Mailing Fees":         "#f87171",
   "Legal Fees":           "#f472b6",
   "Office & Admin":       "#fbbf24",
   "General Overhead":     "var(--text-secondary)",
@@ -294,6 +296,7 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     "Port / Terminal Fees": "Cost of Goods Sold (COGS)",
     "Loaders & Warehouses": "Cost of Goods Sold (COGS)",
     "Software":             "Cost of Goods Sold (COGS)",
+    "Mailing Fees":         "Cost of Goods Sold (COGS)",
     "Legal Fees":           "Operating Expense",
     "Office & Admin":       "Operating Expense",
     "General Overhead":     "Operating Expense",
@@ -326,9 +329,9 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     if (/e-?z\s*cargo|savannah|i-?ship|cedars/.test(v))                          return "Loaders & Warehouses";
     if (/sallaum|acl\b|grimaldi|wallenius|eukor/.test(v))                        return "Ocean Freight";
     if (/neva\s*28|mtv trucking|hey logistics|lj logistics|\bfts\b|\bamf\b|ll trans|arc trucking|vs transit|victory towing|golden carrier|\bsdm\b|vikstatus|\b4rg\b|b strong|ponce|dispatch|tow|transport/.test(v)) return "Towing / Transport";
-    if (/copart|\biaa\b|iaai/.test(v))                                           return "Storage";
+    if (/copart|\biaa\b|iaai|manheim|adesa/.test(v))                             return "Storage";
     if (/central dispatch|chatgpt|claude|openai|anthropic/.test(v))              return "Software";
-    if (/manheim|adesa/.test(v))                                                 return "Storage";
+    if (/fedex|ups\b|usps|dhl/.test(v))                                          return "Mailing Fees";
     return "";
   };
 

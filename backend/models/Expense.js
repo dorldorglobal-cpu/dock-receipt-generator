@@ -7,6 +7,7 @@ const CATEGORIES = [
   "Port / Terminal Fees",
   "Loaders & Warehouses",
   "Software",
+  "Mailing Fees",
   "Legal Fees",
   "Office & Admin",
   "General Overhead",
