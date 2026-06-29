@@ -404,6 +404,7 @@ export default function OrderDetails() {
   const [sallaumNotifySubject, setSallaumNotifySubject] = useState("");
   const [sallaumNotifyBody,    setSallaumNotifyBody]    = useState("");
   const [sallaumSending,       setSallaumSending]       = useState(false);
+  const [sallaumPendingNoTitle, setSallaumPendingNoTitle] = useState(null); // queued no-title modal
 
   useEffect(() => {
     fetchOrder();
@@ -1358,15 +1359,27 @@ export default function OrderDetails() {
       const booking = payload.bookingNumber || order.bookingNumber || "";
       const ymm  = payload.vehicleYearMakeModel || [order.year, order.make, order.model].filter(Boolean).join(" ");
       const vin  = payload.vin || order.vin || "";
-      if (isNoTitle) {
-        setSallaumNotifySubject(`${booking} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
-        setSallaumNotifyBody(`Please approve no title delivery for this unit.`);
-      } else {
-        const condLabel = condition === "forklift" ? "Forklift" : "Nonrunner";
+      const isForklift = condition === "forklift";
+      const isNonrunner = condition === "nonrunner";
+
+      if ((isForklift || isNonrunner) && isNoTitle) {
+        // Both conditions — open forklift/nonrunner modal first, queue no-title after
+        const condLabel = isForklift ? "Forklift" : "Nonrunner";
         setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)} ${condLabel.toUpperCase()}`);
         setSallaumNotifyBody(`Please update to ${condLabel}.`);
+        setSallaumNotify(true);
+        // Queue no-title modal to open after user sends/closes the first one
+        setSallaumPendingNoTitle({ booking, ymm, vin });
+      } else if (isNoTitle) {
+        setSallaumNotifySubject(`${booking} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
+        setSallaumNotifyBody(`Please approve no title delivery for this unit.`);
+        setSallaumNotify(true);
+      } else {
+        const condLabel = isForklift ? "Forklift" : "Nonrunner";
+        setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)} ${condLabel.toUpperCase()}`);
+        setSallaumNotifyBody(`Please update to ${condLabel}.`);
+        setSallaumNotify(true);
       }
-      setSallaumNotify(true);
     }
 
     setMessage("Dock Receipt generated & uploaded");
@@ -1460,6 +1473,14 @@ export default function OrderDetails() {
       fetchOrder();
       setSallaumNotify(false);
       setMessage("✅ Sallaum notified successfully");
+      // If a no-title email is queued, open it now
+      if (sallaumPendingNoTitle) {
+        const { booking, ymm, vin } = sallaumPendingNoTitle;
+        setSallaumNotifySubject(`${booking} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
+        setSallaumNotifyBody(`Please approve no title delivery for this unit.`);
+        setSallaumNotify(true);
+        setSallaumPendingNoTitle(null);
+      }
     } catch (e) {
       setMessage("❌ Failed to notify Sallaum: " + e.message);
     } finally {
@@ -1859,15 +1880,25 @@ export default function OrderDetails() {
           const isNoTitle2 = titleStat2 === "no title";
           if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift" || isNoTitle2)) {
             const booking2 = order.bookingNumber || "";
-            if (isNoTitle2) {
-              setSallaumNotifySubject(`${booking2} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
-              setSallaumNotifyBody(`Please approve no title delivery for this unit.`);
-            } else {
-              const condLabel2 = cond2 === "forklift" ? "Forklift" : "Nonrunner";
+            const isForklift2 = cond2 === "forklift";
+            const isNonrunner2 = cond2 === "nonrunner";
+            if ((isForklift2 || isNonrunner2) && isNoTitle2) {
+              // Both — open condition modal first, queue no-title after
+              const condLabel2 = isForklift2 ? "Forklift" : "Nonrunner";
               setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)} ${condLabel2.toUpperCase()}`);
               setSallaumNotifyBody(`Please update to ${condLabel2}.`);
+              setSallaumNotify(true);
+              setSallaumPendingNoTitle({ booking: booking2, ymm, vin });
+            } else if (isNoTitle2) {
+              setSallaumNotifySubject(`${booking2} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
+              setSallaumNotifyBody(`Please approve no title delivery for this unit.`);
+              setSallaumNotify(true);
+            } else {
+              const condLabel2 = isForklift2 ? "Forklift" : "Nonrunner";
+              setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)} ${condLabel2.toUpperCase()}`);
+              setSallaumNotifyBody(`Please update to ${condLabel2}.`);
+              setSallaumNotify(true);
             }
-            setSallaumNotify(true);
           }
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
           ✉️ Send DR
