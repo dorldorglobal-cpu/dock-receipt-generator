@@ -2569,13 +2569,13 @@ export default function OrderDetails() {
                           <td style={{ padding:"4px 6px" }}>
                             <input key={`ts-${charges.towingCharge}`} type="number" autoFocus
                               defaultValue={charges.towingCharge || ""}
-                              onBlur={e => { saveInternalField("towingCharge", e.target.value); setEditingInternalRow(null); }}
+                              onBlur={e => { saveInternalField("towingCharge", e.target.value); }}
                               style={inpStyle("var(--accent)")} placeholder="0" />
                           </td>
                           <td style={{ padding:"4px 6px" }}>
                             <input key={`tc-${charges.towingCost}`} type="number"
                               defaultValue={charges.towingCost || ""}
-                              onBlur={e => { saveInternalField("towingCost", e.target.value); setEditingInternalRow(null); }}
+                              onBlur={e => { saveInternalField("towingCost", e.target.value); }}
                               style={inpStyle("#f87171")} placeholder="0" />
                           </td>
                         </>
