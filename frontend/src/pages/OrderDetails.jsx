@@ -486,10 +486,13 @@ export default function OrderDetails() {
     // ── Auto-populate towing / ocean freight from pricing table ──────────
     // Fills in sell prices AND costs wherever they are still $0.
     // Saves silently so the values persist on refresh.
-    const needsTowing     = !currentCharges.towingCharge || Number(currentCharges.towingCharge) === 0;
-    const needsOcean      = !currentCharges.oceanFreight || Number(currentCharges.oceanFreight) === 0;
-    const needsTowingCost = !currentCharges.towingCost   || Number(currentCharges.towingCost)   === 0;
-    const needsOceanCost  = !currentCharges.oceanCost    || Number(currentCharges.oceanCost)    === 0;
+    if (data.requestType === "Inland Only") return; // no ocean freight for inland orders
+
+    // "" means user explicitly cleared — don't refill. null/undefined/"0" means never set.
+    const needsTowing     = currentCharges.towingCharge !== "" && (!currentCharges.towingCharge || Number(currentCharges.towingCharge) === 0);
+    const needsOcean      = currentCharges.oceanFreight !== "" && (!currentCharges.oceanFreight || Number(currentCharges.oceanFreight) === 0);
+    const needsTowingCost = currentCharges.towingCost   !== "" && (!currentCharges.towingCost   || Number(currentCharges.towingCost)   === 0);
+    const needsOceanCost  = currentCharges.oceanCost    !== "" && (!currentCharges.oceanCost    || Number(currentCharges.oceanCost)    === 0);
     if (!needsTowing && !needsOcean && !needsTowingCost && !needsOceanCost) return;
 
     // Derive pickup city: use stored pickupCity, or extract first word from pickupLocation.
@@ -2775,8 +2778,8 @@ export default function OrderDetails() {
                               <button
                                 onClick={async () => {
                                   if (!window.confirm("Remove Ocean Freight charge?")) return;
-                                  await saveInternalField("oceanFreight", "0");
-                                  await saveInternalField("oceanCost", "0");
+                                  await saveInternalField("oceanFreight", "");
+                                  await saveInternalField("oceanCost", "");
                                 }}
                                 title="Remove ocean freight"
                                 style={{ background:"none", border:"none", cursor:"pointer", color:"#f87171", fontSize:12, padding:"2px 4px" }}>
