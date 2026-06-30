@@ -12,7 +12,7 @@ const orderSchema = new mongoose.Schema(
 
     requestType: {
       type: String,
-      enum: ["RORO", "Container"],
+      enum: ["RORO", "Container", "Inland Only"],
       required: true,
     },
 
