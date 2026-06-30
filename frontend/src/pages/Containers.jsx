@@ -39,6 +39,32 @@ function F({ label, value, onChange, placeholder, type="text", full }) {
   );
 }
 
+// Defined at module level (not inside the component) so React never recreates it
+// as a new component type on re-render — that was causing inputs to lose focus
+// after every keystroke.
+function ConsigneeSection({ vals, set }) {
+  return (
+    <>
+      <div style={sec()}>Consignee Info</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <F label="NAME" value={vals.consigneeName} onChange={set("consigneeName")} full />
+        <F label="ADDRESS / CITY / COUNTRY" value={vals.consigneeAddress} onChange={set("consigneeAddress")} placeholder="Street, City, Country" full />
+        <F label="PHONE" value={vals.consigneePhone} onChange={set("consigneePhone")} placeholder="+1 000 000 0000" />
+        <F label="EMAIL" value={vals.consigneeEmail} onChange={set("consigneeEmail")} type="email" />
+        <F label="TIN #" value={vals.consigneeTin} onChange={set("consigneeTin")} full />
+      </div>
+      <div style={sec()}>Notify Party Info</div>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+        <F label="NAME" value={vals.notifyName} onChange={set("notifyName")} full />
+        <F label="ADDRESS / CITY / COUNTRY" value={vals.notifyAddress} onChange={set("notifyAddress")} placeholder="Street, City, Country" full />
+        <F label="PHONE" value={vals.notifyPhone} onChange={set("notifyPhone")} placeholder="+1 000 000 0000" />
+        <F label="EMAIL" value={vals.notifyEmail} onChange={set("notifyEmail")} type="email" />
+        <F label="TIN #" value={vals.notifyTin} onChange={set("notifyTin")} full />
+      </div>
+    </>
+  );
+}
+
 const BLANK = {
   name:"", vessel:"", pol:"NJ", pod:"", loaderEmail:"", notes:"",
   consigneeName:"", consigneeAddress:"", consigneePhone:"", consigneeEmail:"", consigneeTin:"",
@@ -268,28 +294,6 @@ export default function Containers() {
       || (l.orderIds||[]).some(o=>
           `${o.vin||""} ${o.customerName||""} ${o.refNumber||""}`.toLowerCase().includes(s));
   });
-
-  // ── Shared consignee/notify form ─────────────────────────────────────────
-  const ConsigneeSection = ({ vals, set }) => (
-    <>
-      <div style={sec()}>Consignee Info</div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <F label="NAME" value={vals.consigneeName} onChange={set("consigneeName")} full />
-        <F label="ADDRESS / CITY / COUNTRY" value={vals.consigneeAddress} onChange={set("consigneeAddress")} placeholder="Street, City, Country" full />
-        <F label="PHONE" value={vals.consigneePhone} onChange={set("consigneePhone")} placeholder="+1 000 000 0000" />
-        <F label="EMAIL" value={vals.consigneeEmail} onChange={set("consigneeEmail")} type="email" />
-        <F label="TIN #" value={vals.consigneeTin} onChange={set("consigneeTin")} full />
-      </div>
-      <div style={sec()}>Notify Party Info</div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-        <F label="NAME" value={vals.notifyName} onChange={set("notifyName")} full />
-        <F label="ADDRESS / CITY / COUNTRY" value={vals.notifyAddress} onChange={set("notifyAddress")} placeholder="Street, City, Country" full />
-        <F label="PHONE" value={vals.notifyPhone} onChange={set("notifyPhone")} placeholder="+1 000 000 0000" />
-        <F label="EMAIL" value={vals.notifyEmail} onChange={set("notifyEmail")} type="email" />
-        <F label="TIN #" value={vals.notifyTin} onChange={set("notifyTin")} full />
-      </div>
-    </>
-  );
 
   const TABS = [
     { id:"details",   label:"📋 Details" },

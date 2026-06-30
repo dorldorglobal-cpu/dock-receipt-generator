@@ -211,11 +211,11 @@ export default function Orders() {
                     <div style={{ marginTop: 3 }}>
                       <span style={{
                         fontSize: 9, fontWeight: 700, padding: "1px 5px", borderRadius: 8, letterSpacing: "0.04em",
-                        background: o.requestType === "Container" ? "rgba(251,191,36,0.12)" : "rgba(96,165,250,0.12)",
-                        color: o.requestType === "Container" ? "#fbbf24" : "#60a5fa",
-                        border: `1px solid ${o.requestType === "Container" ? "rgba(251,191,36,0.3)" : "rgba(96,165,250,0.3)"}`,
+                        background: o.requestType === "Container" ? "rgba(251,191,36,0.12)" : o.requestType === "Inland Only" ? "rgba(217,119,6,0.12)" : "rgba(96,165,250,0.12)",
+                        color: o.requestType === "Container" ? "#fbbf24" : o.requestType === "Inland Only" ? "#d97706" : "#60a5fa",
+                        border: `1px solid ${o.requestType === "Container" ? "rgba(251,191,36,0.3)" : o.requestType === "Inland Only" ? "rgba(217,119,6,0.3)" : "rgba(96,165,250,0.3)"}`,
                       }}>
-                        {o.requestType === "Container" ? "📦 CNTR" : "⚓ RORO"}
+                        {o.requestType === "Container" ? "📦 CNTR" : o.requestType === "Inland Only" ? "🚛 INLAND" : "⚓ RORO"}
                       </span>
                     </div>
                   )}

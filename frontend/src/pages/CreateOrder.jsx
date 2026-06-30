@@ -738,7 +738,7 @@ export default function CreateOrder() {
         <div className="dashboard-card" style={{ cursor:"default" }}>
           <span style={{ marginBottom:8, display:"block" }}>Order Type</span>
           <div style={{ display:"flex", gap:8 }}>
-            {["RORO","Container"].map(t => (
+            {["RORO","Container","Inland Only"].map(t => (
               <button key={t} type="button"
                 onClick={() => {
                   update("requestType", t);
@@ -769,7 +769,7 @@ export default function CreateOrder() {
                   flex:1, padding:"7px 0", borderRadius:8, cursor:"pointer",
                   fontWeight:700, fontSize:13, border:"none",
                   background: form.requestType === t
-                    ? (t === "Container" ? "#2563eb" : "#059669")
+                    ? (t === "Container" ? "#2563eb" : t === "Inland Only" ? "#d97706" : "#059669")
                     : "var(--bg-panel)",
                   color: form.requestType === t ? "#fff" : "var(--text-muted)",
                   outline: form.requestType === t ? "none" : "1px solid var(--border)",

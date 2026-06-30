@@ -2075,7 +2075,7 @@ export default function OrderDetails() {
           <div>
             <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>ORDER TYPE</label>
             <div style={{ display:"flex", gap:6 }}>
-              {["RORO","Container"].map(t => {
+              {["RORO","Container","Inland Only"].map(t => {
                 const active = (order.requestType || "RORO") === t;
                 return (
                   <button key={t} type="button"
@@ -3430,7 +3430,7 @@ export default function OrderDetails() {
 
             {cardPopup.card === "orderType" && (
               <div style={{ display:"flex", gap:10 }}>
-                {["RORO","Container"].map(t => (
+                {["RORO","Container","Inland Only"].map(t => (
                   <button key={t} type="button"
                     onClick={() => setCardPopup(p => ({ ...p, form: { requestType: t } }))}
                     style={{ flex:1, padding:"12px 0", borderRadius:8, border:"none", cursor:"pointer", fontWeight:700, fontSize:14,
@@ -3607,13 +3607,13 @@ export default function OrderDetails() {
 
             {/* Request Type toggle */}
             <div style={{ display:"flex", gap:8, marginBottom:12 }}>
-              {["RORO","Container"].map(t => (
+              {["RORO","Container","Inland Only"].map(t => (
                 <button key={t} type="button"
                   onClick={() => setEditForm(f => ({ ...f, requestType: t, containerSize:"", shippingLine:"", pol:"" }))}
                   style={{
                     padding:"6px 18px", borderRadius:20, cursor:"pointer", fontSize:12, fontWeight:600,
                     border: editForm.requestType === t ? "none" : "1px solid var(--border)",
-                    background: editForm.requestType === t ? (t === "Container" ? "#2563eb" : "#059669") : "var(--bg-panel)",
+                    background: editForm.requestType === t ? (t === "Container" ? "#2563eb" : t === "Inland Only" ? "#d97706" : "#059669") : "var(--bg-panel)",
                     color: editForm.requestType === t ? "#fff" : "var(--text-secondary)",
                   }}>{t}</button>
               ))}
