@@ -2043,7 +2043,7 @@ export default function Expenses() {
                                       : {};
                                     return { ...r, markPartial: toggling, ...extraIds };
                                   }))}
-                                  style={{ fontSize:10, color: row.markPartial ? "#fb923c" : "#a78bfa", border:`1px solid ${row.markPartial ? "#fb923c" : "#a78bfa"}`, borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  style={{ fontSize:10, color:"#fff", border:`1px solid ${row.markPartial ? "#fb923c" : "#a78bfa"}`, borderRadius:5, padding:"2px 6px", background: row.markPartial ? "#fb923c" : "#a78bfa", cursor:"pointer", fontWeight:700 }}>
                                   {row.markPartial ? "½ Partial ✓" : "½ Partial"}
                                 </button>
                               )}
@@ -2071,7 +2071,7 @@ export default function Expenses() {
                                       createBill: true,
                                     })) };
                                   }))}
-                                  style={{ fontSize:10, color: row.splitBills ? "#f87171" : "#fbbf24", border:`1px solid ${row.splitBills ? "#f87171" : "#fbbf24"}`, borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  style={{ fontSize:10, color: row.splitBills ? "#fff" : "#1a1a1a", border:`1px solid ${row.splitBills ? "#f87171" : "#fbbf24"}`, borderRadius:5, padding:"2px 6px", background: row.splitBills ? "#f87171" : "#fbbf24", cursor:"pointer", fontWeight:700 }}>
                                   {row.splitBills ? "✕ Cancel Split" : `✂ Split${row.splitSeed?.length > 1 ? ` (${row.splitSeed.length})` : ""}`}
                                 </button>
                               )}
