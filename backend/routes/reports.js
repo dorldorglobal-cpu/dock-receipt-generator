@@ -22,16 +22,21 @@ const dateQ = (from, to, field) => {
 router.get("/income-by-customer", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const orders = await Order.find(dateQ(from, to, "createdAt")).lean();
+    const orders = await Order.find(dateQ(from, to, "createdAt")).sort({ createdAt: -1 }).lean();
     const map = {};
     for (const o of orders) {
       const key = (o.customerName || "—").trim();
-      if (!map[key]) map[key] = { customer: key, orders: 0, billed: 0, collected: 0, outstanding: 0 };
-      map[key].orders++;
       const amt = orderTotal(o);
+      if (!map[key]) map[key] = { customer: key, orders: 0, billed: 0, collected: 0, outstanding: 0, items: [] };
+      map[key].orders++;
       map[key].billed += amt;
       if (o.status === "Completed") map[key].collected += amt;
       else map[key].outstanding += amt;
+      map[key].items.push({
+        refNumber: o.refNumber, date: o.createdAt, status: o.status,
+        vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
+        vin: o.vin || "", pod: o.pod || "", amount: amt,
+      });
     }
     const rows   = Object.values(map).sort((a, b) => b.billed - a.billed);
     const totals = rows.reduce((t, r) => ({
@@ -46,14 +51,21 @@ router.get("/income-by-customer", async (req, res) => {
 router.get("/income-by-destination", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const orders = await Order.find(dateQ(from, to, "createdAt")).lean();
+    const orders = await Order.find(dateQ(from, to, "createdAt")).sort({ createdAt: -1 }).lean();
     const map = {};
     for (const o of orders) {
       const key = (o.pod || "Unknown").trim();
-      if (!map[key]) map[key] = { destination: key, orders: 0, completed: 0, billed: 0 };
+      const amt = orderTotal(o);
+      if (!map[key]) map[key] = { destination: key, orders: 0, completed: 0, billed: 0, items: [] };
       map[key].orders++;
-      map[key].billed += orderTotal(o);
+      map[key].billed += amt;
       if (o.status === "Completed") map[key].completed++;
+      map[key].items.push({
+        refNumber: o.refNumber, date: o.createdAt, status: o.status,
+        customer: o.customerName || "—",
+        vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
+        vin: o.vin || "", amount: amt,
+      });
     }
     const rows   = Object.values(map).sort((a, b) => b.billed - a.billed);
     const totals = { orders: rows.reduce((s, r) => s + r.orders, 0), billed: rows.reduce((s, r) => s + r.billed, 0) };
@@ -65,14 +77,21 @@ router.get("/income-by-destination", async (req, res) => {
 router.get("/income-by-route", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const orders = await Order.find(dateQ(from, to, "createdAt")).lean();
+    const orders = await Order.find(dateQ(from, to, "createdAt")).sort({ createdAt: -1 }).lean();
     const map = {};
     for (const o of orders) {
       const pol = o.pol || "?", pod = o.pod || "?";
       const key = `${pol} > ${pod}`;
-      if (!map[key]) map[key] = { route: key, pol, pod, orders: 0, billed: 0 };
+      const amt = orderTotal(o);
+      if (!map[key]) map[key] = { route: key, pol, pod, orders: 0, billed: 0, items: [] };
       map[key].orders++;
-      map[key].billed += orderTotal(o);
+      map[key].billed += amt;
+      map[key].items.push({
+        refNumber: o.refNumber, date: o.createdAt, status: o.status,
+        customer: o.customerName || "—",
+        vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
+        vin: o.vin || "", amount: amt,
+      });
     }
     const rows   = Object.values(map).sort((a, b) => b.billed - a.billed);
     const totals = { orders: rows.reduce((s, r) => s + r.orders, 0), billed: rows.reduce((s, r) => s + r.billed, 0) };
@@ -136,15 +155,20 @@ router.get("/aged-payables", async (req, res) => {
 router.get("/purchases-by-vendor", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const expenses = await Expense.find(dateQ(from, to, "date")).lean();
+    const expenses = await Expense.find(dateQ(from, to, "date")).sort({ date: -1 }).lean();
     const map = {};
     for (const e of expenses) {
       const key = (e.vendor || "Unknown").trim();
-      if (!map[key]) map[key] = { vendor: key, category: e.category, bills: 0, total: 0, paid: 0, unpaid: 0 };
+      if (!map[key]) map[key] = { vendor: key, category: e.category, bills: 0, total: 0, paid: 0, unpaid: 0, items: [] };
       map[key].bills++;
       map[key].total += e.amount;
       if (e.status === "paid") map[key].paid += e.amount;
       else map[key].unpaid += e.amount;
+      map[key].items.push({
+        _id: e._id, date: e.date, description: e.description,
+        orderRef: e.orderRef || "", invoiceNumber: e.invoiceNumber || "",
+        amount: e.amount, paidAmount: e.paidAmount || 0, status: e.status,
+      });
     }
     const rows   = Object.values(map).sort((a, b) => b.total - a.total);
     const totals = rows.reduce((t, r) => ({

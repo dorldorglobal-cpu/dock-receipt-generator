@@ -132,6 +132,61 @@ function AgingStrip({ buckets, total }) {
   );
 }
 
+const STATUS_CLR = { paid: "#34d399", partial: "#fb923c", unpaid: "#f87171",
+  Completed: "#34d399", Sailed: "#34d399", Arrived: "#22d3ee", "Waiting to Sail": "#fb923c",
+  "Picked Up": "#a78bfa", "Awaiting Pickup": "#fbbf24", "New Order": "#60a5fa" };
+
+// Reusable expandable grouped table
+function ExpandTable({ headers, rows, footer, rights = [], subHeaders, renderSub }) {
+  const [expanded, setExpanded] = useState({});
+  if (!rows?.length) return <div style={{ color:"var(--text-muted)", padding:32, textAlign:"center" }}>No data for this period.</div>;
+  const s = (i) => rights.includes(i) ? { textAlign:"right" } : {};
+  return (
+    <div style={{ overflowX:"auto" }}>
+      <table className="orders-table" style={{ width:"100%" }}>
+        <thead>
+          <tr>
+            <th style={{ width:28 }}></th>
+            {headers.map((h, i) => <th key={i} style={s(i)}>{h}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, ri) => {
+            const open = expanded[ri];
+            const items = r.__items || [];
+            return [
+              <tr key={`r${ri}`} onClick={() => items.length && setExpanded(e => ({ ...e, [ri]: !e[ri] }))}
+                style={{ cursor: items.length ? "pointer" : "default",
+                  background: open ? "var(--bg-elevated)" : "transparent" }}
+                onMouseEnter={e => { if (items.length) e.currentTarget.style.background = "var(--bg-elevated)"; }}
+                onMouseLeave={e => { e.currentTarget.style.background = open ? "var(--bg-elevated)" : "transparent"; }}>
+                <td style={{ textAlign:"center", color:"var(--text-muted)", fontSize:11 }}>
+                  {items.length ? (open ? "▼" : "▶") : ""}
+                </td>
+                {r.__cells.map((c, ci) => <td key={ci} style={s(ci)}>{c}</td>)}
+              </tr>,
+              open && items.map((item, idx) => (
+                <tr key={`sub${ri}-${idx}`} style={{ background:"var(--bg-base)", borderBottom:"1px solid var(--border-muted)" }}>
+                  <td></td>
+                  {renderSub(item)}
+                </tr>
+              )),
+            ];
+          })}
+        </tbody>
+        {footer && (
+          <tfoot>
+            <tr style={{ borderTop:"2px solid var(--border)" }}>
+              <td></td>
+              {footer.map((c, i) => <td key={i} style={{ ...s(i), fontWeight:700 }}>{c}</td>)}
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
 // Simple table: headers = string[], rows = array-of-arrays (can contain JSX for color), rights = col indexes that are right-aligned
 function RT({ headers, rows, footer, rights = [] }) {
   if (!rows?.length) return (
@@ -221,12 +276,12 @@ function IncomeByCustomer({ d, sub, filter }) {
     collected: t.collected + r.collected, outstanding: t.outstanding + r.outstanding,
   }), { orders: 0, billed: 0, collected: 0, outstanding: 0 });
   const H = ["Customer", "Orders", "Total Billed", "Collected", "Outstanding"];
-  const R = rows.map((r) => [
-    r.customer, r.orders,
-    <span style={{ color: "var(--accent)" }}>{f$(r.billed)}</span>,
-    <span style={{ color: "#34d399" }}>{f$(r.collected)}</span>,
-    <span style={{ color: r.outstanding > 0 ? "#f87171" : "var(--text-muted)" }}>{f$(r.outstanding)}</span>,
-  ]);
+  const R = rows.map((r) => ({ __items: r.items || [], __cells: [
+    <strong>{r.customer}</strong>, r.orders,
+    <span style={{ color:"var(--accent)", fontFamily:"monospace" }}>{f$(r.billed)}</span>,
+    <span style={{ color:"#34d399", fontFamily:"monospace" }}>{f$(r.collected)}</span>,
+    <span style={{ color: r.outstanding > 0 ? "#f87171" : "var(--text-muted)", fontFamily:"monospace" }}>{f$(r.outstanding)}</span>,
+  ]}));
   const F    = ["TOTALS", totals.orders, f$(totals.billed), f$(totals.collected), f$(totals.outstanding)];
   const Rcsv = rows.map((r) => [r.customer, r.orders, f$(r.billed), f$(r.collected), f$(r.outstanding)]);
   return <>
@@ -237,7 +292,22 @@ function IncomeByCustomer({ d, sub, filter }) {
       { label: "Outstanding",  val: f$(totals.outstanding), clr: totals.outstanding > 0 ? "#f87171" : "#34d399" },
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Income-by-Customer")} onPDF={() => dlPDF("Income by Customer", sub, H, Rcsv, F)} />
-    <RT headers={H} rows={R} footer={F} rights={[1, 2, 3, 4]} />
+    <ExpandTable headers={H} rows={R} footer={F} rights={[1,2,3,4]}
+      renderSub={item => [
+        <td style={{ padding:"6px 8px" }}>
+          <span style={{ color:"var(--accent)", fontWeight:700, fontFamily:"monospace", fontSize:12 }}>#{item.refNumber}</span>
+          <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:8 }}>{fD(item.date)}</span>
+        </td>,
+        <td style={{ padding:"6px 8px", fontSize:12 }}>{item.vehicle}{item.vin ? <span style={{ color:"var(--text-muted)", fontSize:10 }}> ···{item.vin.slice(-6)}</span> : ""}</td>,
+        <td style={{ padding:"6px 8px", fontSize:11 }}>{item.pod || "—"}</td>,
+        <td style={{ padding:"6px 8px", textAlign:"right", fontFamily:"monospace", fontSize:12 }}>{f$(item.amount)}</td>,
+        <td style={{ padding:"6px 8px", textAlign:"right" }}>
+          <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:10,
+            background:(STATUS_CLR[item.status]||"#888")+"22", color:STATUS_CLR[item.status]||"#888" }}>
+            {item.status}
+          </span>
+        </td>,
+      ]} />
   </>;
 }
 
@@ -245,10 +315,10 @@ function IncomeByDestination({ d, sub, filter }) {
   const rows   = applyFilter(d.rows || [], filter, r => r.destination);
   const totals = { orders: rows.reduce((s,r)=>s+r.orders,0), billed: rows.reduce((s,r)=>s+r.billed,0) };
   const H = ["Destination", "Orders", "Completed", "Total Billed"];
-  const R = rows.map((r) => [
-    r.destination, r.orders, r.completed,
-    <span style={{ color: "var(--accent)" }}>{f$(r.billed)}</span>,
-  ]);
+  const R = rows.map((r) => ({ __items: r.items || [], __cells: [
+    <strong>{r.destination}</strong>, r.orders, r.completed,
+    <span style={{ color:"var(--accent)", fontFamily:"monospace" }}>{f$(r.billed)}</span>,
+  ]}));
   const F    = ["TOTALS", totals.orders, "", f$(totals.billed)];
   const Rcsv = rows.map((r) => [r.destination, r.orders, r.completed, f$(r.billed)]);
   return <>
@@ -258,7 +328,22 @@ function IncomeByDestination({ d, sub, filter }) {
       { label: "Total Billed", val: f$(totals.billed), clr: "var(--accent)" },
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Income-by-Destination")} onPDF={() => dlPDF("Income by Destination", sub, H, Rcsv, F)} />
-    <RT headers={H} rows={R} footer={F} rights={[1, 2, 3]} />
+    <ExpandTable headers={H} rows={R} footer={F} rights={[1,2,3]}
+      renderSub={item => [
+        <td style={{ padding:"6px 8px" }}>
+          <span style={{ color:"var(--accent)", fontWeight:700, fontFamily:"monospace", fontSize:12 }}>#{item.refNumber}</span>
+          <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:8 }}>{fD(item.date)}</span>
+        </td>,
+        <td style={{ padding:"6px 8px", fontSize:12 }}>{item.customer}</td>,
+        <td style={{ padding:"6px 8px", fontSize:12 }}>{item.vehicle}{item.vin ? <span style={{ color:"var(--text-muted)", fontSize:10 }}> ···{item.vin.slice(-6)}</span> : ""}</td>,
+        <td style={{ padding:"6px 8px", textAlign:"right", fontFamily:"monospace", fontSize:12 }}>{f$(item.amount)}</td>,
+        <td style={{ padding:"6px 8px", textAlign:"right" }}>
+          <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:10,
+            background:(STATUS_CLR[item.status]||"#888")+"22", color:STATUS_CLR[item.status]||"#888" }}>
+            {item.status}
+          </span>
+        </td>,
+      ]} />
   </>;
 }
 
@@ -266,10 +351,10 @@ function IncomeByRoute({ d, sub, filter }) {
   const rows   = applyFilter(d.rows || [], filter, r => r.route, r => r.pol, r => r.pod);
   const totals = { orders: rows.reduce((s,r)=>s+r.orders,0), billed: rows.reduce((s,r)=>s+r.billed,0) };
   const H = ["Route", "Origin (POL)", "Destination (POD)", "Orders", "Total Billed"];
-  const R = rows.map((r) => [
-    r.route, r.pol, r.pod, r.orders,
-    <span style={{ color: "var(--accent)" }}>{f$(r.billed)}</span>,
-  ]);
+  const R = rows.map((r) => ({ __items: r.items || [], __cells: [
+    <strong>{r.route}</strong>, r.pol, r.pod, r.orders,
+    <span style={{ color:"var(--accent)", fontFamily:"monospace" }}>{f$(r.billed)}</span>,
+  ]}));
   const F    = ["TOTALS", "", "", totals.orders, f$(totals.billed)];
   const Rcsv = rows.map((r) => [r.route, r.pol, r.pod, r.orders, f$(r.billed)]);
   return <>
@@ -279,7 +364,22 @@ function IncomeByRoute({ d, sub, filter }) {
       { label: "Total Billed", val: f$(totals.billed), clr: "var(--accent)" },
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Income-by-Route")} onPDF={() => dlPDF("Income by Route", sub, H, Rcsv, F)} />
-    <RT headers={H} rows={R} footer={F} rights={[3, 4]} />
+    <ExpandTable headers={H} rows={R} footer={F} rights={[3,4]}
+      renderSub={item => [
+        <td style={{ padding:"6px 8px" }}>
+          <span style={{ color:"var(--accent)", fontWeight:700, fontFamily:"monospace", fontSize:12 }}>#{item.refNumber}</span>
+          <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:8 }}>{fD(item.date)}</span>
+        </td>,
+        <td style={{ padding:"6px 8px", fontSize:12 }}>{item.customer}</td>,
+        <td style={{ padding:"6px 8px", fontSize:12 }}>{item.vehicle}{item.vin ? <span style={{ color:"var(--text-muted)", fontSize:10 }}> ···{item.vin.slice(-6)}</span> : ""}</td>,
+        <td style={{ padding:"6px 8px", textAlign:"right", fontFamily:"monospace", fontSize:12 }}>{f$(item.amount)}</td>,
+        <td style={{ padding:"6px 8px", textAlign:"right" }}>
+          <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:10,
+            background:(STATUS_CLR[item.status]||"#888")+"22", color:STATUS_CLR[item.status]||"#888" }}>
+            {item.status}
+          </span>
+        </td>,
+      ]} />
   </>;
 }
 
@@ -438,12 +538,15 @@ function PurchasesByVendor({ d, sub, filter }) {
     paid: t.paid + r.paid,   unpaid: t.unpaid + r.unpaid,
   }), { bills: 0, total: 0, paid: 0, unpaid: 0 });
   const H = ["Vendor", "Category", "Bills", "Total", "Paid", "Unpaid"];
-  const R = rows.map((r) => [
-    r.vendor, r.category, r.bills,
-    f$(r.total),
-    <span style={{ color: "#34d399" }}>{f$(r.paid)}</span>,
-    <span style={{ color: r.unpaid > 0 ? "#f87171" : "var(--text-muted)" }}>{f$(r.unpaid)}</span>,
-  ]);
+  const R = rows.map((r) => ({
+    __cells: [
+      r.vendor, r.category, r.bills,
+      f$(r.total),
+      <span style={{ color: "#34d399" }}>{f$(r.paid)}</span>,
+      <span style={{ color: r.unpaid > 0 ? "#f87171" : "var(--text-muted)" }}>{f$(r.unpaid)}</span>,
+    ],
+    __items: r.items || [],
+  }));
   const F    = ["TOTALS", "", totals.bills, f$(totals.total), f$(totals.paid), f$(totals.unpaid)];
   const Rcsv = rows.map((r) => [r.vendor, r.category, r.bills, f$(r.total), f$(r.paid), f$(r.unpaid)]);
   return <>
@@ -454,7 +557,20 @@ function PurchasesByVendor({ d, sub, filter }) {
       { label: "Unpaid",      val: f$(totals.unpaid), clr: totals.unpaid > 0 ? "#f87171" : "#34d399" },
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Purchases-by-Vendor")} onPDF={() => dlPDF("Purchases by Vendor", sub, H, Rcsv, F)} />
-    <RT headers={H} rows={R} footer={F} rights={[2, 3, 4, 5]} />
+    <ExpandTable headers={H} rows={R} footer={F} rights={[2, 3, 4, 5]}
+      renderSub={(item) => [
+        <td key="d" style={{ color: "var(--text-muted)", fontSize: 12 }}>{item.date ? new Date(item.date).toLocaleDateString() : "—"}</td>,
+        <td key="desc" style={{ fontSize: 12 }}>{item.description || "—"}</td>,
+        <td key="ref" style={{ fontSize: 12, color: "var(--text-muted)" }}>{item.orderRef || "—"}</td>,
+        <td key="inv" style={{ fontSize: 12, color: "var(--text-muted)" }}>{item.invoiceNumber || "—"}</td>,
+        <td key="amt" style={{ textAlign: "right", fontSize: 12 }}>{f$(item.amount)}</td>,
+        <td key="st" style={{ textAlign: "right", fontSize: 12 }}>
+          <span style={{ background: STATUS_CLR[item.status] || "#64748b", color: "#fff", borderRadius: 4, padding: "1px 7px", fontSize: 11 }}>
+            {item.status || "—"}
+          </span>
+        </td>,
+      ]}
+    />
   </>;
 }
 
