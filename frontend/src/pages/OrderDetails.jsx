@@ -474,6 +474,7 @@ export default function OrderDetails() {
 
     setOrder(data);
     document.title = `${data.refNumber || "Order"} | DOR LDOR GLOBAL OPS`;
+    return data; // allow callers to use the freshly-fetched order
     fetchBills(data.refNumber);
     setNoteText(data.notes || "");
     setHoldNote(data.holdNote || "");
@@ -1025,8 +1026,19 @@ export default function OrderDetails() {
       }
       if (data.towingCostVerification) setTowingVerify(data.towingCostVerification);
       try { await fetchDriveFiles(); } catch {}
-      try { await fetchOrder();      } catch {}
+      const refreshed = await fetchOrder();
       setMessage(`✅ ${file.name} uploaded`);
+
+      // ── If Draft uploaded, auto-fire schedule lookup to populate sail/arrival dates ──
+      if (label === "Draft") {
+        const vessel = refreshed?.vessel || order?.vessel || "";
+        const pol    = refreshed?.pol    || order?.pol    || "";
+        const pod    = refreshed?.pod    || order?.pod    || "";
+        if (vessel && pol && pod) {
+          setMessage(`✅ ${file.name} uploaded — looking up schedule…`);
+          await applyScheduleResult({ vessel, pol, pod });
+        }
+      }
 
       // ── If Email doc, parse for PIN and auto-update order ────────────
       if (label === "Email") {

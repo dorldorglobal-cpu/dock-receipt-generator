@@ -1774,13 +1774,21 @@ router.post("/auto-advance-arrived", async (req, res) => {
   try {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
+
+    // Fetch all Sailed orders that have an arrivalDate set.
+    // arrivalDate is stored as a String in various formats (YYYY-MM-DD, MM/DD/YYYY, etc.)
+    // so we cannot rely on a MongoDB string $lte comparison — parse in JS instead.
     const candidates = await Order.find({
       status: "Sailed",
-      arrivalDate: { $lte: today.toISOString().slice(0, 10) },
+      arrivalDate: { $exists: true, $nin: ["", null] },
     }).select("_id refNumber arrivalDate customerName").lean();
 
     const updated = [];
     for (const o of candidates) {
+      const parsed = new Date(o.arrivalDate);
+      if (isNaN(parsed.getTime())) continue; // unparseable — skip
+      parsed.setHours(0, 0, 0, 0);
+      if (parsed > today) continue; // arrival date is still in the future — leave as Sailed
       await Order.findByIdAndUpdate(o._id, {
         $set:  { status: "Arrived" },
         $push: { timeline: { action: "Status Changed", details: `Auto-advanced to Arrived (arrival date: ${o.arrivalDate})`, createdAt: new Date() } },
