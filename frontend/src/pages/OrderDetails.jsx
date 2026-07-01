@@ -474,7 +474,6 @@ export default function OrderDetails() {
 
     setOrder(data);
     document.title = `${data.refNumber || "Order"} | DOR LDOR GLOBAL OPS`;
-    return data; // allow callers to use the freshly-fetched order
     fetchBills(data.refNumber);
     setNoteText(data.notes || "");
     setHoldNote(data.holdNote || "");
@@ -598,6 +597,7 @@ export default function OrderDetails() {
     } catch (_) {
       // Pricing lookup failure is non-critical — silently ignore
     }
+    return data; // allow callers to use the freshly-fetched order
   };
 
   const fetchDriveFiles = async () => {
