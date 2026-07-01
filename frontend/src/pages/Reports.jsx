@@ -339,18 +339,15 @@ function AgedPayables({ d, sub, filter }) {
 }
 
 function ExpensesByCategory({ d, sub, filter }) {
+  const [expanded, setExpanded] = useState({});
   const rows  = applyFilter(d.rows || [], filter, r => r.category);
   const total = rows.reduce((s, r) => s + r.total, 0);
   const H = ["Category", "Bills", "Total", "Paid", "Unpaid", "% of Total"];
-  const R = rows.map((r) => [
-    r.category, r.bills,
-    f$(r.total),
-    <span style={{ color: "#34d399" }}>{f$(r.paid)}</span>,
-    <span style={{ color: r.unpaid > 0 ? "#f87171" : "var(--text-muted)" }}>{f$(r.unpaid)}</span>,
-    <span style={{ fontSize: 12 }}>{r.pct}%</span>,
-  ]);
-  const F    = ["TOTALS", rows.reduce((s, r) => s + r.bills, 0), f$(total), "", "", "100%"];
   const Rcsv = rows.map((r) => [r.category, r.bills, f$(r.total), f$(r.paid), f$(r.unpaid), r.pct + "%"]);
+  const F    = ["TOTALS", rows.reduce((s, r) => s + r.bills, 0), f$(total), "", "", "100%"];
+
+  const STATUS_CLR = { paid: "#34d399", partial: "#fb923c", unpaid: "#f87171" };
+
   return <>
     <Chips items={[
       { label: "Categories",    val: rows.length },
@@ -358,8 +355,79 @@ function ExpensesByCategory({ d, sub, filter }) {
       { label: "Paid",          val: f$(rows.reduce((s, r) => s + r.paid,   0)), clr: "#34d399" },
       { label: "Unpaid",        val: f$(rows.reduce((s, r) => s + r.unpaid, 0)), clr: rows.some(r => r.unpaid > 0) ? "#f87171" : "#34d399" },
     ]} />
-    <ExBar onCSV={() => dlCSV(H, Rcsv, "Expenses-by-Category")} onPDF={() => dlPDF("Expenses by Category", sub, H, Rcsv, F)} />
-    <RT headers={H} rows={R} footer={F} rights={[1, 2, 3, 4, 5]} />
+    <ExBar onCSV={() => dlCSV(H, Rcsv, "Expenses-by-Category")} onPDF={() => dlPDF("Expenses by Category", sub, H, Rcsv, Rcsv)} />
+
+    <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+      <thead>
+        <tr style={{ borderBottom:"2px solid var(--border)" }}>
+          {["", "CATEGORY","BILLS","TOTAL","PAID","UNPAID","% OF TOTAL"].map((h,i) => (
+            <th key={i} style={{ padding:"8px 10px", textAlign: i >= 2 ? "right" : "left",
+              fontSize:11, fontWeight:700, color:"var(--text-muted)", letterSpacing:"0.05em" }}>{h}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map((r) => {
+          const open = expanded[r.category];
+          return [
+            <tr key={r.category}
+              onClick={() => setExpanded(e => ({ ...e, [r.category]: !e[r.category] }))}
+              style={{ borderBottom:"1px solid var(--border)", cursor:"pointer",
+                background: open ? "var(--bg-elevated)" : "transparent",
+                transition:"background 0.15s" }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--bg-elevated)"}
+              onMouseLeave={e => e.currentTarget.style.background = open ? "var(--bg-elevated)" : "transparent"}>
+              <td style={{ padding:"10px 10px", color:"var(--text-muted)", fontSize:12, width:24 }}>
+                {open ? "▼" : "▶"}
+              </td>
+              <td style={{ padding:"10px 4px", fontWeight:600, color:"var(--text-primary)" }}>{r.category}</td>
+              <td style={{ padding:"10px 10px", textAlign:"right", color:"var(--text-secondary)" }}>{r.bills}</td>
+              <td style={{ padding:"10px 10px", textAlign:"right", fontFamily:"monospace", fontWeight:700 }}>{f$(r.total)}</td>
+              <td style={{ padding:"10px 10px", textAlign:"right", fontFamily:"monospace", color:"#34d399" }}>{f$(r.paid)}</td>
+              <td style={{ padding:"10px 10px", textAlign:"right", fontFamily:"monospace", color: r.unpaid > 0 ? "#f87171" : "var(--text-muted)" }}>{f$(r.unpaid)}</td>
+              <td style={{ padding:"10px 10px", textAlign:"right", fontSize:12 }}>{r.pct}%</td>
+            </tr>,
+            open && (r.items || []).map((item, idx) => (
+              <tr key={`${r.category}-${idx}`}
+                style={{ borderBottom:"1px solid var(--border-muted)", background:"var(--bg-base)" }}>
+                <td></td>
+                <td style={{ padding:"6px 4px 6px 20px" }}>
+                  <div style={{ fontWeight:600, fontSize:12, color:"var(--text-primary)" }}>{item.vendor}</div>
+                  <div style={{ fontSize:11, color:"var(--text-muted)" }}>{item.description}</div>
+                  {item.orderRef && <div style={{ fontSize:10, color:"var(--accent)" }}>Order #{item.orderRef}</div>}
+                </td>
+                <td style={{ padding:"6px 10px", textAlign:"right", fontSize:11, color:"var(--text-muted)" }}>
+                  {item.invoiceNumber || "—"}
+                </td>
+                <td style={{ padding:"6px 10px", textAlign:"right", fontFamily:"monospace", fontSize:12 }}>{f$(item.amount)}</td>
+                <td style={{ padding:"6px 10px", textAlign:"right", fontFamily:"monospace", fontSize:12, color:"#34d399" }}>
+                  {item.paidAmount > 0 ? f$(item.paidAmount) : "—"}
+                </td>
+                <td style={{ padding:"6px 10px", textAlign:"right", fontFamily:"monospace", fontSize:12, color: item.status !== "paid" ? "#f87171" : "var(--text-muted)" }}>
+                  {item.status !== "paid" ? f$(item.amount - item.paidAmount) : "—"}
+                </td>
+                <td style={{ padding:"6px 10px", textAlign:"right" }}>
+                  <span style={{ fontSize:10, fontWeight:700, padding:"2px 7px", borderRadius:10,
+                    background: (STATUS_CLR[item.status] || "#888") + "22",
+                    color: STATUS_CLR[item.status] || "#888" }}>
+                    {item.status}
+                  </span>
+                  <div style={{ fontSize:10, color:"var(--text-muted)", marginTop:2 }}>{fD(item.date)}</div>
+                </td>
+              </tr>
+            )),
+          ];
+        })}
+        <tr style={{ borderTop:"2px solid var(--border)", fontWeight:700 }}>
+          <td></td>
+          <td style={{ padding:"10px 4px" }}>TOTALS</td>
+          <td style={{ padding:"10px 10px", textAlign:"right" }}>{rows.reduce((s, r) => s + r.bills, 0)}</td>
+          <td style={{ padding:"10px 10px", textAlign:"right", fontFamily:"monospace" }}>{f$(total)}</td>
+          <td></td><td></td>
+          <td style={{ padding:"10px 10px", textAlign:"right" }}>100%</td>
+        </tr>
+      </tbody>
+    </table>
   </>;
 }
 

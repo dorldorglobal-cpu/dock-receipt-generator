@@ -159,15 +159,26 @@ router.get("/purchases-by-vendor", async (req, res) => {
 router.get("/expenses-by-category", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const expenses = await Expense.find(dateQ(from, to, "date")).lean();
+    const expenses = await Expense.find(dateQ(from, to, "date")).sort({ date: -1 }).lean();
     const map = {};
     for (const e of expenses) {
       const key = e.category || "Uncategorized";
-      if (!map[key]) map[key] = { category: key, bills: 0, total: 0, paid: 0, unpaid: 0 };
+      if (!map[key]) map[key] = { category: key, bills: 0, total: 0, paid: 0, unpaid: 0, items: [] };
       map[key].bills++;
       map[key].total += e.amount;
-      if (e.status === "paid") map[key].paid += e.amount;
-      else map[key].unpaid += e.amount;
+      if (e.status === "paid" || e.status === "partial") map[key].paid += e.paidAmount || (e.status === "paid" ? e.amount : 0);
+      if (e.status !== "paid") map[key].unpaid += e.amount - (e.paidAmount || 0);
+      map[key].items.push({
+        _id:           e._id,
+        date:          e.date,
+        vendor:        e.vendor || "—",
+        description:   e.description,
+        orderRef:      e.orderRef || "",
+        invoiceNumber: e.invoiceNumber || "",
+        amount:        e.amount,
+        paidAmount:    e.paidAmount || 0,
+        status:        e.status,
+      });
     }
     const total = Object.values(map).reduce((s, r) => s + r.total, 0);
     const rows  = Object.values(map)
