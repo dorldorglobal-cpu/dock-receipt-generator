@@ -1353,6 +1353,80 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
 });
 
 // POST /api/send-sms  { body }  — sends via Google Voice gateway using Gmail REST API
+// ── POST /api/orders/:id/post-to-central-dispatch ────────────────────────────
+app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req, res) => {
+  try {
+    const Order = require("./models/Order");
+    const order = await Order.findById(req.params.id).lean();
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const charges = order.charges || {};
+    const carrierPay = parseFloat(charges.towingCost || charges.towingCharge || 0).toFixed(2);
+    if (parseFloat(carrierPay) <= 0) return res.status(400).json({ error: "Towing cost is $0 — set a towing cost before posting to Central Dispatch." });
+
+    const pickupCity  = (order.pickupCity  || "").trim();
+    const pickupState = (order.pickupState || "").trim().toUpperCase().slice(0, 2);
+    const pickupZip   = (order.pickupZip   || "").trim();
+    const delivCity   = (order.deliveryCity  || "").trim();
+    const delivState  = (order.deliveryState || "").trim().toUpperCase().slice(0, 2);
+    const delivZip    = (order.deliveryZip   || "").trim();
+
+    if (!pickupCity || !pickupState || !delivCity || !delivState) {
+      return res.status(400).json({ error: "Missing pickup or delivery city/state. Fill those in on the order first." });
+    }
+
+    const operable = (order.condition || "Runner").toLowerCase() === "runner" ? "operable" : "inop";
+    const today    = new Date();
+    const fmtDate  = (d) => d.toISOString().slice(0, 10);
+    const dispUntil = new Date(today); dispUntil.setDate(dispUntil.getDate() + 30);
+
+    // Build vehicle string — VIN only since full VIN makes year|make|model|type optional
+    const vin = (order.vin || "").trim();
+    const vehicleStr = vin
+      ? `${order.year || ""}|${order.make || ""}|${order.model || ""}||${vin}`
+      : `${order.year || ""}|${order.make || ""}|${order.model || ""}|Car`;
+
+    const orderId = String(order.refNumber || order._id).slice(0, 10);
+
+    // 18-field comma-delimited record
+    const record = [
+      orderId,
+      pickupCity,
+      pickupState,
+      pickupZip,
+      delivCity,
+      delivState,
+      delivZip,
+      carrierPay,
+      "0.00",                  // COD/COP amount
+      "cash/certified funds",  // COD method (required even when 0)
+      "delivery",              // COD timing (required even when 0)
+      "quickpay",              // remaining balance — closest to ACH/electronic
+      "open",                  // ship method
+      operable,
+      fmtDate(today),          // first available
+      fmtDate(dispUntil),      // display until
+      "",                      // additional info
+      vehicleStr,
+    ].join(",");
+
+    const emailBody = `UID(9Wc66ajD)*\n${record}*`;
+
+    await mailer.sendMail({
+      from:    process.env.GMAIL_USER,
+      to:      "cdupd-v4@centraldispatch.com",
+      subject: "",
+      text:    emailBody,
+    });
+
+    console.log(`[CentralDispatch] Posted order ${orderId}: ${emailBody}`);
+    res.json({ success: true, record: emailBody });
+  } catch (err) {
+    console.error("[CentralDispatch] Error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 app.post("/api/send-sms", express.json(), async (req, res) => {
   const { body } = req.body;
   if (!body) return res.status(400).json({ error: "body required" });

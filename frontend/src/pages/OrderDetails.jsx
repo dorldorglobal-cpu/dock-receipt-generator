@@ -2466,14 +2466,31 @@ export default function OrderDetails() {
                   <td style={{ display:"flex", gap:6, alignItems:"center" }}>
                     {isDispatch && (() => {
                       const hasDispatchBill = bills.some(b => /towing|transport/i.test(b.category) && b.orderRef === order.refNumber);
-                      return (
+                      return (<>
                         <button
                           title="Create Bill from Dispatch"
                           onClick={() => createBillFromDoc("Dispatch")}
                           style={{ background:"none", border:"none", cursor:"pointer", color: hasDispatchBill ? "#34d399" : "#60a5fa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                           {hasDispatchBill ? "✅ Bill Created" : "📋 Create Bill from Dispatch"}
                         </button>
-                      );
+                        <button
+                          title="Post this order to Central Dispatch"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setMessage("Posting to Central Dispatch…");
+                            try {
+                              const res = await fetch(`${API}/api/orders/${order._id}/post-to-central-dispatch`, { method: "POST" });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.error || "Failed");
+                              setMessage("✅ Posted to Central Dispatch! Check dorldorglobal@gmail.com for import log.");
+                            } catch (err) {
+                              setMessage("❌ Central Dispatch: " + err.message);
+                            }
+                          }}
+                          style={{ background:"none", border:"none", cursor:"pointer", color:"#f59e0b", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          📡 Post to Central Dispatch
+                        </button>
+                      </>);
                     })()}
                     {isRatedDraft && (
                       <button
