@@ -309,32 +309,38 @@ function parseBLText(text, filename = "") {
     inline(/B\/?L\s*(?:NUMBER|NO)[:\s]*(\S+)/i) ||
     (t.match(/\b(\d{10})\b/)?.[1] || "");
 
-  // Vessel: appears as "VESSELNAME / VOYAGExxxE" — grab from line containing that pattern
-  // In this BL format: "OOCL SEOUL / 120E New York" — vessel is before the port name
-  let vessel = "";
+  // Vessel + POL: In BL format the vessel line is "VESSELNAME / VOYAGEcode PORTCITY"
+  // e.g. "OOCL SEOUL / 120E New York"
+  // Voyage code always contains digits (120E, 526E, 0526) — this distinguishes it
+  // from junk like "NOTIFY PARTY / INTERMEDIATE"
+  let vessel = "", pol = "";
   for (const line of lines) {
-    // Pattern: WORD WORD / digits+letter  (e.g. "OOCL SEOUL / 120E")
-    const m = line.match(/([A-Z][A-Z\s\-]{3,})\s*\/\s*(\w+)\b/);
-    if (m && !/PORT|LOADING|EXPORT|DELIVERY|DISCHARGE|UNLOADING|RECEIPT|CARRIER|MOVE/i.test(m[0])) {
+    const m = line.match(/^([A-Z][A-Z0-9 \-]{2,}?)\s*\/\s*([A-Z0-9]*\d[A-Z0-9]*)\s*(.*)$/);
+    if (m) {
       vessel = `${m[1].trim()} / ${m[2].trim()}`;
+      pol    = m[3].trim(); // city name appears after voyage code on same line
       break;
     }
   }
-  // Fallback: line after "14. EXPORTING CARRIER"
-  if (!vessel) vessel = lineAfter(/14\.\s*EXPORTING\s*CARRIER/i, /EXPORTING\s*CARRIER/i);
 
-  // POL: line after "15. PORT OF LOADING"
-  // In this BL, field label and value appear on separate lines
-  const pol =
-    lineAfter(/15\.\s*PORT\s*OF\s*LOADING/i) ||
-    lineAfter(/PORT\s*OF\s*LOADING\s*\/?\s*EXPORT/i) ||
-    inline(/PORT\s+OF\s+LOADING[^:]*:\s*(.+)/i);
-
-  // POD: line after "16. FOREIGN PORT OF UNLOADING"
-  const pod =
-    lineAfter(/16\.\s*FOREIGN\s*PORT\s*OF\s*UNLOADING/i) ||
-    lineAfter(/FOREIGN\s*PORT\s*OF\s*UNLOADING/i) ||
-    inline(/FOREIGN\s+PORT\s+OF\s+UNLOADING[^:]*:\s*(.+)/i);
+  // POD: usually the line right after the vessel line, sometimes repeated ("Tema Tema")
+  let pod = "";
+  for (let i = 0; i < lines.length - 1; i++) {
+    if (vessel && lines[i].startsWith(vessel.split(" /")[0].trim())) {
+      for (let j = i + 1; j <= Math.min(i + 4, lines.length - 1); j++) {
+        const candidate = lines[j].split(/\s+/)[0]; // first word (handles "Tema Tema")
+        if (/^[A-Z][a-z]/.test(candidate) && candidate.length > 2 &&
+            !/CNT:|SEAL:|VIN:|NYCT|HS CODE|FREIGHT|SEAWAY/i.test(lines[j])) {
+          pod = candidate;
+          break;
+        }
+      }
+      break;
+    }
+  }
+  // Fallbacks
+  if (!pol) pol = lineAfter(/15\.\s*PORT\s*OF\s*LOADING/i, /PORT\s*OF\s*LOADING/i);
+  if (!pod) pod = lineAfter(/16\.\s*FOREIGN\s*PORT/i, /FOREIGN\s*PORT\s*OF\s*UNLOADING/i);
 
   // AES ITN
   const aesItn = inline(/AES\s+ITN[:\s]+(\S+)/i) || inline(/ITN[:\s]+(X\d{14})/i);

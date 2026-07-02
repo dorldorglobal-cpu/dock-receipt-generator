@@ -820,20 +820,26 @@ export default function Containers() {
                   {parsedBL && (
                     <div style={{ background:"rgba(124,58,237,0.12)", border:"1px solid rgba(124,58,237,0.35)",
                       borderRadius:10, padding:16, marginBottom:16 }}>
-                      <div style={{ fontWeight:700, fontSize:13, color:"#a78bfa", marginBottom:10 }}>📋 Parsed from document — click Apply to fill fields</div>
-                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px 16px", fontSize:12 }}>
+                      <div style={{ fontWeight:700, fontSize:13, color:"#a78bfa", marginBottom:10 }}>📋 Parsed from document — edit if needed, then Apply</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 16px", fontSize:12 }}>
                         {[
-                          ["Booking #",    parsedBL.bookingNumber],
-                          ["Container #",  parsedBL.containerNumber],
-                          ["Seal #",       parsedBL.sealNumber],
-                          ["Vessel",       parsedBL.vessel],
-                          ["POL",          parsedBL.pol],
-                          ["POD",          parsedBL.pod],
-                          ["AES ITN",      parsedBL.aesItn],
-                        ].filter(([,v]) => v).map(([k,v]) => (
-                          <div key={k}>
-                            <span style={{ color:"var(--text-muted)" }}>{k}: </span>
-                            <strong style={{ color:"var(--text-primary)" }}>{v}</strong>
+                          ["bookingNumber",   "Booking #"],
+                          ["containerNumber", "Container #"],
+                          ["sealNumber",      "Seal #"],
+                          ["vessel",          "Vessel"],
+                          ["pol",             "POL"],
+                          ["pod",             "POD"],
+                          ["aesItn",          "AES ITN"],
+                        ].map(([field, label]) => (
+                          <div key={field} style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                            <span style={{ color:"var(--text-muted)", fontSize:11 }}>{label}</span>
+                            <input
+                              value={parsedBL[field] || ""}
+                              onChange={e => setParsedBL(prev => ({ ...prev, [field]: e.target.value }))}
+                              style={{ padding:"4px 8px", border:"1px solid rgba(124,58,237,0.4)",
+                                borderRadius:5, background:"rgba(124,58,237,0.08)", color:"var(--text-primary)",
+                                fontSize:12, outline:"none", width:"100%", boxSizing:"border-box" }}
+                            />
                           </div>
                         ))}
                         {parsedBL.vins?.length > 0 && (
