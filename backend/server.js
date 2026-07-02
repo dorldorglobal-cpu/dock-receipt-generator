@@ -1422,7 +1422,7 @@ app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req,
       delivZip,
       carrierPay,
       "0.00",                  // COD/COP amount
-      "cash/certified funds",  // COD method (required even when 0)
+      "check",                 // COD method
       "delivery",              // COD timing (required even when 0)
       "quickpay",              // remaining balance — closest to ACH/electronic
       "open",                  // ship method
