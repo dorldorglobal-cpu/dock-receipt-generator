@@ -142,7 +142,8 @@ router.post("/:id/upload", upload.single("file"), async (req, res) => {
         const pdfParse = require("pdf-parse");
         const buf  = fs.readFileSync(req.file.path);
         const data = await pdfParse(buf);
-        parsed = parseBLText(data.text || "", req.file.originalname);
+        const rawText = data.text || "";
+        parsed = { ...parseBLText(rawText, req.file.originalname), _rawLines: rawText.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).slice(0,80) };
       } catch (_) { /* non-fatal */ }
     }
 
@@ -256,7 +257,7 @@ router.post("/:id/parse-bl-file", upload.single("file"), async (req, res) => {
       try { fs.unlinkSync(req.file.path); } catch (_) {}
     }
 
-    const parsed = parseBLText(text, req.file.originalname);
+    const parsed = { ...parseBLText(text, req.file.originalname), _rawLines: text.split(/\r?\n/).map(l=>l.trim()).filter(Boolean).slice(0,80) };
     res.json(parsed);
   } catch (e) {
     console.error("[ContainerLoad] parse-bl-file error:", e.message);

@@ -851,6 +851,14 @@ export default function Containers() {
                           </div>
                         )}
                       </div>
+                      {parsedBL._rawLines && (
+                        <details style={{ marginTop:8, fontSize:10, color:"var(--text-muted)" }}>
+                          <summary style={{ cursor:"pointer" }}>🔍 Raw extracted lines (debug)</summary>
+                          <pre style={{ whiteSpace:"pre-wrap", maxHeight:200, overflowY:"auto", background:"rgba(0,0,0,0.2)", padding:8, borderRadius:4, marginTop:4 }}>
+                            {parsedBL._rawLines.join("\n")}
+                          </pre>
+                        </details>
+                      )}
                       <div style={{ display:"flex", gap:8, marginTop:12 }}>
                         <button onClick={applyParsedBL}
                           style={{ padding:"7px 20px", background:"#7c3aed", color:"#fff",
