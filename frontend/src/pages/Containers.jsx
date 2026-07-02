@@ -327,11 +327,14 @@ export default function Containers() {
       const r = await fetch(`${API}/api/container-loads/${editLoad._id}/upload`, { method: "POST", body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Upload failed");
-      // Update editLoad with new files list from response
       setEditLoad(d);
-      setLoadFiles(prev => [...prev, ...(d.files || []).slice(prev.length)]);
       await fetchLoadFiles(editLoad._id);
-      flash("✅ File uploaded");
+      if (d.parsed && Object.values(d.parsed).some(v => v && (typeof v === "string" ? v.length : v.length))) {
+        setParsedBL(d.parsed);
+        flash("✅ Uploaded and parsed — review fields below");
+      } else {
+        flash("✅ File uploaded");
+      }
     } catch (e) {
       flash("❌ " + e.message);
     } finally {

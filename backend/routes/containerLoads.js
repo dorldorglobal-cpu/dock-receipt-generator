@@ -134,6 +134,17 @@ router.post("/:id/upload", upload.single("file"), async (req, res) => {
       load.driveFolderLink = folder.webViewLink;
     }
 
+    // Auto-parse PDFs before uploading (read file while still on disk)
+    let parsed = null;
+    if (/pdf/i.test(req.file.mimetype)) {
+      try {
+        const pdfParse = require("pdf-parse");
+        const buf  = fs.readFileSync(req.file.path);
+        const data = await pdfParse(buf);
+        parsed = parseBLText(data.text || "", req.file.originalname);
+      } catch (_) { /* non-fatal */ }
+    }
+
     const uploaded = await uploadFileToDrive(
       req.file.path,
       req.file.originalname,
@@ -154,7 +165,7 @@ router.post("/:id/upload", upload.single("file"), async (req, res) => {
     await load.save();
 
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
-    res.json(populated);
+    res.json({ ...populated, parsed });
   } catch (e) {
     if (req.file?.path) try { fs.unlinkSync(req.file.path); } catch (_) {}
     console.error("[ContainerLoad] upload error:", e.message);
@@ -240,65 +251,89 @@ function extractDriveId(url) {
 function parseBLText(text, filename = "") {
   const t = text || "";
   const lines = t.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-  const find = (...patterns) => {
+
+  // Find value on the line AFTER the line matching a pattern
+  const lineAfter = (...patterns) => {
     for (const pat of patterns) {
-      for (const line of lines) {
-        const m = line.match(pat);
-        if (m) return (m[1] || m[0]).trim();
+      for (let i = 0; i < lines.length - 1; i++) {
+        if (pat.test(lines[i])) {
+          const next = lines[i + 1].trim();
+          if (next && next.length < 80) return next;
+        }
       }
     }
     return "";
   };
 
-  // Container number: CNT: XXXX1234567 or CONTAINER: or just a 4-letter + 7-digit pattern
+  // Find inline value on same line
+  const inline = (...patterns) => {
+    for (const pat of patterns) {
+      for (const line of lines) {
+        const m = line.match(pat);
+        if (m?.[1]) return m[1].trim();
+      }
+    }
+    return "";
+  };
+
+  // Container: CNT: XXXX1234567
   const containerNumber =
-    find(/CNT[:\s]+([A-Z]{4}\d{7})/i, /CONTAINER\s*(?:NO\.?|NUMBER)?[:\s]+([A-Z]{4}\d{7})/i) ||
+    inline(/CNT[:\s]+([A-Z]{4}\d{7})/i) ||
     (t.match(/\b([A-Z]{4}\d{7})\b/)?.[1] || "");
 
-  // Seal number
-  const sealNumber = find(/SEAL[:\s]+(\S+)/i, /SEAL\s*NO\.?\s*[:\s]+(\S+)/i);
+  // Seal
+  const sealNumber = inline(/SEAL[:\s]+(\S+)/i);
 
-  // Booking / document number (5a B/L NUMBER or DOCUMENT NUMBER field)
-  const bookingNumber = find(
-    /(?:DOCUMENT\s+NUMBER|DOC\.?\s*NO\.?)[:\s]+(\S+)/i,
-    /B\/?L\s*(?:NUMBER|NO\.?)[:\s]+(\S+)/i,
-    /BOOKING\s*(?:NUMBER|NO\.?)[:\s]+(\S+)/i,
-  ) || (t.match(/\b(\d{10})\b/)?.[1] || ""); // 10-digit booking numbers
+  // Booking / BL number — 10-digit number is most reliable
+  const bookingNumber =
+    inline(/(?:5\.\s*DOCUMENT\s+NUMBER|DOCUMENT\s+NUMBER)[:\s]*(\S+)/i) ||
+    inline(/B\/?L\s*(?:NUMBER|NO)[:\s]*(\S+)/i) ||
+    (t.match(/\b(\d{10})\b/)?.[1] || "");
 
-  // Vessel
-  const vessel = find(
-    /(?:VESSEL|EXPORTING CARRIER)[:\s]+([A-Z][A-Z0-9 \/]+?)(?:\s+\d+E|\s*$)/im,
-    /([A-Z]{3,}\s+[A-Z]{3,})\s*\/\s*\d+[A-Z]/,
-  );
+  // Vessel: appears as "VESSELNAME / VOYAGExxxE" — grab from line containing that pattern
+  // In this BL format: "OOCL SEOUL / 120E New York" — vessel is before the port name
+  let vessel = "";
+  for (const line of lines) {
+    // Pattern: WORD WORD / digits+letter  (e.g. "OOCL SEOUL / 120E")
+    const m = line.match(/([A-Z][A-Z\s\-]{3,})\s*\/\s*(\w+)\b/);
+    if (m && !/PORT|LOADING|EXPORT|DELIVERY|DISCHARGE|UNLOADING|RECEIPT|CARRIER|MOVE/i.test(m[0])) {
+      vessel = `${m[1].trim()} / ${m[2].trim()}`;
+      break;
+    }
+  }
+  // Fallback: line after "14. EXPORTING CARRIER"
+  if (!vessel) vessel = lineAfter(/14\.\s*EXPORTING\s*CARRIER/i, /EXPORTING\s*CARRIER/i);
 
-  // POL
-  const pol = find(
-    /PORT\s+OF\s+LOADING[\/\s]+EXPORT[:\s]+(.+)/i,
-    /PORT\s+OF\s+LOADING[:\s]+(.+)/i,
-  );
+  // POL: line after "15. PORT OF LOADING"
+  // In this BL, field label and value appear on separate lines
+  const pol =
+    lineAfter(/15\.\s*PORT\s*OF\s*LOADING/i) ||
+    lineAfter(/PORT\s*OF\s*LOADING\s*\/?\s*EXPORT/i) ||
+    inline(/PORT\s+OF\s+LOADING[^:]*:\s*(.+)/i);
 
-  // POD
-  const pod = find(
-    /FOREIGN\s+PORT\s+OF\s+UNLOADING[:\s]+(.+)/i,
-    /PORT\s+OF\s+DISCHARGE[:\s]+(.+)/i,
-    /PLACE\s+OF\s+DELIVERY[:\s]+(.+)/i,
-  );
+  // POD: line after "16. FOREIGN PORT OF UNLOADING"
+  const pod =
+    lineAfter(/16\.\s*FOREIGN\s*PORT\s*OF\s*UNLOADING/i) ||
+    lineAfter(/FOREIGN\s*PORT\s*OF\s*UNLOADING/i) ||
+    inline(/FOREIGN\s+PORT\s+OF\s+UNLOADING[^:]*:\s*(.+)/i);
 
   // AES ITN
-  const aesItn = find(/AES\s+ITN[:\s]+(\S+)/i, /ITN[:\s]+(X\d{14})/i);
+  const aesItn = inline(/AES\s+ITN[:\s]+(\S+)/i) || inline(/ITN[:\s]+(X\d{14})/i);
 
-  // VINs — 17-char alphanumeric
+  // VINs — 17-char
   const vins = [...new Set((t.match(/\bVIN[:\s]*([A-HJ-NPR-Z0-9]{17})\b/gi) || [])
     .map(v => v.replace(/VIN[:\s]*/i, "").trim()))];
 
+  const clean = (s, max = 60) => (s || "").replace(/\s+/g, " ").trim().slice(0, max);
+
   return {
-    containerNumber: containerNumber.slice(0, 20),
-    sealNumber:      sealNumber.slice(0, 20),
-    bookingNumber:   bookingNumber.slice(0, 30),
-    vessel:          vessel.slice(0, 60),
-    pol:             pol.slice(0, 40),
-    pod:             pod.slice(0, 40),
-    aesItn:          aesItn.slice(0, 20),
+    containerNumber: clean(containerNumber, 20),
+    sealNumber:      clean(sealNumber, 20),
+    bookingNumber:   clean(bookingNumber, 30),
+    vessel:          clean(vessel, 60),
+    pol:             clean(pol, 40),
+    pod:             clean(pod, 40),
+    aesItn:          clean(aesItn, 20),
     vins,
   };
 }
