@@ -315,7 +315,9 @@ function parseBLText(text, filename = "") {
   // from junk like "NOTIFY PARTY / INTERMEDIATE"
   let vessel = "", pol = "";
   for (const line of lines) {
-    const m = line.match(/^([A-Z][A-Z0-9 \-]{2,}?)\s*\/\s*([A-Z0-9]*\d[A-Z0-9]*)\s*(.*)$/);
+    // Group 3 must start with Capital+lowercase (city name like "New York")
+    // so the greedy voyage group can't consume the leading capital of the city
+    const m = line.match(/^([A-Z][A-Z0-9 \-]{2,}?)\s*\/\s*([A-Z0-9]*\d[A-Z0-9]*)\s+([A-Z][a-z].*)$/);
     if (m) {
       vessel = `${m[1].trim()} / ${m[2].trim()}`;
       pol    = m[3].trim(); // city name appears after voyage code on same line
@@ -328,7 +330,12 @@ function parseBLText(text, filename = "") {
   for (let i = 0; i < lines.length - 1; i++) {
     if (vessel && lines[i].startsWith(vessel.split(" /")[0].trim())) {
       for (let j = i + 1; j <= Math.min(i + 4, lines.length - 1); j++) {
-        const candidate = lines[j].split(/\s+/)[0]; // first word (handles "Tema Tema")
+        let candidate = lines[j].split(/\s+/)[0]; // first word (handles "Tema Tema")
+        // Handle pdf-parse merging two-column duplicate like "TemaTema" → "Tema"
+        const half = candidate.length / 2;
+        if (half === Math.floor(half) && candidate.slice(0, half) === candidate.slice(half)) {
+          candidate = candidate.slice(0, half);
+        }
         if (/^[A-Z][a-z]/.test(candidate) && candidate.length > 2 &&
             !/CNT:|SEAL:|VIN:|NYCT|HS CODE|FREIGHT|SEAWAY/i.test(lines[j])) {
           pod = candidate;
