@@ -1386,7 +1386,8 @@ app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req,
       ? `${order.year || ""}|${order.make || ""}|${order.model || ""}||${vin}`
       : `${order.year || ""}|${order.make || ""}|${order.model || ""}|Car`;
 
-    const orderId = String(order.refNumber || order._id).slice(0, 10);
+    const isPort  = ["RORO", "Container"].includes(order.requestType);
+    const orderId = (String(order.refNumber || order._id) + (isPort ? "PORT" : "")).slice(0, 10);
 
     // 18-field comma-delimited record
     const record = [
