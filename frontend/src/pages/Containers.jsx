@@ -145,6 +145,8 @@ export default function Containers() {
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [parsedBL,    setParsedBL]    = useState(null);
   const [dragOver,    setDragOver]    = useState(false);
+  const [renamingFile, setRenamingFile] = useState(null); // { id, name }
+
 
   const refresh = () => {
     fetch(`${API}/api/container-loads`).then(r=>r.json()).then(d=>setLoads(Array.isArray(d)?d:[])).catch(()=>{});
@@ -897,30 +899,62 @@ export default function Containers() {
                     </div>
                   )}
                   {loadFiles.map((f, idx) => (
-                    <div key={f.id || idx} style={{ display:"flex", alignItems:"center", gap:10,
+                    <div key={f.id || idx} style={{ display:"flex", alignItems:"center", gap:8,
                       padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)",
                       marginBottom:8, background:"var(--bg-base)" }}>
                       <span style={{ fontSize:20 }}>
                         {/pdf/i.test(f.mimeType) ? "📄" : /image/i.test(f.mimeType) ? "🖼" : "📎"}
                       </span>
                       <div style={{ flex:1, minWidth:0 }}>
-                        <div style={{ fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
-                          {f.name}
-                        </div>
-                        <div style={{ fontSize:11, color:"var(--text-muted)" }}>
-                          {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : ""}
-                        </div>
+                        {renamingFile?.id === f.id ? (
+                          <div style={{ display:"flex", gap:6, alignItems:"center" }}>
+                            <input
+                              autoFocus
+                              value={renamingFile.name}
+                              onChange={e => setRenamingFile(r => ({ ...r, name: e.target.value }))}
+                              onKeyDown={async e => {
+                                if (e.key === "Enter") {
+                                  await fetch(`${API}/api/container-loads/${editLoad._id}/files/${f.id}/rename`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ name: renamingFile.name }),
+                                  }).catch(() => {});
+                                  setLoadFiles(prev => prev.map(x => x.id === f.id ? { ...x, name: renamingFile.name } : x));
+                                  setRenamingFile(null);
+                                }
+                                if (e.key === "Escape") setRenamingFile(null);
+                              }}
+                              style={{ ...inp, fontSize:12, padding:"4px 8px", flex:1 }}
+                            />
+                            <button onClick={async () => {
+                              await fetch(`${API}/api/drive-rename/${f.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ name: renamingFile.name }),
+                              }).catch(() => {});
+                              setLoadFiles(prev => prev.map(x => x.id === f.id ? { ...x, name: renamingFile.name } : x));
+                              setRenamingFile(null);
+                            }} style={{ padding:"4px 10px", fontSize:11, background:"#2563eb", color:"#fff",
+                              border:"none", borderRadius:6, cursor:"pointer" }}>Save</button>
+                            <button onClick={() => setRenamingFile(null)}
+                              style={{ padding:"4px 8px", fontSize:11, background:"none",
+                                border:"1px solid var(--border)", borderRadius:6, color:"var(--text-muted)", cursor:"pointer" }}>✕</button>
+                          </div>
+                        ) : (
+                          <>
+                            <div style={{ fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                              {f.name}
+                            </div>
+                            <div style={{ fontSize:11, color:"var(--text-muted)" }}>
+                              {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : ""}
+                            </div>
+                          </>
+                        )}
                       </div>
+                      {/* Parse */}
                       <button
                         onClick={async () => {
                           setUploadingDoc(true);
-                          try {
-                            const r = await fetch(`${API}/api/container-loads/${editLoad._id}/parse-bl-file`, {
-                              method: "POST",
-                              body: (() => { const fd = new FormData(); fd.append("url", f.webViewLink || f.webContentLink || ""); return fd; })(),
-                            });
-                          } catch (_) {}
-                          // Parse from Drive URL via proxy
                           try {
                             const proxyUrl = `${API}/api/drive-proxy/${f.id}`;
                             const blob = await fetch(proxyUrl).then(r => r.blob());
@@ -932,18 +966,47 @@ export default function Containers() {
                             setUploadingDoc(false);
                           }
                         }}
-                        title="Parse this document for BL info"
+                        title="Parse for BL info"
                         style={{ padding:"5px 10px", fontSize:11, background:"rgba(124,58,237,0.12)",
                           border:"1px solid rgba(124,58,237,0.3)", borderRadius:6,
                           color:"#a78bfa", cursor:"pointer", whiteSpace:"nowrap" }}>
                         🔍 Parse
                       </button>
+                      {/* Open */}
                       <a href={f.webViewLink} target="_blank" rel="noreferrer"
                         style={{ padding:"5px 10px", fontSize:11, background:"var(--bg-panel)",
                           border:"1px solid var(--border)", borderRadius:6,
                           color:"var(--text-secondary)", cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>
                         ↗ Open
                       </a>
+                      {/* Edit (rename) */}
+                      <button
+                        onClick={() => setRenamingFile({ id: f.id, name: f.name })}
+                        title="Rename file"
+                        style={{ padding:"5px 10px", fontSize:11, background:"rgba(251,191,36,0.12)",
+                          border:"1px solid rgba(251,191,36,0.3)", borderRadius:6,
+                          color:"#fbbf24", cursor:"pointer", whiteSpace:"nowrap" }}>
+                        ✏️ Edit
+                      </button>
+                      {/* Delete */}
+                      <button
+                        onClick={async () => {
+                          if (!window.confirm(`Delete "${f.name}"?`)) return;
+                          try {
+                            const r = await fetch(`${API}/api/container-loads/${editLoad._id}/files/${f.id}`, { method: "DELETE" });
+                            const d = await r.json();
+                            if (!r.ok) throw new Error(d.error);
+                            setEditLoad(d);
+                            setLoadFiles(prev => prev.filter(x => x.id !== f.id));
+                            flash("🗑 File removed");
+                          } catch (e) { flash("❌ " + e.message); }
+                        }}
+                        title="Delete file"
+                        style={{ padding:"5px 10px", fontSize:11, background:"rgba(248,113,113,0.12)",
+                          border:"1px solid rgba(248,113,113,0.3)", borderRadius:6,
+                          color:"#f87171", cursor:"pointer", whiteSpace:"nowrap" }}>
+                        🗑 Delete
+                      </button>
                     </div>
                   ))}
                 </div>

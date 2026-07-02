@@ -7,6 +7,7 @@ const ContainerLoad = require("../models/ContainerLoad");
 const Order         = require("../models/Order");
 const { getGmailAccessToken } = require("../utils/gmail");
 const {
+  drive,
   createDriveFolder,
   uploadFileToDrive,
   listFilesInFolder,
@@ -182,6 +183,24 @@ router.delete("/:id/files/:fileId", async (req, res) => {
     await load.save();
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
     res.json(populated);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+// PATCH /api/container-loads/:id/files/:fileId/rename
+router.patch("/:id/files/:fileId/rename", express.json(), async (req, res) => {
+  try {
+    const { name } = req.body;
+    if (!name) return res.status(400).json({ error: "name required" });
+    await drive.files.update({ fileId: req.params.fileId, requestBody: { name } });
+    // Update name in load.files array too
+    const load = await ContainerLoad.findById(req.params.id);
+    if (load) {
+      const f = (load.files || []).find(f => f.driveFileId === req.params.fileId);
+      if (f) { f.filename = name; f.originalName = name; await load.save(); }
+    }
+    res.json({ success: true });
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
