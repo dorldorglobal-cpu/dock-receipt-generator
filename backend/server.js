@@ -1082,7 +1082,11 @@ app.post("/generate-pdf", async (req, res) => {
     const vesselLine = safeVal(d.vessel) && safeVal(d.voyage)
       ? `${safeVal(d.vessel)} V: ${safeVal(d.voyage)}`
       : safeVal(d.vessel) || "";
-    text(vesselLine, 30, 292);
+    // Auto-shrink vessel name so it doesn't bleed into Port of Loading (x=180)
+    const VESSEL_MAX_W = 148;
+    let vesselSize = 8.5;
+    while (vesselSize > 5.5 && font.widthOfTextAtSize(vesselLine, vesselSize) > VESSEL_MAX_W) vesselSize -= 0.25;
+    text(vesselLine, 30, 292, vesselSize);
     text(safeVal(d.portOfLoading || d.pol), 180, 292);
     text(safeVal(d.portOfDischarge || d.pod), 30, 313);
 
