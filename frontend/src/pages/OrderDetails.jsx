@@ -4800,32 +4800,36 @@ export default function OrderDetails() {
           const res = await fetch(`${API}/api/expenses`, { method: "POST", body });
           if (!res.ok) throw new Error("Failed to create expense");
 
-          // Queue as pending invoice item (will be merged when invoice is generated)
+          // Save sell price directly to order charges so it auto-appears on invoice
           const sellAmt = parseFloat(storageSellPrice);
           if (sellAmt > 0) {
-            const desc = `Storage Fee${parsed.lotNumber ? ` – Lot ${parsed.lotNumber}` : ""}`;
+            const vendor = (parsed.vendor || "Copart").toLowerCase();
+            const chargeKey = /copart|iaa|iaai/.test(vendor) ? "storageAuctionFee" : "storageWarehouseFee";
+            const updatedCharges = { ...charges, [chargeKey]: String(sellAmt) };
+            const chRes = await fetch(`${API}/api/orders/${order._id}`, {
+              method: "PUT", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ charges: updatedCharges }),
+            });
+            if (chRes.ok) {
+              const updated = await chRes.json();
+              setOrder(updated);
+              setCharges(prev => ({ ...prev, [chargeKey]: String(sellAmt) }));
+            }
+            // Also add to existing invoice if one already exists
             if (orderInvoices.length > 0) {
-              // Invoice already exists — add the line item directly
+              const desc = `Storage Fee${parsed.lotNumber ? ` – Lot ${parsed.lotNumber}` : ""}`;
               const existingItems = (orderInvoices[0]?.items || []).map(i => ({ description: i.description, amount: Number(i.amount || 0) }));
               const invRes = await fetch(`${API}/api/invoices/${orderInvoices[0]._id}`, {
                 method: "PUT", headers: { "Content-Type": "application/json" },
                 body: JSON.stringify({ items: [...existingItems, { description: desc, amount: sellAmt }] }),
               });
-              if (!invRes.ok) { const d = await invRes.json(); throw new Error("Invoice update failed: " + (d.error || invRes.status)); }
-              fetchOrderInvoices();
-            } else {
-              // No invoice yet — save as pending so it pre-loads when invoice is generated
-              await fetch(`${API}/api/orders/${order._id}/pending-invoice-items`, {
-                method: "POST", headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ description: desc, amount: sellAmt }),
-              });
-              fetchOrder();
+              if (invRes.ok) fetchOrderInvoices();
             }
           }
 
           setStorageConfirm(null);
           setStorageSellPrice("");
-          setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}${sellAmt > 0 ? (orderInvoices.length > 0 ? " · added to invoice" : " · queued for next invoice") : ""}.`);
+          setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}${sellAmt > 0 ? " · sell price added to charges" : ""}.`);
           fetchBills(order.refNumber);
         };
         return (
