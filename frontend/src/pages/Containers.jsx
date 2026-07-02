@@ -139,8 +139,12 @@ export default function Containers() {
   // Edit modal
   const [editLoad,    setEditLoad]    = useState(null);
   const [editForm,    setEditForm]    = useState({});
-  const [editTab,     setEditTab]     = useState("details"); // details | consignee | notify | orders
+  const [editTab,     setEditTab]     = useState("details"); // details | consignee | orders | docs
   const [savingEdit,  setSavingEdit]  = useState(false);
+  const [loadFiles,   setLoadFiles]   = useState([]);
+  const [uploadingDoc, setUploadingDoc] = useState(false);
+  const [parsedBL,    setParsedBL]    = useState(null);
+  const [dragOver,    setDragOver]    = useState(false);
 
   const refresh = () => {
     fetch(`${API}/api/container-loads`).then(r=>r.json()).then(d=>setLoads(Array.isArray(d)?d:[])).catch(()=>{});
@@ -257,6 +261,9 @@ export default function Containers() {
       notifyTin:        l.notifyTin        || "",
     });
     setEditTab("details");
+    setLoadFiles([]);
+    setParsedBL(null);
+    fetchLoadFiles(l._id);
   };
 
   const saveEdit = async () => {
@@ -299,7 +306,70 @@ export default function Containers() {
     { id:"details",   label:"📋 Details" },
     { id:"consignee", label:"👤 Consignee & Notify" },
     { id:"orders",    label:`📦 Orders (${editLoad ? (editLoad.orderIds||[]).length : 0})` },
+    { id:"docs",      label:`📄 Docs${loadFiles.length ? ` (${loadFiles.length})` : ""}` },
   ];
+
+  const fetchLoadFiles = async (loadId) => {
+    try {
+      const r = await fetch(`${API}/api/container-loads/${loadId}/files`);
+      const d = await r.json();
+      setLoadFiles(Array.isArray(d) ? d : []);
+    } catch (_) { setLoadFiles([]); }
+  };
+
+  const uploadDocFile = async (file) => {
+    if (!editLoad) return;
+    setUploadingDoc(true);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      fd.append("label", "Document");
+      const r = await fetch(`${API}/api/container-loads/${editLoad._id}/upload`, { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Upload failed");
+      // Update editLoad with new files list from response
+      setEditLoad(d);
+      setLoadFiles(prev => [...prev, ...(d.files || []).slice(prev.length)]);
+      await fetchLoadFiles(editLoad._id);
+      flash("✅ File uploaded");
+    } catch (e) {
+      flash("❌ " + e.message);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const parseBLFile = async (file) => {
+    if (!editLoad) return;
+    setUploadingDoc(true);
+    setParsedBL(null);
+    try {
+      const fd = new FormData();
+      fd.append("file", file);
+      const r = await fetch(`${API}/api/container-loads/${editLoad._id}/parse-bl-file`, { method: "POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Parse failed");
+      setParsedBL(d);
+    } catch (e) {
+      flash("❌ Parse failed: " + e.message);
+    } finally {
+      setUploadingDoc(false);
+    }
+  };
+
+  const applyParsedBL = () => {
+    if (!parsedBL) return;
+    const updates = {};
+    if (parsedBL.bookingNumber)   updates.bookingNumber   = parsedBL.bookingNumber;
+    if (parsedBL.containerNumber) updates.containerNumber = parsedBL.containerNumber;
+    if (parsedBL.sealNumber)      updates.sealNumber      = parsedBL.sealNumber;
+    if (parsedBL.vessel)          updates.vessel          = parsedBL.vessel;
+    if (parsedBL.pol)             updates.pol             = parsedBL.pol;
+    if (parsedBL.pod)             updates.pod             = parsedBL.pod;
+    setEditForm(f => ({ ...f, ...updates }));
+    setParsedBL(null);
+    flash("✅ Fields updated from BL — save to confirm");
+  };
 
   return (
     <div>
@@ -738,10 +808,147 @@ export default function Containers() {
                   })}
                 </div>
               )}
+              {/* ─ Docs tab ─ */}
+              {editTab === "docs" && (
+                <div>
+                  {/* Parsed BL results banner */}
+                  {parsedBL && (
+                    <div style={{ background:"rgba(124,58,237,0.12)", border:"1px solid rgba(124,58,237,0.35)",
+                      borderRadius:10, padding:16, marginBottom:16 }}>
+                      <div style={{ fontWeight:700, fontSize:13, color:"#a78bfa", marginBottom:10 }}>📋 Parsed from document — click Apply to fill fields</div>
+                      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"6px 16px", fontSize:12 }}>
+                        {[
+                          ["Booking #",    parsedBL.bookingNumber],
+                          ["Container #",  parsedBL.containerNumber],
+                          ["Seal #",       parsedBL.sealNumber],
+                          ["Vessel",       parsedBL.vessel],
+                          ["POL",          parsedBL.pol],
+                          ["POD",          parsedBL.pod],
+                          ["AES ITN",      parsedBL.aesItn],
+                        ].filter(([,v]) => v).map(([k,v]) => (
+                          <div key={k}>
+                            <span style={{ color:"var(--text-muted)" }}>{k}: </span>
+                            <strong style={{ color:"var(--text-primary)" }}>{v}</strong>
+                          </div>
+                        ))}
+                        {parsedBL.vins?.length > 0 && (
+                          <div style={{ gridColumn:"1/-1" }}>
+                            <span style={{ color:"var(--text-muted)" }}>VINs: </span>
+                            <span style={{ fontFamily:"monospace", fontSize:11, color:"var(--text-primary)" }}>
+                              {parsedBL.vins.join(" · ")}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      <div style={{ display:"flex", gap:8, marginTop:12 }}>
+                        <button onClick={applyParsedBL}
+                          style={{ padding:"7px 20px", background:"#7c3aed", color:"#fff",
+                            border:"none", borderRadius:7, fontWeight:600, cursor:"pointer", fontSize:13 }}>
+                          ✅ Apply to Load
+                        </button>
+                        <button onClick={() => setParsedBL(null)}
+                          style={{ padding:"7px 14px", background:"none", border:"1px solid var(--border)",
+                            borderRadius:7, color:"var(--text-secondary)", cursor:"pointer", fontSize:13 }}>
+                          Dismiss
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Drag & drop upload zone */}
+                  <div
+                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
+                    onDragLeave={() => setDragOver(false)}
+                    onDrop={async e => {
+                      e.preventDefault(); setDragOver(false);
+                      const file = e.dataTransfer.files[0];
+                      if (!file) return;
+                      await uploadDocFile(file);
+                    }}
+                    style={{ border:`2px dashed ${dragOver ? "#7c3aed" : "var(--border)"}`,
+                      borderRadius:10, padding:"28px 20px", textAlign:"center", marginBottom:16,
+                      background: dragOver ? "rgba(124,58,237,0.08)" : "var(--bg-base)",
+                      transition:"all 0.15s", cursor:"pointer" }}
+                    onClick={() => document.getElementById("cl-doc-upload").click()}>
+                    <input id="cl-doc-upload" type="file" style={{ display:"none" }}
+                      onChange={async e => {
+                        const file = e.target.files[0];
+                        if (!file) return;
+                        e.target.value = "";
+                        await uploadDocFile(file);
+                      }} />
+                    {uploadingDoc
+                      ? <div style={{ color:"var(--text-muted)", fontSize:13 }}>⏳ Uploading…</div>
+                      : <>
+                          <div style={{ fontSize:28, marginBottom:6 }}>📎</div>
+                          <div style={{ fontSize:13, color:"var(--text-muted)" }}>Drag & drop or click to upload</div>
+                          <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:4 }}>BL · Draft · Invoice · Any document</div>
+                        </>
+                    }
+                  </div>
+
+                  {/* File list */}
+                  {loadFiles.length === 0 && !uploadingDoc && (
+                    <div style={{ textAlign:"center", padding:24, color:"var(--text-muted)", fontSize:13 }}>
+                      No documents uploaded yet
+                    </div>
+                  )}
+                  {loadFiles.map((f, idx) => (
+                    <div key={f.id || idx} style={{ display:"flex", alignItems:"center", gap:10,
+                      padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)",
+                      marginBottom:8, background:"var(--bg-base)" }}>
+                      <span style={{ fontSize:20 }}>
+                        {/pdf/i.test(f.mimeType) ? "📄" : /image/i.test(f.mimeType) ? "🖼" : "📎"}
+                      </span>
+                      <div style={{ flex:1, minWidth:0 }}>
+                        <div style={{ fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
+                          {f.name}
+                        </div>
+                        <div style={{ fontSize:11, color:"var(--text-muted)" }}>
+                          {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : ""}
+                        </div>
+                      </div>
+                      <button
+                        onClick={async () => {
+                          setUploadingDoc(true);
+                          try {
+                            const r = await fetch(`${API}/api/container-loads/${editLoad._id}/parse-bl-file`, {
+                              method: "POST",
+                              body: (() => { const fd = new FormData(); fd.append("url", f.webViewLink || f.webContentLink || ""); return fd; })(),
+                            });
+                          } catch (_) {}
+                          // Parse from Drive URL via proxy
+                          try {
+                            const proxyUrl = `${API}/api/drive-proxy/${f.id}`;
+                            const blob = await fetch(proxyUrl).then(r => r.blob());
+                            const file = new File([blob], f.name, { type: f.mimeType });
+                            await parseBLFile(file);
+                          } catch (e) {
+                            flash("❌ Could not parse: " + e.message);
+                          } finally {
+                            setUploadingDoc(false);
+                          }
+                        }}
+                        title="Parse this document for BL info"
+                        style={{ padding:"5px 10px", fontSize:11, background:"rgba(124,58,237,0.12)",
+                          border:"1px solid rgba(124,58,237,0.3)", borderRadius:6,
+                          color:"#a78bfa", cursor:"pointer", whiteSpace:"nowrap" }}>
+                        🔍 Parse
+                      </button>
+                      <a href={f.webViewLink} target="_blank" rel="noreferrer"
+                        style={{ padding:"5px 10px", fontSize:11, background:"var(--bg-panel)",
+                          border:"1px solid var(--border)", borderRadius:6,
+                          color:"var(--text-secondary)", cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>
+                        ↗ Open
+                      </a>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
 
             {/* Footer */}
-            {editTab !== "orders" && (
+            {editTab !== "orders" && editTab !== "docs" && (
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end",
                 padding:"14px 24px", borderTop:"1px solid var(--border)" }}>
                 <button onClick={()=>setEditLoad(null)}
@@ -756,7 +963,7 @@ export default function Containers() {
                 </button>
               </div>
             )}
-            {editTab === "orders" && (
+            {(editTab === "orders" || editTab === "docs") && (
               <div style={{ display:"flex", justifyContent:"flex-end",
                 padding:"14px 24px", borderTop:"1px solid var(--border)" }}>
                 <button onClick={()=>setEditLoad(null)}
