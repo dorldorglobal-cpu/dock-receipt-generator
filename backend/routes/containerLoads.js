@@ -179,6 +179,8 @@ router.delete("/:id/files/:fileId", async (req, res) => {
   try {
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
+    // Delete from Google Drive
+    try { await drive.files.delete({ fileId: req.params.fileId }); } catch (_) {}
     load.files = (load.files || []).filter(f => f.driveFileId !== req.params.fileId);
     await load.save();
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
@@ -315,12 +317,12 @@ function parseBLText(text, filename = "") {
   // from junk like "NOTIFY PARTY / INTERMEDIATE"
   let vessel = "", pol = "";
   for (const line of lines) {
-    // Group 3 must start with Capital+lowercase (city name like "New York")
-    // so the greedy voyage group can't consume the leading capital of the city
-    const m = line.match(/^([A-Z][A-Z0-9 \-]{2,}?)\s*\/\s*([A-Z0-9]*\d[A-Z0-9]*)\s+([A-Z][a-z].*)$/);
+    // Voyage code must contain a digit (120E, 526E, 0526) — filters out "NOTIFY PARTY / INTERMEDIATE"
+    // City/POL is optional on the same line (may appear on the next line instead)
+    const m = line.match(/^([A-Z][A-Z0-9 \-]{2,}?)\s*\/\s*([A-Z0-9]*\d[A-Z0-9]*)(?:\s+(.+))?$/);
     if (m) {
       vessel = `${m[1].trim()} / ${m[2].trim()}`;
-      pol    = m[3].trim(); // city name appears after voyage code on same line
+      pol    = (m[3] || "").trim(); // city name appears after voyage code on same line
       break;
     }
   }
@@ -345,9 +347,30 @@ function parseBLText(text, filename = "") {
       break;
     }
   }
-  // Fallbacks
-  if (!pol) pol = lineAfter(/15\.\s*PORT\s*OF\s*LOADING/i, /PORT\s*OF\s*LOADING/i);
-  if (!pod) pod = lineAfter(/16\.\s*FOREIGN\s*PORT/i, /FOREIGN\s*PORT\s*OF\s*UNLOADING/i);
+  // If POL wasn't on the vessel line, try the line immediately after vessel in the text
+  if (vessel && !pol) {
+    const vi = lines.findIndex(l => l.startsWith(vessel.split(" /")[0].trim()));
+    if (vi >= 0 && vi < lines.length - 1) {
+      const cand = lines[vi + 1];
+      if (/^[A-Z]/.test(cand) && cand.length < 40 && !/^\d+\./.test(cand)) pol = cand.trim();
+    }
+  }
+  // Fallback: skip lines that look like numbered field labels (^\d+\. WORD...)
+  const valueAfter = (...patterns) => {
+    for (const pat of patterns) {
+      for (let i = 0; i < lines.length - 1; i++) {
+        if (pat.test(lines[i])) {
+          for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+            const next = lines[j];
+            if (!/^\d+\.\s+[A-Z]/.test(next) && next.length > 1 && next.length < 60) return next;
+          }
+        }
+      }
+    }
+    return "";
+  };
+  if (!pol) pol = valueAfter(/15\.\s*PORT\s*OF\s*LOADING/i);
+  if (!pod) pod = valueAfter(/16\.\s*FOREIGN\s*PORT/i);
 
   // AES ITN
   const aesItn = inline(/AES\s+ITN[:\s]+(\S+)/i) || inline(/ITN[:\s]+(X\d{14})/i);
