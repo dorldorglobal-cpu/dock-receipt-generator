@@ -1354,6 +1354,25 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
 
 // POST /api/send-sms  { body }  — sends via Google Voice gateway using Gmail REST API
 // ── POST /api/orders/:id/post-to-central-dispatch ────────────────────────────
+// Port city/state/zip lookup keyed by normalized POL name
+const PORT_LOCATIONS = {
+  "WILMINGTON":   { city: "Wilmington",   state: "DE", zip: "19801" },
+  "BALTIMORE":    { city: "Baltimore",    state: "MD", zip: "21224" },
+  "NEWARK":       { city: "Newark",       state: "NJ", zip: "07114" },
+  "PORT NEWARK":  { city: "Newark",       state: "NJ", zip: "07114" },
+  "BRUNSWICK":    { city: "Brunswick",    state: "GA", zip: "31525" },
+  "JACKSONVILLE": { city: "Jacksonville", state: "FL", zip: "32226" },
+  "HOUSTON":      { city: "Houston",      state: "TX", zip: "77029" },
+  "SAVANNAH":     { city: "Savannah",     state: "GA", zip: "31401" },
+  "MIAMI":        { city: "Miami",        state: "FL", zip: "33132" },
+  "NEW YORK":     { city: "Newark",       state: "NJ", zip: "07114" },
+  "CHARLESTON":   { city: "Charleston",   state: "SC", zip: "29405" },
+  "NORFOLK":      { city: "Norfolk",      state: "VA", zip: "23510" },
+  "LOS ANGELES":  { city: "Los Angeles",  state: "CA", zip: "90731" },
+  "LONG BEACH":   { city: "Long Beach",   state: "CA", zip: "90802" },
+  "PROVIDENCE":   { city: "Providence",   state: "RI", zip: "02905" },
+};
+
 app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req, res) => {
   try {
     const Order = require("./models/Order");
@@ -1361,21 +1380,25 @@ app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req,
     if (!order) return res.status(404).json({ error: "Order not found" });
 
     const charges = order.charges || {};
-    const carrierPay = parseFloat(charges.towingCost || charges.towingCharge || 0).toFixed(2);
-    if (parseFloat(carrierPay) <= 0) return res.status(400).json({ error: "Towing cost is $0 — set a towing cost before posting to Central Dispatch." });
+    const carrierPay = parseFloat(charges.towingCharge || 0).toFixed(2);
+    if (parseFloat(carrierPay) <= 0) return res.status(400).json({ error: "Towing charge is $0 — set a towing charge before posting to Central Dispatch." });
 
     const pickupCity  = (order.pickupCity  || "").trim();
     const pickupState = (order.pickupState || "").trim().toUpperCase().slice(0, 2);
     const pickupZip   = (order.pickupZip   || "").trim();
-    const delivCity   = (order.deliveryCity  || "").trim();
-    const delivState  = (order.deliveryState || "").trim().toUpperCase().slice(0, 2);
-    const delivZip    = (order.deliveryZip   || "").trim();
+
+    // For port orders, resolve delivery from POL; fall back to deliveryCity/State/Zip
+    const isPort = ["RORO", "Container"].includes(order.requestType);
+    const polKey = (order.pol || "").toUpperCase().trim();
+    const portLoc = PORT_LOCATIONS[polKey];
+    const delivCity  = isPort && portLoc ? portLoc.city  : (order.deliveryCity  || "").trim();
+    const delivState = isPort && portLoc ? portLoc.state : (order.deliveryState || "").trim().toUpperCase().slice(0, 2);
+    const delivZip   = isPort && portLoc ? portLoc.zip   : (order.deliveryZip   || "").trim();
 
     if (!pickupCity || !pickupState || !delivCity || !delivState) {
       return res.status(400).json({ error: "Missing pickup or delivery city/state. Fill those in on the order first." });
     }
 
-    const operable = (order.condition || "Runner").toLowerCase() === "runner" ? "operable" : "inop";
     const today    = new Date();
     const fmtDate  = (d) => d.toISOString().slice(0, 10);
     const dispUntil = new Date(today); dispUntil.setDate(dispUntil.getDate() + 30);
@@ -1386,7 +1409,6 @@ app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req,
       ? `${order.year || ""}|${order.make || ""}|${order.model || ""}||${vin}`
       : `${order.year || ""}|${order.make || ""}|${order.model || ""}|Car`;
 
-    const isPort  = ["RORO", "Container"].includes(order.requestType);
     const orderId = (String(order.refNumber || order._id) + (isPort ? "PORT" : "")).slice(0, 10);
 
     // 18-field comma-delimited record
@@ -1404,7 +1426,7 @@ app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req,
       "delivery",              // COD timing (required even when 0)
       "quickpay",              // remaining balance — closest to ACH/electronic
       "open",                  // ship method
-      operable,
+      "operable",
       fmtDate(today),          // first available
       fmtDate(dispUntil),      // display until
       "",                      // additional info
