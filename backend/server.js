@@ -1354,23 +1354,28 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
 
 // POST /api/send-sms  { body }  — sends via Google Voice gateway using Gmail REST API
 // ── POST /api/orders/:id/post-to-central-dispatch ────────────────────────────
-// Port city/state/zip lookup keyed by normalized POL name
-const PORT_LOCATIONS = {
-  "WILMINGTON":   { city: "Wilmington",   state: "DE", zip: "19801" },
-  "BALTIMORE":    { city: "Baltimore",    state: "MD", zip: "21224" },
-  "NEWARK":       { city: "Newark",       state: "NJ", zip: "07114" },
-  "PORT NEWARK":  { city: "Newark",       state: "NJ", zip: "07114" },
-  "BRUNSWICK":    { city: "Brunswick",    state: "GA", zip: "31525" },
-  "JACKSONVILLE": { city: "Jacksonville", state: "FL", zip: "32226" },
-  "HOUSTON":      { city: "Houston",      state: "TX", zip: "77029" },
-  "SAVANNAH":     { city: "Savannah",     state: "GA", zip: "31401" },
-  "MIAMI":        { city: "Miami",        state: "FL", zip: "33132" },
-  "NEW YORK":     { city: "Newark",       state: "NJ", zip: "07114" },
-  "CHARLESTON":   { city: "Charleston",   state: "SC", zip: "29405" },
-  "NORFOLK":      { city: "Norfolk",      state: "VA", zip: "23510" },
-  "LOS ANGELES":  { city: "Los Angeles",  state: "CA", zip: "90731" },
-  "LONG BEACH":   { city: "Long Beach",   state: "CA", zip: "90802" },
-  "PROVIDENCE":   { city: "Providence",   state: "RI", zip: "02905" },
+// Nearest port by pickup state — carrier delivers to closest port, not the ocean POL
+const NEAREST_PORT_BY_STATE = {
+  FL: { city: "Jacksonville", state: "FL", zip: "32226" },
+  GA: { city: "Brunswick",    state: "GA", zip: "31525" },
+  SC: { city: "Charleston",   state: "SC", zip: "29405" },
+  NC: { city: "Charleston",   state: "SC", zip: "29405" },
+  VA: { city: "Norfolk",      state: "VA", zip: "23510" },
+  MD: { city: "Baltimore",    state: "MD", zip: "21224" },
+  DC: { city: "Baltimore",    state: "MD", zip: "21224" },
+  DE: { city: "Wilmington",   state: "DE", zip: "19801" },
+  PA: { city: "Wilmington",   state: "DE", zip: "19801" },
+  NJ: { city: "Newark",       state: "NJ", zip: "07114" },
+  NY: { city: "Newark",       state: "NJ", zip: "07114" },
+  CT: { city: "Newark",       state: "NJ", zip: "07114" },
+  RI: { city: "Providence",   state: "RI", zip: "02905" },
+  MA: { city: "Providence",   state: "RI", zip: "02905" },
+  NH: { city: "Providence",   state: "RI", zip: "02905" },
+  TX: { city: "Houston",      state: "TX", zip: "77029" },
+  LA: { city: "Houston",      state: "TX", zip: "77029" },
+  CA: { city: "Long Beach",   state: "CA", zip: "90802" },
+  OR: { city: "Long Beach",   state: "CA", zip: "90802" },
+  WA: { city: "Long Beach",   state: "CA", zip: "90802" },
 };
 
 app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req, res) => {
@@ -1387,13 +1392,12 @@ app.post("/api/orders/:id/post-to-central-dispatch", express.json(), async (req,
     const pickupState = (order.pickupState || "").trim().toUpperCase().slice(0, 2);
     const pickupZip   = (order.pickupZip   || "").trim();
 
-    // For port orders, resolve delivery from POL; fall back to deliveryCity/State/Zip
+    // For port orders, route to nearest port based on pickup state
     const isPort = ["RORO", "Container"].includes(order.requestType);
-    const polKey = (order.pol || "").toUpperCase().trim();
-    const portLoc = PORT_LOCATIONS[polKey];
-    const delivCity  = isPort && portLoc ? portLoc.city  : (order.deliveryCity  || "").trim();
-    const delivState = isPort && portLoc ? portLoc.state : (order.deliveryState || "").trim().toUpperCase().slice(0, 2);
-    const delivZip   = isPort && portLoc ? portLoc.zip   : (order.deliveryZip   || "").trim();
+    const nearestPort = NEAREST_PORT_BY_STATE[pickupState];
+    const delivCity  = isPort && nearestPort ? nearestPort.city  : (order.deliveryCity  || "").trim();
+    const delivState = isPort && nearestPort ? nearestPort.state : (order.deliveryState || "").trim().toUpperCase().slice(0, 2);
+    const delivZip   = isPort && nearestPort ? nearestPort.zip   : (order.deliveryZip   || "").trim();
 
     if (!pickupCity || !pickupState || !delivCity || !delivState) {
       return res.status(400).json({ error: "Missing pickup or delivery city/state. Fill those in on the order first." });
