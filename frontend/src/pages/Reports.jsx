@@ -1,4 +1,5 @@
 ﻿import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -137,7 +138,7 @@ const STATUS_CLR = { paid: "#34d399", partial: "#fb923c", unpaid: "#f87171",
   "Picked Up": "#a78bfa", "Awaiting Pickup": "#fbbf24", "New Order": "#60a5fa" };
 
 // Reusable expandable grouped table
-function ExpandTable({ headers, rows, footer, rights = [], subHeaders, renderSub }) {
+function ExpandTable({ headers, rows, footer, rights = [], subHeaders, renderSub, onRowClick }) {
   const [expanded, setExpanded] = useState({});
   if (!rows?.length) return <div style={{ color:"var(--text-muted)", padding:32, textAlign:"center" }}>No data for this period.</div>;
   const s = (i) => rights.includes(i) ? { textAlign:"right" } : {};
@@ -166,7 +167,12 @@ function ExpandTable({ headers, rows, footer, rights = [], subHeaders, renderSub
                 {r.__cells.map((c, ci) => <td key={ci} style={s(ci)}>{c}</td>)}
               </tr>,
               open && items.map((item, idx) => (
-                <tr key={`sub${ri}-${idx}`} style={{ background:"var(--bg-base)", borderBottom:"1px solid var(--border-muted)" }}>
+                <tr key={`sub${ri}-${idx}`}
+                  onClick={() => onRowClick && onRowClick(item)}
+                  style={{ background:"var(--bg-base)", borderBottom:"1px solid var(--border-muted)",
+                    cursor: onRowClick ? "pointer" : "default" }}
+                  onMouseEnter={e => { if (onRowClick) e.currentTarget.style.background = "var(--bg-elevated)"; }}
+                  onMouseLeave={e => { e.currentTarget.style.background = "var(--bg-base)"; }}>
                   <td></td>
                   {renderSub(item)}
                 </tr>
@@ -269,7 +275,7 @@ async function dlPDF(title, subtitle, headers, rows, footer) {
 // ── Quick (summary) report renderers ─────────────────────────────────────────
 // ══════════════════════════════════════════════════════════════════════════════
 
-function IncomeByCustomer({ d, sub, filter }) {
+function IncomeByCustomer({ d, sub, filter, navigate }) {
   const rows = applyFilter(d.rows || [], filter, r => r.customer);
   const totals = rows.reduce((t, r) => ({
     orders: t.orders + r.orders, billed: t.billed + r.billed,
@@ -293,6 +299,7 @@ function IncomeByCustomer({ d, sub, filter }) {
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Income-by-Customer")} onPDF={() => dlPDF("Income by Customer", sub, H, Rcsv, F)} />
     <ExpandTable headers={H} rows={R} footer={F} rights={[1,2,3,4]}
+      onRowClick={item => item._id && navigate(`/orders/${item._id}`)}
       renderSub={item => [
         <td style={{ padding:"6px 8px" }}>
           <span style={{ color:"var(--accent)", fontWeight:700, fontFamily:"monospace", fontSize:12 }}>#{item.refNumber}</span>
@@ -311,7 +318,7 @@ function IncomeByCustomer({ d, sub, filter }) {
   </>;
 }
 
-function IncomeByDestination({ d, sub, filter }) {
+function IncomeByDestination({ d, sub, filter, navigate }) {
   const rows   = applyFilter(d.rows || [], filter, r => r.destination);
   const totals = { orders: rows.reduce((s,r)=>s+r.orders,0), billed: rows.reduce((s,r)=>s+r.billed,0) };
   const H = ["Destination", "Orders", "Completed", "Total Billed"];
@@ -329,6 +336,7 @@ function IncomeByDestination({ d, sub, filter }) {
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Income-by-Destination")} onPDF={() => dlPDF("Income by Destination", sub, H, Rcsv, F)} />
     <ExpandTable headers={H} rows={R} footer={F} rights={[1,2,3]}
+      onRowClick={item => item._id && navigate(`/orders/${item._id}`)}
       renderSub={item => [
         <td style={{ padding:"6px 8px" }}>
           <span style={{ color:"var(--accent)", fontWeight:700, fontFamily:"monospace", fontSize:12 }}>#{item.refNumber}</span>
@@ -347,7 +355,7 @@ function IncomeByDestination({ d, sub, filter }) {
   </>;
 }
 
-function IncomeByRoute({ d, sub, filter }) {
+function IncomeByRoute({ d, sub, filter, navigate }) {
   const rows   = applyFilter(d.rows || [], filter, r => r.route, r => r.pol, r => r.pod);
   const totals = { orders: rows.reduce((s,r)=>s+r.orders,0), billed: rows.reduce((s,r)=>s+r.billed,0) };
   const H = ["Route", "Origin (POL)", "Destination (POD)", "Orders", "Total Billed"];
@@ -365,6 +373,7 @@ function IncomeByRoute({ d, sub, filter }) {
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Income-by-Route")} onPDF={() => dlPDF("Income by Route", sub, H, Rcsv, F)} />
     <ExpandTable headers={H} rows={R} footer={F} rights={[3,4]}
+      onRowClick={item => item._id && navigate(`/orders/${item._id}`)}
       renderSub={item => [
         <td style={{ padding:"6px 8px" }}>
           <span style={{ color:"var(--accent)", fontWeight:700, fontFamily:"monospace", fontSize:12 }}>#{item.refNumber}</span>
@@ -887,6 +896,7 @@ function ExpenseDetail({ d, sub, filter, activeReport }) {
 // ══════════════════════════════════════════════════════════════════════════════
 
 export default function Reports() {
+  const navigate = useNavigate();
   const [active,     setActive]     = useState("income-by-customer");
   const [from,       setFrom]       = useState("");
   const [to,         setTo]         = useState("");
@@ -962,7 +972,7 @@ export default function Reports() {
     );
     if (!data) return null;
 
-    const props = { d: data, sub: subLabel, filter: filterText, activeReport: active };
+    const props = { d: data, sub: subLabel, filter: filterText, activeReport: active, navigate };
 
     // Detailed drill-down view
     if (view === "detailed") {

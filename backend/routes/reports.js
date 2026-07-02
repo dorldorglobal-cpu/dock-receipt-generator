@@ -33,7 +33,7 @@ router.get("/income-by-customer", async (req, res) => {
       if (o.status === "Completed") map[key].collected += amt;
       else map[key].outstanding += amt;
       map[key].items.push({
-        refNumber: o.refNumber, date: o.createdAt, status: o.status,
+        _id: o._id, refNumber: o.refNumber, date: o.createdAt, status: o.status,
         vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
         vin: o.vin || "", pod: o.pod || "", amount: amt,
       });
@@ -61,7 +61,7 @@ router.get("/income-by-destination", async (req, res) => {
       map[key].billed += amt;
       if (o.status === "Completed") map[key].completed++;
       map[key].items.push({
-        refNumber: o.refNumber, date: o.createdAt, status: o.status,
+        _id: o._id, refNumber: o.refNumber, date: o.createdAt, status: o.status,
         customer: o.customerName || "—",
         vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
         vin: o.vin || "", amount: amt,
@@ -87,7 +87,7 @@ router.get("/income-by-route", async (req, res) => {
       map[key].orders++;
       map[key].billed += amt;
       map[key].items.push({
-        refNumber: o.refNumber, date: o.createdAt, status: o.status,
+        _id: o._id, refNumber: o.refNumber, date: o.createdAt, status: o.status,
         customer: o.customerName || "—",
         vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
         vin: o.vin || "", amount: amt,
