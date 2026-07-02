@@ -1308,7 +1308,7 @@ export default function Expenses() {
   };
 
   return (
-    <div style={{ padding: "28px 32px", maxWidth: 1300, margin: "0 auto" }}>
+    <div style={{ padding: "28px 32px", maxWidth: 1300, margin: "0 auto", paddingBottom: selectedIds.length > 0 ? 100 : 28 }}>
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
@@ -2664,7 +2664,7 @@ export default function Expenses() {
       {/* ── Sticky Pay Bills Bar ── */}
       {selectedIds.length > 0 && (
         <div style={{
-          position: "fixed", bottom: 0, left: 0, right: 0, zIndex: 100,
+          position: "fixed", bottom: 0, left: 228, right: 0, zIndex: 100,
           background: "var(--bg-base)", borderTop: "2px solid #f59e0b",
           padding: "14px 32px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
           boxShadow: "0 -4px 24px rgba(0,0,0,0.5)",
