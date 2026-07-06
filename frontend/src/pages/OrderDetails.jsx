@@ -637,16 +637,18 @@ export default function OrderDetails() {
   };
 
   const BILL_CATEGORIES = [
-    "Towing / Transport", "Ocean Freight", "Port / Terminal Fees",
-    "Loaders & Warehouses", "Software", "Legal Fees", "Office & Admin", "General Overhead",
+    "Towing / Transport", "Ocean Freight", "Storage", "Port / Terminal Fees",
+    "Loaders & Warehouses", "Software", "Mailing Fees", "Legal Fees", "Office & Admin", "General Overhead",
   ];
 
   const BILL_CAT_COLORS = {
     "Towing / Transport":   "#60a5fa",
     "Ocean Freight":        "#34d399",
+    "Storage":              "#fb923c",
     "Port / Terminal Fees": "#a78bfa",
     "Loaders & Warehouses": "#f97316",
     "Software":             "#22d3ee",
+    "Mailing Fees":         "#e879f9",
     "Legal Fees":           "#f43f5e",
     "Office & Admin":       "#fbbf24",
     "General Overhead":     "var(--text-secondary)",
