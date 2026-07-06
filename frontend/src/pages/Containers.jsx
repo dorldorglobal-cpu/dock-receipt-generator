@@ -442,16 +442,38 @@ export default function Containers() {
                   </span>
                 </div>
 
-                <div style={{ flex:1 }}>
-                  {l.bookingNumber
-                    ? <div style={{ fontWeight:600, color:"#60a5fa", fontSize:13 }}>📋 {l.bookingNumber}</div>
-                    : <div style={{ color:"var(--text-muted)", fontSize:12, fontStyle:"italic" }}>No booking # yet</div>}
-                  {l.containerNumber && (
-                    <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
-                      CTR: <strong>{l.containerNumber}</strong>
-                      {l.sealNumber && <> · Seal: <strong>{l.sealNumber}</strong></>}
-                    </div>
-                  )}
+                <div style={{ flex:1, display:"flex", gap:24, minWidth:0 }}>
+                  {/* Booking + Container */}
+                  <div style={{ minWidth:170 }}>
+                    {l.bookingNumber
+                      ? <div style={{ fontWeight:600, color:"#60a5fa", fontSize:13 }}>📋 {l.bookingNumber}</div>
+                      : <div style={{ color:"var(--text-muted)", fontSize:12, fontStyle:"italic" }}>No booking # yet</div>}
+                    {l.containerNumber && (
+                      <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
+                        CTR: <strong>{l.containerNumber}</strong>
+                        {l.sealNumber && <> · Seal: <strong>{l.sealNumber}</strong></>}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Consignee / loader */}
+                  <div style={{ flex:1, minWidth:0 }}>
+                    {l.consigneeName
+                      ? <div style={{ fontWeight:600, fontSize:13, color:"var(--text-primary)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          👤 {l.consigneeName}
+                        </div>
+                      : <div style={{ color:"var(--text-muted)", fontSize:12, fontStyle:"italic" }}>No consignee</div>}
+                    {l.loaderEmail
+                      ? <div style={{ fontSize:11, color:"var(--text-secondary)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          ✉ {l.loaderEmail}
+                        </div>
+                      : null}
+                    {!l.loaderEmail && l.notes
+                      ? <div style={{ fontSize:11, color:"var(--text-muted)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                          {l.notes}
+                        </div>
+                      : null}
+                  </div>
                 </div>
 
                 <div style={{ minWidth:150, fontSize:12 }}>
