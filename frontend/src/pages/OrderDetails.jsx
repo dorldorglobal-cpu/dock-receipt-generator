@@ -5004,6 +5004,22 @@ export default function OrderDetails() {
                 {docPreview.name}
               </span>
               <div style={{ display: "flex", gap: 10, alignItems: "center", flexShrink: 0 }}>
+                {/* Zoom controls */}
+                <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                  <button onClick={() => setPreviewZoom(z => Math.max(0.5, +(z - 0.25).toFixed(2)))}
+                    style={{ padding:"3px 9px", fontSize:16, background:"rgba(255,255,255,0.08)", border:"1px solid var(--border)",
+                      borderRadius:6, color:"var(--text-primary)", cursor:"pointer", lineHeight:1 }}>−</button>
+                  <span style={{ fontSize:11, color:"var(--text-muted)", minWidth:36, textAlign:"center" }}>
+                    {Math.round(previewZoom * 100)}%</span>
+                  <button onClick={() => setPreviewZoom(z => Math.min(5, +(z + 0.25).toFixed(2)))}
+                    style={{ padding:"3px 9px", fontSize:16, background:"rgba(255,255,255,0.08)", border:"1px solid var(--border)",
+                      borderRadius:6, color:"var(--text-primary)", cursor:"pointer", lineHeight:1 }}>+</button>
+                  {previewZoom !== 1 && (
+                    <button onClick={() => { setPreviewZoom(1); setPreviewPan({ x:0, y:0 }); }}
+                      style={{ padding:"3px 8px", fontSize:10, background:"rgba(255,255,255,0.08)", border:"1px solid var(--border)",
+                        borderRadius:6, color:"var(--text-muted)", cursor:"pointer" }}>↺</button>
+                  )}
+                </div>
                 {/* PIN badge — shown when previewing Buyer Receipt and order has a PIN */}
                 {docPreview.label === "Buyer Receipt" && order.pin && (
                   <button
@@ -5076,12 +5092,15 @@ export default function OrderDetails() {
                   </span>
                 </div>
               ) : (
-                <iframe
-                  src={src}
-                  style={{ flex: 1, border: "none", width: "100%" }}
-                  title={docPreview.name}
-                  allow="autoplay"
-                />
+                <div style={{ flex:1, overflow:"auto", display:"flex", alignItems:"flex-start", justifyContent:"center", background:"var(--bg-base)" }}>
+                  <iframe
+                    src={src}
+                    style={{ border:"none", width:`${100 / previewZoom}%`, height:`${100 / previewZoom}vh`,
+                      transform:`scale(${previewZoom})`, transformOrigin:"top center", flexShrink:0 }}
+                    title={docPreview.name}
+                    allow="autoplay"
+                  />
+                </div>
               );
             })()}
           </div>
