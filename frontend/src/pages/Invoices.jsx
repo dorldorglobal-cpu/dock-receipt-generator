@@ -45,6 +45,32 @@ export default function Invoices() {
   const [showOverdue, setShowOverdue] = useState(false);
   const [previewInv,  setPreviewInv]  = useState(null);
 
+  // Bulk selection
+  const [selectedIds, setSelectedIds] = useState(new Set());
+  const [bulkSaving,  setBulkSaving]  = useState(false);
+
+  const unpaidInvoices = invoices.filter(i => i.status !== "paid");
+  const allUnpaidSelected = unpaidInvoices.length > 0 && unpaidInvoices.every(i => selectedIds.has(i._id));
+  const toggleSelect = (id) => setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
+  const toggleAll = () => setSelectedIds(allUnpaidSelected ? new Set() : new Set(unpaidInvoices.map(i => i._id)));
+
+  const bulkMarkPaid = async () => {
+    if (!selectedIds.size) return;
+    if (!window.confirm(`Mark ${selectedIds.size} invoice(s) as Paid?`)) return;
+    setBulkSaving(true);
+    const today = todayISO();
+    await Promise.all([...selectedIds].map(id =>
+      fetch(`${API}/api/invoices/${id}/status`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "paid" }),
+      })
+    ));
+    setSelectedIds(new Set());
+    setBulkSaving(false);
+    setMessage(`${selectedIds.size || "Selected"} invoice(s) marked as Paid`);
+    load();
+  };
+
   // Payment modal state
   const [payModal,    setPayModal]    = useState(null);  // { inv, editPayment? }
   const [payAmount,   setPayAmount]   = useState("");
@@ -302,6 +328,11 @@ export default function Invoices() {
           <table className="orders-table" style={{ width: "100%" }}>
             <thead>
               <tr>
+                <th style={{ width:36, textAlign:"center" }}>
+                  <input type="checkbox" checked={allUnpaidSelected} onChange={toggleAll}
+                    title={allUnpaidSelected ? "Deselect all" : "Select all unpaid"}
+                    style={{ cursor:"pointer", width:15, height:15 }} />
+                </th>
                 <th>Invoice #</th>
                 <th>Order Ref</th>
                 <th>Customer</th>
@@ -320,7 +351,13 @@ export default function Invoices() {
                 const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
                 const remaining = Math.max(0, (inv.total || 0) - totalPaid);
                 return (
-                  <tr key={inv._id} style={{ background: isOverdue ? "rgba(220,38,38,0.04)" : undefined }}>
+                  <tr key={inv._id} style={{ background: selectedIds.has(inv._id) ? "rgba(124,58,237,0.07)" : isOverdue ? "rgba(220,38,38,0.04)" : undefined }}>
+                    <td style={{ textAlign:"center" }}>
+                      {inv.status !== "paid" && (
+                        <input type="checkbox" checked={selectedIds.has(inv._id)} onChange={() => toggleSelect(inv._id)}
+                          style={{ cursor:"pointer", width:15, height:15 }} />
+                      )}
+                    </td>
                     <td>
                       <span style={{ fontWeight: 700, fontFamily: "monospace", color: "var(--accent)", fontSize: 13 }}>
                         {inv.invoiceNumber}
@@ -428,6 +465,28 @@ export default function Invoices() {
               })}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {/* ── Bulk Action Bar ── */}
+      {selectedIds.size > 0 && (
+        <div style={{ position:"fixed", bottom:24, left:"50%", transform:"translateX(-50%)",
+          background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:12,
+          padding:"12px 24px", display:"flex", alignItems:"center", gap:16,
+          boxShadow:"0 4px 24px rgba(0,0,0,0.35)", zIndex:200, whiteSpace:"nowrap" }}>
+          <span style={{ fontWeight:600, color:"var(--text-primary)" }}>
+            {selectedIds.size} invoice{selectedIds.size !== 1 ? "s" : ""} selected
+          </span>
+          <button onClick={bulkMarkPaid} disabled={bulkSaving}
+            style={{ padding:"8px 20px", background:"#059669", border:"none", borderRadius:8,
+              color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", opacity: bulkSaving ? 0.6 : 1 }}>
+            {bulkSaving ? "Saving…" : "✅ Mark as Paid"}
+          </button>
+          <button onClick={() => setSelectedIds(new Set())}
+            style={{ padding:"8px 14px", background:"none", border:"1px solid var(--border)",
+              borderRadius:8, color:"var(--text-secondary)", cursor:"pointer", fontSize:13 }}>
+            Cancel
+          </button>
         </div>
       )}
 
