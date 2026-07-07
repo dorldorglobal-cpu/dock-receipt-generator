@@ -438,7 +438,7 @@ async function generateInvoicePdf(inv, order) {
     }
     if (inv.customerEmail) {
       doc.fill(muted).font("Helvetica").fontSize(9)
-         .text(inv.customerEmail, ML, y, { lineBreak: false });
+         .text(inv.customerEmail, ML, y, { lineBreak: false, width: META_X - ML - 20, ellipsis: true });
       y += 13;
     }
 
