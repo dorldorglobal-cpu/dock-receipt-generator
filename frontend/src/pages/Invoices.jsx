@@ -46,8 +46,12 @@ export default function Invoices() {
   const [previewInv,  setPreviewInv]  = useState(null);
 
   // Bulk selection
-  const [selectedIds, setSelectedIds] = useState(new Set());
-  const [bulkSaving,  setBulkSaving]  = useState(false);
+  const [selectedIds,   setSelectedIds]   = useState(new Set());
+  const [bulkModal,     setBulkModal]     = useState(false);
+  const [bulkMethod,    setBulkMethod]    = useState("Bank ACH");
+  const [bulkDate,      setBulkDate]      = useState(todayISO());
+  const [bulkNotes,     setBulkNotes]     = useState("");
+  const [bulkSaving,    setBulkSaving]    = useState(false);
 
   const unpaidInvoices = invoices.filter(i => i.status !== "paid");
   const allUnpaidSelected = unpaidInvoices.length > 0 && unpaidInvoices.every(i => selectedIds.has(i._id));
@@ -56,18 +60,30 @@ export default function Invoices() {
 
   const bulkMarkPaid = async () => {
     if (!selectedIds.size) return;
-    if (!window.confirm(`Mark ${selectedIds.size} invoice(s) as Paid?`)) return;
     setBulkSaving(true);
-    const today = todayISO();
-    await Promise.all([...selectedIds].map(id =>
-      fetch(`${API}/api/invoices/${id}/status`, {
+    const ids = [...selectedIds];
+    const count = ids.length;
+    await Promise.all(ids.map(async id => {
+      const inv = invoices.find(i => i._id === id);
+      if (!inv) return;
+      const remaining = Math.max(0, (inv.total || 0) - (inv.payments || []).reduce((s, p) => s + p.amount, 0));
+      // Record payment entry
+      if (remaining > 0) {
+        await fetch(`${API}/api/invoices/${id}/payments`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ amount: remaining, method: bulkMethod, date: bulkDate, notes: bulkNotes }),
+        });
+      }
+      // Mark as paid
+      await fetch(`${API}/api/invoices/${id}/status`, {
         method: "PATCH", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: "paid" }),
-      })
-    ));
+      });
+    }));
     setSelectedIds(new Set());
+    setBulkModal(false);
     setBulkSaving(false);
-    setMessage(`${selectedIds.size || "Selected"} invoice(s) marked as Paid`);
+    setMessage(`${count} invoice(s) marked as Paid`);
     load();
   };
 
@@ -477,16 +493,74 @@ export default function Invoices() {
           <span style={{ fontWeight:600, color:"var(--text-primary)" }}>
             {selectedIds.size} invoice{selectedIds.size !== 1 ? "s" : ""} selected
           </span>
-          <button onClick={bulkMarkPaid} disabled={bulkSaving}
+          <button onClick={() => { setBulkDate(todayISO()); setBulkNotes(""); setBulkModal(true); }}
             style={{ padding:"8px 20px", background:"#059669", border:"none", borderRadius:8,
-              color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer", opacity: bulkSaving ? 0.6 : 1 }}>
-            {bulkSaving ? "Saving…" : "✅ Mark as Paid"}
+              color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>
+            ✅ Mark as Paid
           </button>
           <button onClick={() => setSelectedIds(new Set())}
             style={{ padding:"8px 14px", background:"none", border:"1px solid var(--border)",
               borderRadius:8, color:"var(--text-secondary)", cursor:"pointer", fontSize:13 }}>
             Cancel
           </button>
+        </div>
+      )}
+
+      {/* ── Bulk Mark Paid Modal ── */}
+      {bulkModal && (
+        <div onClick={() => setBulkModal(false)} style={{
+          position:"fixed", inset:0, background:"rgba(0,0,0,0.65)",
+          zIndex:1000, display:"flex", alignItems:"center", justifyContent:"center", padding:20,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:14,
+            padding:28, width:"100%", maxWidth:400,
+          }}>
+            <h3 style={{ margin:"0 0 6px", color:"var(--text-primary)", fontSize:17 }}>
+              ✅ Mark as Paid
+            </h3>
+            <p style={{ margin:"0 0 20px", fontSize:13, color:"var(--text-secondary)" }}>
+              {selectedIds.size} invoice{selectedIds.size !== 1 ? "s" : ""} — remaining balance will be recorded as a payment.
+            </p>
+            <div style={{ display:"grid", gap:14 }}>
+              <label style={{ display:"block", fontSize:12, color:"var(--text-secondary)" }}>
+                Payment Method
+                <select value={bulkMethod} onChange={e => setBulkMethod(e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px",
+                    background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:7,
+                    color:"var(--text-primary)", fontSize:13 }}>
+                  {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+                </select>
+              </label>
+              <label style={{ display:"block", fontSize:12, color:"var(--text-secondary)" }}>
+                Date Paid
+                <input type="date" value={bulkDate} onChange={e => setBulkDate(e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px",
+                    background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:7,
+                    color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ display:"block", fontSize:12, color:"var(--text-secondary)" }}>
+                Notes (optional)
+                <input value={bulkNotes} onChange={e => setBulkNotes(e.target.value)}
+                  placeholder="e.g. batch ref #12345"
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px",
+                    background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:7,
+                    color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+            </div>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end", marginTop:22 }}>
+              <button onClick={() => setBulkModal(false)}
+                style={{ padding:"9px 20px", background:"none", border:"1px solid var(--border)",
+                  borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>
+                Cancel
+              </button>
+              <button onClick={bulkMarkPaid} disabled={bulkSaving}
+                style={{ padding:"9px 22px", background:"#059669", color:"#fff", border:"none",
+                  borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14, opacity: bulkSaving ? 0.6 : 1 }}>
+                {bulkSaving ? "Saving…" : `Mark ${selectedIds.size} as Paid`}
+              </button>
+            </div>
+          </div>
         </div>
       )}
 
