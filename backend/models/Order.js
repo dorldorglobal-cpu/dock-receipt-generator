@@ -15,6 +15,7 @@ const orderSchema = new mongoose.Schema(
       enum: ["RORO", "Container", "Inland Only"],
       required: true,
     },
+    dispatchMethod: { type: String, enum: ["Post", "Self Dispatch"], default: "Post" },
 
     year: String,
     make: String,

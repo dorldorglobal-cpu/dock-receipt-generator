@@ -25,6 +25,7 @@ export default function CreateOrder() {
   // ── Parse confirmation popup ───────────────────────────────────────────
   const [parsePopup, setParsePopup]         = useState(null); // { data, file, label }
   const [popupType, setPopupType]           = useState("RORO");
+  const [popupDispatch, setPopupDispatch]   = useState("Post");
   const [popupContainerSize, setPopupContainerSize] = useState("");
   const [popupWarehouse, setPopupWarehouse] = useState(null);
   const [popupCustomerName, setPopupCustomerName] = useState("");
@@ -537,7 +538,7 @@ export default function CreateOrder() {
   };
 
   // ── Shared: apply parsed data to form (called on popup confirm) ────────
-  const applyParsedData = (data, type, containerSize, warehouse) => {
+  const applyParsedData = (data, type, containerSize, warehouse, dispatchMethod = "Post") => {
     const rec = data.customerRecord;
     const podFromCustomer = rec?.defaultPod || countryToPod(rec?.country);
     const effectivePod  = data.pod || podFromCustomer || "";
@@ -548,6 +549,7 @@ export default function CreateOrder() {
     setForm(prev => ({
       ...prev,
       requestType:      type,
+      dispatchMethod:   dispatchMethod,
       customerName:     rec?.companyName  || data.customerName  || prev.customerName,
       customerPhone:    rec?.phone        || data.customerPhone || prev.customerPhone,
       customerEmail:    rec?.email        || data.customerEmail || prev.customerEmail,
@@ -1566,19 +1568,37 @@ export default function CreateOrder() {
             {/* RORO / Container toggle */}
             <div style={{ marginBottom:16 }}>
               <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>Shipping Mode</div>
-              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+              <div style={{ display:"flex", gap:8 }}>
                 {[
-                  { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
-                  { val:"Container",     label:"📦 Container",     color:"#2563eb" },
-                  { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
-                  { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+                  { val:"RORO",        label:"⚓ RORO",      color:"#059669" },
+                  { val:"Container",   label:"📦 Container", color:"#2563eb" },
+                  { val:"Inland Only", label:"🏠 Inland",    color:"#7c3aed" },
                 ].map(({ val, label, color }) => (
                   <button key={val} type="button" onClick={() => { setPopupType(val); setPopupContainerSize(""); setPopupWarehouse(null); }}
                     style={{
-                      flex:1, minWidth:120, padding:"9px 0", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13, border:"none",
+                      flex:1, padding:"9px 0", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13, border:"none",
                       background: popupType === val ? color : "var(--bg-panel)",
                       color: popupType === val ? "#fff" : "var(--text-muted)",
                       outline: popupType === val ? "none" : "1px solid var(--border)",
+                    }}>{label}</button>
+                ))}
+              </div>
+            </div>
+
+            {/* Transport method */}
+            <div style={{ marginBottom:16 }}>
+              <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>Transport</div>
+              <div style={{ display:"flex", gap:8 }}>
+                {[
+                  { val:"Post",          label:"📡 Post to Central Dispatch", color:"#2563eb" },
+                  { val:"Self Dispatch", label:"🚛 Self Dispatch",             color:"#d97706" },
+                ].map(({ val, label, color }) => (
+                  <button key={val} type="button" onClick={() => setPopupDispatch(val)}
+                    style={{
+                      flex:1, padding:"9px 0", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13, border:"none",
+                      background: popupDispatch === val ? color : "var(--bg-panel)",
+                      color: popupDispatch === val ? "#fff" : "var(--text-muted)",
+                      outline: popupDispatch === val ? "none" : "1px solid var(--border)",
                     }}>{label}</button>
                 ))}
               </div>
@@ -1701,7 +1721,7 @@ export default function CreateOrder() {
                       customerName:   popupCustomerName || parsePopup.data.customerName,
                       customerRecord: popupCustRecord   || parsePopup.data.customerRecord,
                     },
-                    popupType, popupContainerSize, popupWarehouse
+                    popupType, popupContainerSize, popupWarehouse, popupDispatch
                   );
                   setParsePopup(null);
                 }}

@@ -1139,6 +1139,7 @@ export default function OrderDetails() {
       pickupLocation:  order.pickupLocation  || "",
       deliveryLocation:order.deliveryLocation|| "",
       requestType:     order.requestType     || "RORO",
+      dispatchMethod:  order.dispatchMethod  || "Post",
       containerSize:   order.containerSize   || "",
       shippingLine:    order.shippingLine    || "",
       pol:             order.pol             || "",
@@ -2093,10 +2094,9 @@ export default function OrderDetails() {
             <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>ORDER TYPE</label>
             <div style={{ display:"flex", gap:6 }}>
               {[
-                { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
-                { val:"Container",     label:"📦 Container",     color:"#2563eb" },
-                { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
-                { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+                { val:"RORO",        label:"⚓ RORO",      color:"#059669" },
+                { val:"Container",   label:"📦 Container", color:"#2563eb" },
+                { val:"Inland Only", label:"🏠 Inland",    color:"#7c3aed" },
               ].map(({ val, label, color }) => {
                 const active = (order.requestType || "RORO") === val;
                 return (
@@ -2124,6 +2124,37 @@ export default function OrderDetails() {
                           await fetch(`${API}/api/orders/${id}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ charges: newCharges }) });
                         }
                       }
+                      fetchOrder();
+                    }}
+                    style={{
+                      flex:1, padding:"5px 0", borderRadius:6, cursor:"pointer", fontWeight:600,
+                      fontSize:11, border:"none",
+                      background: active ? color : "var(--bg-panel)",
+                      color: active ? "#fff" : "var(--text-muted)",
+                      outline: active ? "none" : "1px solid var(--border)",
+                    }}>{label}</button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Transport method */}
+          <div style={{ marginTop:10 }}>
+            <label style={{ fontSize:11, color:"var(--text-muted)", display:"block", marginBottom:4 }}>TRANSPORT</label>
+            <div style={{ display:"flex", gap:6 }}>
+              {[
+                { val:"Post",          label:"📡 Post to CD",    color:"#2563eb" },
+                { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
+              ].map(({ val, label, color }) => {
+                const active = (order.dispatchMethod || "Post") === val;
+                return (
+                  <button key={val} type="button"
+                    onClick={async () => {
+                      if (active) return;
+                      await fetch(`${API}/api/orders/${id}`, {
+                        method:"PUT", headers:{"Content-Type":"application/json"},
+                        body: JSON.stringify({ dispatchMethod: val }),
+                      });
                       fetchOrder();
                     }}
                     style={{
@@ -3463,10 +3494,9 @@ export default function OrderDetails() {
             {cardPopup.card === "orderType" && (
               <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
                 {[
-                  { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
-                  { val:"Container",     label:"📦 Container",     color:"#2563eb" },
-                  { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
-                  { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+                  { val:"RORO",        label:"⚓ RORO",      color:"#059669" },
+                  { val:"Container",   label:"📦 Container", color:"#2563eb" },
+                  { val:"Inland Only", label:"🏠 Inland",    color:"#7c3aed" },
                 ].map(({ val, label, color }) => (
                   <button key={val} type="button"
                     onClick={() => setCardPopup(p => ({ ...p, form: { requestType: val } }))}
@@ -3645,10 +3675,9 @@ export default function OrderDetails() {
             {/* Request Type toggle */}
             <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
               {[
-                { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
-                { val:"Container",     label:"📦 Container",     color:"#2563eb" },
-                { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
-                { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+                { val:"RORO",        label:"⚓ RORO",      color:"#059669" },
+                { val:"Container",   label:"📦 Container", color:"#2563eb" },
+                { val:"Inland Only", label:"🏠 Inland",    color:"#7c3aed" },
               ].map(({ val, label, color }) => (
                 <button key={val} type="button"
                   onClick={() => setEditForm(f => ({ ...f, requestType: val, containerSize:"", shippingLine:"", pol:"" }))}
@@ -3657,6 +3686,22 @@ export default function OrderDetails() {
                     border: editForm.requestType === val ? "none" : "1px solid var(--border)",
                     background: editForm.requestType === val ? color : "var(--bg-panel)",
                     color: editForm.requestType === val ? "#fff" : "var(--text-secondary)",
+                  }}>{label}</button>
+              ))}
+            </div>
+            {/* Transport / dispatch method */}
+            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
+              {[
+                { val:"Post",          label:"📡 Post to CD",   color:"#2563eb" },
+                { val:"Self Dispatch", label:"🚛 Self Dispatch", color:"#d97706" },
+              ].map(({ val, label, color }) => (
+                <button key={val} type="button"
+                  onClick={() => setEditForm(f => ({ ...f, dispatchMethod: val }))}
+                  style={{
+                    padding:"6px 16px", borderRadius:20, cursor:"pointer", fontSize:12, fontWeight:600,
+                    border: (editForm.dispatchMethod || "Post") === val ? "none" : "1px solid var(--border)",
+                    background: (editForm.dispatchMethod || "Post") === val ? color : "var(--bg-panel)",
+                    color: (editForm.dispatchMethod || "Post") === val ? "#fff" : "var(--text-secondary)",
                   }}>{label}</button>
               ))}
             </div>
