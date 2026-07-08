@@ -2092,22 +2092,25 @@ export default function OrderDetails() {
           <div>
             <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>ORDER TYPE</label>
             <div style={{ display:"flex", gap:6 }}>
-              {["RORO","Container","Inland Only"].map(t => {
-                const active = (order.requestType || "RORO") === t;
+              {[
+                { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
+                { val:"Container",     label:"📦 Container",     color:"#2563eb" },
+                { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
+                { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+              ].map(({ val, label, color }) => {
+                const active = (order.requestType || "RORO") === val;
                 return (
-                  <button key={t} type="button"
+                  <button key={val} type="button"
                     onClick={async () => {
-                      if (active) return; // already this type
-                      const clearFields = t === "Container"
-                        ? { requestType: t, vessel: "", voyage: "", sailDate: "", cutoffDate: "", arrivalDate: "" }
-                        : { requestType: t, containerNumber: "", sealNumber: "" };
+                      if (active) return;
+                      const clearFields = val === "Container"
+                        ? { requestType: val, vessel: "", voyage: "", sailDate: "", cutoffDate: "", arrivalDate: "" }
+                        : { requestType: val, containerNumber: "", sealNumber: "" };
                       await fetch(`${API}/api/orders/${id}`, {
                         method:"PUT", headers:{"Content-Type":"application/json"},
                         body: JSON.stringify(clearFields),
                       });
-
-                      // Re-price ocean freight when switching to Container
-                      if (t === "Container" && order.containerSize && order.pol) {
+                      if (val === "Container" && order.containerSize && order.pol) {
                         const pol  = order.pol.toUpperCase();
                         const size = order.containerSize;
                         const line = (order.shippingLine || "").toUpperCase();
@@ -2116,28 +2119,20 @@ export default function OrderDetails() {
                           oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol && r.containerSize === size) ||
                           oceanRates.find(r => r.requestType === "CONTAINER" && r.pol === pol);
                         if (match?.portPrice) {
-                          const newCharges = {
-                            ...charges,
-                            oceanFreight: String(match.portPrice),
-                            ...(match.cost ? { oceanCost: String(match.cost) } : {}),
-                          };
+                          const newCharges = { ...charges, oceanFreight: String(match.portPrice), ...(match.cost ? { oceanCost: String(match.cost) } : {}) };
                           setCharges(newCharges);
-                          await fetch(`${API}/api/orders/${id}`, {
-                            method:"PUT", headers:{"Content-Type":"application/json"},
-                            body: JSON.stringify({ charges: newCharges }),
-                          });
+                          await fetch(`${API}/api/orders/${id}`, { method:"PUT", headers:{"Content-Type":"application/json"}, body: JSON.stringify({ charges: newCharges }) });
                         }
                       }
-
                       fetchOrder();
                     }}
                     style={{
                       flex:1, padding:"5px 0", borderRadius:6, cursor:"pointer", fontWeight:600,
-                      fontSize:12, border:"none",
-                      background: active ? (t==="Container" ? "#2563eb" : "#059669") : "var(--bg-panel)",
+                      fontSize:11, border:"none",
+                      background: active ? color : "var(--bg-panel)",
                       color: active ? "#fff" : "var(--text-muted)",
                       outline: active ? "none" : "1px solid var(--border)",
-                    }}>{t}</button>
+                    }}>{label}</button>
                 );
               })}
             </div>
@@ -3466,14 +3461,19 @@ export default function OrderDetails() {
             )}
 
             {cardPopup.card === "orderType" && (
-              <div style={{ display:"flex", gap:10 }}>
-                {["RORO","Container","Inland Only"].map(t => (
-                  <button key={t} type="button"
-                    onClick={() => setCardPopup(p => ({ ...p, form: { requestType: t } }))}
-                    style={{ flex:1, padding:"12px 0", borderRadius:8, border:"none", cursor:"pointer", fontWeight:700, fontSize:14,
-                      background: cardPopup.form.requestType === t ? "#059669" : "var(--bg-panel)",
-                      color: cardPopup.form.requestType === t ? "#fff" : "var(--text-muted)" }}>
-                    {t}
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                {[
+                  { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
+                  { val:"Container",     label:"📦 Container",     color:"#2563eb" },
+                  { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
+                  { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+                ].map(({ val, label, color }) => (
+                  <button key={val} type="button"
+                    onClick={() => setCardPopup(p => ({ ...p, form: { requestType: val } }))}
+                    style={{ flex:1, minWidth:110, padding:"12px 0", borderRadius:8, border:"none", cursor:"pointer", fontWeight:700, fontSize:13,
+                      background: cardPopup.form.requestType === val ? color : "var(--bg-panel)",
+                      color: cardPopup.form.requestType === val ? "#fff" : "var(--text-muted)" }}>
+                    {label}
                   </button>
                 ))}
               </div>
@@ -3643,16 +3643,21 @@ export default function OrderDetails() {
             </p>
 
             {/* Request Type toggle */}
-            <div style={{ display:"flex", gap:8, marginBottom:12 }}>
-              {["RORO","Container","Inland Only"].map(t => (
-                <button key={t} type="button"
-                  onClick={() => setEditForm(f => ({ ...f, requestType: t, containerSize:"", shippingLine:"", pol:"" }))}
+            <div style={{ display:"flex", gap:8, flexWrap:"wrap", marginBottom:12 }}>
+              {[
+                { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
+                { val:"Container",     label:"📦 Container",     color:"#2563eb" },
+                { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
+                { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+              ].map(({ val, label, color }) => (
+                <button key={val} type="button"
+                  onClick={() => setEditForm(f => ({ ...f, requestType: val, containerSize:"", shippingLine:"", pol:"" }))}
                   style={{
-                    padding:"6px 18px", borderRadius:20, cursor:"pointer", fontSize:12, fontWeight:600,
-                    border: editForm.requestType === t ? "none" : "1px solid var(--border)",
-                    background: editForm.requestType === t ? (t === "Container" ? "#2563eb" : t === "Inland Only" ? "#d97706" : "#059669") : "var(--bg-panel)",
-                    color: editForm.requestType === t ? "#fff" : "var(--text-secondary)",
-                  }}>{t}</button>
+                    padding:"6px 16px", borderRadius:20, cursor:"pointer", fontSize:12, fontWeight:600,
+                    border: editForm.requestType === val ? "none" : "1px solid var(--border)",
+                    background: editForm.requestType === val ? color : "var(--bg-panel)",
+                    color: editForm.requestType === val ? "#fff" : "var(--text-secondary)",
+                  }}>{label}</button>
               ))}
             </div>
 

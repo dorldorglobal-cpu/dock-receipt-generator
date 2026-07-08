@@ -1566,15 +1566,20 @@ export default function CreateOrder() {
             {/* RORO / Container toggle */}
             <div style={{ marginBottom:16 }}>
               <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:6 }}>Shipping Mode</div>
-              <div style={{ display:"flex", gap:8 }}>
-                {["RORO","Container"].map(t => (
-                  <button key={t} type="button" onClick={() => { setPopupType(t); setPopupContainerSize(""); setPopupWarehouse(null); }}
+              <div style={{ display:"flex", gap:8, flexWrap:"wrap" }}>
+                {[
+                  { val:"RORO",          label:"⚓ RORO",          color:"#059669" },
+                  { val:"Container",     label:"📦 Container",     color:"#2563eb" },
+                  { val:"Self Dispatch", label:"🚛 Self Dispatch",  color:"#d97706" },
+                  { val:"Inland Only",   label:"🏠 Inland Only",   color:"#7c3aed" },
+                ].map(({ val, label, color }) => (
+                  <button key={val} type="button" onClick={() => { setPopupType(val); setPopupContainerSize(""); setPopupWarehouse(null); }}
                     style={{
-                      flex:1, padding:"9px 0", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14, border:"none",
-                      background: popupType === t ? (t==="Container" ? "#2563eb" : "#059669") : "var(--bg-panel)",
-                      color: popupType === t ? "#fff" : "var(--text-muted)",
-                      outline: popupType === t ? "none" : "1px solid var(--border)",
-                    }}>{t}</button>
+                      flex:1, minWidth:120, padding:"9px 0", borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:13, border:"none",
+                      background: popupType === val ? color : "var(--bg-panel)",
+                      color: popupType === val ? "#fff" : "var(--text-muted)",
+                      outline: popupType === val ? "none" : "1px solid var(--border)",
+                    }}>{label}</button>
                 ))}
               </div>
             </div>
