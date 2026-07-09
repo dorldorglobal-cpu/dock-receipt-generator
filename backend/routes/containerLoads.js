@@ -108,6 +108,16 @@ router.post("/:id/send-email", express.json(), async (req, res) => {
   }
 });
 
+// GET /api/container-loads/by-order/:orderId — find which load contains this order
+router.get("/by-order/:orderId", async (req, res) => {
+  try {
+    const load = await ContainerLoad.findOne({ orderIds: req.params.orderId }).lean();
+    if (!load) return res.json(null);
+    res.json({ _id: load._id, name: load.name, vessel: load.vessel, pol: load.pol, pod: load.pod,
+      containerNumber: load.containerNumber, bookingNumber: load.bookingNumber, status: load.status });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/container-loads/:id/files — list Drive files for this load
 router.get("/:id/files", async (req, res) => {
   try {

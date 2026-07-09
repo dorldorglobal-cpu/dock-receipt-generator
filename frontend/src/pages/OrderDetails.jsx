@@ -238,6 +238,7 @@ export default function OrderDetails() {
   const navigate = useNavigate();
 
   const [order, setOrder] = useState(null);
+  const [containerLoad, setContainerLoad] = useState(null);
   const [message, setMessage] = useState("");
 
   const [driveFiles,        setDriveFiles]        = useState([]);
@@ -475,6 +476,9 @@ export default function OrderDetails() {
     setOrder(data);
     document.title = `${data.refNumber || "Order"} | DOR LDOR GLOBAL OPS`;
     fetchBills(data.refNumber);
+    // Check if this order is in a container load
+    fetch(`${API}/api/container-loads/by-order/${data._id}`)
+      .then(r => r.json()).then(cl => setContainerLoad(cl || null)).catch(() => {});
     setNoteText(data.notes || "");
     setHoldNote(data.holdNote || "");
     setEmailNote(data.emailNote || "");
@@ -2060,6 +2064,30 @@ export default function OrderDetails() {
           <strong>{order.requestType || "—"}</strong>
         </div>
       </div>
+
+      {/* ── Container Load Banner ─────────────────── */}
+      {containerLoad && (
+        <div style={{ display:"flex", alignItems:"center", gap:14, padding:"10px 18px",
+          background:"rgba(37,99,235,0.1)", border:"1px solid rgba(37,99,235,0.35)",
+          borderRadius:10, marginBottom:16, flexWrap:"wrap" }}>
+          <span style={{ fontSize:18 }}>📦</span>
+          <div style={{ flex:1, minWidth:0 }}>
+            <div style={{ fontWeight:700, fontSize:13, color:"#60a5fa" }}>
+              In Container Load: {containerLoad.name}
+            </div>
+            <div style={{ fontSize:11, color:"var(--text-secondary)", marginTop:2, display:"flex", gap:12, flexWrap:"wrap" }}>
+              {containerLoad.bookingNumber && <span>Booking: <strong>{containerLoad.bookingNumber}</strong></span>}
+              {containerLoad.containerNumber && <span>CTR: <strong>{containerLoad.containerNumber}</strong></span>}
+              {containerLoad.vessel && <span>Vessel: <strong>{containerLoad.vessel}</strong></span>}
+              {containerLoad.pol && containerLoad.pod && <span>{containerLoad.pol} → {containerLoad.pod}</span>}
+              {containerLoad.status && <span style={{ fontWeight:600, color:"#a78bfa" }}>{containerLoad.status}</span>}
+            </div>
+          </div>
+          <a href={`/containers`} style={{ fontSize:12, color:"#60a5fa", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+            View Load →
+          </a>
+        </div>
+      )}
 
       {/* ── Info Panels ─────────────────────────────── */}
       <div className="details-grid">
