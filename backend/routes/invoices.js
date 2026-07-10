@@ -283,6 +283,17 @@ function recalcStatus(inv) {
   return "draft";
 }
 
+// ── Helper: sync order status when invoice paid/unpaid ───────────────────────
+async function syncOrderStatus(inv) {
+  if (!inv.orderId) return;
+  if (inv.status === "paid") {
+    await Order.findByIdAndUpdate(inv.orderId, {
+      $set: { status: "Completed" },
+      $push: { timeline: { action: "Invoice Paid", details: `Invoice ${inv.invoiceNumber} fully paid — order marked Completed`, createdAt: new Date() } },
+    });
+  }
+}
+
 // ── POST /api/invoices/:id/payments — add a payment ──────────────────────────
 router.post("/:id/payments", express.json(), async (req, res) => {
   try {
@@ -295,6 +306,7 @@ router.post("/:id/payments", express.json(), async (req, res) => {
     if (inv.status === "paid" && !inv.paidAt) inv.paidAt = new Date();
     if (inv.status !== "paid") inv.paidAt = null;
     await inv.save();
+    await syncOrderStatus(inv);
     res.json(inv);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
@@ -315,6 +327,7 @@ router.put("/:id/payments/:pid", express.json(), async (req, res) => {
     if (inv.status === "paid" && !inv.paidAt) inv.paidAt = new Date();
     if (inv.status !== "paid") inv.paidAt = null;
     await inv.save();
+    await syncOrderStatus(inv);
     res.json(inv);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
