@@ -406,6 +406,10 @@ export default function OrderDetails() {
   const [sallaumNotifyBody,    setSallaumNotifyBody]    = useState("");
   const [sallaumSending,       setSallaumSending]       = useState(false);
   const [sallaumPendingNoTitle, setSallaumPendingNoTitle] = useState(null); // queued no-title modal
+  const [tartanNoTitle,        setTartanNoTitle]        = useState(false);
+  const [tartanSubject,        setTartanSubject]        = useState("");
+  const [tartanBody,           setTartanBody]           = useState("");
+  const [tartanSending,        setTartanSending]        = useState(false);
 
   useEffect(() => {
     fetchOrder();
@@ -1376,6 +1380,8 @@ export default function OrderDetails() {
     const titleStat   = (payload.titleStatus || order.titleStatus || "").toLowerCase();
     const isSallaum  = (order.shippingLine || payload.shippingLine || "").toUpperCase().includes("SALLAUM");
     const isNoTitle  = titleStat === "no title";
+    // Baltimore/Tartan: Sallaum orders whose POD or delivery contains "baltimore"
+    const isTartan   = isSallaum && /baltimore/i.test(order.pod || order.deliveryLocation || "");
     const needsNotify = isSallaum && (condition === "nonrunner" || condition === "forklift" || isNoTitle);
     if (needsNotify) {
       const booking = payload.bookingNumber || order.bookingNumber || "";
@@ -1384,13 +1390,23 @@ export default function OrderDetails() {
       const isForklift = condition === "forklift";
       const isNonrunner = condition === "nonrunner";
 
-      if ((isForklift || isNonrunner) && isNoTitle) {
+      if (isNoTitle && isTartan) {
+        // Baltimore/Tartan no-title email
+        setTartanSubject(`NO TITLE - ${vin.slice(-6)}`);
+        setTartanBody(`Please allow the driver to drop off the ${ymm} ${vin}\nwithout the title. \nWe acknowledge the driver is responsible for the $75.00 fee.\n\n--\nRegards,\n\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`);
+        setTartanNoTitle(true);
+        if (isForklift || isNonrunner) {
+          const condLabel = isForklift ? "Forklift" : "Nonrunner";
+          setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)} ${condLabel.toUpperCase()}`);
+          setSallaumNotifyBody(`Please update to ${condLabel}.`);
+          setSallaumNotify(true);
+        }
+      } else if ((isForklift || isNonrunner) && isNoTitle) {
         // Both conditions — open forklift/nonrunner modal first, queue no-title after
         const condLabel = isForklift ? "Forklift" : "Nonrunner";
         setSallaumNotifySubject(`${booking} ${ymm} ${vin.slice(-6)} ${condLabel.toUpperCase()}`);
         setSallaumNotifyBody(`Please update to ${condLabel}.`);
         setSallaumNotify(true);
-        // Queue no-title modal to open after user sends/closes the first one
         setSallaumPendingNoTitle({ booking, ymm, vin });
       } else if (isNoTitle) {
         setSallaumNotifySubject(`${booking} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
@@ -1470,6 +1486,33 @@ export default function OrderDetails() {
       setMessage("❌ Failed to send DR: " + msg);
     } finally {
       setDrSending(false);
+    }
+  };
+
+  const sendTartanNoTitle = async () => {
+    setTartanSending(true);
+    try {
+      const res = await fetch(`${API}/api/send-email`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to:      "info@tartanterminals.com",
+          cc:      "sbrzezenski@balterm.com, sholloway@tartanterminals.com",
+          subject: tartanSubject,
+          body:    tartanBody,
+        }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
+      await fetch(`${API}/api/orders/${id}/timeline`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "Tartan No-Title Email Sent", details: tartanSubject }),
+      });
+      fetchOrder();
+      setTartanNoTitle(false);
+      setMessage("✅ Tartan no-title email sent");
+    } catch (err) {
+      setMessage("❌ Tartan email failed: " + err.message);
+    } finally {
+      setTartanSending(false);
     }
   };
 
@@ -4856,6 +4899,34 @@ export default function OrderDetails() {
       )}
 
       {/* ── Sallaum Non-Runner / Forklift notify — independent popup ── */}
+      {tartanNoTitle && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2002, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #60a5fa", borderRadius:12, padding:28, width:500, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 4px", color:"#60a5fa" }}>⚓ Tartan Terminals — No Title Email</h3>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
+              To: <strong style={{color:"var(--text-primary)"}}>info@tartanterminals.com</strong>
+              &nbsp;· CC: <strong style={{color:"var(--text-primary)"}}>sbrzezenski@balterm.com, sholloway@tartanterminals.com</strong>
+            </p>
+            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
+              Subject
+              <input value={tartanSubject} onChange={e => setTartanSubject(e.target.value)}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+            </label>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
+              Message
+              <textarea value={tartanBody} onChange={e => setTartanBody(e.target.value)} rows={8}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+            </label>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setTartanNoTitle(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
+              <button onClick={sendTartanNoTitle} disabled={tartanSending} style={{ padding:"8px 20px", background:"#2563eb", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                {tartanSending ? "Sending…" : "Send to Tartan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {sallaumNotify && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2001, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"var(--bg-panel)", border:"1px solid #f97316", borderRadius:12, padding:28, width:480, maxWidth:"95vw" }}>
