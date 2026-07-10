@@ -496,8 +496,14 @@ router.post("/bulk-populate-ocean", async (req, res) => {
 // GET ALL ORDERS
 router.get("/", async (req, res) => {
   try {
-    const orders = await Order.find().sort({ createdAt: -1 });
-    res.json(orders);
+    const Invoice = require("../models/Invoice");
+    const orders = await Order.find().sort({ createdAt: -1 }).lean();
+    const paidIds = new Set(
+      (await Invoice.find({ status: "paid" }).select("orderId").lean())
+        .map(inv => String(inv.orderId))
+    );
+    const result = orders.map(o => ({ ...o, invoicePaid: paidIds.has(String(o._id)) }));
+    res.json(result);
   } catch (err) {
     console.error("Get orders error:", err);
     res.status(500).json({ error: "Failed to fetch orders" });

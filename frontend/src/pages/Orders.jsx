@@ -75,7 +75,9 @@ export default function Orders() {
     counts[t.value] = t.value === "all"
       ? orders.length
       : t.value === "active"
-      ? orders.filter(o => !ACTIVE_EXCLUDED.includes(o.status)).length
+      ? orders.filter(o => !ACTIVE_EXCLUDED.includes(o.status) && !o.invoicePaid).length
+      : t.value === "Paid"
+      ? orders.filter(o => o.invoicePaid).length
       : orders.filter(o => o.status === t.value).length;
   }
 
@@ -85,7 +87,9 @@ export default function Orders() {
     const matchTab     = activeTab === "all"
       ? true
       : activeTab === "active"
-      ? !ACTIVE_EXCLUDED.includes(o.status)
+      ? !ACTIVE_EXCLUDED.includes(o.status) && !o.invoicePaid
+      : activeTab === "Paid"
+      ? o.invoicePaid
       : o.status === activeTab;
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
     const matchType    = typeFilter === "all" || (o.requestType || "").toLowerCase() === typeFilter.toLowerCase();
