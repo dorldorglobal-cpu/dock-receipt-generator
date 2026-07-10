@@ -11,10 +11,17 @@ const invoiceSchema = new mongoose.Schema(
     customerEmail: String,
     customerPhone: String,
 
-    vehicle: String,   // "2019 Toyota Camry"
-    vin:     String,
-    pol:     String,
-    pod:     String,
+    vehicle:          String,   // "2019 Toyota Camry"
+    vin:              String,
+    pol:              String,
+    pod:              String,
+    requestType:      String,   // "RORO" | "Container" | "Inland Only"
+    pickupLocation:   String,
+    deliveryLocation: String,
+    bookingNumber:    String,
+    voyage:           String,
+    arrivalDate:      String,
+    shippingLine:     String,
 
     items: [
       {

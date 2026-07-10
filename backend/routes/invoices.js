@@ -58,16 +58,20 @@ router.post("/", async (req, res) => {
     const invoice = await Invoice.create({
       invoiceNumber,
       orderId,
-      orderRef:      order.refNumber,
-      customerName:  order.customerName,
-      customerEmail: order.customerEmail,
-      customerPhone: order.customerPhone,
-      vehicle:       [order.year, order.make, order.model].filter(Boolean).join(" ") || "",
-      vin:           order.vin,
-      pol:           order.pol,
-      pod:           order.pod,
-      voyage:        order.voyage      || "",
-      arrivalDate:   order.arrivalDate || "",
+      orderRef:         order.refNumber,
+      customerName:     order.customerName,
+      customerEmail:    order.customerEmail,
+      customerPhone:    order.customerPhone,
+      vehicle:          [order.year, order.make, order.model].filter(Boolean).join(" ") || "",
+      vin:              order.vin,
+      pol:              order.pol,
+      pod:              order.pod,
+      requestType:      order.requestType      || "RORO",
+      pickupLocation:   order.pickupLocation   || "",
+      deliveryLocation: order.deliveryLocation || "",
+      bookingNumber:    order.bookingNumber    || "",
+      voyage:           order.voyage           || "",
+      arrivalDate:      order.arrivalDate      || "",
       shippingLine,
       items:         items || [],
       subtotal:      total,
@@ -473,7 +477,14 @@ async function generateInvoicePdf(inv, order) {
       voyage ? `Voyage: ${voyage}` : "",
     ].filter(Boolean).join("  |  ");
 
-    const detailPairs = [
+    const isInland = (inv.requestType || order?.requestType || "").toLowerCase().includes("inland");
+
+    const detailPairs = isInland ? [
+      ["Ref:",      inv.orderRef    || "—",  "Vehicle:", txt(inv.vehicle || "—")],
+      ["Pickup:",   txt(inv.pickupLocation   || order?.pickupLocation   || "—"), "", ""],
+      ["Delivery:", txt(inv.deliveryLocation || order?.deliveryLocation || "—"), "", ""],
+      ["VIN:",      inv.vin         || "—",  "",         ""],
+    ] : [
       ["Ref:",     inv.orderRef    || "—",  "Route:",         (inv.pol && inv.pod) ? `${inv.pol} > ${inv.pod}` : "—"],
       ["Vehicle:", txt(inv.vehicle || "—"), "Shipping Line:", shippingLineValue],
       ["Booking #:", bookingNumber || "—",  "ETA:",           arrivalDate || ""],
@@ -483,7 +494,7 @@ async function generateInvoicePdf(inv, order) {
     // Fixed label column widths (px at 8.5pt Helvetica)
     // LBL1: widest left label is "Booking #:" ~60px → 68 gives a small gap
     // LBL2: widest right label is "Shipping Line:" ~82px → 90 gives a small gap
-    const LBL1_W = 68;
+    const LBL1_W = isInland ? 58 : 68;
     const LBL2_W = 90;
     const COL_W  = Math.floor(W / 2) - 10;
 
