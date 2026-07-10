@@ -256,7 +256,7 @@ router.patch("/:id/status", async (req, res) => {
         status === "sent" ? "sent to customer" :
         status === "paid" ? "marked as Paid"   :
         "reverted to Draft";
-      await Order.findByIdAndUpdate(inv.orderId, {
+      const orderUpdate = {
         $push: {
           timeline: {
             action:    status === "sent" ? "Invoice Sent" : status === "paid" ? "Invoice Paid" : "Invoice Updated",
@@ -264,7 +264,9 @@ router.patch("/:id/status", async (req, res) => {
             createdAt: new Date(),
           },
         },
-      });
+      };
+      if (status === "paid") orderUpdate.$set = { status: "Paid" };
+      await Order.findByIdAndUpdate(inv.orderId, orderUpdate);
     }
 
     res.json(inv);
