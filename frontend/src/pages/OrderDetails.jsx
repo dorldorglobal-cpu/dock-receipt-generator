@@ -2533,23 +2533,71 @@ export default function OrderDetails() {
                       );
                     })()}
                     {isBuyerReceipt && (
-                      <button
-                        title="Post this order to Central Dispatch"
-                        onClick={async (e) => {
-                          e.stopPropagation();
-                          setMessage("Posting to Central Dispatch…");
-                          try {
-                            const res = await fetch(`${API}/api/orders/${order._id}/post-to-central-dispatch`, { method: "POST" });
-                            const data = await res.json();
-                            if (!res.ok) throw new Error(data.error || "Failed");
-                            setMessage("✅ Posted to Central Dispatch! Check dorldorglobal@gmail.com for import log.");
-                          } catch (err) {
-                            setMessage("❌ Central Dispatch: " + err.message);
-                          }
-                        }}
-                        style={{ background:"none", border:"none", cursor:"pointer", color:"#f59e0b", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
-                        📡 Post to Central Dispatch
-                      </button>
+                      <>
+                        <button
+                          title="Post this order to Central Dispatch"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setMessage("Posting to Central Dispatch…");
+                            try {
+                              const res = await fetch(`${API}/api/orders/${order._id}/post-to-central-dispatch`, { method: "POST" });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.error || "Failed");
+                              setMessage("✅ Posted to Central Dispatch! Check dorldorglobal@gmail.com for import log.");
+                            } catch (err) {
+                              setMessage("❌ Central Dispatch: " + err.message);
+                            }
+                          }}
+                          style={{ background:"none", border:"none", cursor:"pointer", color:"#f59e0b", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          📡 Post to Central Dispatch
+                        </button>
+                        <button
+                          title="Re-parse this buyer receipt and update order fields"
+                          onClick={async (e) => {
+                            e.stopPropagation();
+                            setMessage("Reparsing buyer receipt…");
+                            try {
+                              // Download the file through the drive proxy and send to parse endpoint
+                              const m = f.webViewLink.match(/\/d\/([a-zA-Z0-9_-]+)/);
+                              const fileId = m ? m[1] : null;
+                              if (!fileId) throw new Error("Cannot determine file ID");
+                              const blob = await fetch(`${API}/api/drive-proxy/${fileId}`).then(r => r.blob());
+                              const fd = new FormData();
+                              fd.append("file", blob, f.name);
+                              const res = await fetch(`${API}/api/orders/parse-buyer-receipt`, { method:"POST", body: fd });
+                              const data = await res.json();
+                              if (!res.ok) throw new Error(data.error || "Parse failed");
+                              // Apply non-empty parsed fields to the order
+                              const updates = {};
+                              if (data.vin)              updates.vin             = data.vin;
+                              if (data.year)             updates.year            = data.year;
+                              if (data.make)             updates.make            = data.make;
+                              if (data.model)            updates.model           = data.model;
+                              if (data.lotNumber)        updates.lotNumber       = data.lotNumber;
+                              if (data.customerName && !order.customerName)      updates.customerName    = data.customerName;
+                              if (data.customerPhone && !order.customerPhone)    updates.customerPhone   = data.customerPhone;
+                              if (data.customerEmail && !order.customerEmail)    updates.customerEmail   = data.customerEmail;
+                              if (data.pickupLocation)   updates.pickupLocation  = data.pickupLocation;
+                              if (data.pickupAddress)    updates.pickupAddress   = data.pickupAddress;
+                              if (data.pickupCity)       updates.pickupCity      = data.pickupCity;
+                              if (data.pickupState)      updates.pickupState     = data.pickupState;
+                              if (data.pickupZip)        updates.pickupZip       = data.pickupZip;
+                              if (data.buyerName)        updates.buyerName       = data.buyerName;
+                              if (!Object.keys(updates).length) { setMessage("✅ Nothing new to update — order already up to date."); return; }
+                              await fetch(`${API}/api/orders/${order._id}`, {
+                                method:"PUT", headers:{"Content-Type":"application/json"},
+                                body: JSON.stringify(updates),
+                              });
+                              await fetchOrder();
+                              setMessage(`✅ Reparsed — updated: ${Object.keys(updates).join(", ")}`);
+                            } catch (err) {
+                              setMessage("❌ Reparse failed: " + err.message);
+                            }
+                          }}
+                          style={{ background:"none", border:"none", cursor:"pointer", color:"#a78bfa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          🔄 Reparse
+                        </button>
+                      </>
                     )}
                     {isRatedDraft && (
                       <button
