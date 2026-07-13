@@ -1022,6 +1022,21 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
       const validExtras = (row.lineItems || []).filter(l => l.description?.trim() && Number(l.amount) > 0);
       const extrasTotal = validExtras.reduce((s, l) => s + Number(l.amount), 0);
 
+      // Duplicate check: same order + load ID already exists
+      if (orderId && row.loadId) {
+        const dup = await Expense.findOne({ orderId, invoiceNumber: row.loadId }).lean();
+        if (dup) continue;
+      } else if (orderId && row.total) {
+        // Fallback: same order + same vendor + same amount within 30 days
+        const dup = await Expense.findOne({
+          orderId,
+          vendor:   { $regex: `^${(row.carrier || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+          amount:   row.total + extrasTotal,
+          date:     { $gte: new Date(dateObj - 30*24*60*60*1000), $lte: new Date(+dateObj + 30*24*60*60*1000) },
+        }).lean();
+        if (dup) continue;
+      }
+
       const expense = await Expense.create({
         category:      "Towing / Transport",
         description:   `Transport — ${row.ymm || ""} — VIN: ${row.vin || ""} — ${row.origin || ""}`.trim().replace(/\s*—\s*$/, ""),
@@ -1184,10 +1199,19 @@ router.post("/apply-acl", express.json(), async (req, res) => {
         if (m && d && y) dateObj = new Date(`${y}-${m}-${d}`);
       }
 
+      // Duplicate check: same order + VIN + invoice ref already exists
+      const aclDupQuery = orderId && row.vin
+        ? { orderId, vin: row.vin, category: "Ocean Freight", vendor: { $in: ["ACL / Grimaldi", "Grimaldi / ACL"] } }
+        : null;
+      if (aclDupQuery) {
+        const dup = await Expense.findOne(aclDupQuery).lean();
+        if (dup) continue;
+      }
+
       const expense = await Expense.create({
         category:      "Ocean Freight",
         description:   `ACL Ocean Freight — ${row.ymm || ""} — VIN: ${row.vin || ""} — ${row.vessel || ""} ${row.voyage || ""}`.trim().replace(/\s*—\s*$/, ""),
-        vendor:        "Grimaldi / ACL",
+        vendor:        "ACL / Grimaldi",
         amount:        row.total,
         date:          dateObj,
         orderId,
