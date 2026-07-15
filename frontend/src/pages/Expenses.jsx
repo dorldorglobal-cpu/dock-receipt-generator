@@ -2007,19 +2007,45 @@ export default function Expenses() {
                               return <span style={{display:"block",color:"#f87171",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>No bill on file for #{row.orderRef}</span>;
                             })()}
                           </td>
-                          <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",lineHeight:1.2,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>
-                            {row.matchType === "exact" && <span style={{color:"#34d399",fontSize:11}}>✅ Exact{row.markPartial ? " → ½ Partial" : ""}</span>}
-                            {row.matchType === "combined" && <span style={{color:"#34d399",fontSize:11}}>✅ Combined{row.markPartial ? " → ½ Partial" : ""}</span>}
-                            {(row.matchType === "already_paid" || row.matchType === "already_paid_mismatch") && (
-                              <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                                <span style={{color: row.matchType === "already_paid" ? "#60a5fa" : "#fbbf24", fontSize:11}}>
-                                  {row.matchType === "already_paid" ? "ℹ️ Already paid" : "⚠ Amount differs"}
+                          <td style={{padding:"4px 8px",borderBottom:"1px solid var(--border-muted)",lineHeight:1.4}}>
+                            {/* ── Status badge ── */}
+                            {(() => {
+                              const badge = (label, bg, text="#fff") => (
+                                <span style={{ display:"inline-block", background:bg, color:text, fontSize:11, fontWeight:700,
+                                  borderRadius:6, padding:"3px 9px", letterSpacing:"0.03em", whiteSpace:"nowrap" }}>
+                                  {label}
                                 </span>
+                              );
+                              if (row.splitBills)
+                                return badge(`✂ Split ×${row.splitBills.length}`, "#7c3aed");
+                              if (row.createBill && !row.splitBills)
+                                return badge("📝 New Bill", "#0891b2");
+                              if (row.matchType === "exact")
+                                return badge(row.markPartial ? "✅ Exact → ½ Partial" : "✅ Exact", "#16a34a");
+                              if (row.matchType === "combined")
+                                return badge(row.markPartial ? "✅ Combined → ½ Partial" : "✅ Combined", "#0d9488");
+                              if (row.matchType === "already_paid")
+                                return badge("✔ Already Paid", "#1d4ed8");
+                              if (row.matchType === "already_paid_mismatch")
+                                return badge("⚠ Amount Differs", "#b45309");
+                              if (row.matchType === "review")
+                                return badge("⚠ Review", "#b45309");
+                              if (row.matchType === "none")
+                                return badge("— No Match", "#6b7280");
+                              return null;
+                            })()}
+                            {row.markPartial && !row.splitBills && (
+                              <div style={{color:"#fb923c",fontSize:10,marginTop:2}}>
+                                Will record ${row.amount.toFixed(2)} as partial
+                              </div>
+                            )}
+                            {(row.matchType === "already_paid" || row.matchType === "already_paid_mismatch") && (
+                              <div style={{ marginTop:3 }}>
                                 {row.alreadyPaid?.some(c=>!c.receiptFileName) && (
                                   row.selected
                                     ? <span style={{color:"#34d399",fontSize:10}}>📎 Will attach proof</span>
                                     : <button onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,attachOnly:true,selected:true}:r))}
-                                        style={{ fontSize:10, color:"#a78bfa", border:"1px solid #a78bfa", borderRadius:5, padding:"1px 6px", background:"none", cursor:"pointer" }}>
+                                        style={{ fontSize:10, color:"#a78bfa", border:"1px solid #a78bfa", borderRadius:5, padding:"2px 7px", background:"rgba(167,139,250,0.12)", cursor:"pointer", fontWeight:600 }}>
                                         📎 Attach Proof
                                       </button>
                                 )}
@@ -2028,33 +2054,33 @@ export default function Expenses() {
                                 )}
                               </div>
                             )}
-                            {row.matchType === "review" && <span style={{color:"#fbbf24",fontSize:11,display:"block",marginBottom:2}}>⚠ Review</span>}
-                            {row.markPartial && <span style={{color:"#fb923c",fontSize:10,display:"block",marginBottom:2}}>Will record ${row.amount.toFixed(2)} as partial</span>}
-                            <div style={{ display:"flex", gap:4, flexWrap:"wrap" }}>
-                              {/* ½ Partial — for matched rows or review rows with candidates */}
+                            {/* ── Action buttons ── */}
+                            <div style={{ display:"flex", gap:4, flexWrap:"wrap", marginTop:4 }}>
+                              {/* ½ Partial */}
                               {(row.matchedIds?.length > 0 || (row.matchType === "review" && row.candidates?.length > 0)) && !row.splitBills && (
                                 <button
                                   onClick={() => setProofRows(rs => rs.map((r,j) => {
                                     if (j !== i) return r;
                                     const toggling = !r.markPartial;
-                                    // For review rows, wire up the first candidate as matchedIds when enabling partial
                                     const extraIds = toggling && r.matchType === "review" && !r.matchedIds?.length && r.candidates?.length
-                                      ? { matchedIds: [r.candidates[0]._id], selected: true }
-                                      : {};
+                                      ? { matchedIds: [r.candidates[0]._id], selected: true } : {};
                                     return { ...r, markPartial: toggling, ...extraIds };
                                   }))}
-                                  style={{ fontSize:10, color:"#fff", border:`1px solid ${row.markPartial ? "#fb923c" : "#a78bfa"}`, borderRadius:5, padding:"2px 6px", background: row.markPartial ? "#fb923c" : "#a78bfa", cursor:"pointer", fontWeight:700 }}>
+                                  style={{ fontSize:10, fontWeight:700, color:"#fff",
+                                    border:"none", borderRadius:5, padding:"3px 8px",
+                                    background: row.markPartial ? "#ea580c" : "#9333ea",
+                                    cursor:"pointer" }}>
                                   {row.markPartial ? "½ Partial ✓" : "½ Partial"}
                                 </button>
                               )}
-                              {/* + Create Bill — shown when not already in createBill-only mode without split */}
+                              {/* + Create Bill */}
                               {!row.createBill && !row.splitBills && (row.matchType === "none" || row.matchType === "review") && (
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
-                                  style={{ fontSize:10, color:"#06b6d4", border:"1px solid #06b6d4", borderRadius:5, padding:"2px 6px", background:"none", cursor:"pointer" }}>
+                                  style={{ fontSize:10, fontWeight:700, color:"#fff", border:"none", borderRadius:5, padding:"3px 8px", background:"#0891b2", cursor:"pointer" }}>
                                   + Create Bill
                                 </button>
                               )}
-                              {/* ✂ Split — available for any row not in createBill-only mode */}
+                              {/* ✂ Split */}
                               {!row.createBill && (
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => {
                                     if (j !== i) return r;
@@ -2071,13 +2097,14 @@ export default function Expenses() {
                                       createBill: true,
                                     })) };
                                   }))}
-                                  style={{ fontSize:10, color: row.splitBills ? "#fff" : "#1a1a1a", border:`1px solid ${row.splitBills ? "#f87171" : "#fbbf24"}`, borderRadius:5, padding:"2px 6px", background: row.splitBills ? "#f87171" : "#fbbf24", cursor:"pointer", fontWeight:700 }}>
+                                  style={{ fontSize:10, fontWeight:700,
+                                    color:"#fff", border:"none", borderRadius:5, padding:"3px 8px",
+                                    background: row.splitBills ? "#dc2626" : "#ca8a04",
+                                    cursor:"pointer" }}>
                                   {row.splitBills ? "✕ Cancel Split" : `✂ Split${row.splitSeed?.length > 1 ? ` (${row.splitSeed.length})` : ""}`}
                                 </button>
                               )}
                             </div>
-                            {row.createBill && !row.splitBills && <span style={{color:"#34d399",fontSize:11}}>📝 New bill</span>}
-                            {row.splitBills && <span style={{color:"#fbbf24",fontSize:11}}>✂ Split into {row.splitBills.length} — 📝 creates {row.splitBills.filter(s=>s.createBill!==false).length} new bill{row.splitBills.filter(s=>s.createBill!==false).length !== 1 ? "s" : ""}</span>}
                           </td>
                         </tr>
                         {row.createBill && (
