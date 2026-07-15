@@ -1855,7 +1855,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // "S3-29305517" → "S3- 29305517") — tolerate that with \s* and strip it
       // back out so the stored value is clean.
       const refMatch = addenda.match(/^(\d{3,8})\b/) || addenda.match(/REF\.?#?:?\s*(\d{3,8})\b/i);
-      const orderRef = refMatch?.[1] || "";
+      let orderRef = refMatch?.[1] || "";
       const note      = addenda; // always show the raw addenda for context
 
       // Multiple booking numbers (e.g. "S3-29358436 S3-29436152") or multiple
