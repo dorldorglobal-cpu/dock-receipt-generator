@@ -1268,7 +1268,7 @@ export default function Containers() {
                       const booking = billingLoad.bookingNumber || "";
                       const shippingLine = vessel.split(" ")[0] || "";
                       const subject = `Invoices — Load ${billingLoad.name}${booking ? " / Booking "+booking : ""}${vessel ? " / "+vessel : ""}`;
-                      const names = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").map(r=>`  • ${r.vehicle} (Ref #${r.refNumber}) — $${r.invoiceTotal.toFixed(2)}`).join("\n");
+                      const names = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").map(r=>`  • ${r.vehicle}${r.vin ? ` | VIN: ${r.vin}` : ""} (Ref #${r.refNumber}) — $${r.invoiceTotal.toFixed(2)}`).join("\n");
                       const body = `Dear Customer,\n\nPlease find your invoices attached for the following vehicles:\n\n${names}\n\nVessel: ${vessel}\nBooking #: ${booking}\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
                       setSendPreview({ to, subject, body });
                     }}
