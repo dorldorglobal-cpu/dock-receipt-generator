@@ -10,6 +10,8 @@ const containerLoadSchema = new mongoose.Schema({
   bookingNumber: { type: String, default: "" },
   containerNumber: { type: String, default: "" },
   sealNumber:    { type: String, default: "" },
+  sailCutoff:    { type: String, default: "" },
+  arrivalDate:   { type: String, default: "" },
   notes:         { type: String, default: "" },
   emailSentAt:   { type: Date },
   status:        { type: String, default: "Pending" },

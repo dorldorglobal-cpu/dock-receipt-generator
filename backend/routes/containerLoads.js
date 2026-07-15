@@ -59,7 +59,7 @@ router.post("/", express.json(), async (req, res) => {
 router.patch("/:id", express.json(), async (req, res) => {
   try {
     const fields = [
-      "bookingNumber","containerNumber","sealNumber","status",
+      "bookingNumber","containerNumber","sealNumber","sailCutoff","arrivalDate","status",
       "vessel","pol","pod","loaderEmail","notes",
       "consigneeName","consigneeAddress","consigneePhone","consigneeEmail","consigneeTin",
       "notifyName","notifyAddress","notifyPhone","notifyEmail","notifyTin",

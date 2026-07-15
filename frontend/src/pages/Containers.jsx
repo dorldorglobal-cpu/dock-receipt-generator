@@ -245,6 +245,8 @@ export default function Containers() {
       bookingNumber:    l.bookingNumber    || "",
       containerNumber:  l.containerNumber  || "",
       sealNumber:       l.sealNumber       || "",
+      sailCutoff:       l.sailCutoff       || "",
+      arrivalDate:      l.arrivalDate      || "",
       status:           l.status           || "Pending",
       vessel:           l.vessel           || "",
       pol:              l.pol              || "",
@@ -452,6 +454,13 @@ export default function Containers() {
                       <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
                         CTR: <strong>{l.containerNumber}</strong>
                         {l.sealNumber && <> · Seal: <strong>{l.sealNumber}</strong></>}
+                      </div>
+                    )}
+                    {(l.sailCutoff || l.arrivalDate) && (
+                      <div style={{ fontSize:11, color:"var(--text-secondary)", marginTop:2 }}>
+                        {l.sailCutoff && <>✂️ Cutoff: <strong>{new Date(l.sailCutoff).toLocaleDateString("en-US")}</strong></>}
+                        {l.sailCutoff && l.arrivalDate && <> · </>}
+                        {l.arrivalDate && <>🛬 Arrival: <strong>{new Date(l.arrivalDate).toLocaleDateString("en-US")}</strong></>}
                       </div>
                     )}
                   </div>
@@ -758,6 +767,8 @@ export default function Containers() {
                   <F label="BOOKING NUMBER" value={editForm.bookingNumber} onChange={setEF("bookingNumber")} placeholder="From loader" full />
                   <F label="CONTAINER NUMBER" value={editForm.containerNumber} onChange={setEF("containerNumber")} placeholder="XXXX0000000" />
                   <F label="SEAL NUMBER" value={editForm.sealNumber} onChange={setEF("sealNumber")} />
+                  <F label="SAIL CUTOFF DATE" value={editForm.sailCutoff} onChange={setEF("sailCutoff")} type="date" />
+                  <F label="ARRIVAL DATE" value={editForm.arrivalDate} onChange={setEF("arrivalDate")} type="date" />
                   <div style={{ gridColumn:"1/-1" }}>
                     <label style={lbl}>STATUS</label>
                     <select value={editForm.status} onChange={e=>setEF("status")(e.target.value)} style={inp}>
