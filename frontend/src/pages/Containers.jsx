@@ -136,6 +136,13 @@ export default function Containers() {
   const [emailModal,  setEmailModal]  = useState(null); // { loadId, to, cc, subject, body }
   const [sendingEmail,setSendingEmail]= useState(false);
 
+  // Billing summary modal
+  const [billingLoad,   setBillingLoad]   = useState(null); // load object
+  const [billingRows,   setBillingRows]   = useState([]);
+  const [billingLoading,setBillingLoading]= useState(false);
+  const [sendingAll,    setSendingAll]    = useState(false);
+  const [sendResults,   setSendResults]   = useState(null);
+
   // Edit modal
   const [editLoad,    setEditLoad]    = useState(null);
   const [editForm,    setEditForm]    = useState({});
@@ -509,6 +516,20 @@ export default function Containers() {
                       background:"rgba(37,99,235,0.15)", border:"1px solid rgba(37,99,235,0.4)",
                       color:"#60a5fa", cursor:"pointer", whiteSpace:"nowrap" }}>
                     ✏️ Edit
+                  </button>
+                  <button onClick={async()=>{
+                      setBillingLoad(l); setBillingRows([]); setSendResults(null); setBillingLoading(true);
+                      try {
+                        const r = await fetch(`${API}/api/container-loads/${l._id}/billing-summary`);
+                        const d = await r.json();
+                        setBillingRows(d.rows || []);
+                      } catch(e) { flash("❌ "+e.message); setBillingLoad(null); }
+                      setBillingLoading(false);
+                    }}
+                    style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
+                      background:"rgba(124,58,237,0.15)", border:"1px solid rgba(124,58,237,0.4)",
+                      color:"#a78bfa", cursor:"pointer", whiteSpace:"nowrap" }}>
+                    💰 Billing
                   </button>
                   <button onClick={()=>openEmailFromLoad(l)}
                     style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
@@ -1084,6 +1105,153 @@ export default function Containers() {
                     borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>
                   Close
                 </button>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Billing Summary Modal ─────────────────────────────────────────── */}
+      {billingLoad && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
+          display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"var(--bg-card)", borderRadius:14, width:"100%", maxWidth:920,
+            maxHeight:"90vh", display:"flex", flexDirection:"column", border:"1px solid var(--border)" }}>
+
+            <div style={{ padding:"18px 24px", borderBottom:"1px solid var(--border)",
+              display:"flex", alignItems:"center", justifyContent:"space-between" }}>
+              <div>
+                <h3 style={{ margin:0, fontSize:16 }}>💰 Billing — {billingLoad.name}</h3>
+                <div style={{ fontSize:12, color:"var(--text-muted)", marginTop:2 }}>
+                  {billingLoad.vessel}{billingLoad.pol ? ` · ${billingLoad.pol} → ${billingLoad.pod}` : ""}
+                </div>
+              </div>
+              <button onClick={()=>{ setBillingLoad(null); setSendResults(null); }}
+                style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"var(--text-muted)" }}>✕</button>
+            </div>
+
+            <div style={{ overflowY:"auto", flex:1, padding:"16px 24px" }}>
+              {billingLoading ? (
+                <div style={{ textAlign:"center", padding:40, color:"var(--text-muted)" }}>Loading…</div>
+              ) : sendResults ? (
+                <div>
+                  <div style={{ fontSize:14, fontWeight:600, marginBottom:12 }}>Send Results:</div>
+                  {sendResults.map((r,i) => (
+                    <div key={i} style={{ padding:"8px 12px", borderRadius:8, marginBottom:6,
+                      background: r.sent ? "rgba(52,211,153,0.1)" : "rgba(251,191,36,0.1)",
+                      border:`1px solid ${r.sent ? "rgba(52,211,153,0.3)" : "rgba(251,191,36,0.3)"}`, fontSize:13 }}>
+                      {r.sent ? "✅" : "⚠️"} Invoice {r.invoiceNumber}
+                      {r.sent && <span style={{ color:"var(--text-muted)" }}> → {r.to}</span>}
+                      {r.skipped && <span style={{ color:"#fbbf24" }}> — Skipped: {r.reason}</span>}
+                      {r.error && <span style={{ color:"#f87171" }}> — Error: {r.error}</span>}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div style={{ overflowX:"auto" }}>
+                  <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
+                    <thead>
+                      <tr style={{ borderBottom:"2px solid var(--border)", color:"var(--text-muted)", fontSize:11, textAlign:"left" }}>
+                        <th style={{ padding:"6px 8px" }}>Order</th>
+                        <th style={{ padding:"6px 8px" }}>Vehicle</th>
+                        <th style={{ padding:"6px 8px" }}>Customer</th>
+                        <th style={{ padding:"6px 8px", textAlign:"right" }}>Expenses</th>
+                        <th style={{ padding:"6px 8px", textAlign:"right" }}>Invoice</th>
+                        <th style={{ padding:"6px 8px", textAlign:"right" }}>Profit</th>
+                        <th style={{ padding:"6px 8px", textAlign:"center" }}>Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {billingRows.map(row => (
+                        <tr key={row.refNumber} style={{ borderBottom:"1px solid var(--border)" }}>
+                          <td style={{ padding:"10px 8px", fontWeight:600 }}>
+                            <a href={`/orders/${row.orderId}`} target="_blank" rel="noreferrer"
+                              style={{ color:"#60a5fa", textDecoration:"none" }}>#{row.refNumber}</a>
+                          </td>
+                          <td style={{ padding:"10px 8px" }}>
+                            <div>{row.vehicle}</div>
+                            <div style={{ fontSize:11, color:"var(--text-muted)" }}>{row.vin}</div>
+                          </td>
+                          <td style={{ padding:"10px 8px" }}>
+                            <div>{row.customerName}</div>
+                            <div style={{ fontSize:11, color:"var(--text-muted)" }}>{row.customerEmail || <span style={{color:"#f87171"}}>No email</span>}</div>
+                          </td>
+                          <td style={{ padding:"10px 8px", textAlign:"right" }}>
+                            <div style={{ fontWeight:600, color:"#f87171" }}>${row.totalExpenses.toFixed(2)}</div>
+                            {row.expenses.map((e,i) => (
+                              <div key={i} style={{ fontSize:10, color:"var(--text-muted)" }}>{e.vendor}: ${e.amount.toFixed(2)}</div>
+                            ))}
+                          </td>
+                          <td style={{ padding:"10px 8px", textAlign:"right", fontWeight:600, color:"#34d399" }}>
+                            {row.invoice ? `$${row.invoiceTotal.toFixed(2)}` : <span style={{ color:"var(--text-muted)" }}>No invoice</span>}
+                          </td>
+                          <td style={{ padding:"10px 8px", textAlign:"right", fontWeight:700,
+                            color: row.profit > 0 ? "#34d399" : row.profit < 0 ? "#f87171" : "var(--text-muted)" }}>
+                            {row.invoice ? `$${row.profit.toFixed(2)}` : "—"}
+                          </td>
+                          <td style={{ padding:"10px 8px", textAlign:"center" }}>
+                            {row.invoice ? (
+                              <span style={{ padding:"3px 8px", borderRadius:6, fontSize:11, fontWeight:600,
+                                background: row.invoice.status==="paid" ? "rgba(52,211,153,0.15)" : row.invoice.status==="sent" ? "rgba(96,165,250,0.15)" : "rgba(251,191,36,0.15)",
+                                color: row.invoice.status==="paid" ? "#34d399" : row.invoice.status==="sent" ? "#60a5fa" : "#fbbf24" }}>
+                                {row.invoice.status.toUpperCase()}
+                              </span>
+                            ) : <span style={{ color:"var(--text-muted)", fontSize:11 }}>—</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    {billingRows.length > 0 && (
+                      <tfoot>
+                        <tr style={{ borderTop:"2px solid var(--border)", fontWeight:700 }}>
+                          <td colSpan={3} style={{ padding:"10px 8px", color:"var(--text-muted)", fontSize:12 }}>TOTALS</td>
+                          <td style={{ padding:"10px 8px", textAlign:"right", color:"#f87171" }}>
+                            ${billingRows.reduce((s,r)=>s+r.totalExpenses,0).toFixed(2)}
+                          </td>
+                          <td style={{ padding:"10px 8px", textAlign:"right", color:"#34d399" }}>
+                            ${billingRows.reduce((s,r)=>s+r.invoiceTotal,0).toFixed(2)}
+                          </td>
+                          <td style={{ padding:"10px 8px", textAlign:"right",
+                            color: billingRows.reduce((s,r)=>s+r.profit,0)>=0 ? "#34d399" : "#f87171" }}>
+                            ${billingRows.reduce((s,r)=>s+r.profit,0).toFixed(2)}
+                          </td>
+                          <td />
+                        </tr>
+                      </tfoot>
+                    )}
+                  </table>
+                </div>
+              )}
+            </div>
+
+            {!sendResults && !billingLoading && (
+              <div style={{ padding:"14px 24px", borderTop:"1px solid var(--border)",
+                display:"flex", gap:10, justifyContent:"flex-end" }}>
+                <button onClick={()=>setBillingLoad(null)}
+                  style={{ padding:"8px 20px", background:"none", border:"1px solid var(--border)",
+                    borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Close</button>
+                <button disabled={sendingAll || billingRows.every(r=>!r.invoice||!r.customerEmail)}
+                  onClick={async()=>{
+                    setSendingAll(true);
+                    try {
+                      const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/send-all-invoices`, { method:"POST" });
+                      const d = await r.json();
+                      if (!r.ok) throw new Error(d.error);
+                      setSendResults(d.results);
+                    } catch(e) { flash("❌ "+e.message); }
+                    setSendingAll(false);
+                  }}
+                  style={{ padding:"8px 20px", background:"rgba(124,58,237,0.85)", border:"none",
+                    borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:sendingAll?0.6:1 }}>
+                  {sendingAll ? "Sending…" : "📧 Send All Invoices"}
+                </button>
+              </div>
+            )}
+            {sendResults && (
+              <div style={{ padding:"14px 24px", borderTop:"1px solid var(--border)", display:"flex", justifyContent:"flex-end" }}>
+                <button onClick={()=>{ setBillingLoad(null); setSendResults(null); }}
+                  style={{ padding:"8px 20px", background:"rgba(52,211,153,0.15)", border:"1px solid rgba(52,211,153,0.3)",
+                    borderRadius:8, color:"#34d399", fontWeight:600, cursor:"pointer" }}>Done</button>
               </div>
             )}
           </div>

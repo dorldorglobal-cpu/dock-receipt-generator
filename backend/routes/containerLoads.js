@@ -108,6 +108,131 @@ router.post("/:id/send-email", express.json(), async (req, res) => {
   }
 });
 
+// GET /api/container-loads/:id/billing-summary — expenses + invoice per order in load
+router.get("/:id/billing-summary", async (req, res) => {
+  try {
+    const Expense = require("../models/Expense");
+    const Invoice = require("../models/Invoice");
+
+    const load = await ContainerLoad.findById(req.params.id).lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+
+    const orders = await Order.find({ _id: { $in: load.orderIds } })
+      .select("_id refNumber customerName customerEmail year make model vin status").lean();
+
+    const orderIds = orders.map(o => o._id);
+
+    const [expenses, invoices] = await Promise.all([
+      Expense.find({ orderId: { $in: orderIds } }).select("orderId category vendor amount status description").lean(),
+      Invoice.find({ orderId: { $in: orderIds } }).select("orderId invoiceNumber total status paidAt items customerEmail").lean(),
+    ]);
+
+    const expByOrder = {};
+    for (const e of expenses) {
+      const key = String(e.orderId);
+      if (!expByOrder[key]) expByOrder[key] = [];
+      expByOrder[key].push(e);
+    }
+    const invByOrder = {};
+    for (const i of invoices) {
+      invByOrder[String(i.orderId)] = i;
+    }
+
+    const rows = orders.map(o => {
+      const key = String(o._id);
+      const exps = expByOrder[key] || [];
+      const inv  = invByOrder[key] || null;
+      const totalExpenses = exps.reduce((s, e) => s + (e.amount || 0), 0);
+      const invoiceTotal  = inv?.total || 0;
+      return {
+        orderId:       o._id,
+        refNumber:     o.refNumber,
+        customerName:  o.customerName,
+        customerEmail: o.customerEmail || inv?.customerEmail || "",
+        vehicle:       [o.year, o.make, o.model].filter(Boolean).join(" "),
+        vin:           o.vin,
+        orderStatus:   o.status,
+        expenses:      exps,
+        totalExpenses,
+        invoice:       inv,
+        invoiceTotal,
+        profit:        invoiceTotal - totalExpenses,
+      };
+    });
+
+    res.json({ load, rows });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/container-loads/:id/send-all-invoices — send invoices for all orders in load
+router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
+  try {
+    const Invoice = require("../models/Invoice");
+    const { getGmailAccessToken } = require("../utils/gmail");
+    const { generateInvoicePdf } = require("./invoices");
+
+    const load = await ContainerLoad.findById(req.params.id).lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+
+    const invoices = await Invoice.find({ orderId: { $in: load.orderIds } }).lean();
+    const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
+    const orderMap = {};
+    for (const o of orders) orderMap[String(o._id)] = o;
+
+    const accessToken = await getGmailAccessToken();
+    const results = [];
+
+    for (const inv of invoices) {
+      const to = inv.customerEmail;
+      if (!to) { results.push({ invoiceNumber: inv.invoiceNumber, skipped: true, reason: "No email" }); continue; }
+      if (inv.status === "paid") { results.push({ invoiceNumber: inv.invoiceNumber, skipped: true, reason: "Already paid" }); continue; }
+
+      try {
+        const order = orderMap[String(inv.orderId)] || null;
+        const pdfBuf = await generateInvoicePdf(inv, order);
+
+        const subject = `Invoice ${inv.invoiceNumber} — Dor Ldor Global`;
+        const body    = `Dear ${inv.customerName || "Customer"},\n\nPlease find your invoice attached.\n\nThank you,\nDor Ldor Global\n9172003998`;
+        const from    = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+        const boundary = "DDG_BULK_" + Date.now() + "_" + inv.invoiceNumber;
+
+        const mimeLines = [
+          `From: ${from}`, `To: ${to}`,
+          `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+          `MIME-Version: 1.0`,
+          `Content-Type: multipart/mixed; boundary="${boundary}"`, ``,
+          `--${boundary}`,
+          `Content-Type: text/plain; charset="UTF-8"`, ``, body, ``,
+          `--${boundary}`,
+          `Content-Type: application/pdf; name="Invoice-${inv.invoiceNumber}.pdf"`,
+          `Content-Transfer-Encoding: base64`,
+          `Content-Disposition: attachment; filename="Invoice-${inv.invoiceNumber}.pdf"`, ``,
+          pdfBuf.toString("base64"), ``,
+          `--${boundary}--`,
+        ];
+
+        const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+        const { google } = require("googleapis");
+        const gmail = google.gmail("v1");
+        const auth  = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: accessToken });
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
+
+        await Invoice.findByIdAndUpdate(inv._id, {
+          $set: { status: "sent", sentAt: new Date() },
+          $push: { timeline: { action: "Invoice Sent", details: `Sent via bulk send from container load ${load.name}`, createdAt: new Date() } },
+        });
+
+        results.push({ invoiceNumber: inv.invoiceNumber, to, sent: true });
+      } catch (err) {
+        results.push({ invoiceNumber: inv.invoiceNumber, error: err.message });
+      }
+    }
+
+    res.json({ results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/container-loads/by-order/:orderId — find which load contains this order
 router.get("/by-order/:orderId", async (req, res) => {
   try {

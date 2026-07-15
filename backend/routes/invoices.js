@@ -738,3 +738,4 @@ router.get("/overdue", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.generateInvoicePdf = generateInvoicePdf;
