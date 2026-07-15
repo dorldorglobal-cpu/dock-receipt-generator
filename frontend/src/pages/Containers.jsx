@@ -154,6 +154,8 @@ export default function Containers() {
   const [parsedBL,    setParsedBL]    = useState(null);
   const [dragOver,    setDragOver]    = useState(false);
   const [renamingFile, setRenamingFile] = useState(null); // { id, name }
+  const [draftBlEmail, setDraftBlEmail] = useState(null); // { to, subject, body }
+  const [sendingDraftBl, setSendingDraftBl] = useState(false);
 
 
   const refresh = () => {
@@ -329,13 +331,13 @@ export default function Containers() {
     } catch (_) { setLoadFiles([]); }
   };
 
-  const uploadDocFile = async (file) => {
+  const uploadDocFile = async (file, label = "Document") => {
     if (!editLoad) return;
     setUploadingDoc(true);
     try {
       const fd = new FormData();
       fd.append("file", file);
-      fd.append("label", "Document");
+      fd.append("label", label);
       const r = await fetch(`${API}/api/container-loads/${editLoad._id}/upload`, { method: "POST", body: fd });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Upload failed");
@@ -352,6 +354,23 @@ export default function Containers() {
     } finally {
       setUploadingDoc(false);
     }
+  };
+
+  const openDraftBlEmail = (load) => {
+    const orders = (load.orderIds || []);
+    const booking = load.bookingNumber || "";
+    const vessel  = load.vessel || "";
+    const pol     = load.pol || "";
+    const pod     = load.pod || "";
+    const customerEmail = orders[0]?.customerEmail || "";
+    const to = customerEmail ? customerEmail.split(",")[0].trim() : "";
+    const subject = `Draft BL — ${load.name}${booking ? " / Booking " + booking : ""}${vessel ? " / " + vessel : ""}`;
+    const vehicleLines = orders.map(o => {
+      const ymm = [o.year, o.make, o.model].filter(Boolean).join(" ") || "—";
+      return `  • ${ymm}${o.vin ? " | VIN: " + o.vin : ""}${o.refNumber ? " (Ref #" + o.refNumber + ")" : ""}`;
+    }).join("\n");
+    const body = `Dear Customer,\n\nPlease see attached Draft Bill of Lading for the following vehicles:\n\n${vehicleLines}\n\nVessel: ${vessel || "—"}\nBooking #: ${booking || "—"}\nPOL: ${pol || "—"}\nPOD: ${pod || "—"}\n\nPlease review and confirm all details. Let us know if any corrections are needed before the final BL is issued.\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
+    setDraftBlEmail({ to, subject, body, loadId: load._id });
   };
 
   const parseBLFile = async (file) => {
@@ -961,13 +980,40 @@ export default function Containers() {
                     }
                   </div>
 
+                  {/* Labeled upload zones */}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:8, marginBottom:16 }}>
+                    {[
+                      { label:"Draft BL",            icon:"📝" },
+                      { label:"Stamped BL",          icon:"📌" },
+                      { label:"Booking Confirmation",icon:"📋" },
+                      { label:"Invoice",             icon:"🧾" },
+                      { label:"Other",               icon:"📎" },
+                    ].map(({ label, icon }) => (
+                      <label key={label} style={{ display:"flex", flexDirection:"column", alignItems:"center",
+                        gap:4, padding:"10px 8px", borderRadius:8, border:"2px dashed var(--border)",
+                        cursor:"pointer", fontSize:11, color:"var(--text-muted)", textAlign:"center",
+                        background:"var(--bg-panel)", transition:"border-color .15s" }}
+                        onMouseEnter={e=>e.currentTarget.style.borderColor="#60a5fa"}
+                        onMouseLeave={e=>e.currentTarget.style.borderColor=""}>
+                        <span style={{ fontSize:20 }}>{icon}</span>
+                        {label}
+                        <input type="file" hidden onChange={e => {
+                          Array.from(e.target.files).forEach(f => uploadDocFile(f, label));
+                          e.target.value = "";
+                        }} />
+                      </label>
+                    ))}
+                  </div>
+
                   {/* File list */}
                   {loadFiles.length === 0 && !uploadingDoc && (
                     <div style={{ textAlign:"center", padding:24, color:"var(--text-muted)", fontSize:13 }}>
                       No documents uploaded yet
                     </div>
                   )}
-                  {loadFiles.map((f, idx) => (
+                  {loadFiles.map((f, idx) => {
+                    const isDraftBL = /^draft/i.test(f.label || "");
+                    return (
                     <div key={f.id || idx} style={{ display:"flex", alignItems:"center", gap:8,
                       padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)",
                       marginBottom:8, background:"var(--bg-base)" }}>
@@ -996,7 +1042,7 @@ export default function Containers() {
                               style={{ ...inp, fontSize:12, padding:"4px 8px", flex:1 }}
                             />
                             <button onClick={async () => {
-                              await fetch(`${API}/api/drive-rename/${f.id}`, {
+                              await fetch(`${API}/api/container-loads/${editLoad._id}/files/${f.id}/rename`, {
                                 method: "PATCH",
                                 headers: { "Content-Type": "application/json" },
                                 body: JSON.stringify({ name: renamingFile.name }),
@@ -1014,12 +1060,42 @@ export default function Containers() {
                             <div style={{ fontSize:13, fontWeight:600, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                               {f.name}
                             </div>
-                            <div style={{ fontSize:11, color:"var(--text-muted)" }}>
-                              {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : ""}
+                            <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:2 }}>
+                              {/* Label badge + dropdown */}
+                              <select
+                                value={f.label || "Document"}
+                                onChange={async e => {
+                                  const newLabel = e.target.value;
+                                  await fetch(`${API}/api/container-loads/${editLoad._id}/files/${f.id}/label`, {
+                                    method: "PATCH",
+                                    headers: { "Content-Type": "application/json" },
+                                    body: JSON.stringify({ label: newLabel }),
+                                  }).catch(() => {});
+                                  setLoadFiles(prev => prev.map(x => x.id === f.id ? { ...x, label: newLabel } : x));
+                                }}
+                                style={{ fontSize:10, padding:"2px 4px", borderRadius:4, border:"1px solid var(--border)",
+                                  background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
+                                {["Draft BL","Stamped BL","Booking Confirmation","Invoice","Other","Document"]
+                                  .map(o => <option key={o} value={o}>{o}</option>)}
+                              </select>
+                              <span style={{ fontSize:10, color:"var(--text-muted)" }}>
+                                {f.modifiedTime ? new Date(f.modifiedTime).toLocaleDateString() : ""}
+                              </span>
                             </div>
                           </>
                         )}
                       </div>
+                      {/* Email Draft BL */}
+                      {isDraftBL && (
+                        <button
+                          onClick={() => openDraftBlEmail(editLoad)}
+                          title="Email Draft BL to customer"
+                          style={{ padding:"5px 10px", fontSize:11, background:"rgba(52,211,153,0.12)",
+                            border:"1px solid rgba(52,211,153,0.3)", borderRadius:6,
+                            color:"#34d399", cursor:"pointer", whiteSpace:"nowrap" }}>
+                          📧 Email
+                        </button>
+                      )}
                       {/* Parse */}
                       <button
                         onClick={async () => {
@@ -1048,7 +1124,7 @@ export default function Containers() {
                           color:"var(--text-secondary)", cursor:"pointer", textDecoration:"none", whiteSpace:"nowrap" }}>
                         ↗ Open
                       </a>
-                      {/* Edit (rename) */}
+                      {/* Rename */}
                       <button
                         onClick={() => setRenamingFile({ id: f.id, name: f.name })}
                         title="Rename file"
@@ -1077,7 +1153,8 @@ export default function Containers() {
                         🗑 Delete
                       </button>
                     </div>
-                  ))}
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1314,6 +1391,61 @@ export default function Containers() {
                 </div>
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {/* ── Draft BL Email Modal ──────────────────────────────────────────── */}
+      {draftBlEmail && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:1200,
+          display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"var(--bg-panel)", borderRadius:14, width:"100%", maxWidth:560,
+            border:"1px solid var(--border)", boxShadow:"0 25px 60px rgba(0,0,0,0.5)" }}>
+            <div style={{ padding:"18px 24px", borderBottom:"1px solid var(--border)", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+              <div style={{ fontWeight:700, fontSize:15 }}>📧 Email Draft BL</div>
+              <button onClick={() => setDraftBlEmail(null)}
+                style={{ background:"none", border:"none", color:"var(--text-muted)", fontSize:18, cursor:"pointer" }}>✕</button>
+            </div>
+            <div style={{ padding:"20px 24px", display:"grid", gap:12 }}>
+              <div>
+                <label style={lbl}>TO</label>
+                <input value={draftBlEmail.to} onChange={e => setDraftBlEmail(p=>({...p,to:e.target.value}))} style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>SUBJECT</label>
+                <input value={draftBlEmail.subject} onChange={e => setDraftBlEmail(p=>({...p,subject:e.target.value}))} style={inp} />
+              </div>
+              <div>
+                <label style={lbl}>BODY</label>
+                <textarea value={draftBlEmail.body} onChange={e => setDraftBlEmail(p=>({...p,body:e.target.value}))}
+                  rows={10} style={{...inp, resize:"vertical", fontFamily:"inherit", fontSize:12}} />
+              </div>
+              <div style={{ fontSize:11, color:"var(--text-muted)" }}>
+                The Draft BL PDF will be attached automatically.
+              </div>
+            </div>
+            <div style={{ padding:"14px 24px", borderTop:"1px solid var(--border)", display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setDraftBlEmail(null)}
+                style={{ padding:"8px 20px", background:"none", border:"1px solid var(--border)",
+                  borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
+              <button disabled={sendingDraftBl || !draftBlEmail.to} onClick={async () => {
+                setSendingDraftBl(true);
+                try {
+                  const r = await fetch(`${API}/api/container-loads/${draftBlEmail.loadId}/email-draft-bl`, {
+                    method:"POST", headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({ to: draftBlEmail.to, subject: draftBlEmail.subject, body: draftBlEmail.body }),
+                  });
+                  const d = await r.json();
+                  if (!r.ok) throw new Error(d.error);
+                  setDraftBlEmail(null);
+                  flash("✅ Draft BL sent to " + draftBlEmail.to);
+                } catch(e) { flash("❌ " + e.message); }
+                setSendingDraftBl(false);
+              }} style={{ padding:"8px 20px", background:"rgba(52,211,153,0.85)", border:"none",
+                borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity: sendingDraftBl ? 0.6 : 1 }}>
+                {sendingDraftBl ? "Sending…" : "✉️ Send Draft BL"}
+              </button>
+            </div>
           </div>
         </div>
       )}

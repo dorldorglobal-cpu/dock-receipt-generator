@@ -283,17 +283,96 @@ router.get("/by-order/:orderId", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// GET /api/container-loads/:id/files — list Drive files for this load
+// GET /api/container-loads/:id/files — list Drive files merged with stored labels
 router.get("/:id/files", async (req, res) => {
   try {
     const load = await ContainerLoad.findById(req.params.id).lean();
     if (!load) return res.status(404).json({ error: "Not found" });
     if (!load.driveFolderId) return res.json([]);
-    const files = await listFilesInFolder(load.driveFolderId);
-    res.json(files);
+    const driveFiles = await listFilesInFolder(load.driveFolderId);
+    // Merge Drive metadata with stored labels from MongoDB
+    const labelMap = {};
+    for (const f of (load.files || [])) {
+      if (f.driveFileId) labelMap[f.driveFileId] = f.label || "Document";
+    }
+    const merged = driveFiles.map(f => ({ ...f, label: labelMap[f.id] || "Document" }));
+    res.json(merged);
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// PATCH /api/container-loads/:id/files/:fileId/label — update a file's label
+router.patch("/:id/files/:fileId/label", express.json(), async (req, res) => {
+  try {
+    const { label } = req.body;
+    if (!label) return res.status(400).json({ error: "label required" });
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    const f = (load.files || []).find(f => f.driveFileId === req.params.fileId);
+    if (f) { f.label = label; await load.save(); }
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/container-loads/:id/email-draft-bl — email Draft BL to customers
+router.post("/:id/email-draft-bl", express.json(), async (req, res) => {
+  try {
+    const { to, subject, body } = req.body || {};
+    if (!to) return res.status(400).json({ error: "to is required" });
+
+    const load = await ContainerLoad.findById(req.params.id).lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+
+    // Find Draft BL file
+    const isDraft = f => /^draft/i.test(f.label || "");
+    const draftFile = (load.files || []).find(isDraft);
+    if (!draftFile?.driveFileId) return res.status(400).json({ error: "No Draft BL found in this load's docs" });
+
+    // Download Draft BL from Drive
+    const { downloadDriveFile } = require("../googleDrive");
+    const fsNode = require("fs");
+    const os     = require("os");
+    const tmpPath = require("path").join(os.tmpdir(), `draft-bl-${Date.now()}.pdf`);
+    await downloadDriveFile(draftFile.driveFileId, tmpPath);
+    const draftBuf = fsNode.readFileSync(tmpPath);
+    fsNode.unlinkSync(tmpPath);
+
+    // Send via Gmail
+    const { getGmailAccessToken } = require("../utils/gmail");
+    const { google } = require("googleapis");
+    const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+    const boundary = "DDG_DRAFTBL_" + Date.now();
+    const mimeLines = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject || "Draft BL").toString("base64")}?=`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      ``,
+      body || "",
+      ``,
+      `--${boundary}`,
+      `Content-Type: application/pdf; name="${draftFile.originalName || "Draft-BL.pdf"}"`,
+      `Content-Transfer-Encoding: base64`,
+      `Content-Disposition: attachment; filename="${draftFile.originalName || "Draft-BL.pdf"}"`,
+      ``,
+      draftBuf.toString("base64"),
+      ``,
+      `--${boundary}--`,
+    ];
+    const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+    const accessToken = await getGmailAccessToken();
+    const gmail = google.gmail("v1");
+    const auth  = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
+
+    res.json({ ok: true, to });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
 // POST /api/container-loads/:id/upload — upload a file to Drive
