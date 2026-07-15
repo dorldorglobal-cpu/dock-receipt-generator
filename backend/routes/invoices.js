@@ -47,13 +47,21 @@ router.post("/", async (req, res) => {
     const invoiceNumber = await nextInvoiceNumber();
     const total = (items || []).reduce((s, i) => s + Number(i.amount || 0), 0);
 
-    // Derive shipping line from booking number prefix
+    // Derive shipping line from booking number prefix or container load vessel
     const bn = (order.bookingNumber || "").toUpperCase();
-    const shippingLine = bn.startsWith("SLSE") || bn.startsWith("SLS")
+    let shippingLine = bn.startsWith("SLSE") || bn.startsWith("SLS")
       ? "SALLAUM LINES"
       : bn.startsWith("ACL") || bn.startsWith("GLL")
-      ? "ACL"
+      ? "ACL / Grimaldi"
       : order.shippingLine || "";
+    // If order is in a container load, use the load's vessel as shipping line
+    if (!shippingLine || shippingLine === order.shippingLine) {
+      try {
+        const ContainerLoad = require("../models/ContainerLoad");
+        const cl = await ContainerLoad.findOne({ orderIds: order._id }).select("vessel").lean();
+        if (cl?.vessel) shippingLine = cl.vessel;
+      } catch (_) {}
+    }
 
     const invoice = await Invoice.create({
       invoiceNumber,
@@ -474,13 +482,20 @@ async function generateInvoicePdf(inv, order) {
     const col1x = ML;
     const col2x = ML + W / 2 + 10;
 
-    // Resolve shipping line from invoice (stored at creation) or re-derive from booking
-    const invShippingLine = inv.shippingLine ||
+    // Resolve shipping line from invoice (stored at creation) or re-derive from booking/container load
+    let invShippingLine = inv.shippingLine ||
       (bookingNumber.toUpperCase().startsWith("SLSE") || bookingNumber.toUpperCase().startsWith("SLS")
         ? "SALLAUM LINES"
         : bookingNumber.toUpperCase().startsWith("ACL") || bookingNumber.toUpperCase().startsWith("GLL")
-        ? "ACL"
+        ? "ACL / Grimaldi"
         : "");
+    if (!invShippingLine && order?._id) {
+      try {
+        const ContainerLoad = require("../models/ContainerLoad");
+        const cl = await ContainerLoad.findOne({ orderIds: order._id }).select("vessel").lean();
+        if (cl?.vessel) invShippingLine = cl.vessel;
+      } catch (_) {}
+    }
 
     // Always prefer live order data so invoice reflects latest voyage/schedule
     const voyage      = order?.voyage      || inv.voyage      || "";

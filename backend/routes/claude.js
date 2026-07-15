@@ -188,13 +188,17 @@ router.post("/upload-chat", upload.single("file"), async (req, res) => {
         ? await pdfText(req.file.buffer)
         : req.file.buffer.toString("utf8");
 
-      // Auto-detect document type
-      const typeResult = await aiJSON(
-        `Identify the type of this logistics document. Return JSON: { "docType": "..." }
+      // Auto-detect document type — check filename first to avoid misclassifying generated invoices
+      if (/^Invoice-/i.test(fileName)) {
+        docType = "Invoice";
+      } else {
+        const typeResult = await aiJSON(
+          `Identify the type of this logistics document. Return JSON: { "docType": "..." }
 Common types: "IAA Buyer Receipt", "IAAI Buyer Receipt", "Copart Buyer Receipt", "Dispatch Sheet", "Bill of Lading", "Booking Confirmation", "AES Export", "Invoice", "Other"`,
-        `Document text:\n${docText.slice(0, 3000)}`
-      );
-      docType = typeResult.docType || "Unknown Document";
+          `Document text:\n${docText.slice(0, 3000)}`
+        );
+        docType = typeResult.docType || "Unknown Document";
+      }
     }
 
     const message = req.body.message || "";
