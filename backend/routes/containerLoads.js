@@ -183,7 +183,7 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     const orderMap = {};
     for (const o of orders) orderMap[String(o._id)] = o;
 
-    // Generate all PDFs
+    // Generate all invoice PDFs
     const attachments = [];
     for (const inv of invoices) {
       try {
@@ -196,6 +196,32 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     }
 
     if (!attachments.length) return res.status(400).json({ error: "No invoices to send" });
+
+    // Attach Draft BL — check load files first, then fall back to any order's files
+    try {
+      const { downloadDriveFile } = require("../googleDrive");
+      const fs = require("fs");
+      const os = require("os");
+
+      const isDraft = f => /^draft/i.test(f.label || "");
+      let draftFile = (load.files || []).find(isDraft);
+      if (!draftFile) {
+        for (const o of orders) {
+          draftFile = (o.files || []).find(isDraft);
+          if (draftFile) break;
+        }
+      }
+
+      if (draftFile?.driveFileId) {
+        const tmpPath = require("path").join(os.tmpdir(), `draft-bl-${Date.now()}.pdf`);
+        await downloadDriveFile(draftFile.driveFileId, tmpPath);
+        const buf = fs.readFileSync(tmpPath);
+        fs.unlinkSync(tmpPath);
+        attachments.push({ filename: draftFile.originalName || "Draft-BL.pdf", content: buf.toString("base64") });
+      }
+    } catch (draftErr) {
+      console.warn("[send-all-invoices] Could not attach Draft BL:", draftErr.message);
+    }
 
     // Build one MIME email with all PDFs attached
     const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
