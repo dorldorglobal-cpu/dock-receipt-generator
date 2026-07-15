@@ -1951,6 +1951,31 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         }
       }
 
+      // Fallback: vendor name + amount when no order ref in addenda.
+      // Normalizes both sides: strips apostrophes/punctuation and suffixes
+      // like LLC, INC, CORP so "JOLA LOGISTICS" matches "J'OLA LOGISTICS LLC".
+      if (matchType === "none" && !orderRef) {
+        const normVendor = s => s.replace(/['''`]/g, "").replace(/\b(LLC|INC|CORP|LTD|CO)\b\.?/gi, "").replace(/[^A-Z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toUpperCase();
+        const normPayee = normVendor(payeeName);
+        const byVendorAmt = await Expense.find({
+          amount: parseFloat(amount.toFixed(2)),
+          status: { $in: ["unpaid", "partial"] },
+        }).select("_id description vendor amount paidAmount status orderRef").lean();
+
+        const vendorMatches = byVendorAmt.filter(c => normVendor(c.vendor || "") === normPayee);
+        if (vendorMatches.length) {
+          const exact = vendorMatches.find(c => Math.abs(c.amount - amount) < 0.01 && c.status !== "partial");
+          if (exact) {
+            candidates = vendorMatches;
+            matchedIds = [exact._id];
+            matchType  = "exact";
+          } else {
+            candidates = vendorMatches;
+            matchType  = "review";
+          }
+        }
+      }
+
       // Fallback for multi-booking payments with no plain order ref (e.g. the
       // ACL "S3-xxxxx" case) — these get split into bills whose description
       // contains the booking number, so match on vendor + booking number
