@@ -2421,6 +2421,7 @@ export default function OrderDetails() {
         {/* ── Labeled upload zones ── */}
         <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(105px, 1fr))", gap:8, marginBottom:16 }}>
           {[
+            { label:"Invoice",            icon:"🧾" },
             { label:"Buyer Receipt",      icon:"🧾" },
             { label:"Email",              icon:"📧" },
             { label:"Order Request Form", icon:"📋" },
@@ -2556,7 +2557,7 @@ export default function OrderDetails() {
                         background: isRatedDraft ? "rgba(234,179,8,0.15)" : "var(--bg-panel)",
                         color:      isRatedDraft ? "#fbbf24"              : "var(--text-secondary)",
                         border:`1px solid ${isRatedDraft ? "rgba(251,191,36,0.3)" : "var(--border)"}` }}>
-                      {["Buyer Receipt","Email","Order Request Form","Dispatch","Title","AES",
+                      {["Invoice","Buyer Receipt","Email","Order Request Form","Dispatch","Title","AES",
                         "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","Other","Document"]
                         .map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>

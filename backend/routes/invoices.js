@@ -482,19 +482,22 @@ async function generateInvoicePdf(inv, order) {
     const col1x = ML;
     const col2x = ML + W / 2 + 10;
 
-    // Resolve shipping line from invoice (stored at creation) or re-derive from booking/container load
-    let invShippingLine = inv.shippingLine ||
-      (bookingNumber.toUpperCase().startsWith("SLSE") || bookingNumber.toUpperCase().startsWith("SLS")
-        ? "SALLAUM LINES"
-        : bookingNumber.toUpperCase().startsWith("ACL") || bookingNumber.toUpperCase().startsWith("GLL")
-        ? "ACL / Grimaldi"
-        : "");
-    if (!invShippingLine && order?._id) {
+    // Resolve shipping line — ContainerLoad vessel takes priority, then booking prefix, then stored value
+    let invShippingLine = "";
+    if (order?._id) {
       try {
         const ContainerLoad = require("../models/ContainerLoad");
         const cl = await ContainerLoad.findOne({ orderIds: order._id }).select("vessel").lean();
         if (cl?.vessel) invShippingLine = cl.vessel;
       } catch (_) {}
+    }
+    if (!invShippingLine) {
+      const bn = bookingNumber.toUpperCase();
+      invShippingLine = bn.startsWith("SLSE") || bn.startsWith("SLS")
+        ? "SALLAUM LINES"
+        : bn.startsWith("ACL") || bn.startsWith("GLL")
+        ? "ACL / Grimaldi"
+        : inv.shippingLine || "";
     }
 
     // Always prefer live order data so invoice reflects latest voyage/schedule
