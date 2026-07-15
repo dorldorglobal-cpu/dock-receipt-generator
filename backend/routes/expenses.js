@@ -1969,9 +1969,12 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
             candidates = vendorMatches;
             matchedIds = [exact._id];
             matchType  = "exact";
+            // Back-fill orderRef from the matched bill so the UI shows it
+            if (!orderRef && exact.orderRef) orderRef = exact.orderRef;
           } else {
             candidates = vendorMatches;
             matchType  = "review";
+            if (!orderRef && vendorMatches[0].orderRef) orderRef = vendorMatches[0].orderRef;
           }
         }
       }
