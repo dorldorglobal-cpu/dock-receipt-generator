@@ -172,7 +172,7 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     const { generateInvoicePdf } = require("./invoices");
     const { google } = require("googleapis");
 
-    const { to, subject, body } = req.body;
+    const { to, subject, body } = req.body || {};
     if (!to) return res.status(400).json({ error: "to is required" });
 
     const load = await ContainerLoad.findById(req.params.id).lean();
