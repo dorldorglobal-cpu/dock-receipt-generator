@@ -779,7 +779,17 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           billDriveId:   billDriveId   || "",
           billDriveUrl:  billDriveUrl  || "",
         });
-        if (!duplicate) created.push(true);
+        if (!duplicate) {
+          created.push(true);
+          // Update order's oceanCost so it appears in P&L
+          if (orderId && row.total) {
+            const ord = await Order.findById(orderId).select("charges").lean();
+            const existing = parseFloat(ord?.charges?.oceanCost || 0);
+            if (!existing || existing === 0) {
+              await Order.findByIdAndUpdate(orderId, { $set: { "charges.oceanCost": String(row.total) } });
+            }
+          }
+        }
 
         // Attach the invoice PDF to the matched order's docs as "Rated Draft".
         // If we have the session temp file, produce a highlighted copy first.
@@ -1230,6 +1240,15 @@ router.post("/apply-acl", express.json(), async (req, res) => {
         billMime:      row.billMime     || "",
       });
       created.push(expense._id);
+
+      // Update order's oceanCost so it shows in the order P&L
+      if (orderId && row.total) {
+        const ord = await Order.findById(orderId).select("charges").lean();
+        const existing = parseFloat(ord?.charges?.oceanCost || 0);
+        if (!existing || existing === 0) {
+          await Order.findByIdAndUpdate(orderId, { $set: { "charges.oceanCost": String(row.total) } });
+        }
+      }
     }
 
     res.json({ created: created.length });
@@ -1498,6 +1517,15 @@ router.post("/apply-container", express.json(), async (req, res) => {
           billFileName:  invoice.billFileName || "",
           billMime:      invoice.billMime     || "",
         });
+
+        // Update order's oceanCost so it appears in P&L
+        if (orderId && row.total) {
+          const ord = await Order.findById(orderId).select("charges").lean();
+          const existing = parseFloat(ord?.charges?.oceanCost || 0);
+          if (!existing || existing === 0) {
+            await Order.findByIdAndUpdate(orderId, { $set: { "charges.oceanCost": String(row.total) } });
+          }
+        }
         created++;
       }
     }
