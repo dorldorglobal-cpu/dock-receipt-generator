@@ -137,11 +137,12 @@ export default function Containers() {
   const [sendingEmail,setSendingEmail]= useState(false);
 
   // Billing summary modal
-  const [billingLoad,   setBillingLoad]   = useState(null); // load object
+  const [billingLoad,   setBillingLoad]   = useState(null);
   const [billingRows,   setBillingRows]   = useState([]);
   const [billingLoading,setBillingLoading]= useState(false);
   const [sendingAll,    setSendingAll]    = useState(false);
   const [sendResults,   setSendResults]   = useState(null);
+  const [sendPreview,   setSendPreview]   = useState(null); // { to, subject, body }
 
   // Edit modal
   const [editLoad,    setEditLoad]    = useState(null);
@@ -1226,34 +1227,91 @@ export default function Containers() {
               )}
             </div>
 
+            {/* Email preview panel */}
+            {sendPreview && !sendResults && (
+              <div style={{ padding:"16px 24px", borderTop:"2px solid var(--border)", background:"rgba(124,58,237,0.06)" }}>
+                <div style={{ fontSize:12, fontWeight:700, color:"#a78bfa", marginBottom:10, textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                  📧 Preview — confirm before sending
+                </div>
+                <div style={{ display:"grid", gap:8 }}>
+                  <div>
+                    <label style={lbl}>TO</label>
+                    <input value={sendPreview.to} onChange={e=>setSendPreview(p=>({...p,to:e.target.value}))} style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>SUBJECT</label>
+                    <input value={sendPreview.subject} onChange={e=>setSendPreview(p=>({...p,subject:e.target.value}))} style={inp} />
+                  </div>
+                  <div>
+                    <label style={lbl}>BODY</label>
+                    <textarea value={sendPreview.body} onChange={e=>setSendPreview(p=>({...p,body:e.target.value}))}
+                      rows={6} style={{...inp, resize:"vertical", fontFamily:"inherit"}} />
+                  </div>
+                  <div style={{ fontSize:11, color:"var(--text-muted)" }}>
+                    {billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").length} invoice PDF(s) will be attached
+                  </div>
+                </div>
+              </div>
+            )}
+
             {!sendResults && !billingLoading && (
               <div style={{ padding:"14px 24px", borderTop:"1px solid var(--border)",
                 display:"flex", gap:10, justifyContent:"flex-end" }}>
-                <button onClick={()=>setBillingLoad(null)}
+                <button onClick={()=>{ setBillingLoad(null); setSendPreview(null); setSendResults(null); }}
                   style={{ padding:"8px 20px", background:"none", border:"1px solid var(--border)",
                     borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Close</button>
-                <button disabled={sendingAll || billingRows.every(r=>!r.invoice||!r.customerEmail)}
-                  onClick={async()=>{
-                    setSendingAll(true);
-                    try {
-                      const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/send-all-invoices`, { method:"POST" });
-                      const d = await r.json();
-                      if (!r.ok) throw new Error(d.error);
-                      setSendResults(d.results);
-                    } catch(e) { flash("❌ "+e.message); }
-                    setSendingAll(false);
-                  }}
-                  style={{ padding:"8px 20px", background:"rgba(124,58,237,0.85)", border:"none",
-                    borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:sendingAll?0.6:1 }}>
-                  {sendingAll ? "Sending…" : "📧 Send All Invoices"}
-                </button>
+                {!sendPreview ? (
+                  <button disabled={billingRows.every(r=>!r.invoice||r.invoice.status==="paid")}
+                    onClick={()=>{
+                      const to = billingRows.find(r=>r.customerEmail)?.customerEmail || "";
+                      const vessel = billingLoad.vessel || "";
+                      const booking = billingLoad.bookingNumber || "";
+                      const shippingLine = vessel.split(" ")[0] || "";
+                      const subject = `Invoices — Load ${billingLoad.name}${booking ? " / Booking "+booking : ""}${vessel ? " / "+vessel : ""}`;
+                      const names = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").map(r=>`  • ${r.vehicle} (Ref #${r.refNumber}) — $${r.invoiceTotal.toFixed(2)}`).join("\n");
+                      const body = `Dear Customer,\n\nPlease find your invoices attached for the following vehicles:\n\n${names}\n\nVessel: ${vessel}\nBooking #: ${booking}\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
+                      setSendPreview({ to, subject, body });
+                    }}
+                    style={{ padding:"8px 20px", background:"rgba(124,58,237,0.85)", border:"none",
+                      borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer" }}>
+                    📧 Send All Invoices
+                  </button>
+                ) : (
+                  <button disabled={sendingAll || !sendPreview.to}
+                    onClick={async()=>{
+                      setSendingAll(true);
+                      try {
+                        const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/send-all-invoices`, {
+                          method:"POST", headers:{"Content-Type":"application/json"},
+                          body: JSON.stringify({ to: sendPreview.to, subject: sendPreview.subject, body: sendPreview.body }),
+                        });
+                        const d = await r.json();
+                        if (!r.ok) throw new Error(d.error);
+                        setSendResults([{ sent: true, to: sendPreview.to, count: d.sent, attachments: d.attachments }]);
+                        setSendPreview(null);
+                      } catch(e) { flash("❌ "+e.message); }
+                      setSendingAll(false);
+                    }}
+                    style={{ padding:"8px 20px", background:"rgba(52,211,153,0.85)", border:"none",
+                      borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:sendingAll?0.6:1 }}>
+                    {sendingAll ? "Sending…" : "✅ Confirm & Send"}
+                  </button>
+                )}
               </div>
             )}
             {sendResults && (
-              <div style={{ padding:"14px 24px", borderTop:"1px solid var(--border)", display:"flex", justifyContent:"flex-end" }}>
-                <button onClick={()=>{ setBillingLoad(null); setSendResults(null); }}
-                  style={{ padding:"8px 20px", background:"rgba(52,211,153,0.15)", border:"1px solid rgba(52,211,153,0.3)",
-                    borderRadius:8, color:"#34d399", fontWeight:600, cursor:"pointer" }}>Done</button>
+              <div style={{ padding:"14px 24px", borderTop:"1px solid var(--border)" }}>
+                {sendResults.map((r,i) => (
+                  <div key={i} style={{ fontSize:13, color:"#34d399", marginBottom:4 }}>
+                    ✅ {r.count} invoice(s) sent to {r.to}
+                    {r.attachments && <div style={{ fontSize:11, color:"var(--text-muted)" }}>{r.attachments.join(", ")}</div>}
+                  </div>
+                ))}
+                <div style={{ display:"flex", justifyContent:"flex-end", marginTop:10 }}>
+                  <button onClick={()=>{ setBillingLoad(null); setSendResults(null); setSendPreview(null); }}
+                    style={{ padding:"8px 20px", background:"rgba(52,211,153,0.15)", border:"1px solid rgba(52,211,153,0.3)",
+                      borderRadius:8, color:"#34d399", fontWeight:600, cursor:"pointer" }}>Done</button>
+                </div>
               </div>
             )}
           </div>

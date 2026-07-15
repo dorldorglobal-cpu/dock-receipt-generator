@@ -170,66 +170,80 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     const Invoice = require("../models/Invoice");
     const { getGmailAccessToken } = require("../utils/gmail");
     const { generateInvoicePdf } = require("./invoices");
+    const { google } = require("googleapis");
+
+    const { to, subject, body } = req.body;
+    if (!to) return res.status(400).json({ error: "to is required" });
 
     const load = await ContainerLoad.findById(req.params.id).lean();
     if (!load) return res.status(404).json({ error: "Not found" });
 
-    const invoices = await Invoice.find({ orderId: { $in: load.orderIds } }).lean();
+    const invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
     const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
     const orderMap = {};
     for (const o of orders) orderMap[String(o._id)] = o;
 
-    const accessToken = await getGmailAccessToken();
-    const results = [];
-
+    // Generate all PDFs
+    const attachments = [];
     for (const inv of invoices) {
-      const to = inv.customerEmail;
-      if (!to) { results.push({ invoiceNumber: inv.invoiceNumber, skipped: true, reason: "No email" }); continue; }
-      if (inv.status === "paid") { results.push({ invoiceNumber: inv.invoiceNumber, skipped: true, reason: "Already paid" }); continue; }
-
       try {
         const order = orderMap[String(inv.orderId)] || null;
         const pdfBuf = await generateInvoicePdf(inv, order);
-
-        const subject = `Invoice ${inv.invoiceNumber} — Dor Ldor Global`;
-        const body    = `Dear ${inv.customerName || "Customer"},\n\nPlease find your invoice attached.\n\nThank you,\nDor Ldor Global\n9172003998`;
-        const from    = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
-        const boundary = "DDG_BULK_" + Date.now() + "_" + inv.invoiceNumber;
-
-        const mimeLines = [
-          `From: ${from}`, `To: ${to}`,
-          `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-          `MIME-Version: 1.0`,
-          `Content-Type: multipart/mixed; boundary="${boundary}"`, ``,
-          `--${boundary}`,
-          `Content-Type: text/plain; charset="UTF-8"`, ``, body, ``,
-          `--${boundary}`,
-          `Content-Type: application/pdf; name="Invoice-${inv.invoiceNumber}.pdf"`,
-          `Content-Transfer-Encoding: base64`,
-          `Content-Disposition: attachment; filename="Invoice-${inv.invoiceNumber}.pdf"`, ``,
-          pdfBuf.toString("base64"), ``,
-          `--${boundary}--`,
-        ];
-
-        const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
-        const { google } = require("googleapis");
-        const gmail = google.gmail("v1");
-        const auth  = new google.auth.OAuth2();
-        auth.setCredentials({ access_token: accessToken });
-        await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
-
-        await Invoice.findByIdAndUpdate(inv._id, {
-          $set: { status: "sent", sentAt: new Date() },
-          $push: { timeline: { action: "Invoice Sent", details: `Sent via bulk send from container load ${load.name}`, createdAt: new Date() } },
-        });
-
-        results.push({ invoiceNumber: inv.invoiceNumber, to, sent: true });
+        attachments.push({ filename: `Invoice-${inv.invoiceNumber}.pdf`, content: pdfBuf.toString("base64") });
       } catch (err) {
-        results.push({ invoiceNumber: inv.invoiceNumber, error: err.message });
+        console.warn(`PDF gen failed for ${inv.invoiceNumber}:`, err.message);
       }
     }
 
-    res.json({ results });
+    if (!attachments.length) return res.status(400).json({ error: "No invoices to send" });
+
+    // Build one MIME email with all PDFs attached
+    const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+    const boundary = "DDG_LOAD_" + Date.now();
+
+    const mimeLines = [
+      `From: ${from}`,
+      `To: ${to}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+      `MIME-Version: 1.0`,
+      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      ``,
+      `--${boundary}`,
+      `Content-Type: text/plain; charset="UTF-8"`,
+      ``,
+      body || "",
+      ``,
+    ];
+
+    for (const att of attachments) {
+      mimeLines.push(
+        `--${boundary}`,
+        `Content-Type: application/pdf; name="${att.filename}"`,
+        `Content-Transfer-Encoding: base64`,
+        `Content-Disposition: attachment; filename="${att.filename}"`,
+        ``,
+        att.content,
+        ``
+      );
+    }
+    mimeLines.push(`--${boundary}--`);
+
+    const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+    const accessToken = await getGmailAccessToken();
+    const gmail = google.gmail("v1");
+    const auth  = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
+
+    // Mark all sent invoices
+    for (const inv of invoices) {
+      await Invoice.findByIdAndUpdate(inv._id, {
+        $set: { status: "sent", sentAt: new Date() },
+        $push: { timeline: { action: "Invoice Sent", details: `Sent in bulk email for container load ${load.name}`, createdAt: new Date() } },
+      });
+    }
+
+    res.json({ sent: invoices.length, to, attachments: attachments.map(a => a.filename) });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
