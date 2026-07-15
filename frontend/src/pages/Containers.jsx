@@ -1113,7 +1113,7 @@ export default function Containers() {
 
       {/* ── Billing Summary Modal ─────────────────────────────────────────── */}
       {billingLoad && (
-        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1000,
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:1000,
           display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"var(--bg-card)", borderRadius:14, width:"100%", maxWidth:920,
             maxHeight:"90vh", display:"flex", flexDirection:"column", border:"1px solid var(--border)" }}>
@@ -1172,9 +1172,11 @@ export default function Containers() {
                             <div>{row.vehicle}</div>
                             <div style={{ fontSize:11, color:"var(--text-muted)" }}>{row.vin}</div>
                           </td>
-                          <td style={{ padding:"10px 8px" }}>
-                            <div>{row.customerName}</div>
-                            <div style={{ fontSize:11, color:"var(--text-muted)" }}>{row.customerEmail || <span style={{color:"#f87171"}}>No email</span>}</div>
+                          <td style={{ padding:"10px 8px", maxWidth:160 }}>
+                            <div style={{ whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{row.customerName}</div>
+                            <div style={{ fontSize:11, color:"var(--text-muted)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>
+                              {row.customerEmail || <span style={{color:"#f87171"}}>No email</span>}
+                            </div>
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right" }}>
                             <div style={{ fontWeight:600, color:"#f87171" }}>${row.totalExpenses.toFixed(2)}</div>

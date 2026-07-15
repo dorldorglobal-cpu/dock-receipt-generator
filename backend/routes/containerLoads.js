@@ -148,7 +148,7 @@ router.get("/:id/billing-summary", async (req, res) => {
         orderId:       o._id,
         refNumber:     o.refNumber,
         customerName:  o.customerName,
-        customerEmail: o.customerEmail || inv?.customerEmail || "",
+        customerEmail: (inv?.customerEmail || o.customerEmail || "").split(",")[0].trim(),
         vehicle:       [o.year, o.make, o.model].filter(Boolean).join(" "),
         vin:           o.vin,
         orderStatus:   o.status,
