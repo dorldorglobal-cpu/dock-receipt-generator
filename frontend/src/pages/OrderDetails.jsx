@@ -11,6 +11,7 @@ const TERMINAL_MAP = {}; // fallback empty — real data comes from address book
 
 // defaultSell = fixed sell price pre-fill; hasDesc = show description sub-input
 const feeRows = [
+  ["emergencyBafFee",     "Emergency BAF",                 {}],
   ["nonRunnerFee",        "Non-runner Fee",                { defaultSell: 400  }],
   ["forkliftFee",         "Forklift Fee",                  { defaultSell: 500  }],
   ["storageAuctionFee",   "Storage Fee – Auction",         {}],
@@ -25,7 +26,6 @@ const feeRows = [
   ["vesselRolloverFee",   "Vessel Rollover Fee",           {}],
   ["blFedexFee",          "FedEx/Mailing Fee",             { defaultSell: 35   }],
   ["noTitleDeliveryFee",  "No Title Delivery at Port Fee", { defaultSell: 75   }],
-  ["emergencyBafFee",     "Emergency BAF",                 {}],
   ["ctnFee",              "CTN Fee",                       { defaultSell: 75   }],
   ["dryRunFee",           "Dry Run Fee",                   { defaultSell: 75   }],
   ["inOutFee",            "In & Out Fee",                  { category: "Loaders & Warehouses" }],
