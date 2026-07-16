@@ -1022,11 +1022,18 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
         if (o) { orderId = o._id; orderRef = o.refNumber; }
       }
 
-      // Parse dispatch date
+      // Parse dispatch date — fall back to today if missing or unparseable
       let dateObj = new Date();
       if (row.dispatchDate) {
-        const [m, d, y] = row.dispatchDate.split("/");
-        dateObj = new Date(`${y}-${m}-${d}`);
+        const parts = row.dispatchDate.split("/");
+        if (parts.length === 3) {
+          const [m, d, y] = parts;
+          const attempt = new Date(`${y}-${String(m).padStart(2,"0")}-${String(d).padStart(2,"0")}`);
+          if (!isNaN(attempt)) dateObj = attempt;
+        } else {
+          const attempt = new Date(row.dispatchDate);
+          if (!isNaN(attempt)) dateObj = attempt;
+        }
       }
 
       const validExtras = (row.lineItems || []).filter(l => l.description?.trim() && Number(l.amount) > 0);
