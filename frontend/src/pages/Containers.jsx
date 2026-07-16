@@ -992,9 +992,12 @@ export default function Containers() {
                       <label key={label} style={{ display:"flex", flexDirection:"column", alignItems:"center",
                         gap:4, padding:"10px 8px", borderRadius:8, border:"2px dashed var(--border)",
                         cursor:"pointer", fontSize:11, color:"var(--text-muted)", textAlign:"center",
-                        background:"var(--bg-panel)", transition:"border-color .15s" }}
-                        onMouseEnter={e=>e.currentTarget.style.borderColor="#60a5fa"}
-                        onMouseLeave={e=>e.currentTarget.style.borderColor=""}>
+                        background:"var(--bg-panel)", transition:"border-color .15s, background .15s" }}
+                        onMouseEnter={e=>{ e.currentTarget.style.borderColor="#60a5fa"; e.currentTarget.style.background="rgba(96,165,250,0.07)"; }}
+                        onMouseLeave={e=>{ e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; }}
+                        onDragOver={e=>{ e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor="#60a5fa"; e.currentTarget.style.background="rgba(96,165,250,0.13)"; }}
+                        onDragLeave={e=>{ e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; }}
+                        onDrop={e=>{ e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; Array.from(e.dataTransfer.files).forEach(f => uploadDocFile(f, label)); }}>
                         <span style={{ fontSize:20 }}>{icon}</span>
                         {label}
                         <input type="file" hidden onChange={e => {
