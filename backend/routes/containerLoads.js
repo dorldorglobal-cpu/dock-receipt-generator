@@ -15,8 +15,17 @@ const {
 
 const upload = multer({ dest: "temp/" });
 
-// Parent Drive folder for container load docs (same as ACL/EZ Cargo area)
-const CONTAINER_DOCS_FOLDER = process.env.CONTAINER_DOCS_FOLDER_ID || "root";
+// Lazily resolved parent folder: My Drive → Dor L'Dor Global → Container Loads
+let _containerParentFolderId = null;
+async function getContainerParentFolder() {
+  if (_containerParentFolderId) return _containerParentFolderId;
+  const { getOrCreateFolder } = require("../googleDrive");
+  const rootId  = process.env.DDG_ROOT_FOLDER_ID || "root";
+  const ddgId   = await getOrCreateFolder("Dor L'Dor Global", rootId);
+  const clId    = await getOrCreateFolder("Container Loads", ddgId.id || ddgId);
+  _containerParentFolderId = clId.id || clId;
+  return _containerParentFolderId;
+}
 
 const LOADER_TO = "info@e-zcargo.com";
 const LOADER_CC = "shipping@e-zcargo.com";
@@ -383,10 +392,11 @@ router.post("/:id/upload", upload.single("file"), async (req, res) => {
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
 
-    // Create Drive folder if missing
+    // Create Drive folder if missing — nested under Dor L'Dor Global → Container Loads
     if (!load.driveFolderId) {
+      const parentId = await getContainerParentFolder();
       const folderName = `Container ${load.name}`;
-      const folder = await createDriveFolder(folderName, CONTAINER_DOCS_FOLDER);
+      const folder = await createDriveFolder(folderName, parentId);
       load.driveFolderId   = folder.id;
       load.driveFolderLink = folder.webViewLink;
     }
