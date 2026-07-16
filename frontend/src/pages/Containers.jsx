@@ -1364,9 +1364,20 @@ export default function Containers() {
                     <textarea value={sendPreview.body} onChange={e=>setSendPreview(p=>({...p,body:e.target.value}))}
                       rows={6} style={{...inp, resize:"vertical", fontFamily:"inherit"}} />
                   </div>
-                  <div style={{ fontSize:11, color:"var(--text-muted)" }}>
-                    {billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").length} invoice PDF(s) will be attached
-                  </div>
+                  {(() => {
+                    const invoiceCount = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").length;
+                    const hasDraft = (billingLoad?.files||[]).some(f =>
+                      /^draft/i.test(f.label||"") || /draft/i.test(f.originalName||"") || /draft/i.test(f.filename||"")
+                    );
+                    return (
+                      <div style={{ fontSize:11, color:"var(--text-muted)", display:"flex", flexDirection:"column", gap:3 }}>
+                        <span>📄 {invoiceCount} invoice PDF(s) will be attached</span>
+                        <span style={{ color: hasDraft ? "#34d399" : "#f87171" }}>
+                          {hasDraft ? "📝 Draft BL will be attached" : "⚠️ No Draft BL found in this load's docs — upload one to include it"}
+                        </span>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
             )}

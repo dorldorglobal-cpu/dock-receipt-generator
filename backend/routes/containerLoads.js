@@ -203,7 +203,8 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
       const fs = require("fs");
       const os = require("os");
 
-      const isDraft = f => /^draft/i.test(f.label || "");
+      // Match by label OR by filename containing "draft"
+      const isDraft = f => /^draft/i.test(f.label || "") || /draft/i.test(f.originalName || "") || /draft/i.test(f.filename || "");
       let draftFile = (load.files || []).find(isDraft);
       if (!draftFile) {
         for (const o of orders) {
@@ -269,7 +270,8 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
       });
     }
 
-    res.json({ sent: invoices.length, to, attachments: attachments.map(a => a.filename) });
+    const draftAttached = attachments.some(a => /draft/i.test(a.filename));
+    res.json({ sent: invoices.length, to, attachments: attachments.map(a => a.filename), draftAttached });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
