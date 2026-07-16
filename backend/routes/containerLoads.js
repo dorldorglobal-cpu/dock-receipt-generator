@@ -527,21 +527,8 @@ function extractDriveId(url) {
 function parseBLText(text, filename = "") {
   const t = text || "";
   const lines = t.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+  const clean = (s, max = 60) => (s || "").replace(/\s+/g, " ").trim().slice(0, max);
 
-  // Find value on the line AFTER the line matching a pattern
-  const lineAfter = (...patterns) => {
-    for (const pat of patterns) {
-      for (let i = 0; i < lines.length - 1; i++) {
-        if (pat.test(lines[i])) {
-          const next = lines[i + 1].trim();
-          if (next && next.length < 80) return next;
-        }
-      }
-    }
-    return "";
-  };
-
-  // Find inline value on same line
   const inline = (...patterns) => {
     for (const pat of patterns) {
       for (const line of lines) {
@@ -552,95 +539,168 @@ function parseBLText(text, filename = "") {
     return "";
   };
 
-  // Container: CNT: XXXX1234567
+  // ── Container number: 4 uppercase letters + 7 digits (ISO 6346) ──────────────
   const containerNumber =
-    inline(/CNT[:\s]+([A-Z]{4}\d{7})/i) ||
+    inline(/(?:CNTR?|CONTAINER)\s*(?:NO|NUMBER|#)[.:\s]+([A-Z]{4}\d{7})/i) ||
     (t.match(/\b([A-Z]{4}\d{7})\b/)?.[1] || "");
 
-  // Seal
-  const sealNumber = inline(/SEAL[:\s]+(\S+)/i);
+  // ── Seal: "SEAL: XXXXXXX" or after container on same line "SEKU4051437 /46048962/" ──
+  let sealNumber = inline(/SEAL\s*(?:NO|NUMBER|#)?[.:\s]+(\d{5,})/i);
+  if (!sealNumber && containerNumber) {
+    for (const line of lines) {
+      if (line.includes(containerNumber)) {
+        const after = line.slice(line.indexOf(containerNumber) + containerNumber.length);
+        const m = after.match(/[\/\s]+(\d{6,})/);
+        if (m) { sealNumber = m[1]; break; }
+      }
+    }
+  }
 
-  // Booking / BL number — 10-digit number is most reliable
-  const bookingNumber =
+  // ── Booking number ────────────────────────────────────────────────────────────
+  // Format A (OOCL): "BOOKING NO. BILL OF LADING NO." header, value on next line
+  //   e.g. "E-Z CARGO INC 2331483910 OOLU2331483910"
+  // Format B: "BOOKING NO: 2331483910" inline
+  // Format C (Sallaum): "5. DOCUMENT NUMBER: XXXXX"
+  let bookingNumber = inline(/BOOKING\s*(?:NO|NUMBER|#)[.:\s]+(\d{7,12})/i);
+  if (!bookingNumber) {
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (/BOOKING\s*NO/i.test(lines[i])) {
+        // Next line may be "SHIPPER NAME  2331483910  OOLU2331483910" — grab standalone 7-12 digit number
+        const m = lines[i + 1].match(/(?<![A-Z])(\d{7,12})(?!\d)/);
+        if (m) { bookingNumber = m[1]; break; }
+      }
+    }
+  }
+  if (!bookingNumber) bookingNumber =
     inline(/(?:5\.\s*DOCUMENT\s+NUMBER|DOCUMENT\s+NUMBER)[:\s]*(\S+)/i) ||
     inline(/B\/?L\s*(?:NUMBER|NO)[:\s]*(\S+)/i) ||
     (t.match(/\b(\d{10})\b/)?.[1] || "");
 
-  // Vessel + POL: In BL format the vessel line is "VESSELNAME / VOYAGEcode PORTCITY"
-  // e.g. "OOCL SEOUL / 120E New York"
-  // Voyage code always contains digits (120E, 526E, 0526) — this distinguishes it
-  // from junk like "NOTIFY PARTY / INTERMEDIATE"
-  let vessel = "", pol = "";
-  for (const line of lines) {
-    // Voyage code must contain a digit (120E, 526E, 0526) — filters out "NOTIFY PARTY / INTERMEDIATE"
-    // City/POL is optional on the same line (may appear on the next line instead)
-    const m = line.match(/^([A-Z][A-Z0-9 \-]{2,}?)\s*\/\s*([A-Z0-9]*\d[A-Z0-9]*)(?:\s+(.+))?$/);
-    if (m) {
-      vessel = `${m[1].trim()} / ${m[2].trim()}`;
-      pol    = (m[3] || "").trim(); // city name appears after voyage code on same line
-      break;
+  // ── Vessel + Voyage ───────────────────────────────────────────────────────────
+  // Format A (OOCL page 2): "VESSEL: CMA CGM AMBITION VOYAGE: 013E B/L NO.: OOLU..."
+  // Format B (OOCL page 1): line after "VESSEL/VOYAGE/FLAG..." header:
+  //   "CMA CGM AMBITION 013E NEW YORK NEW YORK"  (vessel voyageCode POL POL)
+  // Format C (slash style): "OOCL SEOUL / 120E New York"
+
+  let vessel = "", voyage = "", pol = "";
+
+  // Format A
+  const inlineVV = lines.find(l => /VESSEL[:\s]/i.test(l) && /VOYAGE[:\s]/i.test(l));
+  if (inlineVV) {
+    const m = inlineVV.match(/VESSEL[:\s]+([A-Z][A-Z0-9 \-]+?)\s+VOYAGE[:\s]+(\S+)/i);
+    if (m) { vessel = m[1].trim(); voyage = m[2].trim(); }
+  }
+
+  // Format B — line immediately after "VESSEL/VOYAGE" label row
+  if (!vessel) {
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (/VESSEL\s*[\/&]\s*VOYAGE/i.test(lines[i])) {
+        const val = lines[i + 1];
+        // Voyage code: 3-4 chars with at least one digit, e.g. 013E, 120E, 526S, 0526
+        const m = val.match(/^((?:[A-Z][A-Z0-9 \-]*?)+?)\s+(\d{3}[A-Z]\d*|[A-Z]{0,2}\d{3,4}[A-Z]?)\s*(.*)?$/);
+        if (m) {
+          vessel = m[1].trim();
+          voyage = m[2].trim();
+          pol    = (m[3] || "").trim();
+        } else {
+          vessel = val.trim();
+        }
+        break;
+      }
     }
   }
 
-  // POD: usually the line right after the vessel line, sometimes repeated ("Tema Tema")
+  // Format C — slash-separated "VESSEL / VOYAGE [POL]"
+  if (!vessel) {
+    for (const line of lines) {
+      const m = line.match(/^([A-Z][A-Z0-9 \-]{2,}?)\s*\/\s*([A-Z0-9]*\d[A-Z0-9]*)(?:\s+(.+))?$/);
+      if (m) {
+        vessel = m[1].trim();
+        voyage = m[2].trim();
+        pol    = (m[3] || "").trim();
+        break;
+      }
+    }
+  }
+
+  // If pol looks like "NEW YORK NEW YORK" (doubled two-column merge), de-dup it
+  if (pol) {
+    const words = pol.trim().split(/\s+/);
+    const h = words.length / 2;
+    if (Number.isInteger(h) && h > 0 && words.slice(0, h).join(" ") === words.slice(h).join(" "))
+      pol = words.slice(0, h).join(" ");
+  }
+
+  // ── POL fallback ──────────────────────────────────────────────────────────────
+  if (!pol && vessel) {
+    // The vessel line often contains: "VESSEL VOYAGE POL [POL]"
+    // Find that line and strip out the known vessel+voyage to get the city
+    const vesselBase = vessel.replace(` ${voyage}`, "").trim();
+    for (const line of lines) {
+      if (line.startsWith(vesselBase) && line.includes(voyage)) {
+        const rest = line.slice(line.indexOf(voyage) + voyage.length).trim();
+        if (rest) {
+          // "NEW YORK NEW YORK" → de-dup → "NEW YORK"
+          const words = rest.split(/\s+/);
+          const h = Math.floor(words.length / 2);
+          pol = (h > 0 && words.slice(0, h).join(" ") === words.slice(h).join(" "))
+            ? words.slice(0, h).join(" ")
+            : words.slice(0, Math.min(words.length, 3)).join(" "); // first 1-3 words
+        }
+        break;
+      }
+    }
+  }
+  if (!pol) {
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (/PORT\s+OF\s+LOADING/i.test(lines[i]) && !/DISCHARGE/i.test(lines[i])) {
+        const same = lines[i].match(/PORT\s+OF\s+LOADING[:\s]+([A-Z][A-Z ]+)/i);
+        if (same) { pol = same[1].trim(); break; }
+      }
+    }
+  }
+
+  // ── POD: "PORT OF DISCHARGE" section ─────────────────────────────────────────
   let pod = "";
   for (let i = 0; i < lines.length - 1; i++) {
-    if (vessel && lines[i].startsWith(vessel.split(" /")[0].trim())) {
-      for (let j = i + 1; j <= Math.min(i + 4, lines.length - 1); j++) {
-        let candidate = lines[j].split(/\s+/)[0]; // first word (handles "Tema Tema")
-        // Handle pdf-parse merging two-column duplicate like "TemaTema" → "Tema"
-        const half = candidate.length / 2;
-        if (half === Math.floor(half) && candidate.slice(0, half) === candidate.slice(half)) {
-          candidate = candidate.slice(0, half);
-        }
-        if (/^[A-Z][a-z]/.test(candidate) && candidate.length > 2 &&
-            !/CNT:|SEAL:|VIN:|NYCT|HS CODE|FREIGHT|SEAWAY/i.test(lines[j])) {
-          pod = candidate;
-          break;
-        }
-      }
-      break;
+    if (/PORT\s+OF\s+DISCHARGE/i.test(lines[i])) {
+      const next = lines[i + 1];
+      const words = next.split(/\s+/);
+      // "TEMA TEMA FCL/FCL" → first word; if first two same, take one
+      let candidate = (words[0] === words[1]) ? words[0] : words.slice(0, 2).join(" ");
+      if (/FCL|CY\/CY|DCL/i.test(candidate)) candidate = words[0];
+      if (candidate && candidate.length > 1 && !/FCL|CY\//i.test(candidate)) { pod = candidate; break; }
     }
   }
-  // If POL wasn't on the vessel line, try the line immediately after vessel in the text
-  if (vessel && !pol) {
-    const vi = lines.findIndex(l => l.startsWith(vessel.split(" /")[0].trim()));
-    if (vi >= 0 && vi < lines.length - 1) {
-      const cand = lines[vi + 1];
-      if (/^[A-Z]/.test(cand) && cand.length < 40 && !/^\d+\./.test(cand)) pol = cand.trim();
-    }
-  }
-  // Fallback: skip lines that look like numbered field labels (^\d+\. WORD...)
-  const valueAfter = (...patterns) => {
-    for (const pat of patterns) {
-      for (let i = 0; i < lines.length - 1; i++) {
-        if (pat.test(lines[i])) {
-          for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
-            const next = lines[j];
-            if (!/^\d+\.\s+[A-Z]/.test(next) && next.length > 1 && next.length < 60) return next;
+  // Fallback for numbered-field formats
+  if (!pod) {
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (/16\.\s*FOREIGN\s*PORT/i.test(lines[i])) {
+        for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+          if (!/^\d+\.\s+[A-Z]/.test(lines[j]) && lines[j].length > 1 && lines[j].length < 60) {
+            pod = lines[j]; break;
           }
         }
+        break;
       }
     }
-    return "";
-  };
-  if (!pol) pol = valueAfter(/15\.\s*PORT\s*OF\s*LOADING/i);
-  if (!pod) pod = valueAfter(/16\.\s*FOREIGN\s*PORT/i);
+  }
 
-  // AES ITN
+  // ── Combine vessel + voyage for display ──────────────────────────────────────
+  const vesselFull = vessel && voyage ? `${vessel} ${voyage}` : vessel;
+
+  // ── AES ITN ───────────────────────────────────────────────────────────────────
   const aesItn = inline(/AES\s+ITN[:\s]+(\S+)/i) || inline(/ITN[:\s]+(X\d{14})/i);
 
-  // VINs — 17-char
+  // ── VINs — 17-char ────────────────────────────────────────────────────────────
   const vins = [...new Set((t.match(/\bVIN[:\s]*([A-HJ-NPR-Z0-9]{17})\b/gi) || [])
     .map(v => v.replace(/VIN[:\s]*/i, "").trim()))];
-
-  const clean = (s, max = 60) => (s || "").replace(/\s+/g, " ").trim().slice(0, max);
 
   return {
     containerNumber: clean(containerNumber, 20),
     sealNumber:      clean(sealNumber, 20),
     bookingNumber:   clean(bookingNumber, 30),
-    vessel:          clean(vessel, 60),
+    vessel:          clean(vesselFull, 60),
     pol:             clean(pol, 40),
     pod:             clean(pod, 40),
     aesItn:          clean(aesItn, 20),
