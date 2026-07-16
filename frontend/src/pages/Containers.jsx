@@ -1391,7 +1391,20 @@ export default function Containers() {
                 {!sendPreview ? (
                   <button disabled={billingRows.every(r=>!r.invoice||r.invoice.status==="paid")}
                     onClick={()=>{
-                      const to = billingRows.find(r=>r.customerEmail)?.customerEmail || "";
+                      const TEMA_EMAILS = [
+                        "Israel@dorldorgh.com",
+                        "dominic@dorldorgh.com",
+                        "charlotte@dorldorgh.com",
+                        "kweku.atia@dorldorgh.com",
+                        "richard@dorldorgh.com",
+                        "henrietta.larkyne@dorldorgh.com",
+                        "Godwin@dorldorgh.com",
+                      ];
+                      const isTema = /tema/i.test(billingLoad.pod || "");
+                      const customerEmail = billingRows.find(r=>r.customerEmail)?.customerEmail || "";
+                      const to = isTema
+                        ? [...TEMA_EMAILS, ...(customerEmail ? [customerEmail] : [])].join(", ")
+                        : customerEmail;
                       const vessel = billingLoad.vessel || "";
                       const booking = billingLoad.bookingNumber || "";
                       const shippingLine = vessel.split(" ")[0] || "";
