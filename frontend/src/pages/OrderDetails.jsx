@@ -1,5 +1,5 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
-import { useParams, useNavigate } from "react-router-dom";
+import { useParams, useNavigate, useLocation } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -236,6 +236,7 @@ function LocationSearch({ label, value, onChange, onSelect }) {
 export default function OrderDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const location = useLocation();
 
   const [order, setOrder] = useState(null);
   const [containerLoad, setContainerLoad] = useState(null);
@@ -1707,6 +1708,11 @@ export default function OrderDetails() {
       fetchOrderInvoices();
       setInvoiceSendModal(null);
       setMessage(`✅ Invoice sent to ${to}${data.attachments?.length > 1 ? ` with ${data.attachments.length} attachments` : ""}`);
+      const params = new URLSearchParams(location.search);
+      const loadId = params.get("loadId");
+      if (params.get("returnTo") === "billing" && loadId) {
+        setTimeout(() => navigate(`/containers?billing=${loadId}`), 1200);
+      }
     } catch (e) {
       setMessage(`❌ Failed to send invoice: ${e.message}`);
     }
@@ -5134,7 +5140,14 @@ export default function OrderDetails() {
                   style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
               </label>
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
-                <button onClick={() => setInvoiceSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
+                <button onClick={() => {
+                  setInvoiceSendModal(null);
+                  const params = new URLSearchParams(location.search);
+                  const loadId = params.get("loadId");
+                  if (params.get("returnTo") === "billing" && loadId) {
+                    navigate(`/containers?billing=${loadId}`);
+                  }
+                }} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
                 <button onClick={sendInvoiceEmail} disabled={invSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                   {invSending ? "Sending…" : "Send Invoice"}
                 </button>

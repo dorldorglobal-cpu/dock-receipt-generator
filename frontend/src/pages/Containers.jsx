@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useLocation } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -119,6 +119,7 @@ function buildDraft(form, orders) {
 
 export default function Containers() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [loads,     setLoads]     = useState([]);
   const [allOrders, setAllOrders] = useState([]);
   const [search,    setSearch]    = useState("");
@@ -165,6 +166,26 @@ export default function Containers() {
       .catch(()=>{});
   };
   useEffect(refresh, []);
+
+  // Auto-open billing modal when returning from OrderDetails (e.g. after invoice generation)
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const billingId = params.get("billing");
+    if (!billingId || loads.length === 0) return;
+    const load = loads.find(l => l._id === billingId);
+    if (!load) return;
+    // Clear the param from URL without re-rendering
+    navigate(location.pathname, { replace: true });
+    setBillingLoad(load);
+    setBillingRows([]);
+    setSendResults(null);
+    setBillingLoading(true);
+    fetch(`${API}/api/container-loads/${load._id}/billing-summary`)
+      .then(r => r.json())
+      .then(d => setBillingRows(d.rows || []))
+      .catch(() => {})
+      .finally(() => setBillingLoading(false));
+  }, [location.search, loads]); // eslint-disable-line
 
   const flash = (m) => { setMsg(m); setTimeout(()=>setMsg(""),4000); };
   const setF  = k => v => setForm(f=>({...f,[k]:v}));
@@ -1243,14 +1264,18 @@ export default function Containers() {
                       </tr>
                     </thead>
                     <tbody>
-                      {billingRows.map(row => (
-                        <tr key={row.refNumber} style={{ borderBottom:"1px solid var(--border)" }}>
+                      {billingRows.map(row => {
+                        const hasInvoice = !!row.invoice;
+                        const returnUrl = `/orders/${row.orderId}?returnTo=billing&loadId=${billingLoad._id}`;
+                        return (
+                        <tr key={row.refNumber} style={{ borderBottom:"1px solid var(--border)",
+                          background: hasInvoice ? "rgba(52,211,153,0.07)" : "rgba(251,191,36,0.06)" }}>
                           <td style={{ padding:"10px 8px", fontWeight:600 }}>
-                            <a href={`/orders/${row.orderId}`} target="_blank" rel="noreferrer"
+                            <a href={returnUrl}
                               style={{ color:"#60a5fa", textDecoration:"none" }}>#{row.refNumber}</a>
                           </td>
                           <td style={{ padding:"10px 8px" }}>
-                            <div>{row.vehicle}</div>
+                            <div style={{ fontWeight:600 }}>{row.vehicle}</div>
                             <div style={{ fontSize:11, color:"var(--text-muted)" }}>{row.vin}</div>
                           </td>
                           <td style={{ padding:"10px 8px", maxWidth:160 }}>
@@ -1266,23 +1291,35 @@ export default function Containers() {
                             ))}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right", fontWeight:600, color:"#34d399" }}>
-                            {row.invoice ? `$${row.invoiceTotal.toFixed(2)}` : <span style={{ color:"var(--text-muted)" }}>No invoice</span>}
+                            {hasInvoice ? `$${row.invoiceTotal.toFixed(2)}` : (
+                              <a href={returnUrl}
+                                style={{ fontSize:11, padding:"4px 10px", borderRadius:6, background:"#2563eb",
+                                  color:"#fff", fontWeight:700, textDecoration:"none", whiteSpace:"nowrap" }}>
+                                + Generate
+                              </a>
+                            )}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right", fontWeight:700,
                             color: row.profit > 0 ? "#34d399" : row.profit < 0 ? "#f87171" : "var(--text-muted)" }}>
-                            {row.invoice ? `$${row.profit.toFixed(2)}` : "—"}
+                            {hasInvoice ? `$${row.profit.toFixed(2)}` : "—"}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"center" }}>
-                            {row.invoice ? (
-                              <span style={{ padding:"3px 8px", borderRadius:6, fontSize:11, fontWeight:600,
-                                background: row.invoice.status==="paid" ? "rgba(52,211,153,0.15)" : row.invoice.status==="sent" ? "rgba(96,165,250,0.15)" : "rgba(251,191,36,0.15)",
-                                color: row.invoice.status==="paid" ? "#34d399" : row.invoice.status==="sent" ? "#60a5fa" : "#fbbf24" }}>
+                            {hasInvoice ? (
+                              <span style={{ padding:"4px 10px", borderRadius:6, fontSize:11, fontWeight:700,
+                                background: row.invoice.status==="paid" ? "#16a34a" : row.invoice.status==="sent" ? "#1d4ed8" : "#b45309",
+                                color: "#fff" }}>
                                 {row.invoice.status.toUpperCase()}
                               </span>
-                            ) : <span style={{ color:"var(--text-muted)", fontSize:11 }}>—</span>}
+                            ) : (
+                              <span style={{ padding:"4px 10px", borderRadius:6, fontSize:11, fontWeight:700,
+                                background:"rgba(251,191,36,0.2)", color:"#fbbf24", border:"1px solid rgba(251,191,36,0.4)" }}>
+                                PENDING
+                              </span>
+                            )}
                           </td>
                         </tr>
-                      ))}
+                        );
+                      })}
                     </tbody>
                     {billingRows.length > 0 && (
                       <tfoot>
