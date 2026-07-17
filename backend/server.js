@@ -1285,20 +1285,21 @@ app.get("/api/google-access-token", async (req, res) => {
 // POST /api/send-email  { to, subject, body, pdfBase64, pdfName }
 app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) => {
   try {
-    const { to, subject, body, pdfBase64, pdfName, cc } = req.body;
+    const { to, subject, body, pdfBase64, pdfName, cc, bcc } = req.body;
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
     const accessToken = await getGmailAccessToken();
     const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+    const fmtList = v => Array.isArray(v) ? v.join(", ") : v;
 
     let mimeLines;
     if (pdfBase64) {
-      // Full multipart/mixed for emails with PDF attachments
       const boundary = "DDG_BOUNDARY_" + Date.now();
       mimeLines = [
         `From: ${from}`,
-        `To: ${to}`,
-        ...(cc ? [`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`] : []),
+        `To: ${fmtList(to)}`,
+        ...(cc  ? [`Cc: ${fmtList(cc)}`]  : []),
+        ...(bcc ? [`Bcc: ${fmtList(bcc)}`] : []),
         `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
         `MIME-Version: 1.0`,
         `Content-Type: multipart/mixed; boundary="${boundary}"`,
@@ -1316,11 +1317,11 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
         `--${boundary}--`,
       ];
     } else {
-      // Bare text/plain for SMS gateway addresses and simple emails — multipart breaks tmomail.net
       mimeLines = [
         `From: ${from}`,
-        `To: ${to}`,
-        ...(cc ? [`Cc: ${Array.isArray(cc) ? cc.join(", ") : cc}`] : []),
+        `To: ${fmtList(to)}`,
+        ...(cc  ? [`Cc: ${fmtList(cc)}`]  : []),
+        ...(bcc ? [`Bcc: ${fmtList(bcc)}`] : []),
         `Subject: ${subject}`,
         `MIME-Version: 1.0`,
         `Content-Type: text/plain; charset="UTF-8"`,

@@ -1441,13 +1441,18 @@ export default function OrderDetails() {
 
   const sendDrEmail = async () => {
     if (!drSendModal) return;
-    const toList     = parseEmails(drSendTo);
+    const toList      = parseEmails(drSendTo);
     const truckerList = parseEmails(drSendTrucker);
-    const recipients = [...toList, ...truckerList];
-    if (!recipients.length) return alert("Enter at least one email address.");
+    if (!toList.length && !truckerList.length) return alert("Enter at least one email address.");
     setDrSending(true);
     try {
       const b64 = drSendModal.pdfBase64;
+
+      // One email: TO = first customer, CC = rest of customers, BCC = trucker
+      const [primaryTo, ...ccList] = toList;
+      const toAddr = primaryTo || truckerList[0];
+      const ccAddr = primaryTo ? ccList : truckerList.slice(1);
+      const bccAddr = primaryTo ? truckerList : [];
 
       const fetchWithTimeout = (url, opts, ms = 30000) => {
         const ctrl = new AbortController();
@@ -1455,13 +1460,19 @@ export default function OrderDetails() {
         return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
       };
 
-      const results = await Promise.all(recipients.map(to =>
-        fetchWithTimeout(`${API}/api/send-email`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ to, subject: drSendSubject, body: drSendBody, pdfBase64: b64, pdfName: drSendModal.pdfName }),
-        })
-      ));
+      const results = [await fetchWithTimeout(`${API}/api/send-email`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to:      toAddr,
+          cc:      ccAddr.length  ? ccAddr.join(", ")  : undefined,
+          bcc:     bccAddr.length ? bccAddr.join(", ") : undefined,
+          subject: drSendSubject,
+          body:    drSendBody,
+          pdfBase64: b64,
+          pdfName: drSendModal.pdfName,
+        }),
+      })];
 
       // Check for server-side errors
       for (const r of results) {
