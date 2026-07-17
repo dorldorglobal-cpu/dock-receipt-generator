@@ -2847,20 +2847,29 @@ export default function Expenses() {
               </label>
 
               {/* Proof of payment upload */}
-              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
-                Proof of Payment (optional)
-                <div style={{ marginTop:4, display:"flex", alignItems:"center", gap:8 }}>
-                  <label style={{ display:"inline-flex", alignItems:"center", gap:6, padding:"7px 14px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, cursor:"pointer", fontSize:12, color:"var(--text-secondary)" }}>
-                    📎 {payConfirmFile ? payConfirmFile.name : "Attach file…"}
-                    <input type="file" accept="image/*,application/pdf" style={{ display:"none" }}
-                      onChange={e => setPayConfirmFile(e.target.files[0] || null)} />
-                  </label>
-                  {payConfirmFile && (
-                    <button onClick={() => setPayConfirmFile(null)}
-                      style={{ fontSize:11, color:"#f87171", background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>✕ Remove</button>
+              <div style={{ marginBottom:18 }}>
+                <div style={{ fontSize:12, color:"var(--text-secondary)", marginBottom:4 }}>Proof of Payment (optional)</div>
+                <label
+                  onDragOver={e => { e.preventDefault(); e.currentTarget.style.borderColor="#60a5fa"; e.currentTarget.style.background="rgba(96,165,250,0.08)"; }}
+                  onDragLeave={e => { e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; }}
+                  onDrop={e => { e.preventDefault(); e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; const f = e.dataTransfer.files[0]; if (f) setPayConfirmFile(f); }}
+                  style={{ display:"flex", alignItems:"center", justifyContent:"center", gap:8, padding:"12px 14px",
+                    background:"var(--bg-base)", border:"2px dashed var(--border)", borderRadius:8,
+                    cursor:"pointer", fontSize:12, color:"var(--text-secondary)", transition:"border-color .15s, background .15s",
+                    minHeight:44 }}>
+                  {payConfirmFile ? (
+                    <>
+                      <span style={{ color:"var(--text-primary)", fontWeight:500 }}>📎 {payConfirmFile.name}</span>
+                      <button onClick={e => { e.preventDefault(); setPayConfirmFile(null); }}
+                        style={{ fontSize:11, color:"#f87171", background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>✕</button>
+                    </>
+                  ) : (
+                    <span>📎 Drop file here or click to attach</span>
                   )}
-                </div>
-              </label>
+                  <input type="file" accept="image/*,application/pdf" style={{ display:"none" }}
+                    onChange={e => setPayConfirmFile(e.target.files[0] || null)} />
+                </label>
+              </div>
 
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
                 <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
