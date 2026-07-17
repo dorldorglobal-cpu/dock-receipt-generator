@@ -458,6 +458,15 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
           </select>
         </label>
 
+        {/* Payment Type */}
+        <label style={labelStyle}>
+          Payment Type
+          <select {...inp("paymentMethod")} style={inputStyle}>
+            <option value="">— Select —</option>
+            {PAYMENT_METHODS.map(m => <option key={m} value={m}>{m}</option>)}
+          </select>
+        </label>
+
         {/* Paid Date */}
         {form.status === "paid" && (
           <label style={labelStyle}>
