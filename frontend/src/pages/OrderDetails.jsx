@@ -49,7 +49,8 @@ const defaultCharges = {
   vesselRolloverFee: "0.00",
   blFedexFee: "0.00",
   noTitleDeliveryFee: "0.00",
-  emergencyBafFee: "0.00",
+  emergencyBafFee: "100",
+  emergencyBafFeeCost: "100",
   ctnFee: "0.00",
   dryRunFee: "0.00",
   inOutFee: "0.00",
@@ -488,6 +489,9 @@ export default function OrderDetails() {
     setHoldNote(data.holdNote || "");
     setEmailNote(data.emailNote || "");
     const currentCharges = { ...defaultCharges, ...(data.charges || {}) };
+    // Auto-apply Emergency BAF ($100 sell / $100 cost) if not yet set
+    if (!parseFloat(currentCharges.emergencyBafFee))    currentCharges.emergencyBafFee     = "100";
+    if (!parseFloat(currentCharges.emergencyBafFeeCost)) currentCharges.emergencyBafFeeCost = "100";
     setCharges(currentCharges);
 
     fetchDriveFiles();
