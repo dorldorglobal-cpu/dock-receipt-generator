@@ -213,22 +213,28 @@ router.post("/", uploadFields, async (req, res) => {
       return res.status(400).json({ error: "Category, description, and amount are required." });
     }
 
-    // Duplicate detection — same vendor + amount + date + order within 7 days (skip if force=true)
-    if (req.query.force !== "true" && vendor && amount && orderRef) {
+    // Duplicate detection (skip if force=true)
+    if (req.query.force !== "true" && amount && orderRef) {
       const checkDate = date ? new Date(date) : new Date();
-      const window7   = 7 * 24 * 60 * 60 * 1000;
-      const existing  = await Expense.findOne({
-        vendor:   { $regex: `^${vendor.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
-        amount:   parseFloat(amount),
-        orderRef: { $regex: `^${orderRef.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
-        date:     { $gte: new Date(checkDate - window7), $lte: new Date(+checkDate + window7) },
-      }).lean();
-      if (existing) {
-        return res.status(409).json({
-          error:    "Possible duplicate expense",
-          existing: { _id: existing._id, description: existing.description, amount: existing.amount,
-                      date: existing.date, orderRef: existing.orderRef, status: existing.status },
-        });
+      const window30  = 30 * 24 * 60 * 60 * 1000;
+      const orderFilter = { orderRef: { $regex: `^${orderRef.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" } };
+
+      // VIN-based: same order + same amount (catches vendor name variations)
+      const vinFromDesc = (description || "").match(/VIN:\s*([A-HJ-NPR-Z0-9]{17})/i)?.[1] || vin || "";
+      if (vinFromDesc) {
+        const dupVin = await Expense.findOne({ ...orderFilter, vin: vinFromDesc, amount: parseFloat(amount) }).lean();
+        if (dupVin) return res.status(409).json({ error: "Possible duplicate expense", existing: dupVin });
+      }
+
+      // Vendor + amount + date window
+      if (vendor) {
+        const existing = await Expense.findOne({
+          ...orderFilter,
+          vendor:   { $regex: `^${vendor.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+          amount:   parseFloat(amount),
+          date:     { $gte: new Date(checkDate - window30), $lte: new Date(+checkDate + window30) },
+        }).lean();
+        if (existing) return res.status(409).json({ error: "Possible duplicate expense", existing });
       }
     }
 
@@ -1043,13 +1049,23 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
       if (orderId && row.loadId) {
         const dup = await Expense.findOne({ orderId, invoiceNumber: row.loadId }).lean();
         if (dup) continue;
-      } else if (orderId && row.total) {
-        // Fallback: same order + same vendor + same amount within 30 days
+      }
+      if (orderId && row.total) {
+        // Check by VIN + amount (catches same bill regardless of vendor name spelling)
+        if (row.vin) {
+          const dupVin = await Expense.findOne({
+            orderId,
+            vin:    row.vin,
+            amount: row.total + extrasTotal,
+          }).lean();
+          if (dupVin) continue;
+        }
+        // Fallback: same order + same amount within 30 days (any vendor)
         const dup = await Expense.findOne({
           orderId,
-          vendor:   { $regex: `^${(row.carrier || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
-          amount:   row.total + extrasTotal,
-          date:     { $gte: new Date(dateObj - 30*24*60*60*1000), $lte: new Date(+dateObj + 30*24*60*60*1000) },
+          amount: row.total + extrasTotal,
+          date:   { $gte: new Date(dateObj - 30*24*60*60*1000), $lte: new Date(+dateObj + 30*24*60*60*1000) },
+          category: "Towing / Transport",
         }).lean();
         if (dup) continue;
       }
