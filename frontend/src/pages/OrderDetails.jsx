@@ -11,7 +11,7 @@ const TERMINAL_MAP = {}; // fallback empty — real data comes from address book
 
 // defaultSell = fixed sell price pre-fill; hasDesc = show description sub-input
 const feeRows = [
-  ["emergencyBafFee",     "Emergency BAF",                 {}],
+  ["emergencyBafFee",     "Emergency BAF",                 { defaultSell: 100, defaultCost: 100 }],
   ["nonRunnerFee",        "Non-runner Fee",                { defaultSell: 400  }],
   ["forkliftFee",         "Forklift Fee",                  { defaultSell: 500  }],
   ["storageAuctionFee",   "Storage Fee – Auction",         {}],
@@ -4433,8 +4433,13 @@ export default function OrderDetails() {
                     />
                     <input
                       type="number"
-                      placeholder="Cost"
+                      placeholder={opts.defaultCost ? `$${opts.defaultCost}` : "Cost"}
                       value={Number(charges[key + "Cost"] || 0) === 0 ? "" : (charges[key + "Cost"] || "")}
+                      onFocus={() => {
+                        if (opts.defaultCost && Number(charges[key + "Cost"] || 0) === 0) {
+                          updateCharge(key + "Cost", String(opts.defaultCost));
+                        }
+                      }}
                       onChange={e => updateCharge(key + "Cost", e.target.value)}
                       style={{ padding:"7px 8px", fontSize:13, textAlign:"right",
                         border:"1px solid var(--border)", borderRadius:5,
