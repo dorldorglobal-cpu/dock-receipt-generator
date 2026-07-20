@@ -120,8 +120,10 @@ async function uploadBufferToDrive(buffer, fileName, mimeType, folderId) {
 
 // Get or create a folder by name inside a parent folder
 async function getOrCreateFolder(name, parentId) {
+  // Drive API requires apostrophes to be escaped as \' in query strings
+  const escapedName = name.replace(/'/g, "\\'");
   const res = await drive.files.list({
-    q: `name='${name}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
+    q: `name='${escapedName}' and '${parentId}' in parents and mimeType='application/vnd.google-apps.folder' and trashed=false`,
     fields: "files(id, name)",
     pageSize: 1,
   });
