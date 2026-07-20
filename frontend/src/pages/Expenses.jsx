@@ -1589,7 +1589,10 @@ export default function Expenses() {
                     value={manualForm[f.key]}
                     onChange={e => {
                       const val = e.target.value;
-                      setManualForm(fm => ({...fm, [f.key]: val}));
+                      setManualForm(fm => {
+                        const guessed = f.key === "vendor" ? autoCategoryFromVendor(val) : "";
+                        return { ...fm, [f.key]: val, ...(guessed ? { category: guessed } : {}) };
+                      });
                       if (f.key === "vin" && val.length === 17) lookupOrderByVin(val);
                     }}
                     placeholder={f.placeholder}
