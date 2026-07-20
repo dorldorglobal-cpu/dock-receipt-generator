@@ -552,9 +552,16 @@ function parseBLText(text, filename = "") {
   };
 
   // ── Container number: 4 uppercase letters + 7 digits (ISO 6346) ──────────────
-  const containerNumber =
+  let containerNumber =
     inline(/(?:CNTR?|CONTAINER)\s*(?:NO|NUMBER|#)[.:\s]+([A-Z]{4}\d{7})/i) ||
     (t.match(/\b([A-Z]{4}\d{7})\b/)?.[1] || "");
+  // Hapag-Lloyd: "FANU  3598398" has double space — scan lines explicitly
+  if (!containerNumber) {
+    for (const line of lines) {
+      const m = line.match(/\b([A-Z]{4})\s+(\d{7})\b/);
+      if (m) { containerNumber = m[1] + m[2]; break; }
+    }
+  }
 
   // ── Seal: "SEAL: XXXXXXX" or after container on same line "SEKU4051437 /46048962/" ──
   let sealNumber = inline(/SEAL\s*(?:NO|NUMBER|#)?[.:\s]+(\d{5,})/i);
@@ -567,26 +574,49 @@ function parseBLText(text, filename = "") {
       }
     }
   }
+  // Hapag-Lloyd: "SEAL:\n120182" — label on one line, number on next
+  if (!sealNumber) {
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (/^SEAL:?\s*$/i.test(lines[i])) {
+        const m = lines[i + 1].match(/^(\d{5,})$/);
+        if (m) { sealNumber = m[1]; break; }
+      }
+    }
+  }
 
   // ── Booking number ────────────────────────────────────────────────────────────
-  // Format A (OOCL): "BOOKING NO. BILL OF LADING NO." header, value on next line
-  //   e.g. "E-Z CARGO INC 2331483910 OOLU2331483910"
+  // Format A (OOCL): "BOOKING NO." header, numeric value on next line
   // Format B: "BOOKING NO: 2331483910" inline
   // Format C (Sallaum): "5. DOCUMENT NUMBER: XXXXX"
+  // Format D (Hapag-Lloyd): "B/L-No. HLCUBSC2607BEAK3" alphanumeric
   let bookingNumber = inline(/BOOKING\s*(?:NO|NUMBER|#)[.:\s]+(\d{7,12})/i);
   if (!bookingNumber) {
     for (let i = 0; i < lines.length - 1; i++) {
       if (/BOOKING\s*NO/i.test(lines[i])) {
-        // Next line may be "SHIPPER NAME  2331483910  OOLU2331483910" — grab standalone 7-12 digit number
         const m = lines[i + 1].match(/(?<![A-Z])(\d{7,12})(?!\d)/);
         if (m) { bookingNumber = m[1]; break; }
       }
     }
   }
+  // Alphanumeric B/L number (Hapag-Lloyd, MSC, etc.)
   if (!bookingNumber) bookingNumber =
+    inline(/B\/L[-\s]*No\.?\s+([A-Z0-9]{8,25})/i) ||
+    inline(/B\/L\s*(?:NUMBER|NO|#)[.:\s]+([A-Z0-9]{6,25})/i) ||
     inline(/(?:5\.\s*DOCUMENT\s+NUMBER|DOCUMENT\s+NUMBER)[:\s]*(\S+)/i) ||
     inline(/B\/?L\s*(?:NUMBER|NO)[:\s]*(\S+)/i) ||
     (t.match(/\b(\d{10})\b/)?.[1] || "");
+  // Hapag-Lloyd: "B/L-No." label alone on line, value appears many lines later as "HLCxxxPage"
+  if (!bookingNumber) {
+    for (let i = 0; i < lines.length - 1; i++) {
+      if (/^B\/L[-\s]*No\.?$/i.test(lines[i])) {
+        for (let j = i + 1; j < Math.min(i + 50, lines.length); j++) {
+          const m = lines[j].match(/^([A-Z0-9]{12,20}?)(?:Page\d*)?$/);
+          if (m) { bookingNumber = m[1]; break; }
+        }
+        break;
+      }
+    }
+  }
 
   // ── Vessel + Voyage ───────────────────────────────────────────────────────────
   // Format A (OOCL page 2): "VESSEL: CMA CGM AMBITION VOYAGE: 013E B/L NO.: OOLU..."
@@ -596,19 +626,26 @@ function parseBLText(text, filename = "") {
 
   let vessel = "", voyage = "", pol = "";
 
-  // Format A
-  const inlineVV = lines.find(l => /VESSEL[:\s]/i.test(l) && /VOYAGE[:\s]/i.test(l));
+  // Format A — "VESSEL [NAME]: X VOYAGE: Y" on same line (must have actual value after VESSEL keyword)
+  const inlineVV = lines.find(l =>
+    /VESSEL[:\s]/i.test(l) && /VOYAGE[:\s]/i.test(l) &&
+    /VESSEL(?:\s+\w+)?[:\s]+[A-Z]/i.test(l)  // guard: must have a capital letter value after VESSEL
+  );
   if (inlineVV) {
-    const m = inlineVV.match(/VESSEL[:\s]+([A-Z][A-Z0-9 \-]+?)\s+VOYAGE[:\s]+(\S+)/i);
+    // handles both "VESSEL: X VOYAGE: Y" and "VESSEL NAME: X VOYAGE: Y"
+    const m = inlineVV.match(/VESSEL(?:\s+\w+)?[:\s]+([A-Z][A-Z0-9 \-]+?)\s+VOYAGE[:\s]+(\S+)/i);
     if (m) { vessel = m[1].trim(); voyage = m[2].trim(); }
   }
 
-  // Format B — line immediately after "VESSEL/VOYAGE" label row
+  // Format B — line immediately after a header row containing both VESSEL and VOYAGE
+  // handles: "VESSEL/VOYAGE/FLAG", "Vessel(s): Voyage-No.:", etc.
   if (!vessel) {
     for (let i = 0; i < lines.length - 1; i++) {
-      if (/VESSEL\s*[\/&]\s*VOYAGE/i.test(lines[i])) {
+      if (/VESSEL/i.test(lines[i]) && /VOYAGE/i.test(lines[i]) && !/JAMAICA|EXPRESS|CMA|OOCL/i.test(lines[i])) {
         const val = lines[i + 1];
-        // Voyage code: 3-4 chars with at least one digit, e.g. 013E, 120E, 526S, 0526
+        // Skip if next line is clearly a form field label (has lowercase letters or colons), not a vessel name
+        if (/[a-z]|:/.test(val)) continue;
+        // Voyage code pattern: e.g. 013E, 629E, 120W, 526S
         const m = val.match(/^((?:[A-Z][A-Z0-9 \-]*?)+?)\s+(\d{3}[A-Z]\d*|[A-Z]{0,2}\d{3,4}[A-Z]?)\s*(.*)?$/);
         if (m) {
           vessel = m[1].trim();
@@ -666,22 +703,35 @@ function parseBLText(text, filename = "") {
   if (!pol) {
     for (let i = 0; i < lines.length - 1; i++) {
       if (/PORT\s+OF\s+LOADING/i.test(lines[i]) && !/DISCHARGE/i.test(lines[i])) {
-        const same = lines[i].match(/PORT\s+OF\s+LOADING[:\s]+([A-Z][A-Z ]+)/i);
-        if (same) { pol = same[1].trim(); break; }
+        // Same-line: "PORT OF LOADING: HOUSTON, TX"
+        const same = lines[i].match(/PORT\s+OF\s+LOADING[:\s]+([A-Z][A-Z0-9 ,]+)/i);
+        if (same) { pol = same[1].trim().replace(/,\s*$/, ""); break; }
+        // Next line: "Port of Loading:\nHOUSTON, TX"
+        const next = lines[i + 1];
+        if (next && /^[A-Z]/.test(next) && next.length < 60 && !/DISCHARGE|DELIVERY|NUMBER/i.test(next)) {
+          pol = next.trim(); break;
+        }
       }
     }
   }
 
   // ── POD: "PORT OF DISCHARGE" section ─────────────────────────────────────────
   let pod = "";
-  for (let i = 0; i < lines.length - 1; i++) {
+  for (let i = 0; i < lines.length; i++) {
     if (/PORT\s+OF\s+DISCHARGE/i.test(lines[i])) {
-      const next = lines[i + 1];
-      const words = next.split(/\s+/);
-      // "TEMA TEMA FCL/FCL" → first word; if first two same, take one
-      let candidate = (words[0] === words[1]) ? words[0] : words.slice(0, 2).join(" ");
-      if (/FCL|CY\/CY|DCL/i.test(candidate)) candidate = words[0];
-      if (candidate && candidate.length > 1 && !/FCL|CY\//i.test(candidate)) { pod = candidate; break; }
+      // Same-line: "PORT OF DISCHARGE: TINCAN/LAGOS"
+      const same = lines[i].match(/PORT\s+OF\s+DISCHARGE[:\s]+([A-Z][A-Z0-9\/\- ]+)/i);
+      const raw = same ? same[1].trim() : (lines[i + 1] || "").trim();
+      if (!raw) continue;
+      // Skip if raw looks like a form field label (has lowercase or colons)
+      if (/[a-z]|:/.test(raw)) continue;
+      // "TINCAN/LAGOS" → take last segment after slash (actual port city)
+      let candidate = raw.includes("/") ? raw.split("/").pop().trim() : raw;
+      const words = candidate.split(/\s+/);
+      // "TEMA TEMA FCL/FCL" → de-dup; strip FCL/CY suffixes
+      if (words[0] === words[1]) candidate = words[0];
+      candidate = candidate.replace(/\s*(FCL|CY\/CY|DCL|CY).*/i, "").trim();
+      if (candidate && candidate.length > 1) { pod = candidate; break; }
     }
   }
   // Fallback for numbered-field formats
@@ -693,6 +743,15 @@ function parseBLText(text, filename = "") {
             pod = lines[j]; break;
           }
         }
+        break;
+      }
+    }
+  }
+  // Hapag-Lloyd fallback: "TINCAN/LAGOS" standalone line — take last segment after slash
+  if (!pod) {
+    for (const line of lines) {
+      if (/^[A-Z]{2,}\/[A-Z]{2,}$/.test(line) && !/FCL|DCL|CY|CFS/i.test(line)) {
+        pod = line.split("/").pop().trim();
         break;
       }
     }
