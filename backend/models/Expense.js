@@ -23,7 +23,7 @@ const expenseSchema = new mongoose.Schema(
 
     // Optional order link
     orderId:  { type: mongoose.Schema.Types.ObjectId, ref: "Order", default: null },
-    orderRef: { type: String, default: "" },
+    orderRef: { type: String, default: "", index: true },
 
     // Payment status: unpaid → partial → paid
     status:        { type: String, enum: ["unpaid", "partial", "paid"], default: "unpaid" },

@@ -1195,63 +1195,6 @@ app.get("/grid-template", async (req, res) => {
   }
 });
 
-// ================= START =================
-
-
-
-// ================= PARSE DISPATCH FROM URL =================
-app.post("/api/expenses/parse-dispatch-url", express.json(), async (req, res) => {
-  try {
-    const { url, filename, orderRef, orderId } = req.body;
-    if (!url) return res.status(400).json({ error: "url required" });
-    const urlPath = new URL(url).pathname;
-    const baseUploads = path.join(__dirname, "uploads");
-    const filePath = path.join(baseUploads, ...urlPath.replace(/^\/uploads\//, "").split("/").map(decodeURIComponent));
-    if (!fs.existsSync(filePath)) return res.status(404).json({ error: "File not found: " + filePath });
-    const buffer = fs.readFileSync(filePath);
-    const data = await pdfParse(buffer);
-    const text = data.text;
-
-    const vinMatch = text.match(/\bVIN\b[\s\S]{0,30}?([A-HJ-NPR-Z0-9]{17})/i) || text.match(/([A-HJ-NPR-Z0-9]{17})/);
-    const vin = vinMatch?.[1] || "";
-    const priceMatch = text.match(/Total Price[\s\S]{0,20}?\$\s*([\d,]+(?:\.\d{2})?)/i) || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
-    const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : 0;
-    const loadMatch = text.match(/Load ID\s*\n\s*(\d+)/i) || text.match(/Load\s+(\d{4,})\//i);
-    const loadId = loadMatch?.[1] || "";
-    const ymmMatch = text.match(/(\d{4})\s+([A-Z][a-zA-Z]+)\s+([A-Z][a-zA-Z0-9 ]+?)(?:\n|VIN|$)/m);
-    const ymm = ymmMatch ? `${ymmMatch[1]} ${ymmMatch[2]} ${ymmMatch[3].trim()}` : "";
-    const dispatchDateMatch = text.match(/\d{1,2}\/\d{1,2}\/\d{4}/);
-    const dispatchDate = dispatchDateMatch?.[0] || "";
-    const originMatch = text.match(/Origin[\s\S]{0,5}?\n([^\n]+)/i);
-    const origin = originMatch?.[1]?.trim() || "";
-
-    // Save a copy to receipts dir
-    const savedName = `${Date.now()}-${Math.round(Math.random()*1e9)}.pdf`;
-    const receiptsDir = path.join(__dirname, "uploads/receipts");
-    if (!fs.existsSync(receiptsDir)) fs.mkdirSync(receiptsDir, { recursive: true });
-    fs.copyFileSync(filePath, path.join(receiptsDir, savedName));
-
-    const Order = require("./models/Order");
-    let matchedOrder = null;
-    if (orderId) {
-      matchedOrder = await Order.findById(orderId).select("refNumber _id").lean().catch(() => null);
-    }
-
-    const row = {
-      vin, ymm, total, loadId, dispatchDate, origin,
-      billFileName: savedName, billMime: "application/pdf",
-      orderId: matchedOrder?._id || orderId || null,
-      orderRef: matchedOrder?.refNumber || orderRef || "",
-      matched: !!(matchedOrder || orderId),
-      notes: loadId ? `Load ID: ${loadId}` : "",
-    };
-    res.json([row]);
-  } catch (err) {
-    console.error("parse-dispatch-url error:", err);
-    res.status(500).json({ error: err.message });
-  }
-});
-
 // ================= EMAIL =================
 
 const mailer = nodemailer.createTransport({
@@ -1608,11 +1551,20 @@ mongoose
         }
       };
 
-      // Schedule to run at 12:00 PM UTC = 8:00 AM Eastern Time (EDT, UTC-4)
+      // Schedule to run at 8:00 AM Eastern Time — DST-aware (EDT is UTC-4, EST is UTC-5)
+      const easternUtcOffsetHours = (date) => {
+        const tzPart = new Intl.DateTimeFormat("en-US", {
+          timeZone: "America/New_York",
+          timeZoneName: "shortOffset",
+        }).formatToParts(date).find(p => p.type === "timeZoneName")?.value || "GMT-5";
+        const m = tzPart.match(/GMT([+-]\d+)/);
+        return m ? -parseInt(m[1], 10) : 5;
+      };
       const msUntil8amEastern = () => {
-        const now  = new Date();
-        const next = new Date(now);
-        next.setUTCHours(12, 0, 0, 0); // noon UTC = 8 AM EDT
+        const now    = new Date();
+        const offset = easternUtcOffsetHours(now); // 4 (EDT) or 5 (EST)
+        const next   = new Date(now);
+        next.setUTCHours(8 + offset, 0, 0, 0);
         if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
         return next - now;
       };
