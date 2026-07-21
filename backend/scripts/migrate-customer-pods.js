@@ -1,6 +1,6 @@
-require("dotenv").config();
+require("dotenv").config({ path: require("path").join(__dirname, "../.env") });
 const mongoose = require("mongoose");
-const AddressBook = require("./models/AddressBook");
+const AddressBook = require("../models/AddressBook");
 
 const MONGODB_URI = process.env.MONGODB_URI;
 

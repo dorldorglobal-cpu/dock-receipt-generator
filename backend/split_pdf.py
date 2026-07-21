@@ -7,16 +7,16 @@ Handles encrypted PDFs (tries empty password automatically).
 import sys
 import subprocess
 
-# Auto-install PyPDF2 if not present (happens on fresh Render deploys)
+# Auto-install pypdf if not present (happens on fresh Render deploys)
 try:
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
 except ImportError:
     subprocess.check_call(
-        [sys.executable, "-m", "pip", "install", "--quiet", "PyPDF2"],
+        [sys.executable, "-m", "pip", "install", "--quiet", "pypdf"],
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
-    from PyPDF2 import PdfReader, PdfWriter
+    from pypdf import PdfReader, PdfWriter
 
 
 def main():

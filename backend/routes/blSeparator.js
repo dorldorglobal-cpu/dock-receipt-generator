@@ -14,7 +14,7 @@ const upload = multer({ storage: multer.memoryStorage() });
 const TEMP_DIR = path.join(__dirname, "..", "temp");
 const SPLIT_PY = path.join(__dirname, "..", "split_pdf.py");
 
-// Split pages from a PDF using Python/PyPDF2 (handles encrypted PDFs correctly)
+// Split pages from a PDF using Python/pypdf (handles encrypted PDFs correctly)
 function splitPdf(inputPath, startPage, endPage, outputPath) {
   return new Promise((resolve, reject) => {
     execFile("python3", [SPLIT_PY, inputPath, String(startPage), String(endPage), outputPath], (err, stdout, stderr) => {
