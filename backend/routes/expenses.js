@@ -399,17 +399,55 @@ router.put("/:id", uploadFields, async (req, res) => {
   }
 });
 
-// ── POST /api/expenses/bulk-pay — mark many as paid in one shot ───────────────
-router.post("/bulk-pay", async (req, res) => {
+// ── POST /api/expenses/bulk-pay — mark many as paid, optional proof upload ────
+router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
   try {
-    const { ids, paidDate, paymentMethod, action } = req.body;
+    const ids           = JSON.parse(req.body.ids || "[]");
+    const paidDate      = req.body.paidDate;
+    const paymentMethod = req.body.paymentMethod;
+    const action        = req.body.action;
+
     if (!ids || !ids.length) return res.status(400).json({ error: "No expense IDs provided" });
     const dateObj = paidDate ? new Date(paidDate) : new Date();
-    const update = action === "unpay"
-      ? { $set: { status: "unpaid", paidDate: null, paymentMethod: "" } }
-      : { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "" } };
-    const result = await Expense.updateMany({ _id: { $in: ids } }, update);
-    res.json({ updated: result.modifiedCount });
+
+    if (action === "unpay") {
+      await Expense.updateMany({ _id: { $in: ids } }, { $set: { status: "unpaid", paidDate: null, paymentMethod: "" } });
+      return res.json({ updated: ids.length });
+    }
+
+    // Upload proof file once (if provided), attach to every expense being paid
+    let proofFields = {};
+    if (req.file) {
+      try {
+        const saved = await saveUploadedFile(req.file.buffer, req.file.originalname, req.file.mimetype, null);
+        proofFields = { receiptFileName: saved.fname, receiptDriveId: saved.driveId, receiptDriveUrl: saved.driveUrl, receiptMime: req.file.mimetype };
+      } catch (uploadErr) {
+        console.warn("[bulk-pay] proof upload failed:", uploadErr.message);
+      }
+    }
+
+    const setFields = {
+      status: "paid",
+      paidDate: dateObj,
+      paymentMethod: paymentMethod || "",
+      ...proofFields,
+    };
+
+    // Add a payment record to each expense
+    const expenses = await Expense.find({ _id: { $in: ids } });
+    await Promise.all(expenses.map(exp => {
+      exp.payments.push({
+        amount: exp.amount,
+        date:   dateObj,
+        method: paymentMethod || "",
+        notes:  "",
+        ...proofFields,
+      });
+      Object.assign(exp, setFields);
+      return exp.save();
+    }));
+
+    res.json({ updated: ids.length });
   } catch (err) {
     console.error("bulk-pay error:", err);
     res.status(500).json({ error: err.message });

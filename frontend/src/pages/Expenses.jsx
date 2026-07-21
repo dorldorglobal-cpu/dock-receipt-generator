@@ -560,6 +560,8 @@ export default function Expenses() {
   const [payDate, setPayDate]           = useState(todayISO());
   const [payMethod, setPayMethod]       = useState("Bank ACH");
   const [paying, setPaying]             = useState(false);
+  const [bulkProofFile, setBulkProofFile] = useState(null);
+  const [bulkProofDrag, setBulkProofDrag] = useState(false);
 
   const toggleSelect = (id) => setSelected(s => ({ ...s, [id]: !s[id] }));
   const selectedIds  = Object.keys(selected).filter(id => selected[id]);
@@ -581,21 +583,24 @@ export default function Expenses() {
     if (!window.confirm(`Mark ${selectedIds.length} bill(s) as ${label}?`)) return;
     setPaying(true);
     try {
-      const res = await fetch(`${API}/api/expenses/bulk-pay`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ids: selectedIds, paidDate: payDate, paymentMethod: payMethod, action }),
-      });
+      const fd = new FormData();
+      fd.append("ids", JSON.stringify(selectedIds));
+      fd.append("paidDate", payDate);
+      fd.append("paymentMethod", payMethod);
+      fd.append("action", action);
+      if (bulkProofFile && action !== "unpay") fd.append("proof", bulkProofFile);
+
+      const res = await fetch(`${API}/api/expenses/bulk-pay`, { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      // Optimistically update local state immediately
       setExpenses(prev => prev.map(e => {
         if (!selectedIds.includes(e._id)) return e;
         if (action === "unpay") return { ...e, status: "unpaid", paidDate: null, paymentMethod: "" };
         return { ...e, status: "paid", paidDate: payDate, paymentMethod: payMethod };
       }));
       setSelected({});
-      setFilterStatus(""); // triggers useEffect → fresh fetchAll with no filter
+      setBulkProofFile(null);
+      setFilterStatus("");
     } catch (err) {
       window.alert("Failed: " + err.message);
     } finally {
@@ -2753,6 +2758,26 @@ export default function Expenses() {
               <option>Cash</option>
               <option>Other</option>
             </select>
+
+            {/* Proof of payment drop zone */}
+            <div
+              onDragOver={e => { e.preventDefault(); setBulkProofDrag(true); }}
+              onDragLeave={() => setBulkProofDrag(false)}
+              onDrop={e => { e.preventDefault(); setBulkProofDrag(false); const f = e.dataTransfer.files[0]; if (f) setBulkProofFile(f); }}
+              onClick={() => { const inp = document.createElement("input"); inp.type="file"; inp.accept="image/*,application/pdf"; inp.onchange=ev=>{ if(ev.target.files[0]) setBulkProofFile(ev.target.files[0]); }; inp.click(); }}
+              style={{
+                border: `2px dashed ${bulkProofDrag ? "#34d399" : bulkProofFile ? "#34d399" : "#4b5563"}`,
+                borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12,
+                background: bulkProofDrag ? "#064e3b22" : bulkProofFile ? "#064e3b33" : "transparent",
+                color: bulkProofFile ? "#34d399" : "var(--text-secondary)",
+                minWidth: 140, textAlign: "center", transition: "all .15s", whiteSpace: "nowrap",
+              }}>
+              {bulkProofFile ? `📎 ${bulkProofFile.name.length > 18 ? bulkProofFile.name.slice(0,16)+"…" : bulkProofFile.name}` : "📎 Drop proof here"}
+            </div>
+            {bulkProofFile && (
+              <button onClick={() => setBulkProofFile(null)}
+                style={{ background: "none", border: "none", color: "#f87171", fontSize: 16, cursor: "pointer", padding: "0 2px" }}>✕</button>
+            )}
 
             {(allSelectedUnpaid || mixedSelection) && (
               <button onClick={() => bulkAction("pay")} disabled={paying}
