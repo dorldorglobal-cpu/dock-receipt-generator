@@ -25,6 +25,35 @@ function highlightVinInPdf(inputPath, outputPath, vin) {
   });
 }
 
+// ── Category / tax-category normalization, enforced server-side on every create/update
+// so it can't drift regardless of which form or import path created the expense.
+// Mirrors TAX_BY_CATEGORY in frontend/src/pages/Expenses.jsx — keep the two in sync.
+const TAX_BY_CATEGORY = {
+  "Towing / Transport":   "Cost of Goods Sold (COGS)",
+  "Ocean Freight":        "Cost of Goods Sold (COGS)",
+  "Storage":              "Cost of Goods Sold (COGS)",
+  "Port / Terminal Fees": "Cost of Goods Sold (COGS)",
+  "Loaders & Warehouses": "Cost of Goods Sold (COGS)",
+  "Software":             "Cost of Goods Sold (COGS)",
+  "Mailing Fees":         "Cost of Goods Sold (COGS)",
+  "Legal Fees":           "Operating Expense",
+  "Office & Admin":       "Operating Expense",
+  "General Overhead":     "Operating Expense",
+};
+
+// Vendors that are always Loaders & Warehouses, regardless of what category the
+// form/import submitted.
+const LOADER_WAREHOUSE_VENDOR_RX = /e-?z\s*cargo|savannah|i-?ship|cedars/i;
+
+function enforceVendorCategory(data) {
+  if (LOADER_WAREHOUSE_VENDOR_RX.test(data.vendor || "")) {
+    data.category = "Loaders & Warehouses";
+  }
+  if (!data.taxCategory) {
+    data.taxCategory = TAX_BY_CATEGORY[data.category] || "";
+  }
+}
+
 // ── Google Drive folders for expenses ────────────────────────────────────────
 const DRIVE_RECEIPTS_FOLDER = "1zS9GARKen1KMucPSlm7ags9lq5LhS_Fv"; // Website > Expenses > Receipts
 const DRIVE_BILLS_FOLDER    = "1QJuyyxY8Uumc7Zvhu1UUxqoTk67AbUTJ"; // Website > Expenses > Bills
@@ -293,6 +322,7 @@ router.post("/", uploadFields, async (req, res) => {
       data.billDriveUrl = billDriveUrl || "";
     }
 
+    enforceVendorCategory(data);
     const expense = await Expense.create(data);
     ensureVendor(data.vendor, data.category);
     res.status(201).json(expense);
@@ -356,6 +386,7 @@ router.put("/:id", uploadFields, async (req, res) => {
       update.billDriveUrl = driveFile.webViewLink;
     }
 
+    enforceVendorCategory(update);
     const updated = await Expense.findByIdAndUpdate(
       req.params.id, { $set: update }, { new: true, runValidators: true }
     );
@@ -770,6 +801,7 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
 
         if (!duplicate) await Expense.create({
           category:      "Ocean Freight",
+          taxCategory:   "Cost of Goods Sold (COGS)",
           description:   `Ocean Freight — ${row.ymm || ""} — VIN: ${row.vin}${row.bookingRef ? " — Booking: " + row.bookingRef : ""} — ${vessel || voyage}`.trim().replace(/\s*—\s*$/, ""),
           vendor:        "Sallaum Lines",
           amount:        row.total,
@@ -1072,6 +1104,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
 
       const expense = await Expense.create({
         category:      "Towing / Transport",
+        taxCategory:   "Cost of Goods Sold (COGS)",
         description:   `Transport — ${row.ymm || ""} — VIN: ${row.vin || ""} — ${row.origin || ""}`.trim().replace(/\s*—\s*$/, ""),
         vendor:        row.carrier || "Unknown Carrier",
         amount:        row.total + extrasTotal,
@@ -1243,6 +1276,7 @@ router.post("/apply-acl", express.json(), async (req, res) => {
 
       const expense = await Expense.create({
         category:      "Ocean Freight",
+        taxCategory:   "Cost of Goods Sold (COGS)",
         description:   `ACL Ocean Freight — ${row.ymm || ""} — VIN: ${row.vin || ""} — ${row.vessel || ""} ${row.voyage || ""}`.trim().replace(/\s*—\s*$/, ""),
         vendor:        "ACL / Grimaldi",
         amount:        row.total,
@@ -1526,8 +1560,24 @@ router.post("/apply-container", express.json(), async (req, res) => {
           if (m && d && y) dateObj = new Date(`${y}-${m}-${d}`);
         }
 
+        // Duplicate check: same order + VIN + amount, or same order + amount within 30 days
+        if (orderId && row.total) {
+          if (row.vin) {
+            const dupVin = await Expense.findOne({ orderId, vin: row.vin, amount: row.total }).lean();
+            if (dupVin) continue;
+          }
+          const dup = await Expense.findOne({
+            orderId,
+            amount:   row.total,
+            category: "Loaders & Warehouses",
+            date:     { $gte: new Date(dateObj - 30*24*60*60*1000), $lte: new Date(+dateObj + 30*24*60*60*1000) },
+          }).lean();
+          if (dup) continue;
+        }
+
         await Expense.create({
           category:      "Loaders & Warehouses",
+          taxCategory:   "Cost of Goods Sold (COGS)",
           description:   `Container Loading — ${row.ymm || ""} — VIN: ${row.vin}`.trim().replace(/\s*—\s*$/, ""),
           vendor:        invoice.vendor || "Savannah Auto Export",
           amount:        row.total,
@@ -1784,7 +1834,22 @@ router.post("/apply-misc", express.json(), async (req, res) => {
         if (m && d && y) dateObj = new Date(`${y}-${m}-${d}`);
       }
 
-      await Expense.create({
+      // Duplicate check: same order + VIN + amount, or same order + vendor + amount within 30 days
+      if (orderId && row.total) {
+        if (row.vin) {
+          const dupVin = await Expense.findOne({ orderId, vin: row.vin, amount: row.total }).lean();
+          if (dupVin) continue;
+        }
+        const dup = await Expense.findOne({
+          orderId,
+          amount: row.total,
+          vendor: row.vendor || "",
+          date:   { $gte: new Date(dateObj - 30*24*60*60*1000), $lte: new Date(+dateObj + 30*24*60*60*1000) },
+        }).lean();
+        if (dup) continue;
+      }
+
+      const miscData = {
         category:      row.category || "Port / Terminal Fees",
         description:   `${row.description || row.vendor}${row.vin ? ` — VIN: ${row.vin}` : ""}`.trim(),
         vendor:        row.vendor || "",
@@ -1800,7 +1865,9 @@ router.post("/apply-misc", express.json(), async (req, res) => {
         billDriveId:   row.billDriveId  || "",
         billDriveUrl:  row.billDriveUrl || "",
         billMime:      row.billFileName ? "application/pdf" : "",
-      });
+      };
+      enforceVendorCategory(miscData);
+      await Expense.create(miscData);
       created++;
     }
 
@@ -2169,7 +2236,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
                 .select("_id refNumber").lean();
               if (o) orderId = o._id;
             }
-            await Expense.create({
+            const splitData = {
               category:      split.category || "Port / Terminal Fees",
               description:   split.description || row.payeeName,
               vendor:        row.payeeName,
@@ -2181,7 +2248,9 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
               paidDate:      dateObj,
               paymentMethod: paymentMethod || "Bank ACH",
               ...receiptFields,
-            });
+            };
+            enforceVendorCategory(splitData);
+            await Expense.create(splitData);
             created++;
           }
         }
@@ -2196,7 +2265,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
             .select("_id refNumber").lean();
           if (o) orderId = o._id;
         }
-        await Expense.create({
+        const newBillData = {
           category:      row.newCategory || "Port / Terminal Fees",
           description:   row.newDescription || row.payeeName,
           vendor:        row.payeeName,
@@ -2208,7 +2277,9 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           paidDate:      dateObj,
           paymentMethod: paymentMethod || "Bank ACH",
           ...receiptFields,
-        });
+        };
+        enforceVendorCategory(newBillData);
+        await Expense.create(newBillData);
         created++;
       }
     }

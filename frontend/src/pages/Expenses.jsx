@@ -324,6 +324,10 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     return "";
   };
 
+  // These vendors are always Loaders & Warehouses / COGS — matched below with priority
+  // over the soft per-field guesses so an existing category selection never sticks.
+  const ALWAYS_LOADER_WAREHOUSE_RX = /e-?z\s*cargo|savannah|i-?ship|cedars/i;
+
   const autoCategoryFromVendor = (vendor) => {
     const v = vendor.toLowerCase();
     if (/e-?z\s*cargo|savannah|i-?ship|cedars/.test(v))                          return "Loaders & Warehouses";
@@ -346,6 +350,9 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
   const handleVendorChange = (e) => {
     const vendor = e.target.value;
     setForm(f => {
+      if (ALWAYS_LOADER_WAREHOUSE_RX.test(vendor)) {
+        return { ...f, vendor, category: "Loaders & Warehouses", taxCategory: "Cost of Goods Sold (COGS)" };
+      }
       const guessed = autoCategoryFromVendor(vendor);
       return { ...f, vendor, ...(guessed && !f.category ? { category: guessed } : {}) };
     });
