@@ -17,6 +17,7 @@ Column alignment is determined by the x-positions of the voyage-code tokens.
 
 import sys, json, re
 from collections import defaultdict
+from datetime import date
 
 NA_POLS = {"FREEPORT", "JACKSONVILLE", "BALTIMORE", "WILMINGTON", "PROVIDENCE", "BRUNSWICK"}
 WA_PODS = {"LAGOS", "COTONOU", "LOME", "TEMA", "DAKAR"}
@@ -43,8 +44,15 @@ def is_date(s):
     return bool(re.match(r"^\d{1,2}/\d{1,2}$", s.strip()))
 
 def fmt_date(s):
+    """Attach a year to a bare 'M/D' schedule date, inferring rollover near year boundaries
+    (e.g. a schedule parsed in December for a January sailing is next year, not this one)."""
     m = re.match(r"^(\d{1,2})/(\d{1,2})$", s.strip())
-    return f"{m.group(1)}/{m.group(2)}/2026" if m else s.strip()
+    if not m:
+        return s.strip()
+    month = int(m.group(1))
+    today = date.today()
+    year = today.year + 1 if month < today.month - 6 else today.year
+    return f"{m.group(1)}/{m.group(2)}/{year}"
 
 def cx(word):
     """horizontal centre of a pdfplumber word dict"""

@@ -14,6 +14,15 @@ function lineAfter(lines, label) {
   return i !== -1 ? clean(lines[i + 1]) : "";
 }
 
+function extractPhoneEmail(text) {
+  const phoneMatch = text.match(/(?:Phone|Tel|Cell)[:\s]*([\d()\s\-+]{7,20})/i);
+  const emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  return {
+    phone: phoneMatch ? clean(phoneMatch[1]) : "",
+    email: emailMatch ? emailMatch[0] : "",
+  };
+}
+
 function parseAddressParts(t) {
   const p = clean(t).split(",").map(clean).filter(Boolean);
   let address = p[0] || "";
@@ -74,31 +83,39 @@ function findITN(text) {
   return match ? match[0].toUpperCase() : "";
 }
 
+// ── Port reference data (single source of truth for port matching/normalizing) ──
+const PORT_DEFS = [
+  { name: "JACKSONVILLE", aliases: ["JACKSONVILLE"],             group: "POL" },
+  { name: "BALTIMORE",    aliases: ["BALTIMORE"],                group: "POL" },
+  { name: "PROVIDENCE",   aliases: ["PROVIDENCE", "DAVISVILLE"], group: "POL" },
+  { name: "FREEPORT",     aliases: ["FREEPORT"],                 group: "POL" },
+  { name: "WILMINGTON",   aliases: ["WILMINGTON"],               group: "POL" },
+  { name: "BRUNSWICK",    aliases: ["BRUNSWICK"],                group: "POL" },
+  { name: "NEWARK",       aliases: ["NEWARK"],                   group: "POL" },
+  { name: "TEMA",         aliases: ["TEMA"],       group: "POD", country: "GHANA" },
+  { name: "LAGOS",        aliases: ["LAGOS"],      group: "POD", country: "NIGERIA" },
+  { name: "COTONOU",      aliases: ["COTONOU"],    group: "POD", country: "BENIN" },
+  { name: "LOME",         aliases: ["LOME"],       group: "POD", country: "TOGO" },
+  { name: "DAKAR",        aliases: ["DAKAR"],      group: "POD", country: "SENEGAL" },
+  { name: "DURBAN",       aliases: ["DURBAN"],     group: "POD", country: "SOUTH AFRICA" },
+  { name: "ABIDJAN",      aliases: ["ABIDJAN"],    group: "POD", country: "IVORY COAST" },
+];
+
+// Regex matching any port alias, optionally restricted to one group ("POL" | "POD")
+function portAliasRegex(group) {
+  const aliases = PORT_DEFS.filter(p => !group || p.group === group).flatMap(p => p.aliases);
+  return new RegExp(`\\b(${aliases.join("|")})\\b`, "i");
+}
+
 function normalizePort(raw) {
   const u = cleanUpper(raw || "");
-  if (u.includes("JACKSONVILLE")) return "JACKSONVILLE";
-  if (u.includes("BALTIMORE"))    return "BALTIMORE";
-  if (u.includes("PROVIDENCE") || u.includes("DAVISVILLE")) return "PROVIDENCE";
-  if (u.includes("FREEPORT"))     return "FREEPORT";
-  if (u.includes("WILMINGTON"))   return "WILMINGTON";
-  if (u.includes("BRUNSWICK"))    return "BRUNSWICK";
-  if (u.includes("NEWARK"))       return "NEWARK";
-  if (u.includes("TEMA"))         return "TEMA";
-  if (u.includes("LAGOS"))        return "LAGOS";
-  if (u.includes("COTONOU"))      return "COTONOU";
-  if (u.includes("LOME"))         return "LOME";
-  if (u.includes("DAKAR"))        return "DAKAR";
-  if (u.includes("DURBAN"))       return "DURBAN";
-  if (u.includes("ABIDJAN"))      return "ABIDJAN";
-  return clean(raw);
+  const hit = PORT_DEFS.find(p => p.aliases.some(a => u.includes(a)));
+  return hit ? hit.name : clean(raw);
 }
 
 function countryFromPod(pod) {
-  const map = {
-    TEMA: "GHANA", LAGOS: "NIGERIA", COTONOU: "BENIN", LOME: "TOGO",
-    DAKAR: "SENEGAL", DURBAN: "SOUTH AFRICA", ABIDJAN: "IVORY COAST",
-  };
-  return map[cleanUpper(pod)] || "";
+  const hit = PORT_DEFS.find(p => p.name === cleanUpper(pod));
+  return hit?.country || "";
 }
 
 function extractVehicleData(text) {
@@ -205,8 +222,7 @@ async function parseAES(filePath) {
 
   // Scan up to 15 lines after label for a line matching the given port pattern
   function portNearLabel(label, rx) {
-    const fallback = /\b(JACKSONVILLE|BALTIMORE|PROVIDENCE|DAVISVILLE|FREEPORT|WILMINGTON|BRUNSWICK|NEWARK|TEMA|LAGOS|COTONOU|LOME|DAKAR|DURBAN|ABIDJAN)\b/i;
-    const pat = rx || fallback;
+    const pat = rx || portAliasRegex();
     const i = lines.findIndex(l => cleanUpper(l).includes(cleanUpper(label)));
     if (i === -1) return "";
     for (let j = i + 1; j <= Math.min(i + 15, lines.length - 1); j++) {
@@ -305,10 +321,8 @@ async function parseAES(filePath) {
 
   // Vessel and ports — use pattern-specific scan to avoid POL/POD mix-up
   const vessel = valueAfterLabel("9. EXPORTING CARRIER");
-  const pol = portNearLabel("10. PORT OF EXPORT",
-    /\b(JACKSONVILLE|BALTIMORE|PROVIDENCE|DAVISVILLE|FREEPORT|WILMINGTON|BRUNSWICK|NEWARK)\b/i);
-  const pod = portNearLabel("11. PORT OF UNLADING",
-    /\b(TEMA|LAGOS|COTONOU|LOME|DAKAR|DURBAN|ABIDJAN)\b/i);
+  const pol = portNearLabel("10. PORT OF EXPORT", portAliasRegex("POL"));
+  const pod = portNearLabel("11. PORT OF UNLADING", portAliasRegex("POD"));
 
   // Year/make/model from commodity line
   const commodity = lines.join(" ");
@@ -539,21 +553,24 @@ async function parseDispatch(filePath) {
   };
 }
 
-// ── US state full-name → 2-letter abbreviation ────────────────────────────
+// ── US state reference data (single source of truth for name/abbrev/regex) ──
+const US_STATE_NAME_TO_ABBREV = {
+  'ALABAMA':'AL','ALASKA':'AK','ARIZONA':'AZ','ARKANSAS':'AR','CALIFORNIA':'CA',
+  'COLORADO':'CO','CONNECTICUT':'CT','DELAWARE':'DE','FLORIDA':'FL','GEORGIA':'GA',
+  'HAWAII':'HI','IDAHO':'ID','ILLINOIS':'IL','INDIANA':'IN','IOWA':'IA',
+  'KANSAS':'KS','KENTUCKY':'KY','LOUISIANA':'LA','MAINE':'ME','MARYLAND':'MD',
+  'MASSACHUSETTS':'MA','MICHIGAN':'MI','MINNESOTA':'MN','MISSISSIPPI':'MS','MISSOURI':'MO',
+  'MONTANA':'MT','NEBRASKA':'NE','NEVADA':'NV','NEW HAMPSHIRE':'NH','NEW JERSEY':'NJ',
+  'NEW MEXICO':'NM','NEW YORK':'NY','NORTH CAROLINA':'NC','NORTH DAKOTA':'ND','OHIO':'OH',
+  'OKLAHOMA':'OK','OREGON':'OR','PENNSYLVANIA':'PA','RHODE ISLAND':'RI','SOUTH CAROLINA':'SC',
+  'SOUTH DAKOTA':'SD','TENNESSEE':'TN','TEXAS':'TX','UTAH':'UT','VERMONT':'VT',
+  'VIRGINIA':'VA','WASHINGTON':'WA','WEST VIRGINIA':'WV','WISCONSIN':'WI','WYOMING':'WY',
+};
+const US_STATES = new Set(Object.values(US_STATE_NAME_TO_ABBREV));
+const STATE_CODES_RX = [...US_STATES].join('|');
+
 function stateNameToAbbrev(name) {
-  const map = {
-    'ALABAMA':'AL','ALASKA':'AK','ARIZONA':'AZ','ARKANSAS':'AR','CALIFORNIA':'CA',
-    'COLORADO':'CO','CONNECTICUT':'CT','DELAWARE':'DE','FLORIDA':'FL','GEORGIA':'GA',
-    'HAWAII':'HI','IDAHO':'ID','ILLINOIS':'IL','INDIANA':'IN','IOWA':'IA',
-    'KANSAS':'KS','KENTUCKY':'KY','LOUISIANA':'LA','MAINE':'ME','MARYLAND':'MD',
-    'MASSACHUSETTS':'MA','MICHIGAN':'MI','MINNESOTA':'MN','MISSISSIPPI':'MS','MISSOURI':'MO',
-    'MONTANA':'MT','NEBRASKA':'NE','NEVADA':'NV','NEW HAMPSHIRE':'NH','NEW JERSEY':'NJ',
-    'NEW MEXICO':'NM','NEW YORK':'NY','NORTH CAROLINA':'NC','NORTH DAKOTA':'ND','OHIO':'OH',
-    'OKLAHOMA':'OK','OREGON':'OR','PENNSYLVANIA':'PA','RHODE ISLAND':'RI','SOUTH CAROLINA':'SC',
-    'SOUTH DAKOTA':'SD','TENNESSEE':'TN','TEXAS':'TX','UTAH':'UT','VERMONT':'VT',
-    'VIRGINIA':'VA','WASHINGTON':'WA','WEST VIRGINIA':'WV','WISCONSIN':'WI','WYOMING':'WY',
-  };
-  return map[(name || "").toUpperCase().trim()] || "";
+  return US_STATE_NAME_TO_ABBREV[(name || "").toUpperCase().trim()] || "";
 }
 
 // ── IAA Buyer Receipt parser ───────────────────────────────────────────────
@@ -717,8 +734,7 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
     .trim();
 
   // ── Phone / email ──────────────────────────────────────────────────────
-  const phoneMatch = text.match(/(?:Phone|Tel|Cell)[:\s]*([\d()\s\-+]{7,20})/i);
-  const emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
+  const { phone, email } = extractPhoneEmail(text);
 
   // ── Lot number — IAA StockNo "000-XXXXXXXX" → strip prefix, keep 8 digits ──
   // "000-44707958" may be concatenated with year: "000-447079582012..." — no trailing \b
@@ -727,8 +743,8 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
 
   return {
     customerName,
-    customerPhone: phoneMatch ? clean(phoneMatch[1]) : "",
-    customerEmail: emailMatch ? emailMatch[0] : "",
+    customerPhone: phone,
+    customerEmail: email,
     vin,
     year,
     make,
@@ -950,21 +966,13 @@ async function parseBuyerReceipt(filePath) {
   // Street suffix words that Copart PDFs sometimes wrap onto the next line
   const streetSuffixPat = /^(ROAD|RD|DRIVE|DR|AVENUE|AVE|BOULEVARD|BLVD|STREET|ST|LANE|LN|WAY|HIGHWAY|HWY|COURT|CT|CIRCLE|CIR|PLACE|PL|TRAIL|TERRACE|TER)\s*$/i;
 
-  // Valid US state codes for address validation
-  const US_STATES = new Set([
-    'AL','AK','AZ','AR','CA','CO','CT','DE','FL','GA','HI','ID','IL','IN',
-    'IA','KS','KY','LA','ME','MD','MA','MI','MN','MS','MO','MT','NE','NV',
-    'NH','NJ','NM','NY','NC','ND','OH','OK','OR','PA','RI','SC','SD','TN',
-    'TX','UT','VT','VA','WA','WV','WI','WY',
-  ]);
-
   // US street suffix — required to distinguish US addresses from foreign ones.
   // Foreign customer addresses (e.g. "100 KWAKWACI KANOKANO") have no standard suffix.
   const US_STREET_SUFFIX_RX = /\b(STREET|ST|AVENUE|AVE|BOULEVARD|BLVD|ROAD|RD|DRIVE|DR|LANE|LN|WAY|HIGHWAY|HWY|COURT|CT|PLACE|PL|CIRCLE|CIR|TRAIL|TERRACE|TER|PKWY|PARKWAY|PIKE|NE|NW|SE|SW)\b/i;
 
   // Copart PDFs sometimes jam city+state+zip with no spaces: "WINDSORNJ08561"
   // Build a regex that can peel apart: ([city letters])([2-letter state])(\d{5})
-  const STATE_CODES_RX = 'AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY';
+  // (US_STATES / STATE_CODES_RX come from the module-level state reference data above)
   const concatCSZRx = new RegExp(`^([A-Z]{2,28})(${STATE_CODES_RX})(\\d{5})$`, 'i');
   function parseConcatCSZ(line) {
     const m = clean(line).toUpperCase().match(concatCSZRx);
@@ -1160,12 +1168,7 @@ async function parseBuyerReceipt(filePath) {
   const pickupLocation = pickupName || pickupAddress || "";
 
   // ── Phone / email ──────────────────────────────────────────────────────
-  let phone = "";
-  let email = "";
-  const phoneMatch = text.match(/(?:Phone|Tel|Cell)[:\s]*([\d()\s\-+]{7,20})/i);
-  const emailMatch = text.match(/[a-zA-Z0-9._%+\-]+@[a-zA-Z0-9.\-]+\.[a-zA-Z]{2,}/);
-  if (phoneMatch) phone = clean(phoneMatch[1]);
-  if (emailMatch) email = emailMatch[0];
+  const { phone, email } = extractPhoneEmail(text);
 
   // Lot number — IAA StockNo "000-44707958" → "44707958", Copart "LOT# 12345678"
   let lotNumber = "";

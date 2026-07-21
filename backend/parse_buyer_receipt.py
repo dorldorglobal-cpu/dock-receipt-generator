@@ -35,6 +35,7 @@ US_STATES = {
 COLORS = ['BLACK','WHITE','BLUE','RED','SILVER','GRAY','GREY','GREEN','BROWN',
           'GOLD','ORANGE','YELLOW','PURPLE','BEIGE','MAROON','BURGUNDY','TAN',
           'CREAM','PINK','TEAL','CHAMPAGNE','COPPER','CHARCOAL']
+COLOR_RE = re.compile(r'\b(' + '|'.join(COLORS) + r')\b', re.I)
 
 US_SUFFIX_RE = re.compile(
     r'\b(STREET|ST|AVENUE|AVE|BOULEVARD|BLVD|ROAD|RD|DRIVE|DR|LANE|LN|'
@@ -82,8 +83,9 @@ def try_parse_city_state_zip(line):
 def extract_vehicle(veh_text):
     """Extract year/make/model/color from VEHICLE: line text."""
     year = make = model = color = ''
-    color_found = next((c for c in COLORS if c in veh_text.upper()), '')
-    color_idx = veh_text.upper().rfind(color_found) if color_found else len(veh_text)
+    color_matches = list(COLOR_RE.finditer(veh_text.upper()))
+    color_found = color_matches[-1].group(1) if color_matches else ''
+    color_idx = color_matches[-1].start() if color_matches else len(veh_text)
     before = veh_text[:color_idx].strip()
     ym = re.match(r'^(\d{4})\s+([A-Z0-9\-]+)\s+(.+)$', before, re.I)
     if ym:

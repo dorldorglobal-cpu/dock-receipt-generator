@@ -11,6 +11,7 @@ Dates: positional pairs (cutoff, sail) per vessel in POL rows;
 
 import sys, json, re
 from collections import defaultdict
+from datetime import date
 
 # ── Port rules ────────────────────────────────────────────────────────────────
 
@@ -48,13 +49,18 @@ MONTH = {'jan':'1','feb':'2','mar':'3','apr':'4','may':'5','jun':'6',
           'jul':'7','aug':'8','sep':'9','oct':'10','nov':'11','dec':'12'}
 
 def parse_date(s):
-    """20-Apr  →  4/20/2026"""
+    """20-Apr  →  4/20/<year>, inferring rollover near year boundaries
+    (e.g. a schedule parsed in December for a January sailing is next year)."""
     if not s or s.upper() == 'N/A':
         return ''
     m = re.match(r'^(\d{1,2})-([A-Za-z]{3})', s.strip())
     if m:
         mon = MONTH.get(m.group(2).lower(), '')
-        return f"{mon}/{m.group(1)}/2026" if mon else s.strip()
+        if not mon:
+            return s.strip()
+        today = date.today()
+        year = today.year + 1 if int(mon) < today.month - 6 else today.year
+        return f"{mon}/{m.group(1)}/{year}"
     return s.strip()
 
 def is_date_token(s):
@@ -172,8 +178,17 @@ def parse_sallaum_pdf(path):
                     if pol == 'UNKNOWN': continue
                     pol_data.setdefault(pol, {})
                     for v in range(num_vessels):
-                        ci = date_words[v * 2]     if v * 2     < len(date_words) else None
-                        si = date_words[v * 2 + 1] if v * 2 + 1 < len(date_words) else None
+                        # Assign dates by x-position within this vessel's column band
+                        # (same banding used for vessel names above) rather than by list
+                        # index — a single missing/blank date on any earlier vessel would
+                        # otherwise shift every subsequent vessel's dates by one.
+                        left, right = col_bands[v]
+                        col_dates = sorted(
+                            (w for w in date_words if left <= cx(w) < right),
+                            key=lambda w: w['x0']
+                        )
+                        ci = col_dates[0] if len(col_dates) > 0 else None
+                        si = col_dates[1] if len(col_dates) > 1 else None
                         cutoff = parse_date(ci['text']) if ci else ''
                         sail   = parse_date(si['text']) if si else ''
                         code   = voyage_texts[v]
@@ -189,7 +204,12 @@ def parse_sallaum_pdf(path):
                     if pod == 'UNKNOWN': continue
                     pod_data.setdefault(pod, {})
                     for v in range(num_vessels):
-                        item = date_words[v] if v < len(date_words) else None
+                        left, right = col_bands[v]
+                        col_dates = sorted(
+                            (w for w in date_words if left <= cx(w) < right),
+                            key=lambda w: w['x0']
+                        )
+                        item = col_dates[0] if col_dates else None
                         if item and item['text'].upper() != 'N/A':
                             pod_data[pod][voyage_texts[v]] = parse_date(item['text'])
 
