@@ -59,8 +59,9 @@ function findVin(text) {
   const afterWeight = upper.match(/\b\d{3,5}\s+([A-HJ-NPR-Z0-9]{17})\b/);
   if (afterWeight) return afterWeight[1];
   // Pattern 3: Generic VIN with clean word boundaries on both sides
+  // Validate check digit (pos 8 must be digit or X) to avoid false matches like "00802014MERCEDESC"
   const normalMatch = upper.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-  if (normalMatch) return normalMatch[0];
+  if (normalMatch && /[\dX]/.test(normalMatch[0][8])) return normalMatch[0];
   // Pattern 4: Comma-formatted mileage directly followed by VIN (IAA table rows)
   // e.g. "227,0555UXWZ7C55G0R32171" → mileage = 227,055  VIN = 5UXWZ7C55G0R32171
   // Without this, the comma creates a word-boundary and Pattern 5 picks up "0555UXWZ7C55G0R32"
@@ -683,41 +684,83 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
   // IAA vehicle row format: "[StockNo] [SaleItem] [Year] [Make] [Model] [Color] [Mileage] [VIN]"
   // e.g.: "000-44674966 D-0034 2016 BMW X3 Black 227,055 5UXWZ7C55G0R32171 HYM1024"
   //
-  // extractVehicleData() uses a generic year+make pattern that false-matches the receipt
-  // number ("26696063" → "6063") or dates ("5/26/2026" → "2026 Fort Worth") before it
-  // ever reaches the vehicle row.  Instead we search backwards from the known VIN so we
-  // are guaranteed to be looking at the right portion of the document.
+  // pdf-parse concatenates all columns with no separators, producing a dense row like:
+  //   "000-44617495B-00802014MERCEDESC 300Gray147,626WDDGF8AB6EA927815"
+  // extractVehicleData() false-matches receipt numbers/dates before it reaches the vehicle row.
+  // Instead we search for the line containing the VIN and parse it directly.
   const COLORS = 'White|Black|Silver|Grey|Gray|Blue|Red|Green|Gold|Brown|Beige|Yellow|Orange|Purple|Pink|Maroon|Tan|Cream|Burgundy|Charcoal|Copper|Bronze|Dk|Dark|Lt|Light';
+
+  // Known makes list for splitting dense-packed "MERCEDESC 300" → make="MERCEDES", model="C 300"
+  const KNOWN_MAKES = [
+    'MERCEDES-BENZ','MERCEDES','LAND ROVER','ALFA ROMEO','ROLLS-ROYCE',
+    'CHEVROLET','VOLKSWAGEN','MITSUBISHI','CHRYSLER','INFINITI',
+    'TOYOTA','NISSAN','HONDA','HYUNDAI','SUBARU','GENESIS','LINCOLN',
+    'FORD','JEEP','DODGE','BUICK','CADILLAC','ACURA','LEXUS','MAZDA',
+    'VOLVO','PORSCHE','JAGUAR','MASERATI','FERRARI','BENTLEY','LAMBORGHINI',
+    'TESLA','AUDI','MINI','FIAT','KIA','BMW','GMC','RAM',
+  ];
+
+  function splitMakeModel(combined) {
+    const upper = combined.toUpperCase();
+    for (const mk of KNOWN_MAKES) {
+      if (upper.startsWith(mk)) {
+        return { make: mk, model: combined.slice(mk.length).trim() };
+      }
+    }
+    const sp = combined.indexOf(" ");
+    return sp > 0 ? { make: combined.slice(0, sp).toUpperCase(), model: combined.slice(sp + 1).trim() }
+                  : { make: combined.toUpperCase(), model: "" };
+  }
 
   let year = "";
   let make = "";
   let model = "";
+  let color = "";
 
   if (vin) {
-    const vinIdx = text.indexOf(vin);
-    if (vinIdx > 0) {
-      // Look at up to 300 chars before the VIN — that's where Year/Make/Model/Color/Mileage live
-      const beforeVin = text.slice(Math.max(0, vinIdx - 300), vinIdx);
+    // Strategy A: find the line containing the VIN and parse the dense IAA row
+    // "000-44617495B-00802014MERCEDESC 300Gray147,626WDDGF8AB6EA927815"
+    // After sale-item suffix ([A-Z]-\d{4}) comes year (4 digits), then make+model+color+mileage
+    const vinLine = lines.find(l => l.includes(vin));
+    if (vinLine) {
+      const m = vinLine.match(/[A-Z]-\d{4}((?:19|20)\d{2})(.+?)([\d,]+)\s*[A-HJ-NPR-Z0-9]{17}/);
+      if (m) {
+        year = m[1];
+        // m[2] = "MERCEDESC 300Gray"  (make + model + color, no space between some parts)
+        const makeModelColor = m[2].trim();
+        // Strip color from end
+        const colorRx = new RegExp(`^(.+?)\\s*(${COLORS})\\s*$`, 'i');
+        const cm = makeModelColor.match(colorRx);
+        const makeModel = cm ? cm[1].trim() : makeModelColor;
+        color = cm ? cm[2] : "";
+        const split = splitMakeModel(makeModel);
+        make  = split.make;
+        model = split.model;
+      }
+    }
 
-      // Primary: anchored by COLOR keyword + MILEAGE digits at end of the slice
-      // e.g. "2016 BMW X3 Black 227,055 "
-      const withColor = beforeVin.match(
-        new RegExp(
-          `\\b(\\d{4})\\s+([A-Z]{2,})\\s+([A-Z0-9][A-Z0-9 \\-]*?)\\s+(?:${COLORS})\\s+[\\d,]+\\s*$`,
-          'i'
-        )
-      );
-      if (withColor) {
-        year  = clean(withColor[1]);
-        make  = cleanUpper(withColor[2]);
-        model = cleanUpper(withColor[3].trim());
-      } else {
-        // Fallback: Year Make Model anchored by mileage digits at end of slice (no color)
-        const noColor = beforeVin.match(/\b(\d{4})\s+([A-Z]{2,})\s+([A-Z0-9][A-Z0-9 \-]*?)\s+[\d,]+\s*$/i);
-        if (noColor) {
-          year  = clean(noColor[1]);
-          make  = cleanUpper(noColor[2]);
-          model = cleanUpper(noColor[3].trim());
+    // Strategy B: look backwards from VIN — handles rows with proper spacing
+    if (!year) {
+      const vinIdx = text.indexOf(vin);
+      if (vinIdx > 0) {
+        const beforeVin = text.slice(Math.max(0, vinIdx - 300), vinIdx);
+        const withColor = beforeVin.match(
+          new RegExp(
+            `\\b(\\d{4})\\s+([A-Z]{2,})\\s+([A-Z0-9][A-Z0-9 \\-]*?)\\s+(?:${COLORS})\\s+[\\d,]+\\s*$`,
+            'i'
+          )
+        );
+        if (withColor) {
+          year  = clean(withColor[1]);
+          make  = cleanUpper(withColor[2]);
+          model = cleanUpper(withColor[3].trim());
+        } else {
+          const noColor = beforeVin.match(/\b(\d{4})\s+([A-Z]{2,})\s+([A-Z0-9][A-Z0-9 \-]*?)\s+[\d,]+\s*$/i);
+          if (noColor) {
+            year  = clean(noColor[1]);
+            make  = cleanUpper(noColor[2]);
+            model = cleanUpper(noColor[3].trim());
+          }
         }
       }
     }
@@ -749,6 +792,7 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
     year,
     make,
     model: cleanModel,
+    color,
     lotNumber,
     pickupLocation,
     pickupName,
