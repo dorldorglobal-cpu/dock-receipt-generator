@@ -1369,7 +1369,8 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         // Invoice number — "Invoice no.: 30023" or "NUMBER\n015839" or EzCargo: dates+number concat
         const invMatch  = text.match(/Invoice\s+no\.?:?\s*(\d+)/i)
           || text.match(/NUMBER\s*\n\s*(\d+)/i)
-          || text.match(/Invoice\s*\n[\w\/]+[\w\/]+(\d{5,})/i)   // EzCargo: "Invoice\ndate1date2NNNNN"
+          || text.match(/Invoice\s*\n(?:[A-Z][a-z]+\/\d{2}\/\d{4}){1,2}(\d{5,})/i)  // EzCargo: "Invoice\nJul/14/2026Jul/24/202655994"
+          || text.match(/Invoice\s*\n[\w\/]+[\w\/]+(\d{5,})/i)
           || text.match(/INVOICE[^\d]{0,40}(\d{5,})/i);
         const invoiceNumber = invMatch?.[1] || "";
 
@@ -1622,7 +1623,7 @@ router.post("/apply-container", express.json(), async (req, res) => {
           date:          dateObj,
           orderId:       orderId || null,
           orderRef:      orderRef || "",
-          invoiceNumber: invoice.booking || invoice.invoiceNumber || "",
+          invoiceNumber: invoice.invoiceNumber || "",
           status:        "unpaid",
           notes:         [invoice.container ? `Container: ${invoice.container}` : "", invoice.booking ? `Booking: ${invoice.booking}` : "", row.notes || ""].filter(Boolean).join(" | "),
           billFileName:  invoice.billFileName || "",
