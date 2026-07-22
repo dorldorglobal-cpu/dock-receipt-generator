@@ -1553,9 +1553,11 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
                 { invoiceNumber },
                 ...(booking ? [{ notes: { $regex: booking, $options: "i" } }] : []),
                 ...(invoiceNumber ? [{ notes: { $regex: invoiceNumber, $options: "i" } }] : []),
+                { category: "Loaders & Warehouses", vendor: { $regex: (vendor || "").split(" ")[0], $options: "i" } },
               ],
-            }).select("orderId").lean()
+            }).select("orderId invoiceNumber notes vendor").lean()
           : [];
+        console.log("[dup-check] invoiceNumber:", invoiceNumber, "booking:", booking, "vendor:", vendor, "orderIds:", orderIds.length, "found:", existingExpenses.length, existingExpenses.map(e => ({ inv: e.invoiceNumber, notes: e.notes?.slice(0,60), vendor: e.vendor })));
         const dupOrderIds = new Set(existingExpenses.map(e => String(e.orderId)));
 
         const rows = vins.map(vin => {
