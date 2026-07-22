@@ -127,7 +127,7 @@ router.get("/:id/billing-summary", async (req, res) => {
     if (!load) return res.status(404).json({ error: "Not found" });
 
     const orders = await Order.find({ _id: { $in: load.orderIds } })
-      .select("_id refNumber customerName customerEmail year make model vin status").lean();
+      .select("_id refNumber customerName customerEmail year make model vin status charges").lean();
 
     const orderIds = orders.map(o => o._id);
 
@@ -151,7 +151,26 @@ router.get("/:id/billing-summary", async (req, res) => {
       const key = String(o._id);
       const exps = expByOrder[key] || [];
       const inv  = invByOrder[key] || null;
-      const totalExpenses = exps.reduce((s, e) => s + (e.amount || 0), 0);
+
+      // Include ocean freight cost from order.charges if set and no matching Expense record
+      const syntheticExps = [...exps];
+      const oceanCost = Number((o.charges || {}).oceanCost || 0);
+      if (oceanCost > 0) {
+        const alreadyHasOcean = exps.some(e => /ocean\s*freight/i.test(e.category || ""));
+        if (!alreadyHasOcean) {
+          syntheticExps.push({
+            _id: null,
+            vendor: "Ocean Freight (est.)",
+            category: "Ocean Freight",
+            amount: oceanCost,
+            status: "unpaid",
+            description: "Ocean freight cost from order charges",
+            _synthetic: true,
+          });
+        }
+      }
+
+      const totalExpenses = syntheticExps.reduce((s, e) => s + (e.amount || 0), 0);
       const invoiceTotal  = inv?.total || 0;
       return {
         orderId:       o._id,
@@ -161,7 +180,7 @@ router.get("/:id/billing-summary", async (req, res) => {
         vehicle:       [o.year, o.make, o.model].filter(Boolean).join(" "),
         vin:           o.vin,
         orderStatus:   o.status,
-        expenses:      exps,
+        expenses:      syntheticExps,
         totalExpenses,
         invoice:       inv,
         invoiceTotal,
