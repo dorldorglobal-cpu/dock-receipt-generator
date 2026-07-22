@@ -1936,7 +1936,7 @@ export default function Expenses() {
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             <select value={row.category||"Port / Terminal Fees"} onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,category:e.target.value}:r))}
                               style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:11}}>
-                              {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
+                              {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
                             </select>
                           </td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
@@ -2151,7 +2151,7 @@ export default function Expenses() {
                                 <label style={{ fontSize:10, color:"var(--text-secondary)" }}>Category
                                   <select value={row.newCategory} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newCategory:e.target.value}:r))}
                                     style={{ display:"block", marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"var(--text-primary)", fontSize:11 }}>
-                                    {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
+                                    {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
                                   </select>
                                 </label>
                                 <label style={{ fontSize:10, color:"var(--text-secondary)", flex:1 }}>Description
@@ -2185,7 +2185,7 @@ export default function Expenses() {
                                       style={{ width:80, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"#60a5fa", fontSize:11 }} />
                                     <select value={split.category} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,category:e.target.value}:s)}:r))}
                                       style={{ background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"var(--text-primary)", fontSize:11 }}>
-                                      {["Towing / Transport","Ocean Freight","Port / Terminal Fees","Loaders & Warehouses","Software","Legal Fees","Office & Admin","General Overhead"].map(c=><option key={c} value={c}>{c}</option>)}
+                                      {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
                                     </select>
                                     <input value={split.description} placeholder="Description" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,description:e.target.value}:s)}:r))}
                                       style={{ flex:1, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"var(--text-primary)", fontSize:11 }} />
