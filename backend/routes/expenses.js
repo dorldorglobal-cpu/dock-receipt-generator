@@ -199,6 +199,7 @@ router.get("/export", async (req, res) => {
         { description:   { $regex: v, $options: "i" } },
         { vendor:        { $regex: v, $options: "i" } },
         { orderRef:      { $regex: v, $options: "i" } },
+        { invoiceNumber: { $regex: v, $options: "i" } },
         { notes:         { $regex: v, $options: "i" } },
       ];
     }
@@ -1538,26 +1539,31 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         const equalSplit = vins.length > 0 ? Math.round((baseTotal / vins.length) * 100) / 100 : total;
 
         // Match orders
-        const [orders, existingExpenses] = await Promise.all([
-          Order.find({ vin: { $in: vins } }).select("_id refNumber vin customerName year make model").lean(),
-          Expense.find({
-            vin: { $in: vins },
-            $or: [
-              { invoiceNumber },
-              ...(booking ? [{ notes: { $regex: booking, $options: "i" } }] : []),
-            ],
-          }).select("vin").lean(),
-        ]);
+        const orders = await Order.find({ vin: { $in: vins } })
+          .select("_id refNumber vin customerName year make model").lean();
         const orderByVin = {};
         for (const o of orders) orderByVin[o.vin?.toUpperCase()] = o;
-        const dupVins = new Set(existingExpenses.map(e => e.vin?.toUpperCase()));
+
+        // Duplicate detection: find existing expenses for these orders matching this invoice or booking
+        const orderIds = orders.map(o => o._id);
+        const existingExpenses = orderIds.length
+          ? await Expense.find({
+              orderId: { $in: orderIds },
+              $or: [
+                { invoiceNumber },
+                ...(booking ? [{ notes: { $regex: booking, $options: "i" } }] : []),
+                ...(invoiceNumber ? [{ notes: { $regex: invoiceNumber, $options: "i" } }] : []),
+              ],
+            }).select("orderId").lean()
+          : [];
+        const dupOrderIds = new Set(existingExpenses.map(e => String(e.orderId)));
 
         const rows = vins.map(vin => {
           const order = orderByVin[vin.toUpperCase()] || null;
           const d = vinData[vin] || {};
           const rowTotal = (hasPerVinPricing && d.lineTotal ? d.lineTotal : equalSplit)
             + (vinExtras[vin] || 0);
-          const duplicate = dupVins.has(vin.toUpperCase());
+          const duplicate = dupOrderIds.has(String(order?._id));
           return {
             vin,
             ymm:          d.ymm || (order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : ""),
@@ -1634,6 +1640,7 @@ router.post("/apply-container", express.json(), async (req, res) => {
           date:          dateObj,
           orderId:       orderId || null,
           orderRef:      orderRef || "",
+          vin:           row.vin || "",
           invoiceNumber: invoice.invoiceNumber || "",
           status:        "unpaid",
           notes:         [invoice.container ? `Container: ${invoice.container}` : "", invoice.booking ? `Booking: ${invoice.booking}` : "", row.notes || ""].filter(Boolean).join(" | "),
