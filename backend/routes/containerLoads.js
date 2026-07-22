@@ -303,13 +303,32 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// POST /api/container-loads/:id/send-combined-invoice — merge all invoices into one PDF and send
+// GET /api/container-loads/:id/combined-invoice-pdf — download combined invoice for preview
+router.get("/:id/combined-invoice-pdf", async (req, res) => {
+  try {
+    const Invoice = require("../models/Invoice");
+    const { generateCombinedInvoicePdf } = require("./invoices");
+
+    const load = await ContainerLoad.findById(req.params.id).lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+
+    const invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
+    const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
+    if (!invoices.length) return res.status(400).json({ error: "No invoices found" });
+
+    const buf = await generateCombinedInvoicePdf(invoices, orders, load);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `attachment; filename="Combined-Invoice-${load.name}.pdf"`);
+    res.send(buf);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/container-loads/:id/send-combined-invoice — generate single combined invoice and send
 router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
   try {
     const Invoice = require("../models/Invoice");
     const { getGmailAccessToken } = require("../utils/gmail");
-    const { generateInvoicePdf } = require("./invoices");
-    const { PDFDocument } = require("pdf-lib");
+    const { generateCombinedInvoicePdf } = require("./invoices");
     const { google } = require("googleapis");
 
     const { to, subject, body } = req.body || {};
@@ -320,47 +339,25 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
 
     const invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
     const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
-    const orderMap = {};
-    for (const o of orders) orderMap[String(o._id)] = o;
+    if (!invoices.length) return res.status(400).json({ error: "No invoices to send" });
 
-    // Generate individual invoice PDFs then merge into one
-    const merged = await PDFDocument.create();
-    for (const inv of invoices) {
-      try {
-        const order = orderMap[String(inv.orderId)] || null;
-        const pdfBuf = await generateInvoicePdf(inv, order);
-        const src = await PDFDocument.load(pdfBuf);
-        const pages = await merged.copyPages(src, src.getPageIndices());
-        pages.forEach(p => merged.addPage(p));
-      } catch (err) {
-        console.warn(`PDF gen failed for ${inv.invoiceNumber}:`, err.message);
-      }
-    }
+    const pdfBuf = await generateCombinedInvoicePdf(invoices, orders, load);
+    const filename = `Combined-Invoice-${load.name}.pdf`;
+    const b64 = pdfBuf.toString("base64");
 
-    if (merged.getPageCount() === 0) return res.status(400).json({ error: "No invoices to send" });
-
-    const mergedBytes = await merged.save();
-    const mergedBase64 = Buffer.from(mergedBytes).toString("base64");
-    const mergedFilename = `Combined-Invoice-Load-${load.name}.pdf`;
-
-    const attachments = [{ filename: mergedFilename, content: mergedBase64 }];
-
-    // Build MIME email
     const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
     const boundary = "DDG_COMB_" + Date.now();
     const mimeLines = [
       `From: ${from}`, `To: ${to}`,
       `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-      `MIME-Version: 1.0`,
-      `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`,
       ``, `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``,
       body || "", ``,
       `--${boundary}`,
-      `Content-Type: application/pdf; name="${mergedFilename}"`,
+      `Content-Type: application/pdf; name="${filename}"`,
       `Content-Transfer-Encoding: base64`,
-      `Content-Disposition: attachment; filename="${mergedFilename}"`,
-      ``, mergedBase64, ``,
-      `--${boundary}--`,
+      `Content-Disposition: attachment; filename="${filename}"`,
+      ``, b64, ``, `--${boundary}--`,
     ];
 
     const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
@@ -373,11 +370,11 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
     for (const inv of invoices) {
       await Invoice.findByIdAndUpdate(inv._id, {
         $set: { status: "sent", sentAt: new Date() },
-        $push: { timeline: { action: "Invoice Sent", details: `Sent as combined PDF for load ${load.name}`, createdAt: new Date() } },
+        $push: { timeline: { action: "Invoice Sent", details: `Sent as combined invoice PDF for load ${load.name}`, createdAt: new Date() } },
       });
     }
 
-    res.json({ sent: invoices.length, to, filename: mergedFilename });
+    res.json({ sent: invoices.length, to, filename });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

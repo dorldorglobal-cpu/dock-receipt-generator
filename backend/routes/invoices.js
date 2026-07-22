@@ -633,6 +633,133 @@ async function generateInvoicePdf(inv, order) {
     return pdfReady;
 }
 
+// ── Shared: generate COMBINED invoice PDF (multi-vehicle, one document) ───────
+async function generateCombinedInvoicePdf(invoices, orders, load) {
+  const orderMap = {};
+  for (const o of orders) orderMap[String(o._id)] = o;
+
+  const txt = (s) => (s || "").replace(/→/g,">").replace(/—/g,"-").replace(/–/g,"-").replace(/'/g,"'");
+  const doc    = new PDFDocument({ margin: 0, size: "LETTER", autoFirstPage: true });
+  const chunks = [];
+  doc.on("data", c => chunks.push(c));
+  const pdfReady = new Promise((resolve, reject) => {
+    doc.on("end",   () => resolve(Buffer.concat(chunks)));
+    doc.on("error", reject);
+  });
+
+  const PW = 612, PH = 792, ML = 50, MR = 50, W = PW - ML - MR;
+  const navy = "#1a3567", steel = "#2d5fa6", dark = "#1a1a2e", muted = "#6b7280", light = "#f1f5f9", white = "#ffffff";
+  const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" }) : "—";
+  const logoPath = path.join(__dirname, "..", "logo.png");
+
+  // Use first invoice for customer/header info
+  const first = invoices[0];
+  const grandTotal = invoices.reduce((s, inv) => s + Number(inv.total || 0), 0);
+  const combinedNumber = `CMB-${invoices.map(i => i.invoiceNumber).join("+")}`;
+
+  // ── HEADER ──────────────────────────────────────────────────────────────────
+  const HDR_H = 108;
+  doc.rect(0, 0, PW, HDR_H).fill(light);
+  doc.rect(0, HDR_H - 1, PW, 1).fill("#c7d2e0");
+  try { doc.image(logoPath, ML, 14, { height: 80 }); } catch (_) {}
+  const TX = ML + 90;
+  doc.fill(dark).font("Helvetica-Bold").fontSize(13).text("Dor L'Dor Global LLC", TX, 20, { lineBreak: false });
+  doc.fill(muted).font("Helvetica").fontSize(8).text("23 GALAHAD DR  |  Manalapan, New Jersey 07726  |  United States", TX, 37, { lineBreak: false });
+  doc.fill(muted).font("Helvetica").fontSize(8).text("Tel: 9172003998", TX, 49, { lineBreak: false });
+  doc.fill(navy).font("Helvetica-Bold").fontSize(32).text("INVOICE", 0, 38, { align:"right", width: PW - MR - 2, lineBreak: false });
+
+  // ── META BOX ────────────────────────────────────────────────────────────────
+  const META_X = 390, META_Y = HDR_H + 14, META_W = 172;
+  doc.rect(META_X, META_Y, META_W, 80).fill(light).rect(META_X, META_Y, META_W, 80).lineWidth(0.5).strokeColor("#d1d5db").stroke();
+  doc.fill(muted).font("Helvetica-Bold").fontSize(7.5).text("INVOICE #", META_X + 10, META_Y + 10, { lineBreak: false });
+  doc.fill(steel).font("Helvetica-Bold").fontSize(9).text(combinedNumber, META_X + 10, META_Y + 22, { width: META_W - 20, lineBreak: false });
+  doc.fill(muted).font("Helvetica").fontSize(8).text("Date:", META_X + 10, META_Y + 50, { lineBreak: false });
+  doc.fill(dark).font("Helvetica-Bold").fontSize(8).text(fmtDate(new Date()), META_X + 42, META_Y + 50, { lineBreak: false });
+
+  // ── BILL TO ──────────────────────────────────────────────────────────────────
+  let y = META_Y;
+  doc.fill(muted).font("Helvetica-Bold").fontSize(7.5).text("BILL TO", ML, y, { lineBreak: false });
+  y += 14;
+  doc.fill(dark).font("Helvetica-Bold").fontSize(13).text(txt(first.customerName || "—"), ML, y, { lineBreak: false });
+  y += 18;
+  if (first.customerPhone) { doc.fill(dark).font("Helvetica").fontSize(9).text(first.customerPhone, ML, y, { lineBreak: false }); y += 13; }
+  if (first.customerEmail) { doc.fill(muted).font("Helvetica").fontSize(9).text(first.customerEmail, ML, y, { lineBreak: false, width: META_X - ML - 20, ellipsis: true }); y += 13; }
+
+  // ── LOAD DETAILS BAR ─────────────────────────────────────────────────────────
+  y = META_Y + 108;
+  doc.rect(ML, y, W, 1).fill("#d1d5db"); y += 8;
+  doc.fill(muted).font("Helvetica-Bold").fontSize(7.5).text("SHIPMENT DETAILS", ML, y, { lineBreak: false }); y += 13;
+  const col2x = ML + W / 2 + 10, LBL1_W = 68, LBL2_W = 90, COL_W = Math.floor(W / 2) - 10;
+  const vessel = load?.vessel || first.shippingLine || "";
+  const booking = load?.bookingNumber || first.bookingNumber || "";
+  const pol = load?.pol || first.pol || "";
+  const pod = load?.pod || first.pod || "";
+  const details = [
+    ["Route:", pol && pod ? `${pol} > ${pod}` : "—", "Vessel:", vessel || "—"],
+    ["Booking #:", booking || "—", "Load:", load?.name || "—"],
+  ];
+  details.forEach(([l1,v1,l2,v2]) => {
+    doc.fill(muted).font("Helvetica").fontSize(8.5).text(l1, ML, y, { lineBreak:false });
+    doc.fill(dark).font("Helvetica-Bold").fontSize(8.5).text(txt(v1), ML + LBL1_W, y, { width: COL_W - LBL1_W, lineBreak:false });
+    if (v2) {
+      doc.fill(muted).font("Helvetica").fontSize(8.5).text(l2, col2x, y, { lineBreak:false });
+      doc.fill(dark).font("Helvetica-Bold").fontSize(8.5).text(txt(v2), col2x + LBL2_W, y, { width: PW - MR - col2x - LBL2_W, lineBreak:false });
+    }
+    y += 14;
+  });
+  y += 10;
+
+  // ── ITEMS TABLE ───────────────────────────────────────────────────────────────
+  doc.rect(ML, y, W, 1).fill("#d1d5db"); y += 8;
+  const TBL_HDR_H = 24;
+  doc.rect(ML, y, W, TBL_HDR_H).fill(navy);
+  doc.fill(white).font("Helvetica-Bold").fontSize(9).text("VEHICLE / DESCRIPTION", ML + 10, y + 8, { lineBreak:false });
+  doc.fill(white).font("Helvetica-Bold").fontSize(9).text("REF #", ML + 260, y + 8, { lineBreak:false });
+  doc.fill(white).font("Helvetica-Bold").fontSize(9).text("AMOUNT", ML, y + 8, { align:"right", width: W - 10, lineBreak:false });
+  y += TBL_HDR_H;
+
+  invoices.forEach((inv, idx) => {
+    const order = orderMap[String(inv.orderId)] || null;
+    const vehicle = txt(inv.vehicle || [order?.year, order?.make, order?.model].filter(Boolean).join(" ") || "—");
+    const vin = inv.vin || order?.vin || "";
+    const descLine1 = vehicle;
+    const descLine2 = vin ? `VIN: ${vin}` : "";
+    // also list first item description if meaningful
+    const itemDesc = (inv.items || []).map(i => txt(i.description || "")).filter(Boolean).join(" | ");
+    const fullDesc = [descLine1, descLine2, itemDesc].filter(Boolean).join("\n");
+    const textH = doc.heightOfString(fullDesc, { width: 240, font:"Helvetica", fontSize:9 });
+    const rowH = Math.max(28, textH + 12);
+
+    if (idx % 2 === 0) doc.rect(ML, y, W, rowH).fill("#f8fafc");
+    else               doc.rect(ML, y, W, rowH).fill(white);
+    doc.rect(ML, y, W, rowH).lineWidth(0.3).strokeColor("#e2e8f0").stroke();
+
+    doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(descLine1, ML + 10, y + 6, { width:240, lineBreak:false });
+    if (descLine2) doc.fill(muted).font("Helvetica").fontSize(8).text(descLine2, ML + 10, y + 17, { width:240, lineBreak:false });
+    doc.fill(steel).font("Helvetica").fontSize(9).text(inv.orderRef || "—", ML + 260, y + 6, { lineBreak:false });
+    doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(fmt(Number(inv.total||0)), ML, y + 6, { align:"right", width: W - 10, lineBreak:false });
+    y += rowH;
+  });
+
+  // ── TOTAL ─────────────────────────────────────────────────────────────────────
+  y += 6;
+  doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.5).strokeColor("#d1d5db").stroke(); y += 10;
+  const TOT_W = 220, TOT_H = 36, TOT_X = ML + W - TOT_W;
+  doc.rect(TOT_X, y, TOT_W, TOT_H).fill(navy);
+  doc.fill("rgba(255,255,255,0.6)").font("Helvetica-Bold").fontSize(8).text("TOTAL DUE", TOT_X + 14, y + 8, { lineBreak:false });
+  doc.fill(white).font("Helvetica-Bold").fontSize(18).text(fmt(grandTotal), TOT_X, y + 7, { align:"right", width: TOT_W - 14, lineBreak:false });
+  y += TOT_H + 16;
+
+  // ── FOOTER ────────────────────────────────────────────────────────────────────
+  const footerY = Math.max(y + 20, PH - 52);
+  doc.rect(ML, footerY, W, 0.5).fill("#d1d5db");
+  doc.fill(muted).font("Helvetica").fontSize(8).text("Thank you for your business! — Dor L'Dor Global", ML, footerY + 8, { align:"center", width:W, lineBreak:false });
+  doc.fill(muted).font("Helvetica").fontSize(7).text("Payment due on receipt unless a due date is stated above.", ML, footerY + 22, { align:"center", width:W, lineBreak:false });
+
+  doc.end();
+  return pdfReady;
+}
+
 // ── GET /api/invoices/:id/pdf — stream PDF ────────────────────────────────────
 router.get("/:id/pdf", async (req, res) => {
   try {
@@ -757,3 +884,4 @@ router.get("/overdue", async (req, res) => {
 
 module.exports = router;
 module.exports.generateInvoicePdf = generateInvoicePdf;
+module.exports.generateCombinedInvoicePdf = generateCombinedInvoicePdf;

@@ -1409,7 +1409,13 @@ export default function Containers() {
                           style={{ padding:"8px 16px", background:"rgba(124,58,237,0.85)", border:"none", borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:disabled?0.4:1 }}>
                           📧 Send All Invoices
                         </button>
-                        <button disabled={disabled} onClick={()=>buildPreview(true)}
+                        <button disabled={disabled} onClick={async()=>{
+                            const a = document.createElement("a");
+                            a.href = `${API}/api/container-loads/${billingLoad._id}/combined-invoice-pdf`;
+                            a.download = `Combined-Invoice-${billingLoad.name}.pdf`;
+                            document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                            buildPreview(true);
+                          }}
                           style={{ padding:"8px 16px", background:"rgba(236,72,153,0.85)", border:"none", borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:disabled?0.4:1 }}>
                           📄 Send Combined
                         </button>
