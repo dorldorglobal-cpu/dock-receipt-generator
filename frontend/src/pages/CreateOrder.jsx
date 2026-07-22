@@ -31,6 +31,12 @@ export default function CreateOrder() {
   const [popupCustomerName, setPopupCustomerName] = useState("");
   const [popupCustSuggestions, setPopupCustSuggestions] = useState([]);
   const [popupCustRecord, setPopupCustRecord]     = useState(null);
+  const [popupVin, setPopupVin]                   = useState("");
+  const [popupYear, setPopupYear]                 = useState("");
+  const [popupMake, setPopupMake]                 = useState("");
+  const [popupModel, setPopupModel]               = useState("");
+  const [popupPickup, setPopupPickup]             = useState("");
+  const [popupVinDecoding, setPopupVinDecoding]   = useState(false);
 
   // ── Order number lock ─────────────────────────────────────────────────
   const [refLocked, setRefLocked]           = useState(true);
@@ -525,6 +531,35 @@ export default function CreateOrder() {
   };
 
 
+  const IAA_BRANCHES = [
+    "IAA BURLINGTON","IAA BOSTON","IAA HARTFORD","IAA NEW YORK","IAA NEWARK","IAA PHILADELPHIA",
+    "IAA BALTIMORE","IAA WASHINGTON DC","IAA RICHMOND","IAA CHARLOTTE","IAA ATLANTA","IAA MIAMI",
+    "IAA JACKSONVILLE","IAA ORLANDO","IAA TAMPA","IAA HOUSTON","IAA DALLAS","IAA SAN ANTONIO",
+    "IAA AUSTIN","IAA PHOENIX","IAA LOS ANGELES","IAA SAN DIEGO","IAA SAN FRANCISCO","IAA SEATTLE",
+    "IAA PORTLAND","IAA DENVER","IAA CHICAGO","IAA DETROIT","IAA CLEVELAND","IAA PITTSBURGH",
+    "IAA MINNEAPOLIS","IAA ST LOUIS","IAA KANSAS CITY","IAA NASHVILLE","IAA MEMPHIS","IAA NEW ORLEANS",
+    "COPART","MANHEIM","ADESA",
+  ];
+
+  const decodeVinForPopup = async (vin) => {
+    if (!vin || vin.length !== 17) return;
+    setPopupVinDecoding(true);
+    try {
+      const r = await fetch(`https://vpic.nhtsa.dot.gov/api/vehicles/decodevin/${vin}?format=json`);
+      const d = await r.json();
+      const get = (var_) => d.Results?.find(x => x.Variable === var_)?.Value || "";
+      const yr  = get("Model Year");
+      const mk  = get("Make");
+      const mo  = get("Model");
+      if (yr && yr !== "0" && mk) {
+        setPopupYear(yr);
+        setPopupMake(mk.toUpperCase());
+        setPopupModel(mo.toUpperCase());
+      }
+    } catch {}
+    setPopupVinDecoding(false);
+  };
+
   // ── Shared: open confirmation popup after parse ────────────────────────
   const openParsePopup = (data, file, label) => {
     const detectedType = data.requestType === "Container" ? "Container" : "RORO";
@@ -534,7 +569,15 @@ export default function CreateOrder() {
     setPopupCustomerName(data.customerName || "");
     setPopupCustSuggestions([]);
     setPopupCustRecord(null);
+    setPopupVin(data.vin || "");
+    setPopupYear(data.year || "");
+    setPopupMake(data.make || "");
+    setPopupModel(data.model || "");
+    setPopupPickup(data.pickupLocation || "");
     setParsePopup({ data, file, label });
+    if (data.vin?.length === 17) {
+      setTimeout(() => decodeVinForPopup(data.vin), 0);
+    }
   };
 
   // ── Shared: apply parsed data to form (called on popup confirm) ────────
@@ -1704,9 +1747,38 @@ export default function CreateOrder() {
                   </div>
                 </div>
               )}
-              {parsePopup.data.vin          && <div><span style={{ color:"var(--text-muted)" }}>VIN: </span><strong style={{ fontFamily:"monospace" }}>{parsePopup.data.vin}</strong></div>}
-              {(parsePopup.data.year||parsePopup.data.make) && <div><span style={{ color:"var(--text-muted)" }}>Vehicle: </span><strong>{[parsePopup.data.year,parsePopup.data.make,parsePopup.data.model].filter(Boolean).join(" ")}</strong></div>}
-              {parsePopup.data.pickupLocation && <div><span style={{ color:"var(--text-muted)" }}>Pickup: </span><strong>{parsePopup.data.pickupLocation}</strong></div>}
+              {parsePopup.data.vin && (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ color:"var(--text-muted)", whiteSpace:"nowrap" }}>VIN: </span>
+                  <input value={popupVin} onChange={e => setPopupVin(e.target.value.toUpperCase())}
+                    onBlur={e => decodeVinForPopup(e.target.value)}
+                    style={{ flex:1, background:"transparent", border:"none", borderBottom:"1px solid var(--border)",
+                      color:"var(--text-primary)", fontWeight:700, fontFamily:"monospace", fontSize:12,
+                      padding:"1px 4px", outline:"none" }}/>
+                </div>
+              )}
+              {(parsePopup.data.year || parsePopup.data.make || popupYear || popupMake) && (
+                <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                  <span style={{ color:"var(--text-muted)", whiteSpace:"nowrap" }}>Vehicle: </span>
+                  <input value={[popupYear, popupMake, popupModel].filter(Boolean).join(" ")}
+                    onChange={e => {
+                      const parts = e.target.value.trim().split(/\s+/);
+                      setPopupYear(parts[0] || ""); setPopupMake(parts[1] || ""); setPopupModel(parts.slice(2).join(" "));
+                    }}
+                    style={{ flex:1, background:"transparent", border:"none", borderBottom:"1px solid var(--border)",
+                      color:"var(--text-primary)", fontWeight:700, fontSize:12, padding:"1px 4px", outline:"none" }}/>
+                  {popupVinDecoding && <span style={{ fontSize:10, color:"#94a3b8" }}>decoding…</span>}
+                </div>
+              )}
+              <div style={{ display:"flex", alignItems:"center", gap:6 }}>
+                <span style={{ color:"var(--text-muted)", whiteSpace:"nowrap" }}>Pickup: </span>
+                <input list="iaa-branches-list" value={popupPickup} onChange={e => setPopupPickup(e.target.value)}
+                  style={{ flex:1, background:"transparent", border:"none", borderBottom:"1px solid var(--border)",
+                    color:"var(--text-primary)", fontWeight:700, fontSize:12, padding:"1px 4px", outline:"none" }}/>
+                <datalist id="iaa-branches-list">
+                  {IAA_BRANCHES.map(b => <option key={b} value={b}/>)}
+                </datalist>
+              </div>
               {parsePopup.data.pod           && <div><span style={{ color:"var(--text-muted)" }}>Destination: </span><strong>{parsePopup.data.pod}</strong></div>}
               {parsePopup.data.shippingLine  && <div><span style={{ color:"var(--text-muted)" }}>Shipping Line: </span><strong>{parsePopup.data.shippingLine}</strong></div>}
               {parsePopup.data.towingQuote   && <div><span style={{ color:"var(--text-muted)" }}>Towing Quote: </span><strong style={{ color:"#34d399" }}>${parsePopup.data.towingQuote}</strong></div>}
@@ -1720,6 +1792,11 @@ export default function CreateOrder() {
                       ...parsePopup.data,
                       customerName:   popupCustomerName || parsePopup.data.customerName,
                       customerRecord: popupCustRecord   || parsePopup.data.customerRecord,
+                      vin:            popupVin || parsePopup.data.vin,
+                      year:           popupYear || parsePopup.data.year,
+                      make:           popupMake || parsePopup.data.make,
+                      model:          popupModel || parsePopup.data.model,
+                      pickupLocation: popupPickup || parsePopup.data.pickupLocation,
                     },
                     popupType, popupContainerSize, popupWarehouse, popupDispatch
                   );
