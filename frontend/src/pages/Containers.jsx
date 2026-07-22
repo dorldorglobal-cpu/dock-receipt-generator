@@ -1389,53 +1389,53 @@ export default function Containers() {
                   style={{ padding:"8px 20px", background:"none", border:"1px solid var(--border)",
                     borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Close</button>
                 {!sendPreview ? (
-                  <button disabled={billingRows.every(r=>!r.invoice||r.invoice.status==="paid")}
-                    onClick={()=>{
-                      const TEMA_EMAILS = [
-                        "Israel@dorldorgh.com",
-                        "dominic@dorldorgh.com",
-                        "charlotte@dorldorgh.com",
-                        "kweku.atia@dorldorgh.com",
-                        "richard@dorldorgh.com",
-                        "henrietta.larkyne@dorldorgh.com",
-                        "Godwin@dorldorgh.com",
-                      ];
-                      const isTema = /tema/i.test(billingLoad.pod || "");
-                      const customerEmail = billingRows.find(r=>r.customerEmail)?.customerEmail || "";
-                      const to = isTema
-                        ? [...TEMA_EMAILS, ...(customerEmail ? [customerEmail] : [])].join(", ")
-                        : customerEmail;
-                      const vessel = billingLoad.vessel || "";
-                      const booking = billingLoad.bookingNumber || "";
-                      const shippingLine = vessel.split(" ")[0] || "";
-                      const subject = `Invoices — Load ${billingLoad.name}${booking ? " / Booking "+booking : ""}${vessel ? " / "+vessel : ""}`;
-                      const names = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").map(r=>`  • ${r.vehicle}${r.vin ? ` | VIN: ${r.vin}` : ""} (Ref #${r.refNumber}) — $${r.invoiceTotal.toFixed(2)}`).join("\n");
-                      const body = `Dear Customer,\n\nPlease find your invoices attached for the following vehicles:\n\n${names}\n\nVessel: ${vessel}\nBooking #: ${booking}\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
-                      setSendPreview({ to, subject, body });
-                    }}
-                    style={{ padding:"8px 20px", background:"rgba(124,58,237,0.85)", border:"none",
-                      borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer" }}>
-                    📧 Send All Invoices
-                  </button>
+                  <div style={{ display:"flex", gap:8 }}>
+                    {(() => {
+                      const disabled = billingRows.every(r=>!r.invoice||r.invoice.status==="paid");
+                      const buildPreview = (combined) => {
+                        const TEMA_EMAILS = ["Israel@dorldorgh.com","dominic@dorldorgh.com","charlotte@dorldorgh.com","kweku.atia@dorldorgh.com","richard@dorldorgh.com","henrietta.larkyne@dorldorgh.com","Godwin@dorldorgh.com"];
+                        const isTema = /tema/i.test(billingLoad.pod || "");
+                        const customerEmail = billingRows.find(r=>r.customerEmail)?.customerEmail || "";
+                        const to = isTema ? [...TEMA_EMAILS,...(customerEmail?[customerEmail]:[])].join(", ") : customerEmail;
+                        const vessel = billingLoad.vessel || "";
+                        const booking = billingLoad.bookingNumber || "";
+                        const subject = `Invoice${combined?" (Combined)":"s"} — Load ${billingLoad.name}${booking?" / Booking "+booking:""}${vessel?" / "+vessel:""}`;
+                        const names = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").map(r=>`  • ${r.vehicle}${r.vin?` | VIN: ${r.vin}`:""} (Ref #${r.refNumber}) — $${r.invoiceTotal.toFixed(2)}`).join("\n");
+                        const body = `Dear Customer,\n\nPlease find ${combined?"the combined invoice":"your invoices"} attached for the following vehicles:\n\n${names}\n\nVessel: ${vessel}\nBooking #: ${booking}\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
+                        setSendPreview({ to, subject, body, combined });
+                      };
+                      return (<>
+                        <button disabled={disabled} onClick={()=>buildPreview(false)}
+                          style={{ padding:"8px 16px", background:"rgba(124,58,237,0.85)", border:"none", borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:disabled?0.4:1 }}>
+                          📧 Send All Invoices
+                        </button>
+                        <button disabled={disabled} onClick={()=>buildPreview(true)}
+                          style={{ padding:"8px 16px", background:"rgba(236,72,153,0.85)", border:"none", borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:disabled?0.4:1 }}>
+                          📄 Send Combined
+                        </button>
+                      </>);
+                    })()}
+                  </div>
                 ) : (
                   <button disabled={sendingAll || !sendPreview.to}
                     onClick={async()=>{
                       setSendingAll(true);
                       try {
-                        const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/send-all-invoices`, {
+                        const endpoint = sendPreview.combined ? "send-combined-invoice" : "send-all-invoices";
+                        const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/${endpoint}`, {
                           method:"POST", headers:{"Content-Type":"application/json"},
                           body: JSON.stringify({ to: sendPreview.to, subject: sendPreview.subject, body: sendPreview.body }),
                         });
                         const d = await r.json();
                         if (!r.ok) throw new Error(d.error);
-                        setSendResults([{ sent: true, to: sendPreview.to, count: d.sent, attachments: d.attachments }]);
+                        setSendResults([{ sent: true, to: sendPreview.to, count: d.sent, attachments: d.attachments || [d.filename] }]);
                         setSendPreview(null);
                       } catch(e) { flash("❌ "+e.message); }
                       setSendingAll(false);
                     }}
                     style={{ padding:"8px 20px", background:"rgba(52,211,153,0.85)", border:"none",
                       borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:sendingAll?0.6:1 }}>
-                    {sendingAll ? "Sending…" : "✅ Confirm & Send"}
+                    {sendingAll ? "Sending…" : `✅ Confirm & Send${sendPreview.combined?" Combined":""}`}
                   </button>
                 )}
               </div>
