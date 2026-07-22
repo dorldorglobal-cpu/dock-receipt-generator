@@ -764,7 +764,7 @@ export default function Expenses() {
       const res = await fetch(`${API}/api/expenses/parse-misc`, { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setMiscResults(data.results);
+      setMiscResults(data.results.map(r => ({ ...r, category: autoCategoryFromVendor(r.vendor) || r.category || "" })));
       const unmatched = data.results.filter(r => !r.matched && !r.error).length;
       setMiscMsg(unmatched > 0 ? `⚠ ${unmatched} invoice(s) not matched to an order.` : `✅ ${data.results.length} invoice(s) parsed.`);
     } catch (err) { setMiscMsg("❌ " + err.message); }
