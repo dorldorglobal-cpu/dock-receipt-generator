@@ -989,8 +989,14 @@ export default function Expenses() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
       setContainerResults(data.results);
-      const unmatched = data.results.flatMap(r => r.rows || []).filter(r => !r.matched).length;
-      setContainerMsg(unmatched > 0 ? `⚠ ${unmatched} VIN(s) not matched.` : `✅ ${data.results.length} invoice(s) parsed.`);
+      const allRows = data.results.flatMap(r => r.rows || []);
+      const unmatched = allRows.filter(r => !r.matched).length;
+      const dups = allRows.filter(r => r.duplicate).length;
+      setContainerMsg(
+        unmatched > 0 ? `⚠ ${unmatched} VIN(s) not matched.`
+        : dups > 0 ? `✅ ${data.results.length} invoice(s) parsed. ${dups} already created (skipped).`
+        : `✅ ${data.results.length} invoice(s) parsed.`
+      );
     } catch (err) {
       setContainerMsg("❌ " + err.message);
     } finally {
@@ -1886,7 +1892,9 @@ export default function Expenses() {
                                 style={{ background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:6, padding:"3px 8px", color:"#34d399", fontSize:13, width:80, fontWeight:600 }}/>
                             </td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
-                              {row.matched ? <span style={{ color:"#34d399", fontSize:12 }}>✅ Matched</span> : <span style={{ color:"#f59e0b", fontSize:12 }}>⚠ No match</span>}
+                              {row.duplicate ? <span style={{ color:"#94a3b8", fontSize:12 }}>Already Created</span>
+                                : row.matched ? <span style={{ color:"#34d399", fontSize:12 }}>✅ Matched</span>
+                                : <span style={{ color:"#f59e0b", fontSize:12 }}>⚠ No match</span>}
                             </td>
                           </tr>
                         ))}

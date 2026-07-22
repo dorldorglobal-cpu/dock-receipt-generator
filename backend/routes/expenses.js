@@ -1538,16 +1538,26 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         const equalSplit = vins.length > 0 ? Math.round((baseTotal / vins.length) * 100) / 100 : total;
 
         // Match orders
-        const orders = await Order.find({ vin: { $in: vins } })
-          .select("_id refNumber vin customerName year make model").lean();
+        const [orders, existingExpenses] = await Promise.all([
+          Order.find({ vin: { $in: vins } }).select("_id refNumber vin customerName year make model").lean(),
+          Expense.find({
+            vin: { $in: vins },
+            $or: [
+              { invoiceNumber },
+              ...(booking ? [{ notes: { $regex: booking, $options: "i" } }] : []),
+            ],
+          }).select("vin").lean(),
+        ]);
         const orderByVin = {};
         for (const o of orders) orderByVin[o.vin?.toUpperCase()] = o;
+        const dupVins = new Set(existingExpenses.map(e => e.vin?.toUpperCase()));
 
         const rows = vins.map(vin => {
           const order = orderByVin[vin.toUpperCase()] || null;
           const d = vinData[vin] || {};
           const rowTotal = (hasPerVinPricing && d.lineTotal ? d.lineTotal : equalSplit)
             + (vinExtras[vin] || 0);
+          const duplicate = dupVins.has(vin.toUpperCase());
           return {
             vin,
             ymm:          d.ymm || (order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : ""),
@@ -1556,7 +1566,8 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
             orderRef:     order?.refNumber || "",
             customerName: order?.customerName || "",
             matched:      !!order,
-            skip:         false,
+            duplicate,
+            skip:         duplicate,
             notes:        "",
           };
         });
