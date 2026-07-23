@@ -156,7 +156,11 @@ router.get("/:id/billing-summary", async (req, res) => {
       const syntheticExps = [...exps];
       const oceanCost = Number((o.charges || {}).oceanCost || 0);
       if (oceanCost > 0) {
-        const alreadyHasOcean = exps.some(e => /ocean\s*freight/i.test(e.category || ""));
+        const alreadyHasOcean = exps.some(e =>
+          /ocean\s*freight/i.test(e.category || "") ||
+          /loaders.*warehouses/i.test(e.category || "") ||
+          Math.abs((e.amount || 0) - oceanCost) < 0.01
+        );
         if (!alreadyHasOcean) {
           syntheticExps.push({
             _id: null,
