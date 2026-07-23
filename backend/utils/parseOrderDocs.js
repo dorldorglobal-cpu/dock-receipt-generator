@@ -1,5 +1,6 @@
 const fs = require("fs");
 const pdfParse = require("pdf-parse");
+const { extractAESFields } = require("./llmExtract");
 
 function clean(v) {
   return (v || "").toString().replace(/\s+/g, " ").trim();
@@ -195,8 +196,13 @@ async function parsePdfFile(filePath) {
   return data.text || "";
 }
 
-// ── Full AES parsing (extracts consignee, exporter, vessel, all DR fields) ──
-async function parseAES(filePath) {
+// ── Full AES parsing — regex implementation (extracts consignee, exporter, ──
+// vessel, all DR fields). Kept intact and still used by
+// backend/scripts/try-llm-extraction.js for comparison, even though parseAES
+// below now calls the LLM version by default. To revert, make parseAES below
+// call this function instead — no other code changes needed since every
+// caller uses parseAES's name/shape, not this one directly.
+async function parseAESRegex(filePath) {
   const text = await parsePdfFile(filePath);
   const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
 
@@ -431,6 +437,65 @@ async function parseAES(filePath) {
       clean(text.match(/\/\s*[A-Z]{2}\s+(\d{3,8})\s*(?:Sensitive Information|Do not submit|$)/i)?.[1] || ""),
     aesItn: findITN(text),
   };
+}
+
+// ── Full AES parsing — LLM implementation (Groq/Llama) ────────────────────────
+// Prompt validated against real production AES filings; see
+// backend/utils/llmExtract.js and backend/scripts/try-llm-extraction.js.
+async function parseAESWithLLM(filePath) {
+  const text = await parsePdfFile(filePath);
+  const r = await extractAESFields(text);
+
+  const pol = normalizePort(r.portOfLoading || "");
+  const pod = normalizePort(r.portOfDischarge || "");
+  // ITN is a fixed, unambiguous pattern (X + 14+ digits) — deterministic regex is
+  // strictly more reliable here than asking the LLM, same as the regex parser does.
+  const aesItn = findITN(text);
+
+  return {
+    bookingNumber: clean(r.bookingNumber || ""),
+    referenceNumber: clean(r.referenceNumber || ""),
+
+    exporterName: cleanUpper(r.exporterName || ""),
+    exporterAddress: cleanUpper(r.exporterAddress || ""),
+    exporterCity: cleanUpper(r.exporterCity || ""),
+    exporterState: (r.exporterState || "").toUpperCase(),
+    exporterZip: r.exporterZip || "",
+    exporterCountry: "UNITED STATES",
+
+    consigneeName: cleanUpper(r.consigneeName || ""),
+    consigneeAddress: cleanUpper(r.consigneeAddress || ""),
+    consigneeCity: cleanUpper(r.consigneeCity || ""),
+    consigneeCountry: countryFromPod(pod),
+
+    vessel: cleanUpper(r.vessel || ""),
+    portOfLoading: pol,
+    portOfDischarge: pod,
+    pol,
+    pod,
+
+    vehicleYearMakeModel: cleanUpper(`${r.year || ""} ${r.make || ""} ${r.model || ""}`),
+    vin: (r.vin || "").toUpperCase(),
+    year: clean(r.year || ""),
+    make: cleanUpper(r.make || ""),
+    model: cleanUpper(r.model || ""),
+    weightKgs: (r.weightKgs || "").toString().replace(/,/g, ""),
+    value: (r.value || "").toString().replace(/,/g, ""),
+    aesItn,
+  };
+}
+
+// ── Full AES parsing — public entry point used everywhere in the app ─────────
+// Tries the LLM extraction first; falls back to the regex parser (parseAESRegex,
+// above) if the LLM call fails for any reason (API error, rate limit, etc.) so a
+// Groq outage can't take down AES parsing entirely.
+async function parseAES(filePath) {
+  try {
+    return await parseAESWithLLM(filePath);
+  } catch (e) {
+    console.warn("[parseAES] LLM extraction failed, falling back to regex:", e.message);
+    return parseAESRegex(filePath);
+  }
 }
 
 // ── Extract towing cost from a dispatch/invoice PDF ──────────────────────
@@ -1270,6 +1335,7 @@ async function parseBuyerReceipt(filePath) {
 
 module.exports = {
   parseAES,
+  parseAESRegex,
   parseDispatch,
   parseBuyerReceipt,
 };

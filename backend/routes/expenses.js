@@ -10,6 +10,7 @@ const Expense      = require("../models/Expense");
 const Order        = require("../models/Order");
 const Vendor       = require("../models/Vendor");
 const { uploadBufferToDrive, getOrCreateFolder, deleteDriveFile } = require("../googleDrive");
+const { extractContainerInvoiceFields } = require("../utils/llmExtract");
 
 const TEMP_DIR     = path.join(__dirname, "..", "temp");
 const HIGHLIGHT_PY = path.join(__dirname, "..", "highlight_pdf.py");
@@ -1354,6 +1355,157 @@ router.post("/apply-acl", express.json(), async (req, res) => {
   }
 });
 
+// ── Container/freight invoice header + per-VIN extraction — regex implementation ──
+// Kept intact (and still used by backend/scripts/try-llm-extraction.js for
+// comparison) even though parse-container now calls the LLM version by default.
+// Revert that one call below to switch back to this with no other changes needed.
+function parseContainerInvoiceRegex(text) {
+  // Invoice number — "Invoice no.: 30023" or "NUMBER\n015839" or EzCargo: dates+number concat
+  const invMatch  = text.match(/Invoice\s+no\.?:?\s*(\d+)/i)
+    || text.match(/NUMBER\s*\n\s*(\d+)/i)
+    || text.match(/Invoice\s*\n(?:[A-Z][a-z]+\/\d{2}\/\d{4}){1,2}(\d{5,})/i)  // EzCargo: "Invoice\nJul/14/2026Jul/24/202655994"
+    || text.match(/Invoice\s*\n[\w\/]+[\w\/]+(\d{5,})/i)
+    || text.match(/INVOICE[^\d]{0,40}(\d{5,})/i);
+  const invoiceNumber = invMatch?.[1] || "";
+
+  // Date — "Invoice date: 06/05/2026" or "APR 06 2026"
+  const dateMatch = text.match(/Invoice\s+date:?\s*(\d{2}\/\d{2}\/\d{4})/i)
+    || text.match(/ENTRY\s+DATE\s*\n?\s*([A-Z]{3}\s+\d{2}\s+\d{4})/i);
+  const billDate  = dateMatch?.[1] || "";
+
+  // Vendor name — try multiple patterns
+  // 1. Savannah: company name right after INVOICE header
+  const vSavannah = text.match(/^INVOICE\s*[\r\n]+([A-Z][^\r\n]{3,60}(?:LLC|INC|CORP|LTD)[^\r\n]*)/im);
+  // 2. iShip / Cedars: company name before address at bottom
+  const vBottom   = text.match(/[\r\n]([A-Z][A-Z\s]{2,30}(?:INC|LLC|CORP|LTD)\.?)\s*[\r\n]\d{3,5}/i)
+    || text.match(/[\r\n]([A-Z][A-Z\s]{2,40}(?:INC|LLC|CORP|LTD)\.?)\s*[\r\n](?:OFFICE|TEL|PHONE)/i);
+  // 3. Full name in body text (Cedars: "CEDARS EXPRESS INTERNATIONAL INC SHALL NOT...")
+  const vBody     = text.match(/([A-Z][A-Z\s]{5,50}(?:INC|LLC|CORP|LTD)\.?)\s+SHALL\s+NOT/i);
+  // 4. First non-blank line that looks like a company (handles "E-Z CARGO INC.", hyphens, periods)
+  const vFirst    = text.match(/^\n*([A-Z][A-Z0-9\s\-\.&]{3,50}(?:LLC|INC|CORP|LTD|INC\.))\s*\n/im);
+  // 5. Website URL fallback
+  const vWeb      = text.match(/WWW\.([A-Z]+?)(?:INC)?\.COM/i);
+  const vendorRaw = vSavannah?.[1] || vBody?.[1] || vBottom?.[1] || vFirst?.[1] || (vWeb?.[1] ? vWeb[1] + " INC" : "");
+  const vendor    = vendorRaw.trim().replace(/\s+/g, " ");
+
+  // Container number — handles "CONTAINER: XXXX", "CONT# XXXX", "Container #:XXXX"
+  const containerMatch = text.match(/(?:CONTAINER|CONT)\s*[:#\s]{0,3}([A-Z]{4}\d{7})/i);
+  const container = containerMatch?.[1] || "";
+
+  // Booking / BL number — allow alphanumeric (e.g. NYC078040243)
+  const bookingMatch = text.match(/Booking\s+Number\s*:?\s*([A-Z0-9]{6,})/i)
+    || text.match(/BOOKING\s*[:#]?\s*([A-Z0-9]{6,})/i)
+    || text.match(/AWB\/BL\s*:?\s*([A-Z0-9]{6,})/i)
+    || text.match(/BL\s*[:#]?\s*(\d{6,})/i);
+  const booking = bookingMatch?.[1] || "";
+
+  // Total — try specific patterns before falling back to max
+  // Total — try most specific patterns first
+  const totalMatch = text.match(/TOTAL\s+(?:INVOICE\s+AMOUNT|AMOUNT\s+DUE)[\s\S]{0,10}?([\d,]+\.\d{2})/i)
+    || text.match(/OCEAN\s+FREIGHT\s+SALES[\s\S]{0,10}?([\d,]+\.\d{2})/i)
+    || text.match(/PLEASE\s+PAY\s+THIS\s+AMOUNT[\s\S]{0,30}?([\d,]+\.\d{2})/i)  // EzCargo
+    || text.match(/Total[\r\n][\s$]*([\d,]+\.\d{2})/i);           // Savannah: "Total\n$3,950.00"
+
+  // Cedars: "Balance Due" appears as label then value at end — grab the last occurrence
+  const balanceDueMatches = [...text.matchAll(/Balance\s+Due[\s\S]{0,30}?([\d,]+\.\d{2})/gi)];
+  const balanceDue = balanceDueMatches.length
+    ? parseFloat(balanceDueMatches[balanceDueMatches.length - 1][1].replace(/,/g, ""))
+    : 0;
+
+  const total = totalMatch
+    ? parseFloat(totalMatch[1].replace(/,/g, ""))
+    : balanceDue || (() => {
+        const allNums = (text.match(/[\d,]+\.\d{2}/g) || []).map(n => n.replace(/,/g,""));
+        const freq = {};
+        allNums.forEach(n => { freq[n] = (freq[n]||0) + 1; });
+        const repeated = Object.entries(freq).filter(([,c]) => c >= 2).map(([n]) => parseFloat(n));
+        return repeated.length ? Math.max(...repeated) : Math.max(...allNums.map(parseFloat));
+      })();
+
+  const lines = text.split("\n");
+  const vinData = {};
+
+  // ── EzCargo pre-pass: semicolon-separated or space-inside VINs ──────────
+  for (const line of lines) {
+    const t = line.trim();
+    // VIN with embedded space (e.g. "KM8J3CA44HU5 85616") — line is just the VIN
+    const spaceVin = t.match(/^([A-HJ-NPR-Z0-9]+)\s([A-HJ-NPR-Z0-9]+)$/);
+    if (spaceVin && (spaceVin[1]+spaceVin[2]).length === 17) {
+      const vin = spaceVin[1]+spaceVin[2];
+      if (!vinData[vin]) vinData[vin] = { ymm: "", lineTotal: null };
+      continue;
+    }
+    // Semicolon-separated VINs
+    if (t.includes(';')) {
+      t.split(';').forEach(part => {
+        const v = part.trim().match(/[A-HJ-NPR-Z0-9]{17}/);
+        if (v && !vinData[v[0]]) vinData[v[0]] = { ymm: "", lineTotal: null };
+      });
+    }
+  }
+
+  for (const line of lines) {
+    // Method 1: VIN immediately before first $ on the line
+    const beforeDollar = line.match(/([A-HJ-NPR-Z0-9]{17})\$/);
+    // Method 2: standalone 17-char VIN token (space/start/end bounded)
+    const standalone  = line.match(/(?:^|\s)([A-HJ-NPR-Z0-9]{17})(?:\s|$)/);
+    const vinMatch    = beforeDollar || standalone;
+    if (!vinMatch) continue;
+    const vin = vinMatch[1];
+    if (vinData[vin]) continue;
+
+    // Per-VIN price: last number on the line before newline
+    const lineNums = line.match(/[\d,]+\.\d{2}/g);
+    const lineTotal = lineNums ? parseFloat(lineNums[lineNums.length - 1].replace(/,/g, "")) : null;
+
+    // YMM: year + text before VIN, strip color words and VIN# prefix
+    const lineIdx = lines.indexOf(line);
+    const vinIdx  = line.indexOf(vin);
+    // Try same line first (iShip concatenated style)
+    let before = line.slice(0, vinIdx)
+      .replace(/\d+\s*kg\s*/gi, "")
+      .replace(/VIN\s*#?\s*:?\s*/gi, "")
+      .replace(/BLACK|WHITE|GRAY|GREY|SILVER|BLUE|RED|GREEN|GOLD|BROWN|BEIGE|ORANGE|PURPLE|YELLOW/gi, "")
+      .replace(/[#*]/g, "")
+      .trim();
+    // Look at previous line only if it contains a vehicle year (19xx/20xx)
+    if ((!before || before.length < 4 || !/\d/.test(before)) && lineIdx > 0) {
+      const prevLine = lines[lineIdx - 1]
+        .replace(/\d+\s*kg\s*/gi, "")
+        .replace(/VIN\s*#?\s*:?\s*/gi, "")
+        .replace(/[#*]/g, "")
+        .trim();
+      if (/(?:19|20)\d{2}/.test(prevLine)) before = prevLine;
+    }
+    const ymmRaw = before.match(/(\d{4})\s*(.{2,40})/);
+    const ymm = ymmRaw ? `${ymmRaw[1]} ${ymmRaw[2].trim()}`.replace(/\s+/g, " ").trim() : "";
+
+    vinData[vin] = { ymm, lineTotal };
+  }
+
+  return { invoiceNumber, billDate, vendor, container, booking, total, vinData };
+}
+
+// ── Same extraction via LLM (Groq/Llama) — see backend/utils/llmExtract.js ────
+async function parseContainerInvoiceLLM(text) {
+  const r = await extractContainerInvoiceFields(text);
+  const vinData = {};
+  for (const row of (r.rows || [])) {
+    if (!row.vin) continue;
+    const ymm = [row.year, row.make, row.model].filter(Boolean).join(" ").trim();
+    vinData[row.vin.toUpperCase()] = { ymm, lineTotal: row.lineTotal || null };
+  }
+  return {
+    invoiceNumber: r.invoiceNumber || "",
+    billDate:      r.billDate || "",
+    vendor:        r.vendor || "",
+    container:     r.container || "",
+    booking:       r.booking || "",
+    total:         Number(r.total) || 0,
+    vinData,
+  };
+}
+
 // ── POST /api/expenses/parse-container — parse Savannah-style container invoice ──
 router.post("/parse-container", memUpload.array("invoices", 20), async (req, res) => {
   try {
@@ -1367,130 +1519,17 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         const data = await pdfParse(file.buffer);
         const text = data.text;
 
-        // Invoice number — "Invoice no.: 30023" or "NUMBER\n015839" or EzCargo: dates+number concat
-        const invMatch  = text.match(/Invoice\s+no\.?:?\s*(\d+)/i)
-          || text.match(/NUMBER\s*\n\s*(\d+)/i)
-          || text.match(/Invoice\s*\n(?:[A-Z][a-z]+\/\d{2}\/\d{4}){1,2}(\d{5,})/i)  // EzCargo: "Invoice\nJul/14/2026Jul/24/202655994"
-          || text.match(/Invoice\s*\n[\w\/]+[\w\/]+(\d{5,})/i)
-          || text.match(/INVOICE[^\d]{0,40}(\d{5,})/i);
-        const invoiceNumber = invMatch?.[1] || "";
-
-        // Date — "Invoice date: 06/05/2026" or "APR 06 2026"
-        const dateMatch = text.match(/Invoice\s+date:?\s*(\d{2}\/\d{2}\/\d{4})/i)
-          || text.match(/ENTRY\s+DATE\s*\n?\s*([A-Z]{3}\s+\d{2}\s+\d{4})/i);
-        const billDate  = dateMatch?.[1] || "";
-
-        // Vendor name — try multiple patterns
-        // 1. Savannah: company name right after INVOICE header
-        const vSavannah = text.match(/^INVOICE\s*[\r\n]+([A-Z][^\r\n]{3,60}(?:LLC|INC|CORP|LTD)[^\r\n]*)/im);
-        // 2. iShip / Cedars: company name before address at bottom
-        const vBottom   = text.match(/[\r\n]([A-Z][A-Z\s]{2,30}(?:INC|LLC|CORP|LTD)\.?)\s*[\r\n]\d{3,5}/i)
-          || text.match(/[\r\n]([A-Z][A-Z\s]{2,40}(?:INC|LLC|CORP|LTD)\.?)\s*[\r\n](?:OFFICE|TEL|PHONE)/i);
-        // 3. Full name in body text (Cedars: "CEDARS EXPRESS INTERNATIONAL INC SHALL NOT...")
-        const vBody     = text.match(/([A-Z][A-Z\s]{5,50}(?:INC|LLC|CORP|LTD)\.?)\s+SHALL\s+NOT/i);
-        // 4. First non-blank line that looks like a company (handles "E-Z CARGO INC.", hyphens, periods)
-        const vFirst    = text.match(/^\n*([A-Z][A-Z0-9\s\-\.&]{3,50}(?:LLC|INC|CORP|LTD|INC\.))\s*\n/im);
-        // 5. Website URL fallback
-        const vWeb      = text.match(/WWW\.([A-Z]+?)(?:INC)?\.COM/i);
-        const vendorRaw = vSavannah?.[1] || vBody?.[1] || vBottom?.[1] || vFirst?.[1] || (vWeb?.[1] ? vWeb[1] + " INC" : "");
-        const vendor    = vendorRaw.trim().replace(/\s+/g, " ");
-
-        // Container number — handles "CONTAINER: XXXX", "CONT# XXXX", "Container #:XXXX"
-        const containerMatch = text.match(/(?:CONTAINER|CONT)\s*[:#\s]{0,3}([A-Z]{4}\d{7})/i);
-        const container = containerMatch?.[1] || "";
-
-        // Booking / BL number — allow alphanumeric (e.g. NYC078040243)
-        const bookingMatch = text.match(/Booking\s+Number\s*:?\s*([A-Z0-9]{6,})/i)
-          || text.match(/BOOKING\s*[:#]?\s*([A-Z0-9]{6,})/i)
-          || text.match(/AWB\/BL\s*:?\s*([A-Z0-9]{6,})/i)
-          || text.match(/BL\s*[:#]?\s*(\d{6,})/i);
-        const booking = bookingMatch?.[1] || "";
-
-        // Total — try specific patterns before falling back to max
-        // Total — try most specific patterns first
-        const totalMatch = text.match(/TOTAL\s+(?:INVOICE\s+AMOUNT|AMOUNT\s+DUE)[\s\S]{0,10}?([\d,]+\.\d{2})/i)
-          || text.match(/OCEAN\s+FREIGHT\s+SALES[\s\S]{0,10}?([\d,]+\.\d{2})/i)
-          || text.match(/PLEASE\s+PAY\s+THIS\s+AMOUNT[\s\S]{0,30}?([\d,]+\.\d{2})/i)  // EzCargo
-          || text.match(/Total[\r\n][\s$]*([\d,]+\.\d{2})/i);           // Savannah: "Total\n$3,950.00"
-
-        // Cedars: "Balance Due" appears as label then value at end — grab the last occurrence
-        const balanceDueMatches = [...text.matchAll(/Balance\s+Due[\s\S]{0,30}?([\d,]+\.\d{2})/gi)];
-        const balanceDue = balanceDueMatches.length
-          ? parseFloat(balanceDueMatches[balanceDueMatches.length - 1][1].replace(/,/g, ""))
-          : 0;
-
-        const total = totalMatch
-          ? parseFloat(totalMatch[1].replace(/,/g, ""))
-          : balanceDue || (() => {
-              const allNums = (text.match(/[\d,]+\.\d{2}/g) || []).map(n => n.replace(/,/g,""));
-              const freq = {};
-              allNums.forEach(n => { freq[n] = (freq[n]||0) + 1; });
-              const repeated = Object.entries(freq).filter(([,c]) => c >= 2).map(([n]) => parseFloat(n));
-              return repeated.length ? Math.max(...repeated) : Math.max(...allNums.map(parseFloat));
-            })();
+        let parsedInvoice;
+        try {
+          parsedInvoice = await parseContainerInvoiceLLM(text);
+        } catch (e) {
+          console.warn("[parse-container] LLM extraction failed, falling back to regex:", e.message);
+          parsedInvoice = parseContainerInvoiceRegex(text);
+        }
+        const { invoiceNumber, billDate, vendor, container, booking, total, vinData } = parsedInvoice;
 
         const lines = text.split("\n");
-        const vinData = {};
-
-        // ── EzCargo pre-pass: semicolon-separated or space-inside VINs ──────────
-        for (const line of lines) {
-          const t = line.trim();
-          // VIN with embedded space (e.g. "KM8J3CA44HU5 85616") — line is just the VIN
-          const spaceVin = t.match(/^([A-HJ-NPR-Z0-9]+)\s([A-HJ-NPR-Z0-9]+)$/);
-          if (spaceVin && (spaceVin[1]+spaceVin[2]).length === 17) {
-            const vin = spaceVin[1]+spaceVin[2];
-            if (!vinData[vin]) vinData[vin] = { ymm: "", lineTotal: null };
-            continue;
-          }
-          // Semicolon-separated VINs
-          if (t.includes(';')) {
-            t.split(';').forEach(part => {
-              const v = part.trim().match(/[A-HJ-NPR-Z0-9]{17}/);
-              if (v && !vinData[v[0]]) vinData[v[0]] = { ymm: "", lineTotal: null };
-            });
-          }
-        }
-
-        for (const line of lines) {
-          // Method 1: VIN immediately before first $ on the line
-          const beforeDollar = line.match(/([A-HJ-NPR-Z0-9]{17})\$/);
-          // Method 2: standalone 17-char VIN token (space/start/end bounded)
-          const standalone  = line.match(/(?:^|\s)([A-HJ-NPR-Z0-9]{17})(?:\s|$)/);
-          const vinMatch    = beforeDollar || standalone;
-          if (!vinMatch) continue;
-          const vin = vinMatch[1];
-          if (vinData[vin]) continue;
-
-          // Per-VIN price: last number on the line before newline
-          const lineNums = line.match(/[\d,]+\.\d{2}/g);
-          const lineTotal = lineNums ? parseFloat(lineNums[lineNums.length - 1].replace(/,/g, "")) : null;
-
-          // YMM: year + text before VIN, strip color words and VIN# prefix
-          const lineIdx = lines.indexOf(line);
-          const vinIdx  = line.indexOf(vin);
-          // Try same line first (iShip concatenated style)
-          let before = line.slice(0, vinIdx)
-            .replace(/\d+\s*kg\s*/gi, "")
-            .replace(/VIN\s*#?\s*:?\s*/gi, "")
-            .replace(/BLACK|WHITE|GRAY|GREY|SILVER|BLUE|RED|GREEN|GOLD|BROWN|BEIGE|ORANGE|PURPLE|YELLOW/gi, "")
-            .replace(/[#*]/g, "")
-            .trim();
-          // Look at previous line only if it contains a vehicle year (19xx/20xx)
-          if ((!before || before.length < 4 || !/\d/.test(before)) && lineIdx > 0) {
-            const prevLine = lines[lineIdx - 1]
-              .replace(/\d+\s*kg\s*/gi, "")
-              .replace(/VIN\s*#?\s*:?\s*/gi, "")
-              .replace(/[#*]/g, "")
-              .trim();
-            if (/(?:19|20)\d{2}/.test(prevLine)) before = prevLine;
-          }
-          const ymmRaw = before.match(/(\d{4})\s*(.{2,40})/);
-          const ymm = ymmRaw ? `${ymmRaw[1]} ${ymmRaw[2].trim()}`.replace(/\s+/g, " ").trim() : "";
-
-          vinData[vin] = { ymm, lineTotal };
-        }
-
-        const vins = Object.keys(vinData);
+        const vins  = Object.keys(vinData);
 
         // ── Per-VIN storage/extra charges ────────────────────────────────────────
         // "Storage Fee" heading appears on its own line; the detail (with partial VIN + amount)
