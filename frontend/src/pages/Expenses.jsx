@@ -328,17 +328,6 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
   // over the soft per-field guesses so an existing category selection never sticks.
   const ALWAYS_LOADER_WAREHOUSE_RX = /e-?z\s*cargo|savannah|i-?ship|cedars/i;
 
-  const autoCategoryFromVendor = (vendor) => {
-    const v = vendor.toLowerCase();
-    if (/e-?z\s*cargo|savannah|i-?ship|cedars/.test(v))                          return "Loaders & Warehouses";
-    if (/sallaum|acl\b|grimaldi|wallenius|eukor/.test(v))                        return "Ocean Freight";
-    if (/neva\s*28|mtv trucking|hey logistics|lj logistics|\bfts\b|\bamf\b|ll trans|arc trucking|vs transit|victory towing|golden carrier|\bsdm\b|vikstatus|\b4rg\b|b strong|ponce|dispatch|tow|transport/.test(v)) return "Towing / Transport";
-    if (/copart|\biaa\b|iaai|manheim|adesa/.test(v))                             return "Storage";
-    if (/central dispatch|chatgpt|claude|openai|anthropic/.test(v))              return "Software";
-    if (/fedex|ups\b|usps|dhl/.test(v))                                          return "Mailing Fees";
-    return "";
-  };
-
   const handleDescriptionChange = (e) => {
     const desc = e.target.value;
     setForm(f => {
@@ -523,6 +512,17 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
 }
 
 // ── Main Page ─────────────────────────────────────────────────────────────────
+function autoCategoryFromVendor(vendor) {
+  const v = (vendor || "").toLowerCase();
+  if (/e-?z\s*cargo|savannah|i-?ship|cedars/.test(v))                          return "Loaders & Warehouses";
+  if (/sallaum|acl\b|grimaldi|wallenius|eukor/.test(v))                        return "Ocean Freight";
+  if (/neva\s*28|mtv trucking|hey logistics|lj logistics|\bfts\b|\bamf\b|ll trans|arc trucking|vs transit|victory towing|golden carrier|\bsdm\b|vikstatus|\b4rg\b|b strong|ponce|dispatch|tow|transport/.test(v)) return "Towing / Transport";
+  if (/copart|\biaa\b|iaai|manheim|adesa/.test(v))                             return "Storage";
+  if (/central dispatch|chatgpt|claude|openai|anthropic/.test(v))              return "Software";
+  if (/fedex|ups\b|usps|dhl/.test(v))                                          return "Mailing Fees";
+  return "";
+}
+
 export default function Expenses() {
   const navigate = useNavigate();
   const [expenses, setExpenses]     = useState([]);
