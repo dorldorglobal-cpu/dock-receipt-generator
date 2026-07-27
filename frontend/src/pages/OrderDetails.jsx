@@ -1452,11 +1452,8 @@ export default function OrderDetails() {
     try {
       const b64 = drSendModal.pdfBase64;
 
-      // One email: TO = first customer, CC = rest of customers, BCC = trucker
-      const [primaryTo, ...ccList] = toList;
-      const toAddr = primaryTo || truckerList[0];
-      const ccAddr = primaryTo ? ccList : truckerList.slice(1);
-      const bccAddr = primaryTo ? truckerList : [];
+      // All recipients BCC so customer and trucker cannot see each other
+      const allBcc = [...toList, ...truckerList];
 
       const fetchWithTimeout = (url, opts, ms = 30000) => {
         const ctrl = new AbortController();
@@ -1468,9 +1465,8 @@ export default function OrderDetails() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to:      toAddr,
-          cc:      ccAddr.length  ? ccAddr.join(", ")  : undefined,
-          bcc:     bccAddr.length ? bccAddr.join(", ") : undefined,
+          to:      "DorLdorGlobal@gmail.com",
+          bcc:     allBcc.join(", "),
           subject: drSendSubject,
           body:    drSendBody,
           pdfBase64: b64,
