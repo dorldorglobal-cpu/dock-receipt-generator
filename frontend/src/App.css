@@ -45,6 +45,12 @@ html, body, #root {
   grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   gap: 14px;
   margin-bottom: 28px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  background: var(--bg-base);
+  padding: 10px 0;
+  margin-top: -10px;
 }
 
 .dashboard-card {
