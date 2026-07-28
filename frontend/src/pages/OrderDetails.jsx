@@ -242,6 +242,8 @@ export default function OrderDetails() {
   const [order, setOrder] = useState(null);
   const [containerLoad, setContainerLoad] = useState(null);
   const [message, setMessage] = useState("");
+  const [stickyVisible, setStickyVisible] = useState(false);
+  const dashGridRef = useRef(null);
 
   const [driveFiles,        setDriveFiles]        = useState([]);
   const [uploadingLabels,   setUploadingLabels]   = useState({});   // { AES: 1, Dispatch: 0, ... }
@@ -306,6 +308,16 @@ export default function OrderDetails() {
   useEffect(() => {
     fetch(`${API}/api/schedule/vessels`)
       .then(r => r.json()).then(setScheduleVessels).catch(() => {});
+  }, []);
+
+  useEffect(() => {
+    const onScroll = () => {
+      if (!dashGridRef.current) return;
+      const { bottom } = dashGridRef.current.getBoundingClientRect();
+      setStickyVisible(bottom < 0);
+    };
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => window.removeEventListener("scroll", onScroll);
   }, []);
 
   // Core: hit the schedule API with any combo of voyageName / vessel params
@@ -2048,8 +2060,25 @@ export default function OrderDetails() {
         </div>
       )}
 
+      {/* ── Floating sticky bar (appears when cards scroll off screen) ── */}
+      {stickyVisible && order && (
+        <div style={{
+          position: "fixed", top: 0, left: 0, right: 0, zIndex: 200,
+          background: "var(--bg-elevated)", borderBottom: "1px solid var(--border)",
+          padding: "8px 24px", display: "flex", alignItems: "center", gap: 24,
+          boxShadow: "0 2px 12px rgba(0,0,0,0.3)", flexWrap: "wrap",
+        }}>
+          <span style={{ fontWeight: 700, color: "var(--accent)", fontSize: 13 }}>#{order.refNumber}</span>
+          <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-secondary)" }}>{order.vin}</span>
+          <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>{[order.year, order.make, order.model].filter(Boolean).join(" ")}</span>
+          {order.customerName && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{order.customerName}</span>}
+          {order.lotNumber && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>LOT# {order.lotNumber}</span>}
+          {order.requestType && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", background: "var(--bg-panel)", padding: "2px 8px", borderRadius: 6 }}>{order.requestType}</span>}
+        </div>
+      )}
+
       {/* ── Dashboard Cards ──────────────────────────── */}
-      <div className="dashboard-grid">
+      <div className="dashboard-grid" ref={dashGridRef}>
         <div className="dashboard-card" onClick={() => setCardPopup({ card: "customer", form: { customerName: order.customerName || "", customerPhone: order.customerPhone || "", customerEmail: order.customerEmail || "" } })}
           style={{ cursor: "pointer" }} title="Click to edit">
           <span>Customer</span>
