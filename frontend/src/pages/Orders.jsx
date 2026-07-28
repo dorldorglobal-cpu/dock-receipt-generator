@@ -6,8 +6,8 @@ const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const ACTIVE_EXCLUDED = ["Completed", "Canceled", "Waiting to Sail", "Sailed", "Delivered", "Arrived"];
 
 const TABS = [
-  { label: "Active",           value: "active",           color: "#34d399" },
   { label: "All",              value: "all",              color: "var(--text-secondary)" },
+  { label: "Active",           value: "active",           color: "#34d399" },
   { label: "New Order",        value: "New Order",        color: "#60a5fa" },
   { label: "Awaiting Pickup",  value: "Awaiting Pickup",  color: "#f97316" },
   { label: "Picked Up",        value: "Picked Up",        color: "#60a5fa" },
@@ -39,7 +39,7 @@ const STATUS_COLORS = {
 export default function Orders() {
   const [orders, setOrders]           = useState([]);
   const [search, setSearch]           = useState("");
-  const [activeTab, setActiveTab]     = useState("active");
+  const [activeTab, setActiveTab]     = useState("all");
   const [sourceFilter, setSourceFilter] = useState("");
   const [typeFilter, setTypeFilter]   = useState("all");
   const [deleteTarget, setDeleteTarget] = useState(null);
