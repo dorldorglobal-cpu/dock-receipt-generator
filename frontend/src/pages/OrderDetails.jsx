@@ -1465,7 +1465,7 @@ export default function OrderDetails() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to:      "DorLdorGlobal@gmail.com",
+          to:      "undisclosed-recipients:;",
           bcc:     allBcc.join(", "),
           subject: drSendSubject,
           body:    drSendBody,
