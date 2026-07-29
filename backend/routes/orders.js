@@ -766,6 +766,7 @@ router.post(
       // ── Auto status update based on label ───────────────────────────────
       const STATUS_FLOW = {
         "Dispatch":    { from: ["New Order"],                                                              to: "Awaiting Pickup" },
+        "AES":         { from: ["Awaiting Pickup"],                                                        to: "Picked Up"       },
         "Dock Receipt":{ from: ["New Order","Awaiting Pickup","Picked Up"],                                to: "Picked Up"       },
         "Stamped DR":  { from: ["New Order","Awaiting Pickup","Picked Up","Delivered"],                    to: "Waiting to Sail" },
         "Draft":       { from: ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail"],  to: "Sailed"          },

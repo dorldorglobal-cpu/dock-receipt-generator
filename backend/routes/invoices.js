@@ -138,7 +138,35 @@ router.get("/", async (req, res) => {
       ];
     }
 
-    const invoices = await Invoice.find(q).sort({ createdAt: -1 }).lean();
+    let invoices = await Invoice.find(q).sort({ createdAt: -1 }).lean();
+
+    // Also search orders by customerName/customerPhone/customerEmail so invoices
+    // remain findable even if the order's customer was edited after invoice creation
+    if (search) {
+      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const Order = require("../models/Order");
+      const matchingOrders = await Order.find({
+        $or: [
+          { customerName:  re },
+          { customerPhone: re },
+          { customerEmail: re },
+          { consigneeName: re },
+          { buyerName:     re },
+        ],
+      }).select("_id").lean();
+
+      if (matchingOrders.length) {
+        const orderIds = matchingOrders.map(o => o._id);
+        const existingIds = new Set(invoices.map(i => String(i._id)));
+        const extra = await Invoice.find({ orderId: { $in: orderIds } })
+          .sort({ createdAt: -1 }).lean();
+        for (const inv of extra) {
+          if (!existingIds.has(String(inv._id))) invoices.push(inv);
+        }
+        invoices.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+      }
+    }
+
     res.json(invoices);
   } catch (e) {
     res.status(500).json({ error: e.message });
