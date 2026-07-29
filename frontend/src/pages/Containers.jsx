@@ -157,7 +157,19 @@ export default function Containers() {
   const [renamingFile, setRenamingFile] = useState(null); // { id, name }
   const [draftBlEmail, setDraftBlEmail] = useState(null); // { to, subject, body }
   const [sendingDraftBl, setSendingDraftBl] = useState(false);
+  const [editingLoadName, setEditingLoadName] = useState(null); // { id, value }
 
+  const saveLoadName = async (id, name) => {
+    const trimmed = name.trim();
+    if (!trimmed) return setEditingLoadName(null);
+    await fetch(`${API}/api/container-loads/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ name: trimmed }),
+    });
+    setEditingLoadName(null);
+    refresh();
+  };
 
   const refresh = () => {
     fetch(`${API}/api/container-loads`).then(r=>r.json()).then(d=>setLoads(Array.isArray(d)?d:[])).catch(()=>{});
@@ -485,7 +497,29 @@ export default function Containers() {
                 </div>
 
                 <div style={{ minWidth:150 }}>
-                  <div style={{ fontWeight:700, fontSize:15 }}>{l.name}</div>
+                  {editingLoadName?.id === l._id ? (
+                    <input
+                      autoFocus
+                      value={editingLoadName.value}
+                      onChange={e => setEditingLoadName(p => ({ ...p, value: e.target.value }))}
+                      onBlur={() => saveLoadName(l._id, editingLoadName.value)}
+                      onKeyDown={e => {
+                        if (e.key === "Enter") saveLoadName(l._id, editingLoadName.value);
+                        if (e.key === "Escape") setEditingLoadName(null);
+                      }}
+                      onClick={e => e.stopPropagation()}
+                      style={{ fontWeight:700, fontSize:15, background:"var(--bg-panel)", border:"1px solid var(--accent)",
+                        borderRadius:4, padding:"2px 6px", width:160, color:"var(--text-primary)" }}
+                    />
+                  ) : (
+                    <div
+                      title="Click to rename"
+                      onClick={e => { e.stopPropagation(); setEditingLoadName({ id: l._id, value: l.name }); }}
+                      style={{ fontWeight:700, fontSize:15, cursor:"text", display:"inline-flex", alignItems:"center", gap:5 }}>
+                      {l.name}
+                      <span style={{ fontSize:11, opacity:0.4 }}>✏️</span>
+                    </div>
+                  )}
                   <span style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:20,
                     background:sc.bg, border:`1px solid ${sc.border}`, color:sc.text }}>
                     {l.status}
