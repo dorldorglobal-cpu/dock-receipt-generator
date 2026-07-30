@@ -335,7 +335,7 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
     const { generateCombinedInvoicePdf } = require("./invoices");
     const { google } = require("googleapis");
 
-    const { to, subject, body } = req.body || {};
+    const { to, subject, body, extraLines } = req.body || {};
     if (!to) return res.status(400).json({ error: "to is required" });
 
     const load = await ContainerLoad.findById(req.params.id).lean();
@@ -345,7 +345,7 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
     const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
     if (!invoices.length) return res.status(400).json({ error: "No invoices to send" });
 
-    const pdfBuf = await generateCombinedInvoicePdf(invoices, orders, load);
+    const pdfBuf = await generateCombinedInvoicePdf(invoices, orders, load, { extraLines });
     const filename = `Combined-Invoice-${load.name}.pdf`;
     const b64 = pdfBuf.toString("base64");
 

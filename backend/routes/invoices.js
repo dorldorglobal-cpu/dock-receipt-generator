@@ -662,7 +662,7 @@ async function generateInvoicePdf(inv, order) {
 }
 
 // ── Shared: generate COMBINED invoice PDF (multi-vehicle, one document) ───────
-async function generateCombinedInvoicePdf(invoices, orders, load) {
+async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   const orderMap = {};
   for (const o of orders) orderMap[String(o._id)] = o;
 
@@ -682,7 +682,9 @@ async function generateCombinedInvoicePdf(invoices, orders, load) {
 
   // Use first invoice for customer/header info
   const first = invoices[0];
-  const grandTotal = invoices.reduce((s, inv) => s + Number(inv.total || 0), 0);
+  const extraLines = (opts.extraLines || []).filter(l => l.label && l.amount);
+  const grandTotal = invoices.reduce((s, inv) => s + Number(inv.total || 0), 0)
+                   + extraLines.reduce((s, l) => s + Number(l.amount || 0), 0);
   const combinedNumber = `CMB-${invoices.map(i => i.invoiceNumber).join("+")}`;
 
   // ── HEADER ──────────────────────────────────────────────────────────────────
@@ -768,6 +770,19 @@ async function generateCombinedInvoicePdf(invoices, orders, load) {
     doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(fmt(Number(inv.total||0)), ML, y + 6, { align:"right", width: W - 10, lineBreak:false });
     y += rowH;
   });
+
+  // ── EXTRA LINES (amendment fees, etc.) ───────────────────────────────────────
+  if (extraLines.length) {
+    extraLines.forEach((line, idx) => {
+      const rowH = 24;
+      if (idx % 2 === 0) doc.rect(ML, y, W, rowH).fill("#fff8e7");
+      else               doc.rect(ML, y, W, rowH).fill(white);
+      doc.rect(ML, y, W, rowH).lineWidth(0.3).strokeColor("#e2e8f0").stroke();
+      doc.fill(dark).font("Helvetica").fontSize(9).text(txt(line.label), ML + 10, y + 7, { width: 320, lineBreak:false });
+      doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(fmt(Number(line.amount || 0)), ML, y + 7, { align:"right", width: W - 10, lineBreak:false });
+      y += rowH;
+    });
+  }
 
   // ── TOTAL ─────────────────────────────────────────────────────────────────────
   y += 6;

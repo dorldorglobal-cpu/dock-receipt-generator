@@ -141,6 +141,7 @@ export default function Containers() {
   const [billingLoad,   setBillingLoad]   = useState(null);
   const [billingRows,   setBillingRows]   = useState([]);
   const [billingLoading,setBillingLoading]= useState(false);
+  const [extraLines,    setExtraLines]    = useState([]); // [{ label, amount }]
   const [sendingAll,    setSendingAll]    = useState(false);
   const [sendResults,   setSendResults]   = useState(null);
   const [sendPreview,   setSendPreview]   = useState(null); // { to, subject, body }
@@ -191,6 +192,7 @@ export default function Containers() {
     setBillingLoad(load);
     setBillingRows([]);
     setSendResults(null);
+    setExtraLines([]);
     setBillingLoading(true);
     fetch(`${API}/api/container-loads/${load._id}/billing-summary`)
       .then(r => r.json())
@@ -1357,17 +1359,56 @@ export default function Containers() {
                     </tbody>
                     {billingRows.length > 0 && (
                       <tfoot>
+                        {extraLines.map((line, i) => (
+                          <tr key={i} style={{ borderTop:"1px solid var(--border)", background:"rgba(251,191,36,0.05)" }}>
+                            <td colSpan={3} style={{ padding:"7px 8px" }}>
+                              <input
+                                value={line.label}
+                                onChange={e => setExtraLines(p => p.map((l,j) => j===i ? {...l, label:e.target.value} : l))}
+                                placeholder="e.g. Amendment Fee"
+                                style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4,
+                                  padding:"3px 7px", fontSize:12, color:"var(--text-primary)", width:"100%" }}
+                              />
+                            </td>
+                            <td style={{ padding:"7px 8px", textAlign:"right", color:"var(--text-muted)", fontSize:12 }}>—</td>
+                            <td style={{ padding:"7px 8px", textAlign:"right" }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
+                                <span style={{ color:"var(--text-muted)", fontSize:12 }}>$</span>
+                                <input
+                                  type="number" value={line.amount}
+                                  onChange={e => setExtraLines(p => p.map((l,j) => j===i ? {...l, amount:parseFloat(e.target.value)||0} : l))}
+                                  style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4,
+                                    padding:"3px 7px", fontSize:12, color:"#34d399", width:80, textAlign:"right" }}
+                                />
+                              </div>
+                            </td>
+                            <td style={{ padding:"7px 8px", textAlign:"right", color:"var(--text-muted)", fontSize:12 }}>—</td>
+                            <td style={{ padding:"7px 8px", textAlign:"center" }}>
+                              <button onClick={() => setExtraLines(p => p.filter((_,j) => j!==i))}
+                                style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:14 }}>✕</button>
+                            </td>
+                          </tr>
+                        ))}
+                        <tr>
+                          <td colSpan={7} style={{ padding:"6px 8px" }}>
+                            <button onClick={() => setExtraLines(p => [...p, { label:"Amendment Fee", amount:0 }])}
+                              style={{ background:"none", border:"1px dashed var(--border)", borderRadius:6,
+                                color:"var(--text-muted)", fontSize:12, cursor:"pointer", padding:"4px 12px" }}>
+                              + Add line
+                            </button>
+                          </td>
+                        </tr>
                         <tr style={{ borderTop:"2px solid var(--border)", fontWeight:700 }}>
                           <td colSpan={3} style={{ padding:"10px 8px", color:"var(--text-muted)", fontSize:12 }}>TOTALS</td>
                           <td style={{ padding:"10px 8px", textAlign:"right", color:"#f87171" }}>
                             ${billingRows.reduce((s,r)=>s+r.totalExpenses,0).toFixed(2)}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right", color:"#34d399" }}>
-                            ${billingRows.reduce((s,r)=>s+r.invoiceTotal,0).toFixed(2)}
+                            ${(billingRows.reduce((s,r)=>s+r.invoiceTotal,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right",
-                            color: billingRows.reduce((s,r)=>s+r.profit,0)>=0 ? "#34d399" : "#f87171" }}>
-                            ${billingRows.reduce((s,r)=>s+r.profit,0).toFixed(2)}
+                            color: (billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0))>=0 ? "#34d399" : "#f87171" }}>
+                            ${(billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
                           </td>
                           <td />
                         </tr>
@@ -1464,7 +1505,8 @@ export default function Containers() {
                         const endpoint = sendPreview.combined ? "send-combined-invoice" : "send-all-invoices";
                         const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/${endpoint}`, {
                           method:"POST", headers:{"Content-Type":"application/json"},
-                          body: JSON.stringify({ to: sendPreview.to, subject: sendPreview.subject, body: sendPreview.body }),
+                          body: JSON.stringify({ to: sendPreview.to, subject: sendPreview.subject, body: sendPreview.body,
+                            extraLines: extraLines.filter(l => l.label && l.amount) }),
                         });
                         const d = await r.json();
                         if (!r.ok) throw new Error(d.error);
