@@ -128,6 +128,8 @@ router.get("/lookup-buyer", async (req, res) => {
     for (const c of allCustomers) {
       for (const acct of (c.buyerAccounts || [])) {
         const hay = acct.toLowerCase().replace(/[^a-z0-9]/g, "");
+        // Guard against short/generic tokens (e.g. "LTD", "INC") matching everything
+        if (hay.length < 6 || needle.length < 6) continue;
         if (hay.includes(needle) || needle.includes(hay)) {
           return res.json({ customer: c });
         }
