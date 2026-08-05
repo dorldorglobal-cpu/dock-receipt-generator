@@ -183,6 +183,7 @@ router.get("/", async (req, res) => {
         { invoiceNumber: re },
         { orderRef:      re },
         { vehicle:       re },
+        { vin:           re },
       ];
     }
 
@@ -200,6 +201,7 @@ router.get("/", async (req, res) => {
           { customerEmail: re },
           { consigneeName: re },
           { buyerName:     re },
+          { vin:           re },
         ],
       }).select("_id").lean();
 

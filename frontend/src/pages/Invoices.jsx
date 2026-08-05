@@ -414,7 +414,7 @@ export default function Invoices() {
         <form onSubmit={handleSearch} style={{ display: "flex", gap: 6 }}>
           <div style={{ position: "relative" }}>
             <input value={search} onChange={e => setSearch(e.target.value)}
-              placeholder="Search customer, invoice #, order ref…"
+              placeholder="Search customer, invoice #, order ref, VIN…"
               style={{ fontSize: 13, padding: "7px 32px 7px 10px", width: 260 }} />
             {search && (
               <button type="button" onClick={() => { setSearch(""); load(); }} style={{
