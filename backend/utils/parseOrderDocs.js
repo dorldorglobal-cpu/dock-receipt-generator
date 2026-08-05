@@ -50,32 +50,73 @@ function parseAddressParts(t) {
   };
 }
 
+// ISO 3779 / NHTSA VIN check-digit validation — real math, not just "is a digit".
+// Without this, any incidental 17-char alphanumeric run (a resale certificate #,
+// a concatenated ID field, etc.) can masquerade as a VIN. See findVin() below.
+const VIN_TRANSLIT = {
+  A: 1, B: 2, C: 3, D: 4, E: 5, F: 6, G: 7, H: 8,
+  J: 1, K: 2, L: 3, M: 4, N: 5, P: 7, R: 9,
+  S: 2, T: 3, U: 4, V: 5, W: 6, X: 7, Y: 8, Z: 9,
+};
+const VIN_WEIGHTS = [8, 7, 6, 5, 4, 3, 2, 10, 0, 9, 8, 7, 6, 5, 4, 3, 2];
+function isValidVinChecksum(vin) {
+  if (!/^[A-HJ-NPR-Z0-9]{17}$/.test(vin)) return false;
+  let sum = 0;
+  for (let i = 0; i < 17; i++) {
+    const ch = vin[i];
+    const val = /\d/.test(ch) ? Number(ch) : VIN_TRANSLIT[ch];
+    if (val === undefined) return false;
+    sum += val * VIN_WEIGHTS[i];
+  }
+  const check = sum % 11;
+  return vin[8] === (check === 10 ? "X" : String(check));
+}
+
 function findVin(text) {
   const upper = text.toUpperCase();
+  const candidates = [];
+
   // Pattern 1: ACE/AESDirect concatenated format: "NO14204T1C11AK7NU678515"
   // (unit + weight + VIN jammed together — no spaces, no word boundaries between them)
   const noConcat = upper.match(/NO\d{3,5}([A-HJ-NPR-Z0-9]{17})/);
-  if (noConcat) return noConcat[1];
+  if (noConcat) candidates.push(noConcat[1]);
   // Pattern 2: Standard — weight then whitespace then VIN
   const afterWeight = upper.match(/\b\d{3,5}\s+([A-HJ-NPR-Z0-9]{17})\b/);
-  if (afterWeight) return afterWeight[1];
-  // Pattern 3: Generic VIN with clean word boundaries on both sides
-  // Validate check digit (pos 8 must be digit or X) to avoid false matches like "00802014MERCEDESC"
-  const normalMatch = upper.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-  if (normalMatch && /[\dX]/.test(normalMatch[0][8])) return normalMatch[0];
-  // Pattern 4: Comma-formatted mileage directly followed by VIN (IAA table rows)
+  if (afterWeight) candidates.push(afterWeight[1]);
+  // Pattern 3: Comma-formatted mileage directly followed by VIN (IAA table rows)
   // e.g. "227,0555UXWZ7C55G0R32171" → mileage = 227,055  VIN = 5UXWZ7C55G0R32171
-  // Without this, the comma creates a word-boundary and Pattern 5 picks up "0555UXWZ7C55G0R32"
-  // (3 trailing mileage digits bleed into the front of the match).
   const afterComma = upper.match(/\d{1,3},\d{3}([A-HJ-NPR-Z0-9]{17})/);
-  if (afterComma) return afterComma[1];
+  if (afterComma) candidates.push(afterComma[1]);
+  // Pattern 4: Generic — every standalone 17-char alphanumeric run with clean word
+  // boundaries on both sides (there can be several on a page; a resale cert #,
+  // account #, etc. can incidentally be 17 chars too — checksum picks the real one).
+  const normalMatches = [...upper.matchAll(/\b[A-HJ-NPR-Z0-9]{17}\b/g)];
+  for (const m of normalMatches) candidates.push(m[0]);
   // Pattern 5: VIN concatenated with a trailing code (no comma prefix)
   // e.g. "5UXWZ7C55G0R32171HYM1024" — space between VIN and title code was dropped.
-  // Take first 17 of any 17+-char run at a word boundary; verify check-digit position.
   const embedded = [...upper.matchAll(/\b([A-HJ-NPR-Z0-9]{17})[A-HJ-NPR-Z0-9]+\b/g)];
-  for (const m of embedded) {
-    const c = m[1];
-    if (/[\dX]/.test(c[8])) return c; // check-digit position (index 8) validates it
+  for (const m of embedded) candidates.push(m[1]);
+
+  // Prefer whichever candidate actually passes real VIN checksum validation,
+  // regardless of which pattern found it first.
+  for (const c of candidates) {
+    if (isValidVinChecksum(c)) return c;
+  }
+  // Font-rendering glitches occasionally turn a "0" into a stray "O" (or "1"
+  // into "I") in the extracted text — both are illegal VIN characters, so a
+  // 17-char run containing one is never a real match under the strict regex
+  // classes above. Try a relaxed scan that allows them, then correct and
+  // re-check the checksum before trusting it.
+  const relaxedMatches = [...upper.matchAll(/\b[A-Z0-9]{17}\b/g)].map(m => m[0]);
+  for (const c of relaxedMatches) {
+    if (!/[IOQ]/.test(c)) continue; // already covered by the strict patterns above
+    const fixed = c.replace(/O/g, "0").replace(/I/g, "1");
+    if (isValidVinChecksum(fixed)) return fixed;
+  }
+  // Nothing passed checksum (foreign/non-standard VIN, OCR noise, etc.) —
+  // fall back to the old weak heuristic so we still extract *something*.
+  for (const c of candidates) {
+    if (/[\dX]/.test(c[8])) return c;
   }
   return "";
 }
@@ -826,6 +867,36 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
             make  = cleanUpper(noColor[2]);
             model = cleanUpper(noColor[3].trim());
           }
+        }
+      }
+    }
+
+    // Strategy C: fully concatenated dense row, no whitespace or dashes at all —
+    // e.g. "000-453119862016NISSANSENTRAGray68,6983N1AB7AP3GL642862"
+    // Neither A nor B can anchor on anything here, so peel the row apart from
+    // both known ends: strip the "000-########" stock prefix we already parsed
+    // off the front, then the trailing mileage and color off the back, leaving
+    // just YEARMAKEMODEL glued together.
+    if (!year) {
+      const vinLine2 = lines.find(l => l.includes(vin));
+      const stockMatch = text.match(/\b000-(\d{8})/);
+      if (vinLine2 && stockMatch) {
+        const beforeVin2 = vinLine2.slice(0, vinLine2.indexOf(vin));
+        const stockPrefix = `000-${stockMatch[1]}`;
+        const afterStock = beforeVin2.includes(stockPrefix)
+          ? beforeVin2.slice(beforeVin2.indexOf(stockPrefix) + stockPrefix.length)
+          : beforeVin2;
+        const mileageM = afterStock.match(/([\d,]+)\s*$/);
+        const afterMileage = mileageM ? afterStock.slice(0, afterStock.length - mileageM[1].length) : afterStock;
+        const colorM = afterMileage.match(new RegExp(`(${COLORS})\\s*$`, 'i'));
+        const beforeColor = colorM ? afterMileage.slice(0, afterMileage.length - colorM[1].length) : afterMileage;
+        const ymM = beforeColor.match(/^\s*((?:19|20)\d{2})(.+)$/);
+        if (ymM) {
+          year = ymM[1];
+          const split2 = splitMakeModel(ymM[2].trim());
+          make  = split2.make;
+          model = split2.model;
+          if (colorM) color = colorM[1];
         }
       }
     }
