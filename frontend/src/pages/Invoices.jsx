@@ -45,6 +45,13 @@ export default function Invoices() {
   const [showOverdue, setShowOverdue] = useState(false);
   const [previewInv,  setPreviewInv]  = useState(null);
 
+  // Edit modal state
+  const [editModal,   setEditModal]   = useState(null);  // invoice being edited
+  const [editItems,   setEditItems]   = useState([]);    // [{ description, amount }]
+  const [editNotes,   setEditNotes]   = useState("");
+  const [editDueDate, setEditDueDate] = useState("");
+  const [editSaving,  setEditSaving]  = useState(false);
+
   // Bulk selection
   const [selectedIds,   setSelectedIds]   = useState(new Set());
   const [bulkModal,     setBulkModal]     = useState(false);
@@ -145,6 +152,56 @@ export default function Invoices() {
       setMessage(`Invoice ${inv.invoiceNumber} deleted`);
       load();
     } catch (e) { setMessage("Delete failed"); }
+  };
+
+  // ── Edit invoice modal helpers ────────────────────────────────────────────
+  const openEditInvoice = (inv) => {
+    setEditModal(inv);
+    setEditItems((inv.items || []).map(it => ({ description: it.description || "", amount: String(it.amount ?? "") })));
+    setEditNotes(inv.notes || "");
+    setEditDueDate(toInput(inv.dueDate));
+  };
+
+  const updateEditItem = (index, key, value) =>
+    setEditItems(prev => prev.map((it, i) => (i === index ? { ...it, [key]: value } : it)));
+
+  const addEditItem = () => setEditItems(prev => [...prev, { description: "", amount: "" }]);
+
+  const addEditDiscount = () => setEditItems(prev => [...prev, { description: "Discount", amount: "" }]);
+
+  const removeEditItem = (index) => setEditItems(prev => prev.filter((_, i) => i !== index));
+
+  // A "Discount" line entered as a positive number is stored as negative —
+  // lets the user just type "100" instead of remembering the minus sign.
+  const normalizedAmount = (it) => {
+    const amt = Number(it.amount || 0);
+    return /discount/i.test(it.description || "") && amt > 0 ? -amt : amt;
+  };
+
+  const editTotal = editItems.reduce((s, it) => s + normalizedAmount(it), 0);
+
+  const saveEditInvoice = async () => {
+    if (!editModal) return;
+    setEditSaving(true);
+    try {
+      const items = editItems
+        .filter(it => it.description.trim() || it.amount !== "")
+        .map(it => ({ description: it.description, amount: normalizedAmount(it) }));
+      const res  = await fetch(`${API}/api/invoices/${editModal._id}`, {
+        method: "PUT", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ items, notes: editNotes, dueDate: editDueDate || null }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setMessage(data.error || "Failed to save invoice"); setEditSaving(false); return; }
+      setMessage(
+        `Invoice ${data.invoiceNumber} updated${data._fileReplaced ? " — order file replaced" : ""}`
+      );
+      setEditModal(null);
+      load();
+    } catch (e) {
+      setMessage("Failed to save invoice");
+    }
+    setEditSaving(false);
   };
 
   // ── Payment modal helpers ─────────────────────────────────────────────────
@@ -440,6 +497,11 @@ export default function Invoices() {
                             color: "var(--text-secondary)", cursor: "pointer" }}>
                           📄 PDF
                         </button>
+                        <button onClick={() => openEditInvoice(inv)} title="Edit invoice / add discount"
+                          style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "none",
+                            background: "rgba(245,158,11,0.15)", color: "#f59e0b", cursor: "pointer", fontWeight: 600 }}>
+                          ✎ Edit
+                        </button>
                         {inv.status === "draft" && (
                           <button onClick={() => updateStatus(inv, "sent")}
                             style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "none",
@@ -619,6 +681,102 @@ export default function Invoices() {
               <button onClick={savePayment} disabled={paySaving}
                 style={{ padding: "9px 22px", background: "#059669", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14 }}>
                 {paySaving ? "Saving…" : payModal.editPayment ? "Save Changes" : "Record Payment"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Edit Invoice Modal ── */}
+      {editModal && (
+        <div onClick={() => !editSaving && setEditModal(null)} style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.65)",
+          zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+        }}>
+          <div onClick={e => e.stopPropagation()} style={{
+            background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 14,
+            padding: 28, width: "100%", maxWidth: 520, maxHeight: "90vh", overflowY: "auto",
+          }}>
+            <h3 style={{ margin: "0 0 4px", color: "var(--text-primary)", fontSize: 17 }}>
+              ✎ Edit Invoice
+            </h3>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 18 }}>
+              <strong style={{ color: "#60a5fa" }}>{editModal.invoiceNumber}</strong> — {editModal.customerName}
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 12 }}>
+              {editItems.map((item, index) => (
+                <div key={index} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input value={item.description}
+                    onChange={e => updateEditItem(index, "description", e.target.value)}
+                    placeholder="Description"
+                    style={{ ...inputStyle, flex: 1 }} />
+                  <input type="number" step="0.01" value={item.amount}
+                    onChange={e => updateEditItem(index, "amount", e.target.value)}
+                    placeholder="Amount"
+                    style={{ ...inputStyle, width: 110 }} />
+                  <button type="button" onClick={() => removeEditItem(index)}
+                    style={{ background: "none", border: "none", color: "#f87171", cursor: "pointer", fontSize: 16, padding: "0 4px" }}>
+                    ✕
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", gap: 8, marginBottom: 18 }}>
+              <button type="button" onClick={addEditItem}
+                style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6,
+                  border: "1px solid var(--border)", background: "var(--bg-base)",
+                  color: "var(--text-secondary)", cursor: "pointer" }}>
+                + Add Line Item
+              </button>
+              <button type="button" onClick={addEditDiscount}
+                style={{ fontSize: 12, padding: "6px 12px", borderRadius: 6,
+                  border: "1px solid rgba(245,158,11,0.4)", background: "rgba(245,158,11,0.1)",
+                  color: "#f59e0b", cursor: "pointer", fontWeight: 600 }}>
+                − Add Discount
+              </button>
+            </div>
+
+            <div style={{ display: "grid", gap: 14, marginBottom: 18 }}>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)" }}>
+                Due Date
+                <input type="date" value={editDueDate}
+                  onChange={e => setEditDueDate(e.target.value)}
+                  style={{ ...inputStyle, marginTop: 4 }} />
+              </label>
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)" }}>
+                Notes
+                <input value={editNotes} onChange={e => setEditNotes(e.target.value)}
+                  style={{ ...inputStyle, marginTop: 4 }} />
+              </label>
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+              padding: "12px 16px", borderRadius: 8, background: "var(--bg-base)", marginBottom: 20 }}>
+              <span style={{ fontSize: 13, fontWeight: 600, color: "var(--text-secondary)" }}>New Total</span>
+              <span style={{ fontSize: 18, fontWeight: 800, fontFamily: "monospace",
+                color: editTotal < 0 ? "#f87171" : "var(--text-primary)" }}>
+                {f$(editTotal)}
+              </span>
+            </div>
+
+            {editModal.total !== editTotal && (
+              <div style={{ fontSize: 12, color: "#f59e0b", marginBottom: 16 }}>
+                ⚠ Total will change from {f$(editModal.total)} to {f$(editTotal)}. The invoice PDF on the order will be replaced.
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+              <button onClick={() => setEditModal(null)} disabled={editSaving}
+                style={{ padding: "9px 20px", background: "none", border: "1px solid var(--border)",
+                  borderRadius: 8, color: "var(--text-secondary)", cursor: "pointer" }}>
+                Cancel
+              </button>
+              <button onClick={saveEditInvoice} disabled={editSaving}
+                style={{ padding: "9px 22px", background: "#2563eb", color: "#fff", border: "none",
+                  borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 14, opacity: editSaving ? 0.6 : 1 }}>
+                {editSaving ? "Saving…" : "💾 Save Changes"}
               </button>
             </div>
           </div>

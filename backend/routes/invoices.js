@@ -4,6 +4,7 @@ const path    = require("path");
 const Invoice = require("../models/Invoice");
 const Order   = require("../models/Order");
 const PDFDocument = require("pdfkit");
+const { uploadBufferToDrive, deleteDriveFile } = require("../googleDrive");
 
 // ── Auto-generate next invoice number ─────────────────────────────────────────
 async function nextInvoiceNumber() {
@@ -21,6 +22,50 @@ async function nextInvoiceNumber() {
 // ── Format helper ──────────────────────────────────────────────────────────────
 const fmt = (n) =>
   "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+// ── Replace the "Invoice"-labeled Drive file on an order with a fresh PDF ─────
+// Deletes any existing Invoice file(s) from Drive + order.files, uploads the
+// newly generated PDF, and logs a timeline entry. Saves the order. Returns
+// true if the file was replaced, false if there was nothing to attach to
+// (no Drive folder on the order) or the upload failed.
+async function replaceInvoiceFileOnOrder(order, pdfBuffer, invoiceNumber) {
+  if (!order?.driveFolderId) return false;
+  try {
+    const oldInvoiceFiles = (order.files || []).filter(
+      (f) => (f.label || "").toLowerCase() === "invoice"
+    );
+    for (const f of oldInvoiceFiles) {
+      if (f.driveFileId) await deleteDriveFile(f.driveFileId);
+    }
+    order.files = (order.files || []).filter(
+      (f) => (f.label || "").toLowerCase() !== "invoice"
+    );
+
+    const fileName = `Invoice-${invoiceNumber}.pdf`;
+    const uploaded  = await uploadBufferToDrive(pdfBuffer, fileName, "application/pdf", order.driveFolderId);
+
+    order.files.push({
+      label:        "Invoice",
+      originalName: fileName,
+      filename:     uploaded.name,
+      driveFileId:  uploaded.id,
+      path:         uploaded.webViewLink,
+      mimetype:     "application/pdf",
+    });
+
+    order.timeline.push({
+      action:    "Invoice Updated",
+      details:   `Invoice ${invoiceNumber} edited — old invoice file replaced with updated PDF.`,
+      createdAt: new Date(),
+    });
+
+    await order.save();
+    return true;
+  } catch (e) {
+    console.error("replaceInvoiceFileOnOrder error:", e.message);
+    return false;
+  }
+}
 
 // ── POST /api/invoices — create invoice + log to order timeline ───────────────
 router.post("/", async (req, res) => {
@@ -196,17 +241,24 @@ router.get("/:id", async (req, res) => {
 });
 
 // ── PUT /api/invoices/:id — update items / amounts of an existing invoice ────
+// Regenerates the PDF and, if the order has a Drive file for it, replaces the
+// old "Invoice" attachment on the order with the freshly generated one so
+// opening the order reflects the edit (e.g. a discount applied after billing).
 router.put("/:id", async (req, res) => {
   try {
     const { items, notes, dueDate } = req.body;
     const total = (items || []).reduce((s, i) => s + Number(i.amount || 0), 0);
 
-    // Use user-passed dueDate; fall back to order arrivalDate
     const existingInv = await Invoice.findById(req.params.id).lean();
-    const linkedOrder = existingInv?.orderId ? await Order.findById(existingInv.orderId).select("arrivalDate").lean() : null;
+    if (!existingInv) return res.status(404).json({ error: "Invoice not found" });
+
+    // Load the full order doc (not lean) so we can mutate + save it below
+    const order = existingInv.orderId ? await Order.findById(existingInv.orderId) : null;
+
+    // Use user-passed dueDate; fall back to order arrivalDate
     let computedDueDate = dueDate ? new Date(dueDate) : null;
-    if (!computedDueDate && linkedOrder?.arrivalDate) {
-      const arr = new Date(linkedOrder.arrivalDate);
+    if (!computedDueDate && order?.arrivalDate) {
+      const arr = new Date(order.arrivalDate);
       if (!isNaN(arr)) computedDueDate = arr;
     }
 
@@ -225,8 +277,19 @@ router.put("/:id", async (req, res) => {
 
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
-    // Log to order timeline
-    if (inv.orderId) {
+    // Regenerate the PDF and swap it in on the order (if one is attached there)
+    let fileReplaced = false;
+    if (order) {
+      try {
+        const pdfBuffer = await generateInvoicePdf(inv, order);
+        fileReplaced = await replaceInvoiceFileOnOrder(order, pdfBuffer, inv.invoiceNumber);
+      } catch (fileErr) {
+        console.error("Invoice PDF regeneration/upload failed:", fileErr.message);
+      }
+    }
+
+    // Log to order timeline (replaceInvoiceFileOnOrder already logs + saves when it ran)
+    if (inv.orderId && !fileReplaced) {
       await Order.findByIdAndUpdate(inv.orderId, {
         $push: {
           timeline: {
@@ -238,7 +301,7 @@ router.put("/:id", async (req, res) => {
       });
     }
 
-    res.json(inv);
+    res.json({ ...inv, _fileReplaced: fileReplaced });
   } catch (e) {
     console.error("Update invoice error:", e);
     res.status(500).json({ error: e.message });
