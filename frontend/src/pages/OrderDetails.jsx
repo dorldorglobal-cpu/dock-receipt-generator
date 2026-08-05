@@ -880,6 +880,10 @@ export default function OrderDetails() {
       }
     });
 
+    if (charges.discount && Number(charges.discount) !== 0) {
+      items.push({ description: charges.discountDesc || "Discount", amount: charges.discount });
+    }
+
     // Merge any pending invoice items saved from storage scans
     (order.pendingInvoiceItems || []).forEach(p => {
       items.push({ description: p.description, amount: String(p.amount) });
@@ -2745,7 +2749,9 @@ export default function OrderDetails() {
         const activeFeeRows = feeRows.filter(([key]) => Number(charges[key] || 0) > 0);
         const feeTotal     = activeFeeRows.reduce((s,[key]) => s + Number(charges[key]||0), 0);
         const feeCostTotal = activeFeeRows.reduce((s,[key]) => s + Number(charges[key+"Cost"]||0), 0);
-        const totSell   = towSell + ocnSell + feeTotal;
+        // Discount — synced from the Invoices tab edit modal; stored as a negative amount
+        const discountAmt = Number(charges.discount || 0);
+        const totSell   = towSell + ocnSell + feeTotal + discountAmt;
         const totCost   = towCost + ocnCost + feeCostTotal;
         const totProfit = totSell - totCost;
         return (
@@ -3099,6 +3105,28 @@ export default function OrderDetails() {
                     </tr>
                   );
                 })}
+                {/* Discount — read-only here; edit it via the Invoices tab's Edit modal */}
+                {discountAmt !== 0 && (
+                  <tr style={{ borderBottom:"1px solid var(--border)" }}>
+                    <td style={{ padding:"5px 8px", color:"var(--text-secondary)", fontStyle:"italic" }}>
+                      <div>Discount</div>
+                      {charges.discountDesc && (
+                        <div style={{ fontSize:10, color:"var(--text-muted)", fontStyle:"normal", marginTop:1 }}>
+                          {charges.discountDesc}
+                        </div>
+                      )}
+                      <div style={{ fontSize:9, color:"var(--text-muted)", marginTop:1 }}>Edit from Invoices tab</div>
+                    </td>
+                    <td style={{ textAlign:"right", padding:"5px 8px", color:"#f87171", fontWeight:700 }}>
+                      -{fmt(discountAmt)}
+                    </td>
+                    <td style={{ textAlign:"right", padding:"5px 8px", color:"var(--text-muted)" }}>—</td>
+                    <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:"#f87171" }}>
+                      -{fmt(discountAmt)}
+                    </td>
+                    <td></td>
+                  </tr>
+                )}
               </tbody>
               <tfoot>
                 <tr style={{ borderTop:"2px solid var(--border)", background:"var(--bg-panel)" }}>

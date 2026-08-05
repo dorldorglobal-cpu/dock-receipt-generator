@@ -20,8 +20,11 @@ async function nextInvoiceNumber() {
 }
 
 // ── Format helper ──────────────────────────────────────────────────────────────
-const fmt = (n) =>
-  "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const fmt = (n) => {
+  const num = Number(n || 0);
+  return (num < 0 ? "-$" : "$") +
+    Math.abs(num).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 
 // ── Replace the "Invoice"-labeled Drive file on an order with a fresh PDF ─────
 // Deletes any existing Invoice file(s) from Drive + order.files, uploads the
@@ -262,6 +265,19 @@ router.put("/:id", async (req, res) => {
       if (!isNaN(arr)) computedDueDate = arr;
     }
 
+    // Sync any "Discount" line item(s) onto order.charges.discount so the
+    // order's internal Sell/Cost/Profit breakdown reflects it too, and so a
+    // later "Generate Invoice" from the order page doesn't silently drop it.
+    if (order) {
+      const discountItems = (items || []).filter((i) => /discount/i.test(i.description || ""));
+      const discountTotal = discountItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+      const discountDesc  = discountItems.map((i) => i.description).filter(Boolean).join(", ");
+      if (!order.charges) order.charges = {};
+      order.charges.discount     = discountTotal;
+      order.charges.discountDesc = discountDesc;
+      order.markModified("charges");
+    }
+
     const inv = await Invoice.findByIdAndUpdate(
       req.params.id,
       {
@@ -278,6 +294,8 @@ router.put("/:id", async (req, res) => {
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
 
     // Regenerate the PDF and swap it in on the order (if one is attached there)
+    // — replaceInvoiceFileOnOrder saves the order, so the charges.discount
+    // change above rides along with it.
     let fileReplaced = false;
     if (order) {
       try {
@@ -288,17 +306,17 @@ router.put("/:id", async (req, res) => {
       }
     }
 
-    // Log to order timeline (replaceInvoiceFileOnOrder already logs + saves when it ran)
-    if (inv.orderId && !fileReplaced) {
-      await Order.findByIdAndUpdate(inv.orderId, {
-        $push: {
-          timeline: {
-            action:    "Invoice Updated",
-            details:   `Invoice ${inv.invoiceNumber} updated — Total: ${fmt(total)}`,
-            createdAt: new Date(),
-          },
-        },
+    // Log to order timeline (replaceInvoiceFileOnOrder already logged + saved when it ran).
+    // Push onto the same in-memory `order` doc and save once — mixing this with a
+    // separate findByIdAndUpdate would race with the charges.discount save above
+    // and silently drop whichever write lost.
+    if (!fileReplaced && order) {
+      order.timeline.push({
+        action:    "Invoice Updated",
+        details:   `Invoice ${inv.invoiceNumber} updated — Total: ${fmt(total)}`,
+        createdAt: new Date(),
       });
+      await order.save();
     }
 
     res.json({ ...inv, _fileReplaced: fileReplaced });

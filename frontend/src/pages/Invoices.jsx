@@ -3,8 +3,11 @@ import { useNavigate } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
-const f$ = (n) =>
-  "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+const f$ = (n) => {
+  const num = Number(n || 0);
+  return (num < 0 ? "-$" : "$") +
+    Math.abs(num).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+};
 const fD = (d) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 const toInput = (d) => d ? new Date(d).toISOString().slice(0, 10) : "";
