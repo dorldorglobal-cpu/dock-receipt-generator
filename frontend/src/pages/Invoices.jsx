@@ -47,6 +47,9 @@ export default function Invoices() {
   const [overdue,     setOverdue]     = useState([]);
   const [showOverdue, setShowOverdue] = useState(false);
   const [previewInv,  setPreviewInv]  = useState(null);
+  // Client-side filter applied on top of statusTab — "outstanding" and "overdue"
+  // don't map to a single invoice status, so they're filtered after fetch.
+  const [quickFilter, setQuickFilter] = useState(null); // null | "outstanding" | "overdue"
 
   // Edit modal state
   const [editModal,   setEditModal]   = useState(null);  // invoice being edited
@@ -63,7 +66,22 @@ export default function Invoices() {
   const [bulkNotes,     setBulkNotes]     = useState("");
   const [bulkSaving,    setBulkSaving]    = useState(false);
 
-  const unpaidInvoices = invoices.filter(i => i.status !== "paid");
+  // Summary-card click filters — resets to the "all" tab (so the full set is
+  // loaded) then applies a client-side filter for cards that span statuses.
+  const selectCard = (which) => {
+    if (which === "all")         { setStatusTab("all");  setQuickFilter(null); }
+    else if (which === "paid")   { setStatusTab("paid"); setQuickFilter(null); }
+    else if (which === "outstanding") { setStatusTab("all"); setQuickFilter("outstanding"); }
+    else if (which === "overdue")     { setStatusTab("all"); setQuickFilter("overdue"); }
+  };
+
+  const displayedInvoices = invoices.filter(i => {
+    if (quickFilter === "outstanding") return i.status !== "paid";
+    if (quickFilter === "overdue")     return i.status !== "paid" && i.dueDate && new Date(i.dueDate) < new Date();
+    return true;
+  });
+
+  const unpaidInvoices = displayedInvoices.filter(i => i.status !== "paid");
   const allUnpaidSelected = unpaidInvoices.length > 0 && unpaidInvoices.every(i => selectedIds.has(i._id));
   const toggleSelect = (id) => setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const toggleAll = () => setSelectedIds(allUnpaidSelected ? new Set() : new Set(unpaidInvoices.map(i => i._id)));
@@ -264,7 +282,9 @@ export default function Invoices() {
   const totalAmount  = invoices.reduce((s, i) => s + (i.total || 0), 0);
   const outstanding  = invoices.filter(i => i.status?.toLowerCase() !== "paid").reduce((s, i) => s + (i.total || 0), 0);
   const paidAmount   = invoices.filter(i => i.status?.toLowerCase() === "paid").reduce((s, i) => s + (i.total || 0), 0);
-  const overdueCount = invoices.filter(i => i.status?.toLowerCase() !== "paid" && i.dueDate && new Date(i.dueDate) < new Date()).length;
+  // Sourced from the dedicated /overdue fetch (not the tab-filtered `invoices`
+  // list) so the count stays correct no matter which status tab is active.
+  const overdueCount = overdue.length;
 
   const TABS = [
     { key: "all",   label: "All" },
@@ -305,7 +325,7 @@ export default function Invoices() {
               background:"none", color:"#f87171", cursor:"pointer", fontWeight:600 }}>
             {showOverdue ? "Hide" : "View All"}
           </button>
-          <button onClick={() => setStatusTab("sent")}
+          <button onClick={() => selectCard("overdue")}
             style={{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"none",
               background:"rgba(220,38,38,0.2)", color:"#f87171", cursor:"pointer", fontWeight:600 }}>
             Filter Overdue
@@ -326,37 +346,63 @@ export default function Invoices() {
         </div>
       )}
 
-      {/* ── Summary Chips ── */}
-      <div className="dashboard-grid" style={{ marginBottom: 24 }}>
-        <div className="dashboard-card">
-          <span>Total Invoices</span>
-          <strong>{invoices.length}</strong>
-        </div>
-        <div className="dashboard-card">
-          <span>Total Billed</span>
-          <strong style={{ color: "var(--accent)" }}>{f$(totalAmount)}</strong>
-        </div>
-        <div className="dashboard-card">
-          <span>Outstanding</span>
-          <strong style={{ color: outstanding > 0 ? "#f87171" : "var(--text-primary)" }}>{f$(outstanding)}</strong>
-        </div>
-        <div className="dashboard-card">
-          <span>Collected</span>
-          <strong style={{ color: "#34d399" }}>{f$(paidAmount)}</strong>
-        </div>
-        {overdueCount > 0 && (
-          <div className="dashboard-card" style={{ borderColor: "rgba(220,38,38,0.4)", background: "rgba(220,38,38,0.05)" }}>
-            <span style={{ color: "#f87171" }}>Overdue</span>
-            <strong style={{ color: "#f87171" }}>{overdueCount}</strong>
+      {/* ── Summary Chips (click to filter the table below) ── */}
+      {(() => {
+        const isAllActive         = statusTab === "all"  && quickFilter === null;
+        const isCollectedActive   = statusTab === "paid" && quickFilter === null;
+        const isOutstandingActive = quickFilter === "outstanding";
+        const isOverdueActive     = quickFilter === "overdue";
+        const activeStyle = { borderColor: "var(--accent)", boxShadow: "0 0 0 1px var(--accent) inset" };
+        return (
+          <div className="dashboard-grid" style={{ marginBottom: 24 }}>
+            <div className="dashboard-card" onClick={() => selectCard("all")}
+              style={{ cursor: "pointer", ...(isAllActive ? activeStyle : {}) }}>
+              <span>Total Invoices</span>
+              <strong>{invoices.length}</strong>
+            </div>
+            <div className="dashboard-card" onClick={() => selectCard("all")}
+              style={{ cursor: "pointer", ...(isAllActive ? activeStyle : {}) }}>
+              <span>Total Billed</span>
+              <strong style={{ color: "var(--accent)" }}>{f$(totalAmount)}</strong>
+            </div>
+            <div className="dashboard-card" onClick={() => selectCard("outstanding")}
+              style={{ cursor: "pointer", ...(isOutstandingActive ? activeStyle : {}) }}>
+              <span>Outstanding</span>
+              <strong style={{ color: outstanding > 0 ? "#f87171" : "var(--text-primary)" }}>{f$(outstanding)}</strong>
+            </div>
+            <div className="dashboard-card" onClick={() => selectCard("paid")}
+              style={{ cursor: "pointer", ...(isCollectedActive ? activeStyle : {}) }}>
+              <span>Collected</span>
+              <strong style={{ color: "#34d399" }}>{f$(paidAmount)}</strong>
+            </div>
+            {overdueCount > 0 && (
+              <div className="dashboard-card" onClick={() => selectCard("overdue")} style={{
+                cursor: "pointer", borderColor: "rgba(220,38,38,0.4)", background: "rgba(220,38,38,0.05)",
+                ...(isOverdueActive ? { boxShadow: "0 0 0 1px #f87171 inset" } : {}),
+              }}>
+                <span style={{ color: "#f87171" }}>Overdue</span>
+                <strong style={{ color: "#f87171" }}>{overdueCount}</strong>
+              </div>
+            )}
           </div>
-        )}
-      </div>
+        );
+      })()}
+
+      {quickFilter && (
+        <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, fontSize: 12, color: "var(--text-secondary)" }}>
+          Showing: <strong style={{ color: "var(--text-primary)" }}>{quickFilter === "overdue" ? "Overdue" : "Outstanding"}</strong>
+          <button onClick={() => setQuickFilter(null)} style={{
+            fontSize: 11, padding: "2px 9px", borderRadius: 20, border: "1px solid var(--border)",
+            background: "var(--bg-panel)", color: "var(--text-muted)", cursor: "pointer",
+          }}>✕ Clear</button>
+        </div>
+      )}
 
       {/* ── Filters ── */}
       <div style={{ display: "flex", gap: 12, alignItems: "center", marginBottom: 18, flexWrap: "wrap" }}>
         <div style={{ display: "flex", border: "1px solid var(--border)", borderRadius: 8, overflow: "hidden" }}>
           {TABS.map(t => (
-            <button key={t.key} onClick={() => setStatusTab(t.key)} style={{
+            <button key={t.key} onClick={() => { setStatusTab(t.key); setQuickFilter(null); }} style={{
               padding: "7px 16px", fontSize: 13, border: "none", cursor: "pointer",
               background: statusTab === t.key ? "var(--accent)" : "var(--bg-panel)",
               color:      statusTab === t.key ? "#fff" : "var(--text-secondary)",
@@ -393,11 +439,17 @@ export default function Invoices() {
       {/* ── Table ── */}
       {loading ? (
         <p style={{ color: "var(--text-muted)", padding: 32, textAlign: "center" }}>Loading invoices…</p>
-      ) : invoices.length === 0 ? (
+      ) : displayedInvoices.length === 0 ? (
         <div style={{ textAlign: "center", padding: "60px 0", color: "var(--text-muted)" }}>
           <div style={{ fontSize: 40, marginBottom: 12 }}>🧾</div>
-          <p style={{ fontSize: 15, margin: 0 }}>No invoices found</p>
-          <p style={{ fontSize: 13, marginTop: 6 }}>Generate an invoice from an order's detail page.</p>
+          <p style={{ fontSize: 15, margin: 0 }}>
+            {quickFilter ? `No ${quickFilter} invoices` : "No invoices found"}
+          </p>
+          <p style={{ fontSize: 13, marginTop: 6 }}>
+            {quickFilter
+              ? <button onClick={() => setQuickFilter(null)} style={{ background:"none", border:"none", color:"var(--accent)", cursor:"pointer", padding:0, fontSize:13, textDecoration:"underline" }}>Clear filter</button>
+              : "Generate an invoice from an order's detail page."}
+          </p>
         </div>
       ) : (
         <div style={{ overflowX: "auto" }}>
@@ -421,7 +473,7 @@ export default function Invoices() {
               </tr>
             </thead>
             <tbody>
-              {invoices.map(inv => {
+              {displayedInvoices.map(inv => {
                 const isOverdue = inv.status !== "paid" && inv.dueDate && new Date(inv.dueDate) < new Date();
                 const payments  = inv.payments || [];
                 const totalPaid = payments.reduce((s, p) => s + p.amount, 0);
