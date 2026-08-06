@@ -364,8 +364,20 @@ router.put("/:id", uploadFields, async (req, res) => {
     // Remove undefined keys
     Object.keys(update).forEach(k => update[k] === undefined && delete update[k]);
 
-    const old = await Expense.findById(req.params.id).select("receiptFileName billFileName receiptDriveId billDriveId orderId").lean();
+    const old = await Expense.findById(req.params.id)
+      .select("receiptFileName billFileName receiptDriveId billDriveId orderId paidAmount").lean();
     const linkedOrderId = orderId || old?.orderId || null;
+
+    // If this bill already has a tracked payment (e.g. via the Payment Proof
+    // matcher or Add Payment) and the form still says "paid", don't trust that
+    // blindly — the total may have changed since (e.g. a line item added after
+    // the bill was fully paid). Recompute from the real paidAmount instead so
+    // it correctly drops back to "partial" when the payment no longer covers
+    // it. Only applies when the form is asserting "paid" — an explicit revert
+    // to unpaid/partial via the dropdown is left alone.
+    if (update.status === "paid" && old?.paidAmount > 0 && update.amount != null) {
+      update.status = old.paidAmount >= update.amount - 0.005 ? "paid" : "partial";
+    }
 
     if (req.files?.receipt?.[0]) {
       if (old?.receiptDriveId) await deleteDriveFile(old.receiptDriveId);
@@ -2247,30 +2259,30 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
 
       if (row.matchedIds?.length) {
-        if (row.markPartial) {
-          // Record bank amount as accumulated payment — may result in "partial" or "paid"
-          const expenses = await Expense.find({ _id: { $in: row.matchedIds } });
-          const bankAmt = Number(row.amount) || 0;
-          const perAmt = expenses.length > 1 ? bankAmt / expenses.length : bankAmt;
-          for (const exp of expenses) {
-            const prev = exp.paidAmount || 0;
-            const newTotal = prev + perAmt;
-            const fullyPaid = newTotal >= exp.amount - 0.005;
-            exp.payments.push({ amount: perAmt, date: dateObj, method: paymentMethod || "Bank ACH", notes: "" });
-            exp.paidAmount    = newTotal;
-            exp.paidDate      = dateObj;
-            exp.paymentMethod = paymentMethod || "Bank ACH";
-            exp.status        = fullyPaid ? "paid" : "partial";
-            if (receiptFields.receiptDriveId) Object.assign(exp, receiptFields);
-            await exp.save();
-            updated++;
-          }
-        } else {
-          const result = await Expense.updateMany(
-            { _id: { $in: row.matchedIds } },
-            { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
-          );
-          updated += result.modifiedCount;
+        // Always record the bank amount as a traceable payment and compute
+        // paid/partial from the real numbers — never blindly set "paid".
+        // `markPartial` only changes how the bank amount is divided when it
+        // covers multiple matched bills (row.markPartial → split evenly);
+        // without it, the whole amount applies to each matched bill (the
+        // normal case is a single match). Either way the resulting status
+        // must reflect what was actually paid, since a bill's total can
+        // change later (e.g. a line item added after the match) and only an
+        // honest paidAmount lets that be caught on the next edit.
+        const expenses = await Expense.find({ _id: { $in: row.matchedIds } });
+        const bankAmt = Number(row.amount) || 0;
+        const perAmt = row.markPartial && expenses.length > 1 ? bankAmt / expenses.length : bankAmt;
+        for (const exp of expenses) {
+          const prev = exp.paidAmount || 0;
+          const newTotal = prev + perAmt;
+          const fullyPaid = newTotal >= exp.amount - 0.005;
+          exp.payments.push({ amount: perAmt, date: dateObj, method: paymentMethod || "Bank ACH", notes: "" });
+          exp.paidAmount    = newTotal;
+          exp.paidDate      = dateObj;
+          exp.paymentMethod = paymentMethod || "Bank ACH";
+          exp.status        = fullyPaid ? "paid" : "partial";
+          if (receiptFields.receiptDriveId) Object.assign(exp, receiptFields);
+          await exp.save();
+          updated++;
         }
         continue;
       }
