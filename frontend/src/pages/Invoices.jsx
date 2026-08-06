@@ -86,6 +86,14 @@ export default function Invoices() {
   const toggleSelect = (id) => setSelectedIds(prev => { const s = new Set(prev); s.has(id) ? s.delete(id) : s.add(id); return s; });
   const toggleAll = () => setSelectedIds(allUnpaidSelected ? new Set() : new Set(unpaidInvoices.map(i => i._id)));
 
+  // Remaining balance owed across selected invoices (what "Mark as Paid" will actually record)
+  const selectedInvoices = invoices.filter(i => selectedIds.has(i._id));
+  const selectedTotal = selectedInvoices.reduce((s, i) => s + (i.total || 0), 0);
+  const selectedRemaining = selectedInvoices.reduce((s, i) => {
+    const paid = (i.payments || []).reduce((ps, p) => ps + p.amount, 0);
+    return s + Math.max(0, (i.total || 0) - paid);
+  }, 0);
+
   const bulkMarkPaid = async () => {
     if (!selectedIds.size) return;
     setBulkSaving(true);
@@ -610,6 +618,14 @@ export default function Invoices() {
           <span style={{ fontWeight:600, color:"var(--text-primary)" }}>
             {selectedIds.size} invoice{selectedIds.size !== 1 ? "s" : ""} selected
           </span>
+          <span style={{ fontWeight:700, fontFamily:"monospace", color:"#34d399", fontSize:15 }}>
+            {f$(selectedRemaining)}
+            {selectedRemaining !== selectedTotal && (
+              <span style={{ fontWeight:400, fontFamily:"inherit", color:"var(--text-muted)", fontSize:11, marginLeft:6 }}>
+                (of {f$(selectedTotal)})
+              </span>
+            )}
+          </span>
           <button onClick={() => { setBulkDate(todayISO()); setBulkNotes(""); setBulkModal(true); }}
             style={{ padding:"8px 20px", background:"#059669", border:"none", borderRadius:8,
               color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }}>
@@ -637,7 +653,8 @@ export default function Invoices() {
               ✅ Mark as Paid
             </h3>
             <p style={{ margin:"0 0 20px", fontSize:13, color:"var(--text-secondary)" }}>
-              {selectedIds.size} invoice{selectedIds.size !== 1 ? "s" : ""} — remaining balance will be recorded as a payment.
+              {selectedIds.size} invoice{selectedIds.size !== 1 ? "s" : ""} — remaining balance of{" "}
+              <strong style={{ color:"#34d399" }}>{f$(selectedRemaining)}</strong> will be recorded as a payment.
             </p>
             <div style={{ display:"grid", gap:14 }}>
               <label style={{ display:"block", fontSize:12, color:"var(--text-secondary)" }}>
