@@ -20,6 +20,7 @@ const icons = {
   container: "M21 8a2 2 0 00-1-1.73l-7-4a2 2 0 00-2 0l-7 4A2 2 0 002 8v8a2 2 0 001 1.73l7 4a2 2 0 002 0l7-4A2 2 0 0021 16z M3.27 6.96L12 12.01l8.73-5.05 M12 22.08V12",
   customers: "M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2 M9 11a4 4 0 100-8 4 4 0 000 8z M23 21v-2a4 4 0 00-3-3.87 M16 3.13a4 4 0 010 7.75",
   shipments: "M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 9.81a19.79 19.79 0 01-3.07-8.63A2 2 0 012 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.91a16 16 0 006.72 6.72l1.27-1.27a2 2 0 012.11-.45c.907.339 1.85.573 2.81.7A2 2 0 0122 16.92z",
+  signature: "M3 17s2-1 4-1 3 2 5 2 3-2 5-2 4 1 4 1 M4 14l6.5-6.5a2.12 2.12 0 013 3L7 17H4v-3z M14.5 6.5l3 3",
   invoices: "M9 7H6a2 2 0 00-2 2v9a2 2 0 002 2h9a2 2 0 002-2v-3 M9 10h.01 M9 13h.01 M9 16h.01 M13 7l5 5 M18 7h-5v5",
   expenses: "M2 8h20v13a1 1 0 01-1 1H3a1 1 0 01-1-1V8z M2 8l2-5h16l2 5 M12 12v4 M10 14h4",
   vendors:  "M3 3h18v4H3z M5 7v14h14V7 M9 11h6 M9 15h6",
@@ -98,6 +99,7 @@ export default function Sidebar() {
         <NavItem to="/ocean-freight"  iconKey="ocean"       label="Ocean Freight"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/vessel-schedule" iconKey="schedule"   label="Vessel Schedule" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/shipments"      iconKey="shipments"   label="BL Separator"   collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/sign-documents" iconKey="signature"   label="Sign Documents" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
       </nav>
 
       {!isMobile && <div className="sidebar-section-label">Finance</div>}

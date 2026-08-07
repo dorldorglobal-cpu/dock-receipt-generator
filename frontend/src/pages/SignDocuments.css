@@ -1,0 +1,255 @@
+@import url("https://fonts.googleapis.com/css2?family=Dancing+Script:wght@600&family=Caveat:wght@600&display=swap");
+
+.sign-doc-editor {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.sign-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 10px 12px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  position: sticky;
+  top: 0;
+  z-index: 5;
+}
+
+.sign-toolbar button {
+  padding: 7px 12px;
+  font-size: 13px;
+}
+
+.sign-toolbar-sep {
+  width: 1px;
+  align-self: stretch;
+  background: var(--border);
+  margin: 0 2px;
+}
+
+.sign-page-indicator {
+  font-size: 12px;
+  color: var(--text-secondary);
+  min-width: 70px;
+  text-align: center;
+}
+
+.sign-canvas-scroll {
+  overflow: auto;
+  max-height: 78vh;
+  background: var(--bg-base);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 24px;
+  display: flex;
+  justify-content: center;
+}
+
+.sign-canvas-wrap {
+  position: relative;
+  box-shadow: var(--shadow-lg);
+  background: #fff;
+  flex: none;
+}
+
+.sign-canvas-wrap canvas {
+  display: block;
+}
+
+.sign-overlay {
+  position: absolute;
+  inset: 0;
+}
+
+.sign-annotation {
+  position: absolute;
+  border: 1px dashed transparent;
+  box-sizing: border-box;
+}
+
+.sign-annotation:hover {
+  border-color: rgba(99, 102, 241, 0.5);
+}
+
+.sign-annotation--selected {
+  border: 1.5px solid #6366f1;
+}
+
+.sign-annotation-handle {
+  position: absolute;
+  top: -18px;
+  left: -1px;
+  width: 22px;
+  height: 16px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 10px;
+  line-height: 16px;
+  text-align: center;
+  border-radius: 4px 4px 0 0;
+  cursor: grab;
+  opacity: 0;
+  user-select: none;
+  touch-action: none;
+}
+
+.sign-annotation:hover .sign-annotation-handle,
+.sign-annotation--selected .sign-annotation-handle {
+  opacity: 1;
+}
+
+.sign-annotation-text {
+  width: 100%;
+  height: 100%;
+  resize: none;
+  border: none;
+  background: transparent;
+  padding: 2px 4px;
+  font-family: inherit;
+  line-height: 1.25;
+  overflow: hidden;
+}
+
+.sign-annotation-text:focus {
+  box-shadow: none;
+  outline: 1px solid rgba(99, 102, 241, 0.4);
+}
+
+.sign-annotation-image {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+  user-select: none;
+}
+
+.sign-annotation-resize {
+  position: absolute;
+  right: -5px;
+  bottom: -5px;
+  width: 12px;
+  height: 12px;
+  background: #6366f1;
+  border-radius: 50%;
+  cursor: nwse-resize;
+  touch-action: none;
+}
+
+.sign-annotation-toolbar {
+  position: absolute;
+  top: -18px;
+  right: -1px;
+  display: flex;
+  gap: 2px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 2px;
+}
+
+.sign-annotation-toolbar button {
+  padding: 2px 6px;
+  font-size: 11px;
+  background: transparent;
+  color: var(--text-secondary);
+}
+.sign-annotation-toolbar button:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+.sign-annotation-toolbar input[type="color"] {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+/* ── Signature modal ─────────────────────────────────── */
+.sig-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.55);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.sig-modal {
+  width: 100%;
+  max-width: 680px;
+  background: var(--bg-panel);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  padding: 20px;
+}
+
+.sig-modal-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+
+.sig-modal-tabs {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.sig-modal-tabs button {
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--text-secondary);
+}
+
+.sig-modal-tabs button.active {
+  background: var(--accent-dim);
+  border-color: var(--accent);
+  color: var(--accent-hover);
+}
+
+.sig-draw-canvas {
+  width: 100%;
+  height: 200px;
+  background: #fff;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  cursor: crosshair;
+}
+
+.sig-font-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sig-font-picker button {
+  text-align: left;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  color: var(--text-primary);
+  padding: 10px 14px;
+}
+
+.sig-font-picker button.active {
+  border-color: #6366f1;
+  background: #1e1b4b22;
+}
+
+.sig-modal-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 14px;
+}
