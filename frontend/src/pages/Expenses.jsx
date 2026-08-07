@@ -2107,7 +2107,7 @@ export default function Expenses() {
                               )}
                               {/* + Create Bill */}
                               {!row.createBill && !row.splitBills && (row.matchType === "none" || row.matchType === "review") && (
-                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: autoCategoryFromVendor(r.payeeName) || "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}
                                   style={{ fontSize:10, fontWeight:700, color:"#fff", border:"none", borderRadius:5, padding:"3px 8px", background:"#0891b2", cursor:"pointer" }}>
                                   + Create Bill
                                 </button>
@@ -2121,9 +2121,10 @@ export default function Expenses() {
                                     const looksLikeOrderRef = /^\d{3,8}$/.test(seed[0]);
                                     const n = seed.length;
                                     const each = Math.round((r.amount / n) * 100) / 100;
+                                    const splitCategory = autoCategoryFromVendor(r.payeeName) || "Port / Terminal Fees";
                                     return { ...r, attachOnly:false, splitBills: seed.map((s, k) => ({
                                       orderRef: looksLikeOrderRef ? s : "",
-                                      category: "Port / Terminal Fees",
+                                      category: splitCategory,
                                       description: looksLikeOrderRef ? "" : s,
                                       amount: k === n-1 ? Math.round((r.amount - each*(n-1))*100)/100 : each,
                                       createBill: true,
@@ -2205,7 +2206,7 @@ export default function Expenses() {
                                     </button>
                                   </div>
                                 ))}
-                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills: [...r.splitBills, { orderRef:"", category:"Port / Terminal Fees", description:"", amount:"" }] } : r))}
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills: [...r.splitBills, { orderRef:"", category: autoCategoryFromVendor(r.payeeName) || "Port / Terminal Fees", description:"", amount:"" }] } : r))}
                                   style={{ fontSize:10, color:"#06b6d4", background:"none", border:"1px dashed #06b6d4", borderRadius:5, padding:"3px 8px", cursor:"pointer", marginBottom:6 }}>
                                   + Add Line
                                 </button>

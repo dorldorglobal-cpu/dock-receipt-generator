@@ -46,9 +46,14 @@ const TAX_BY_CATEGORY = {
 // form/import submitted.
 const LOADER_WAREHOUSE_VENDOR_RX = /e-?z\s*cargo|savannah|i-?ship|cedars/i;
 
+// Shipping lines — always Ocean Freight, not Port / Terminal Fees.
+const OCEAN_FREIGHT_VENDOR_RX = /sallaum|acl\b|grimaldi|wallenius|eukor/i;
+
 function enforceVendorCategory(data) {
   if (LOADER_WAREHOUSE_VENDOR_RX.test(data.vendor || "")) {
     data.category = "Loaders & Warehouses";
+  } else if (OCEAN_FREIGHT_VENDOR_RX.test(data.vendor || "")) {
+    data.category = "Ocean Freight";
   }
   if (!data.taxCategory) {
     data.taxCategory = TAX_BY_CATEGORY[data.category] || "";
