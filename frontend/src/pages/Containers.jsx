@@ -151,6 +151,9 @@ export default function Containers() {
   const [editForm,    setEditForm]    = useState({});
   const [editTab,     setEditTab]     = useState("details"); // details | consignee | orders | docs
   const [savingEdit,  setSavingEdit]  = useState(false);
+  const [addOrderSearch, setAddOrderSearch] = useState("");
+  const [addOrderResults, setAddOrderResults] = useState([]);
+  const [addingOrder, setAddingOrder] = useState(false);
   const [loadFiles,   setLoadFiles]   = useState([]);
   const [uploadingDoc, setUploadingDoc] = useState(false);
   const [parsedBL,    setParsedBL]    = useState(null);
@@ -897,19 +900,16 @@ export default function Containers() {
               {/* ─ Orders tab ─ */}
               {editTab === "orders" && (
                 <div>
-                  <p style={{ fontSize:12, color:"var(--text-muted)", marginTop:0 }}>
-                    Click an order to open its full detail page.
-                  </p>
                   {(editLoad.orderIds||[]).length === 0 && (
-                    <div style={{ textAlign:"center", padding:40, color:"var(--text-muted)" }}>No orders in this load</div>
+                    <div style={{ textAlign:"center", padding:32, color:"var(--text-muted)" }}>No orders in this load</div>
                   )}
                   {(editLoad.orderIds||[]).map((o,idx)=>{
                     const osc = orderSC(o.status);
                     return (
                       <div key={o._id}
-                        style={{ display:"grid", gridTemplateColumns:"auto 1fr 2fr 1.2fr 1fr 1fr",
-                          gap:14, padding:"12px 4px", alignItems:"center",
-                          borderBottom: idx < (editLoad.orderIds||[]).length-1 ? "1px solid var(--border)" : "none" }}>
+                        style={{ display:"grid", gridTemplateColumns:"auto 1fr 2fr 1.2fr 1fr auto",
+                          gap:14, padding:"10px 4px", alignItems:"center",
+                          borderBottom: "1px solid var(--border)" }}>
                         <span style={{ fontSize:13, color:"var(--text-muted)", fontWeight:600, minWidth:20 }}>{idx+1}.</span>
                         <div>
                           <div style={{ fontWeight:700, fontSize:13 }}>{o.refNumber}</div>
@@ -920,28 +920,104 @@ export default function Containers() {
                           <div style={{ fontSize:11, color:"var(--text-secondary)", fontFamily:"monospace" }}>{o.vin||"—"}</div>
                         </div>
                         <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
-                          <div>{o.consigneeName||"—"}</div>
+                          <div>{o.condition||"—"} · {o.titleStatus||"—"}</div>
                           <div>→ {o.pod||"—"}</div>
                         </div>
-                        <div style={{ fontSize:11, color:"var(--text-secondary)" }}>
-                          <div>{o.condition||"—"}</div>
-                          <div>{o.titleStatus||"—"}</div>
-                        </div>
-                        <div style={{ display:"flex", flexDirection:"column", alignItems:"flex-end", gap:4 }}>
-                          <span style={{ fontSize:11, fontWeight:600, padding:"3px 8px", borderRadius:20,
-                            background:osc.bg, border:`1px solid ${osc.border}`, color:osc.text }}>
-                            {o.status}
-                          </span>
+                        <span style={{ fontSize:11, fontWeight:600, padding:"3px 8px", borderRadius:20,
+                          background:osc.bg, border:`1px solid ${osc.border}`, color:osc.text }}>
+                          {o.status}
+                        </span>
+                        <div style={{ display:"flex", gap:6, alignItems:"center" }}>
                           <button onClick={()=>navigate(`/orders/${o._id}`)}
-                            style={{ fontSize:11, padding:"3px 10px", borderRadius:6,
+                            style={{ fontSize:11, padding:"4px 10px", borderRadius:6,
                               background:"rgba(99,102,241,0.12)", border:"1px solid rgba(99,102,241,0.3)",
-                              color:"#818cf8", cursor:"pointer" }}>
+                              color:"#818cf8", cursor:"pointer", whiteSpace:"nowrap" }}>
                             Open →
+                          </button>
+                          <button
+                            title="Remove from load"
+                            onClick={async()=>{
+                              if (!window.confirm(`Remove #${o.refNumber} from this load?`)) return;
+                              const r = await fetch(`${API}/api/container-loads/${editLoad._id}/remove-order/${o._id}`, { method:"DELETE" });
+                              if (r.ok) { const updated = await r.json(); setEditLoad(updated); refresh(); }
+                              else flash("❌ Failed to remove order");
+                            }}
+                            style={{ fontSize:13, padding:"3px 7px", borderRadius:6,
+                              background:"rgba(248,113,113,0.12)", border:"1px solid rgba(248,113,113,0.3)",
+                              color:"#f87171", cursor:"pointer", lineHeight:1 }}>
+                            ✕
                           </button>
                         </div>
                       </div>
                     );
                   })}
+
+                  {/* ── Add order search ─────────────────────────────── */}
+                  <div style={{ marginTop:16, padding:"14px", background:"var(--bg-panel)",
+                    borderRadius:10, border:"1px dashed var(--border)" }}>
+                    <div style={{ fontSize:12, fontWeight:600, color:"var(--text-secondary)", marginBottom:8 }}>
+                      + Add order to load
+                    </div>
+                    <input
+                      value={addOrderSearch}
+                      onChange={e => {
+                        const q = e.target.value.toLowerCase();
+                        setAddOrderSearch(e.target.value);
+                        if (q.length < 2) { setAddOrderResults([]); return; }
+                        const existing = new Set((editLoad.orderIds||[]).map(o=>String(o._id||o)));
+                        const results = allOrders.filter(o =>
+                          !existing.has(String(o._id)) && (
+                            String(o.refNumber||"").toLowerCase().includes(q) ||
+                            (o.vin||"").toLowerCase().includes(q) ||
+                            (o.customerName||"").toLowerCase().includes(q) ||
+                            `${o.year||""} ${o.make||""} ${o.model||""}`.toLowerCase().includes(q)
+                          )
+                        ).slice(0, 8);
+                        setAddOrderResults(results);
+                      }}
+                      placeholder="Search by ref #, VIN, customer…"
+                      style={{ width:"100%", boxSizing:"border-box", padding:"7px 10px", fontSize:13,
+                        border:"1px solid var(--border)", borderRadius:7, background:"var(--bg-elevated)",
+                        color:"var(--text-primary)" }}
+                    />
+                    {addOrderResults.length > 0 && (
+                      <div style={{ marginTop:8, display:"flex", flexDirection:"column", gap:4 }}>
+                        {addOrderResults.map(o => (
+                          <div key={o._id} style={{ display:"flex", alignItems:"center", justifyContent:"space-between",
+                            padding:"7px 10px", background:"var(--bg-elevated)", borderRadius:7,
+                            border:"1px solid var(--border)", fontSize:12 }}>
+                            <div>
+                              <span style={{ fontWeight:700, color:"var(--accent)" }}>#{o.refNumber}</span>
+                              {" "}{o.year} {o.make} {o.model}
+                              <span style={{ color:"var(--text-muted)", marginLeft:8 }}>{o.customerName}</span>
+                            </div>
+                            <button
+                              disabled={addingOrder}
+                              onClick={async()=>{
+                                setAddingOrder(true);
+                                const r = await fetch(`${API}/api/container-loads/${editLoad._id}/add-order`, {
+                                  method:"POST", headers:{"Content-Type":"application/json"},
+                                  body: JSON.stringify({ orderId: o._id }),
+                                });
+                                if (r.ok) {
+                                  const updated = await r.json();
+                                  setEditLoad(updated);
+                                  setAddOrderSearch("");
+                                  setAddOrderResults([]);
+                                  refresh();
+                                } else flash("❌ Failed to add order");
+                                setAddingOrder(false);
+                              }}
+                              style={{ padding:"4px 12px", fontSize:12, borderRadius:6, cursor:"pointer",
+                                background:"rgba(52,211,153,0.15)", border:"1px solid rgba(52,211,153,0.35)",
+                                color:"#34d399", fontWeight:600 }}>
+                              + Add
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
               {/* ─ Docs tab ─ */}

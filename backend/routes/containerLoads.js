@@ -95,6 +95,34 @@ router.patch("/:id", express.json(), async (req, res) => {
   }
 });
 
+// POST /api/container-loads/:id/add-order — add an order to the load
+router.post("/:id/add-order", express.json(), async (req, res) => {
+  try {
+    const { orderId } = req.body;
+    if (!orderId) return res.status(400).json({ error: "orderId required" });
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    if (!load.orderIds.map(String).includes(String(orderId))) {
+      load.orderIds.push(orderId);
+      await load.save();
+    }
+    const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
+    res.json(populated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/container-loads/:id/remove-order/:orderId — remove an order from the load
+router.delete("/:id/remove-order/:orderId", async (req, res) => {
+  try {
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    load.orderIds = load.orderIds.filter(id => String(id) !== String(req.params.orderId));
+    await load.save();
+    const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
+    res.json(populated);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/container-loads/:id/send-email  — send custom email (frontend provides to/cc/subject/body)
 router.post("/:id/send-email", express.json(), async (req, res) => {
   try {
