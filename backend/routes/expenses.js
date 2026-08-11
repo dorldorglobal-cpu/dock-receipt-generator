@@ -845,8 +845,14 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           if (o) { orderId = o._id; orderRef = o.refNumber; }
         }
 
-        // Skip creating a duplicate expense (same invoice + VIN already exists)
-        const duplicate = await Expense.findOne({ invoiceNumber, vin: row.vin }).lean();
+        // Skip creating a duplicate expense — check multiple signals
+        const dupChecks = [];
+        if (invoiceNumber && row.vin) dupChecks.push({ invoiceNumber, vin: row.vin });
+        if (orderId) dupChecks.push({ orderId, category: "Ocean Freight", amount: row.total, vendor: "Sallaum Lines" });
+        if (row.vin)  dupChecks.push({ vin: row.vin, category: "Ocean Freight", amount: row.total, vendor: "Sallaum Lines" });
+        const duplicate = dupChecks.length
+          ? await Expense.findOne({ $or: dupChecks }).lean()
+          : null;
 
         // Build charge breakdown note
         const chargeParts = [];
@@ -1322,13 +1328,22 @@ router.post("/apply-acl", express.json(), async (req, res) => {
         if (m && d && y) dateObj = new Date(`${y}-${m}-${d}`);
       }
 
-      // Duplicate check: same order + VIN + invoice ref already exists
-      const aclDupQuery = orderId && row.vin
-        ? { orderId, vin: row.vin, category: "Ocean Freight", vendor: { $in: ["ACL / Grimaldi", "Grimaldi / ACL"] } }
-        : null;
-      if (aclDupQuery) {
-        const dup = await Expense.findOne(aclDupQuery).lean();
-        if (dup) continue;
+      // Duplicate check — multiple layers so neither VIN nor orderId being missing lets a dup slip through
+      if (orderId) {
+        // 1. Same order + same amount + Ocean Freight category (catches re-runs regardless of VIN)
+        const dupByOrder = await Expense.findOne({
+          orderId, category: "Ocean Freight", amount: row.total,
+          vendor: { $in: ["ACL / Grimaldi", "Grimaldi / ACL", "ACL", "Grimaldi"] },
+        }).lean();
+        if (dupByOrder) { console.log(`[apply-acl] skip dup orderId=${orderId} amount=${row.total}`); continue; }
+      }
+      if (row.vin) {
+        // 2. Same VIN + same amount + Ocean Freight (catches when order wasn't linked yet on first run)
+        const dupByVin = await Expense.findOne({
+          vin: row.vin, category: "Ocean Freight", amount: row.total,
+          vendor: { $in: ["ACL / Grimaldi", "Grimaldi / ACL", "ACL", "Grimaldi"] },
+        }).lean();
+        if (dupByVin) { console.log(`[apply-acl] skip dup vin=${row.vin} amount=${row.total}`); continue; }
       }
 
       const expense = await Expense.create({
