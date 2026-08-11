@@ -2012,18 +2012,66 @@ export default function OrderDetails() {
           {orderInvoices.map(inv => {
             const statusClr = inv.status === "paid" ? "#34d399" : inv.status === "sent" ? "#60a5fa" : "var(--text-secondary)";
             const statusBg  = inv.status === "paid" ? "rgba(5,150,105,0.12)" : inv.status === "sent" ? "rgba(37,99,235,0.12)" : "rgba(107,114,128,0.12)";
+
+            // Build current sell total from order charges to detect mismatch
+            const curTow  = Number(charges.towingCharge || 0);
+            const curOcn  = Number(charges.oceanFreight || 0);
+            const curFees = feeRows.reduce((s,[k]) => s + Number(charges[k]||0), 0);
+            const curDisc = Number(charges.discount || 0);
+            const curSell = curTow + curOcn + curFees + curDisc;
+            const invTotal = Number(inv.total || 0);
+            const outOfSync = inv.status !== "paid" && Math.abs(curSell - invTotal) >= 0.01;
+
+            const syncInvoice = async () => {
+              const items = [];
+              if (curTow > 0) {
+                const towDesc = ["Towing", order.pickupLocation && order.deliveryLocation
+                  ? `${order.pickupLocation} → ${order.deliveryLocation}`
+                  : order.pickupLocation || order.deliveryLocation || ""].filter(Boolean).join(" — ");
+                items.push({ description: towDesc, amount: String(curTow) });
+              }
+              if (curOcn > 0) {
+                const ocnCat = charges.oceanCategory ? `Cat. ${charges.oceanCategory}` : "Cat. 1";
+                const ocnDesc = ["Ocean Freight", order.pol && order.pod ? `${order.pol} → ${order.pod}` : "", ocnCat].filter(Boolean).join(" — ");
+                items.push({ description: ocnDesc, amount: String(curOcn) });
+              }
+              feeRows.forEach(([key, label]) => {
+                if (Number(charges[key]||0) > 0) {
+                  const desc = charges[key+"Desc"] ? `${label} — ${charges[key+"Desc"]}` : label;
+                  items.push({ description: desc, amount: String(charges[key]) });
+                }
+              });
+              if (curDisc && Number(curDisc) !== 0)
+                items.push({ description: charges.discountDesc || "Discount", amount: String(curDisc) });
+
+              const total = items.reduce((s,i) => s + Number(i.amount||0), 0);
+              await fetch(`${API}/api/invoices/${inv._id}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ items, subtotal: total, total }),
+              });
+              fetchOrderInvoices();
+              setMessage(`✅ Invoice ${inv.invoiceNumber} synced to $${total.toFixed(2)}`);
+            };
+
             return (
               <div key={inv._id} style={{
                 display: "flex", alignItems: "center", gap: 10, padding: "8px 14px",
-                borderRadius: 10, border: `1px solid ${statusClr}44`,
-                background: statusBg, fontSize: 12,
+                borderRadius: 10, border: `1px solid ${outOfSync ? "#f59e0b66" : statusClr+"44"}`,
+                background: outOfSync ? "rgba(251,191,36,0.07)" : statusBg, fontSize: 12,
+                flexWrap: "wrap",
               }}>
                 <span style={{ fontWeight: 700, fontFamily: "monospace", color: "var(--accent)" }}>
                   {inv.invoiceNumber}
                 </span>
                 <span style={{ color: "var(--text-muted)" }}>
-                  ${Number(inv.total || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                  ${invTotal.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </span>
+                {outOfSync && (
+                  <span style={{ fontSize: 10, color: "#f59e0b", fontWeight: 600 }}>
+                    ⚠ order total ${curSell.toFixed(2)}
+                  </span>
+                )}
                 <span style={{ fontWeight: 700, color: statusClr, textTransform: "uppercase", fontSize: 11 }}>
                   {inv.status}
                 </span>
@@ -2032,6 +2080,13 @@ export default function OrderDetails() {
                     background: "var(--bg-panel)", color: "var(--text-secondary)", cursor: "pointer" }}>
                   PDF
                 </button>
+                {outOfSync && (
+                  <button onClick={syncInvoice}
+                    style={{ fontSize: 11, padding: "2px 10px", borderRadius: 5, border: "none",
+                      background: "rgba(251,191,36,0.25)", color: "#f59e0b", cursor: "pointer", fontWeight: 700 }}>
+                    ⚡ Sync to ${curSell.toFixed(2)}
+                  </button>
+                )}
                 {inv.status !== "paid" && (
                   <button onClick={async () => {
                     await fetch(`${API}/api/invoices/${inv._id}/status`, {
