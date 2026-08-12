@@ -67,8 +67,8 @@ function ConsigneeSection({ vals, set }) {
 
 const BLANK = {
   name:"", vessel:"", pol:"NJ", pod:"", loaderEmail:"", notes:"",
-  consigneeName:"", consigneeAddress:"", consigneePhone:"", consigneeEmail:"", consigneeTin:"",
-  notifyName:"", notifyAddress:"", notifyPhone:"", notifyEmail:"", notifyTin:"",
+  consigneeName:"FIRST OPTION LOGISTICS LTD", consigneeAddress:"P.O.BOX BT 429, COMMUNITY 2, TEMA", consigneePhone:"+233540127767", consigneeEmail:"godwin.dorldorglobal@gmail.com", consigneeTin:"C0057412421",
+  notifyName:"FIRST OPTION LOGISTICS LTD", notifyAddress:"P.O.BOX BT 429, COMMUNITY 2, TEMA", notifyPhone:"+233540127767", notifyEmail:"godwin.dorldorglobal@gmail.com", notifyTin:"C0057412421",
 };
 
 // Build email draft on frontend (mirrors backend logic)
