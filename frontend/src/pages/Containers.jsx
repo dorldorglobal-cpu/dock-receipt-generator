@@ -204,6 +204,21 @@ export default function Containers() {
       .finally(() => setBillingLoading(false));
   }, [location.search, loads]); // eslint-disable-line
 
+  // Auto-expand + scroll to a specific load when ?load=<id> is in the URL
+  useEffect(() => {
+    const params = new URLSearchParams(location.search);
+    const loadId = params.get("load");
+    if (!loadId || loads.length === 0) return;
+    const found = loads.find(l => l._id === loadId);
+    if (!found) return;
+    navigate(location.pathname, { replace: true });
+    setExpanded(p => ({ ...p, [loadId]: true }));
+    setTimeout(() => {
+      const el = document.getElementById(`load-${loadId}`);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }, 100);
+  }, [location.search, loads]); // eslint-disable-line
+
   const flash = (m) => { setMsg(m); setTimeout(()=>setMsg(""),4000); };
   const setF  = k => v => setForm(f=>({...f,[k]:v}));
   const setEF = k => v => setEditForm(f=>({...f,[k]:v}));
@@ -489,7 +504,7 @@ export default function Containers() {
           const open  = !!expanded[l._id];
           const orders = l.orderIds || [];
           return (
-            <div key={l._id} style={{ background:"var(--bg-panel)", border:"1px solid var(--border)",
+            <div key={l._id} id={`load-${l._id}`} style={{ background:"var(--bg-panel)", border:"1px solid var(--border)",
               borderRadius:12, overflow:"hidden" }}>
 
               {/* Header row */}

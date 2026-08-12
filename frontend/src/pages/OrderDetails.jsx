@@ -2231,7 +2231,7 @@ export default function OrderDetails() {
               {containerLoad.status && <span style={{ fontWeight:600, color:"#a78bfa" }}>{containerLoad.status}</span>}
             </div>
           </div>
-          <a href={`/containers`} style={{ fontSize:12, color:"#60a5fa", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
+          <a href={`/containers?load=${containerLoad._id}`} style={{ fontSize:12, color:"#60a5fa", textDecoration:"none", fontWeight:600, whiteSpace:"nowrap" }}>
             View Load →
           </a>
         </div>
