@@ -565,7 +565,11 @@ export default function Expenses() {
   const [bulkProofFile, setBulkProofFile] = useState(null);
   const [bulkProofDrag, setBulkProofDrag] = useState(false);
 
-  const toggleSelect = (id) => setSelected(s => ({ ...s, [id]: !s[id] }));
+  const [selectedCache, setSelectedCache] = useState({}); // id -> expense object, persists across filter changes
+  const toggleSelect = (id, expObj) => {
+    setSelected(s => ({ ...s, [id]: !s[id] }));
+    if (expObj) setSelectedCache(c => ({ ...c, [id]: expObj }));
+  };
   const selectedIds  = Object.keys(selected).filter(id => selected[id]);
   const selectedTotal = expenses.filter(e => selected[e._id]).reduce((sum, e) => sum + (e.amount || 0), 0);
   const selectedByVendor = expenses.filter(e => selected[e._id]).reduce((acc, e) => {
@@ -574,7 +578,7 @@ export default function Expenses() {
     return acc;
   }, {});
 
-  const selectedExpenses = expenses.filter(e => selected[e._id]);
+  const selectedExpenses = selectedIds.map(id => selectedCache[id] || expenses.find(e => e._id === id)).filter(Boolean);
   const allSelectedPaid   = selectedExpenses.length > 0 && selectedExpenses.every(e => e.status === "paid");
   const allSelectedUnpaid = selectedExpenses.length > 0 && selectedExpenses.every(e => e.status === "unpaid");
   const mixedSelection    = selectedExpenses.length > 0 && !allSelectedPaid && !allSelectedUnpaid;
@@ -606,7 +610,7 @@ export default function Expenses() {
         if (action === "unpay") return { ...e, status: "unpaid", paidDate: null, paymentMethod: "" };
         return { ...e, status: "paid", paidDate: payDate, paymentMethod: bulkMethod };
       }));
-      setSelected({});
+      setSelected({}); setSelectedCache({});
       setBulkProofFile(null);
       setFilterStatus("");
     } catch (err) {
@@ -1296,7 +1300,7 @@ export default function Expenses() {
       : `Delete ${deletable.length} expense(s)? This cannot be undone.`;
     if (!window.confirm(msg)) return;
     await Promise.all(deletable.map(e => fetch(`${API}/api/expenses/${e._id}`, { method: "DELETE" })));
-    setSelected({});
+    setSelected({}); setSelectedCache({});
     fetchAll();
   };
 
@@ -2496,10 +2500,10 @@ export default function Expenses() {
                     style={{ background: selected[exp._id] ? "var(--success-dim)" : "var(--bg-elevated)", cursor: "pointer" }}
                     onMouseEnter={e => e.currentTarget.style.background = selected[exp._id] ? "var(--success-dim)" : "var(--bg-hover)"}
                     onMouseLeave={e => e.currentTarget.style.background = selected[exp._id] ? "var(--success-dim)" : "var(--bg-elevated)"}
-                    onClick={() => toggleSelect(exp._id)}>
+                    onClick={() => toggleSelect(exp._id, exp)}>
 
                     <td style={{ ...td, width: 40 }} onClick={e => e.stopPropagation()}>
-                      <input type="checkbox" checked={!!selected[exp._id]} onChange={() => toggleSelect(exp._id)} />
+                      <input type="checkbox" checked={!!selected[exp._id]} onChange={() => toggleSelect(exp._id, exp)} />
                     </td>
 
                     {/* Date */}
@@ -2643,7 +2647,7 @@ export default function Expenses() {
                   {(exp.lineItems || []).filter(l => l.description?.trim()).map((li, li_i) => (
                     <tr key={`${exp._id}-li-${li_i}`}
                       style={{ background: selected[exp._id] ? "#162416" : "#0f1520" }}
-                      onClick={() => toggleSelect(exp._id)}>
+                      onClick={() => toggleSelect(exp._id, exp)}>
                       <td style={{ ...td, borderTop: "none" }} />
                       <td style={{ ...td, borderTop: "none", fontSize: 10, color: "#4b5563" }} />
                       <td style={{ ...td, borderTop: "none" }} />
