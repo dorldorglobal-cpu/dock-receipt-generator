@@ -551,6 +551,7 @@ export default function Expenses() {
   const [payConfirmAmt, setPayConfirmAmt]   = useState("");
   const [payConfirmDate, setPayConfirmDate] = useState(todayISO());
   const [payConfirmMethod, setPayConfirmMethod] = useState("Bank ACH");
+  const [payConfirmCheckNo, setPayConfirmCheckNo] = useState("");
   const [payConfirmNotes, setPayConfirmNotes]   = useState("");
   const [payConfirmFile, setPayConfirmFile]     = useState(null); // File object for proof
 
@@ -559,6 +560,7 @@ export default function Expenses() {
   const [selected, setSelected]         = useState({}); // { [_id]: true }
   const [payDate, setPayDate]           = useState(todayISO());
   const [payMethod, setPayMethod]       = useState("Bank ACH");
+  const [payCheckNo, setPayCheckNo]     = useState("");
   const [paying, setPaying]             = useState(false);
   const [bulkProofFile, setBulkProofFile] = useState(null);
   const [bulkProofDrag, setBulkProofDrag] = useState(false);
@@ -587,9 +589,12 @@ export default function Expenses() {
     setPaying(true);
     try {
       const fd = new FormData();
+      const bulkMethod = payMethod === "Check" && payCheckNo.trim()
+        ? `Check #${payCheckNo.trim()}`
+        : payMethod;
       fd.append("ids", JSON.stringify(selectedIds));
       fd.append("paidDate", payDate);
-      fd.append("paymentMethod", payMethod);
+      fd.append("paymentMethod", bulkMethod);
       fd.append("action", action);
       if (bulkProofFile && action !== "unpay") fd.append("proof", bulkProofFile);
 
@@ -599,7 +604,7 @@ export default function Expenses() {
       setExpenses(prev => prev.map(e => {
         if (!selectedIds.includes(e._id)) return e;
         if (action === "unpay") return { ...e, status: "unpaid", paidDate: null, paymentMethod: "" };
-        return { ...e, status: "paid", paidDate: payDate, paymentMethod: payMethod };
+        return { ...e, status: "paid", paidDate: payDate, paymentMethod: bulkMethod };
       }));
       setSelected({});
       setBulkProofFile(null);
@@ -1248,11 +1253,15 @@ export default function Expenses() {
     const fd = new FormData();
     fd.append("paidDate",      payConfirmDate || todayISO());
     fd.append("paidAmount",    entered);
-    fd.append("paymentMethod", payConfirmMethod);
+    const method = payConfirmMethod === "Check" && payConfirmCheckNo.trim()
+      ? `Check #${payConfirmCheckNo.trim()}`
+      : payConfirmMethod;
+    fd.append("paymentMethod", method);
     fd.append("notes",         payConfirmNotes);
     if (payConfirmFile) fd.append("proof", payConfirmFile);
     await fetch(`${API}/api/expenses/${exp._id}/pay`, { method: "PATCH", body: fd });
     setPayConfirm(null);
+    setPayConfirmCheckNo("");
     setPayConfirmFile(null);
     fetchAll();
   };
@@ -2808,7 +2817,7 @@ export default function Expenses() {
               style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "7px 10px", color: "var(--text-primary)", fontSize: 13 }} />
 
             <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>Method</label>
-            <select value={payMethod} onChange={e => setPayMethod(e.target.value)}
+            <select value={payMethod} onChange={e => { setPayMethod(e.target.value); setPayCheckNo(""); }}
               style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "7px 12px", color: "var(--text-primary)", fontSize: 13, minWidth: 130 }}>
               <option>Bank ACH</option>
               <option>Zelle</option>
@@ -2818,6 +2827,15 @@ export default function Expenses() {
               <option>Cash</option>
               <option>Other</option>
             </select>
+
+            {payMethod === "Check" && (
+              <input
+                value={payCheckNo}
+                onChange={e => setPayCheckNo(e.target.value)}
+                placeholder="Check #"
+                style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 7, padding: "7px 12px", color: "var(--text-primary)", fontSize: 13, width: 110 }}
+              />
+            )}
 
             {/* Proof of payment drop zone */}
             <div
@@ -2937,11 +2955,20 @@ export default function Expenses() {
               {/* Method */}
               <label style={{ display:"block", marginBottom:10, fontSize:12, color:"var(--text-secondary)" }}>
                 Payment Method
-                <select value={payConfirmMethod} onChange={e => setPayConfirmMethod(e.target.value)}
+                <select value={payConfirmMethod} onChange={e => { setPayConfirmMethod(e.target.value); setPayConfirmCheckNo(""); }}
                   style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }}>
                   {PAYMENT_METHODS.map(m => <option key={m}>{m}</option>)}
                 </select>
               </label>
+
+              {payConfirmMethod === "Check" && (
+                <label style={{ display:"block", marginBottom:10, fontSize:12, color:"var(--text-secondary)" }}>
+                  Check Number
+                  <input value={payConfirmCheckNo} onChange={e => setPayConfirmCheckNo(e.target.value)}
+                    placeholder="e.g. 1042" autoFocus
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid #f59e0b", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                </label>
+              )}
 
               {/* Notes */}
               <label style={{ display:"block", marginBottom:10, fontSize:12, color:"var(--text-secondary)" }}>
