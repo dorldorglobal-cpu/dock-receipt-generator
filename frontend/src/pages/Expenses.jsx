@@ -1733,10 +1733,18 @@ export default function Expenses() {
             {sallaumMsg && <div style={{ marginBottom: 10, fontSize: 13, color: sallaumMsg.startsWith("✅") ? "#34d399" : sallaumMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{sallaumMsg}</div>}
             {sallaumParsed && sallaumRows.length > 0 && (
               <>
-                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
-                  Invoice <strong style={{ color: "var(--text-primary)" }}>{sallaumParsed.invoiceNumber}</strong>
-                  {" · "}{sallaumParsed.vessel} · Voyage {sallaumParsed.voyage}
-                  {" · "}{sallaumParsed.pol} → {sallaumParsed.pod} · {sallaumParsed.invoiceDate}
+                <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
+                  <span>
+                    Invoice <strong style={{ color: "var(--text-primary)" }}>{sallaumParsed.invoiceNumber}</strong>
+                    {" · "}{sallaumParsed.vessel} · Voyage {sallaumParsed.voyage}
+                    {" · "}{sallaumParsed.pol} → {sallaumParsed.pod} · {sallaumParsed.invoiceDate}
+                  </span>
+                  <span style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 8, padding: "4px 14px", fontSize: 13, fontWeight: 700, color: "#34d399", whiteSpace: "nowrap" }}>
+                    Invoice Total: ${sallaumRows.reduce((s, r) => s + (r.total || 0), 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    <span style={{ color: "var(--text-muted)", fontWeight: 400, fontSize: 11, marginLeft: 8 }}>
+                      ({sallaumRows.filter(r => !r.skip).length} of {sallaumRows.length} selected)
+                    </span>
+                  </span>
                 </div>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
