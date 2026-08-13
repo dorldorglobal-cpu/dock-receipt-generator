@@ -473,6 +473,27 @@ router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
   }
 });
 
+// ── PATCH /api/expenses/:id — lightweight field update (e.g. assign orderRef) ─
+router.patch("/:id", express.json(), async (req, res) => {
+  try {
+    const { orderRef } = req.body;
+    const update = {};
+    if (orderRef !== undefined) {
+      update.orderRef = orderRef.trim();
+      if (update.orderRef) {
+        const o = await Order.findOne({ refNumber: { $regex: `^${update.orderRef}$`, $options: "i" } })
+          .select("_id refNumber").lean();
+        if (o) { update.orderId = o._id; update.orderRef = o.refNumber; }
+      }
+    }
+    const exp = await Expense.findByIdAndUpdate(req.params.id, { $set: update }, { new: true }).lean();
+    if (!exp) return res.status(404).json({ error: "Not found" });
+    res.json(exp);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── PATCH /api/expenses/:id/pay — record a payment (full or partial) ─────────
 router.patch("/:id/pay", upload.single("proof"), async (req, res) => {
   try {

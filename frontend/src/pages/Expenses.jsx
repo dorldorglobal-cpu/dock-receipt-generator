@@ -579,8 +579,11 @@ export default function Expenses() {
 
   const bulkAction = async (action) => {
     if (!selectedIds.length) return;
-    const label = action === "unpay" ? "unpaid" : `paid via ${payMethod}`;
-    if (!window.confirm(`Mark ${selectedIds.length} bill(s) as ${label}?`)) return;
+    setBulkPayConfirm({ action, expenses: selectedExpenses });
+  };
+
+  const executeBulkAction = async (action) => {
+    setBulkPayConfirm(null);
     setPaying(true);
     try {
       const fd = new FormData();
@@ -608,6 +611,28 @@ export default function Expenses() {
     }
   };
 
+  const assignToOrder = async () => {
+    if (!assignRef.trim() || !assignModal) return;
+    setAssignSaving(true);
+    setAssignMsg("");
+    try {
+      const res = await fetch(`${API}/api/expenses/${assignModal._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ orderRef: assignRef.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed");
+      setExpenses(prev => prev.map(e => e._id === assignModal._id ? { ...e, orderRef: data.orderRef || assignRef.trim(), orderId: data.orderId || e.orderId } : e));
+      setAssignModal(null);
+      setAssignRef("");
+    } catch (err) {
+      setAssignMsg("⚠ " + err.message);
+    } finally {
+      setAssignSaving(false);
+    }
+  };
+
   // ── Bill import state ────────────────────────────────────────────────────────
   const [importTab, setImportTab]         = useState("sallaum"); // "sallaum" | "dispatch"
 
@@ -619,6 +644,15 @@ export default function Expenses() {
   const [manualMsg, setManualMsg]           = useState("");
   const [extraLines, setExtraLines]         = useState([]); // [{ description, amount }]
   const [editExtraLines, setEditExtraLines] = useState([]); // extra lines added during edit
+
+  // ── Bulk-pay confirm modal ───────────────────────────────────────────────────
+  const [bulkPayConfirm, setBulkPayConfirm] = useState(null); // { action, expenses }
+
+  // ── Assign orphaned expense to order ────────────────────────────────────────
+  const [assignModal, setAssignModal]     = useState(null); // expense object
+  const [assignRef,   setAssignRef]       = useState("");
+  const [assignMsg,   setAssignMsg]       = useState("");
+  const [assignSaving,setAssignSaving]    = useState(false);
 
   // ── Split Bill state ─────────────────────────────────────────────────────────
   const [showSplitForm, setShowSplitForm]   = useState(false);
@@ -2547,6 +2581,15 @@ export default function Expenses() {
                     {/* Actions */}
                     <td style={{ ...td, textAlign: "right" }}>
                       <div style={{ display: "flex", gap: 6, justifyContent: "flex-end" }}>
+                        {!exp.orderId && !exp.orderRef && (
+                          <button onClick={e => { e.stopPropagation(); setAssignModal(exp); setAssignRef(""); setAssignMsg(""); }}
+                            title="Assign to an order" style={{
+                            background: "#f59e0b20", color: "#f59e0b", border: "1px solid #f59e0b44", borderRadius: 5,
+                            padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
+                          }}>
+                            🔗 Assign
+                          </button>
+                        )}
                         {exp.status === "unpaid" && (
                           <button onClick={() => markPaid(exp)} title="Mark as paid" style={{
                             background: "#34d39920", color: "#34d399", border: "none", borderRadius: 5,
@@ -2951,6 +2994,95 @@ export default function Expenses() {
               background: "#ef4444", color: "#fff", border: "none", borderRadius: 7,
               padding: "8px 18px", fontSize: 13, fontWeight: 600, cursor: "pointer",
             }}>Delete</button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Bulk-pay confirmation modal ── */}
+      {bulkPayConfirm && (
+        <Modal title={bulkPayConfirm.action === "unpay" ? `Mark ${bulkPayConfirm.expenses.length} as Unpaid` : `Mark ${bulkPayConfirm.expenses.length} as Paid`}
+          onClose={() => setBulkPayConfirm(null)}>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+            {bulkPayConfirm.action === "unpay"
+              ? "The following expenses will be marked UNPAID:"
+              : `The following expenses will be marked PAID via ${payMethod} on ${payDate}:`}
+          </p>
+          <div style={{ maxHeight: 300, overflowY: "auto", border: "1px solid var(--border)", borderRadius: 8, marginBottom: 16 }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead>
+                <tr style={{ background: "var(--bg-panel)" }}>
+                  <th style={{ padding: "6px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600 }}>Order</th>
+                  <th style={{ padding: "6px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600 }}>Vendor</th>
+                  <th style={{ padding: "6px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600 }}>Description</th>
+                  <th style={{ padding: "6px 10px", textAlign: "right", color: "var(--text-muted)", fontWeight: 600 }}>Amount</th>
+                  <th style={{ padding: "6px 10px", textAlign: "center", color: "var(--text-muted)", fontWeight: 600 }}>Current</th>
+                </tr>
+              </thead>
+              <tbody>
+                {bulkPayConfirm.expenses.map(e => (
+                  <tr key={e._id} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "6px 10px", color: "#60a5fa" }}>{e.orderRef ? `#${e.orderRef}` : "—"}</td>
+                    <td style={{ padding: "6px 10px", color: "var(--text-secondary)" }}>{e.vendor || "—"}</td>
+                    <td style={{ padding: "6px 10px", color: "var(--text-primary)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      title={e.description}>{e.description || "—"}</td>
+                    <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>{fmt$(e.amount)}</td>
+                    <td style={{ padding: "6px 10px", textAlign: "center" }}>
+                      <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 600,
+                        background: e.status === "paid" ? "#34d39922" : "#f8717122",
+                        color: e.status === "paid" ? "#34d399" : "#f87171" }}>
+                        {e.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
+            <button onClick={() => setBulkPayConfirm(null)} style={{
+              background: "var(--border)", color: "var(--text-secondary)", border: "none", borderRadius: 7,
+              padding: "8px 18px", fontSize: 13, cursor: "pointer",
+            }}>Cancel</button>
+            <button onClick={() => executeBulkAction(bulkPayConfirm.action)} style={{
+              background: bulkPayConfirm.action === "unpay" ? "#dc2626" : "#059669",
+              color: "#fff", border: "none", borderRadius: 7,
+              padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+            }}>
+              {bulkPayConfirm.action === "unpay" ? `↩ Confirm Mark Unpaid` : `✅ Confirm Mark Paid`}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Assign orphaned expense to order ── */}
+      {assignModal && (
+        <Modal title="Assign to Order" onClose={() => { setAssignModal(null); setAssignRef(""); setAssignMsg(""); }}>
+          <p style={{ color: "var(--text-muted)", fontSize: 13, marginTop: 0 }}>
+            <strong style={{ color: "var(--text-primary)" }}>{assignModal.description}</strong><br />
+            {assignModal.vendor} — {fmt$(assignModal.amount)}
+          </p>
+          <label style={{ fontSize: 12, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>Order Reference #</label>
+          <input
+            value={assignRef}
+            onChange={e => setAssignRef(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && assignToOrder()}
+            placeholder="e.g. 13929"
+            autoFocus
+            style={{ width: "100%", padding: "9px 12px", borderRadius: 7, border: "1px solid var(--border)",
+              background: "var(--bg-elevated)", color: "var(--text-primary)", fontSize: 14, boxSizing: "border-box" }}
+          />
+          {assignMsg && <p style={{ color: "#f87171", fontSize: 12, marginTop: 6 }}>{assignMsg}</p>}
+          <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 14 }}>
+            <button onClick={() => { setAssignModal(null); setAssignRef(""); setAssignMsg(""); }} style={{
+              background: "var(--border)", color: "var(--text-secondary)", border: "none", borderRadius: 7,
+              padding: "8px 18px", fontSize: 13, cursor: "pointer",
+            }}>Cancel</button>
+            <button onClick={assignToOrder} disabled={assignSaving || !assignRef.trim()} style={{
+              background: "#f59e0b", color: "#000", border: "none", borderRadius: 7,
+              padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: assignSaving ? 0.6 : 1,
+            }}>
+              {assignSaving ? "Saving…" : "🔗 Assign"}
+            </button>
           </div>
         </Modal>
       )}
