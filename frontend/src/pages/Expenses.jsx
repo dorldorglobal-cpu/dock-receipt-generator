@@ -3080,6 +3080,18 @@ export default function Expenses() {
               </tbody>
             </table>
           </div>
+          {bulkPayConfirm.action !== "unpay" && payMethod === "Check" && (
+            <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 14 }}>
+              <label style={{ fontSize: 13, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>Check #</label>
+              <input
+                value={payCheckNo}
+                onChange={e => setPayCheckNo(e.target.value)}
+                placeholder="Required"
+                autoFocus
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${payCheckNo.trim() ? "var(--border)" : "#f59e0b"}`, background: "var(--bg-elevated)", color: "var(--text-primary)", fontSize: 14, fontWeight: 600 }}
+              />
+            </div>
+          )}
           <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
             <button onClick={() => setBulkPayConfirm(null)} style={{
               background: "var(--border)", color: "var(--text-secondary)", border: "none", borderRadius: 7,
