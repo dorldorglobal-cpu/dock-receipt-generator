@@ -312,6 +312,8 @@ export default function Customers() {
   const [sortKey, setSortKey]       = useState("companyName");
   const [sortDir, setSortDir]       = useState(1);
   const [activeFilter, setActiveFilter] = useState(null); // "withOrders" | "balance" | "overdue"
+  const [showBuyerAccounts, setShowBuyerAccounts] = useState(false);
+  const [buyerSearch, setBuyerSearch] = useState("");
 
   const load = async (q = "") => {
     setLoading(true);
@@ -421,6 +423,22 @@ export default function Customers() {
 
   const toggleFilter = (f) => setActiveFilter(a => a === f ? null : f);
 
+  // Build flat list of all buyer accounts across all customers
+  const SUSPICIOUS_WORDS = /^(ltd|llc|inc|corp|company|enterprise|enterprises|trading|global|group|international|logistics|import|export|auto|cars|motors|vehicle|vehicles|services|solutions|holdings|limited|co|the)$/i;
+  const allBuyerAccounts = customers.flatMap(c =>
+    (c.buyerAccounts || []).map(acct => ({
+      account: acct,
+      customer: c.companyName,
+      customerId: c._id,
+      suspicious: acct.trim().split(/\s+/).every(w => SUSPICIOUS_WORDS.test(w)) || acct.trim().split(/\s+/).length <= 1,
+    }))
+  ).sort((a, b) => a.account.localeCompare(b.account));
+
+  const filteredBuyerAccounts = buyerSearch
+    ? allBuyerAccounts.filter(b => b.account.toLowerCase().includes(buyerSearch.toLowerCase()) || b.customer.toLowerCase().includes(buyerSearch.toLowerCase()))
+    : allBuyerAccounts;
+  const suspiciousCount = allBuyerAccounts.filter(b => b.suspicious).length;
+
   const filtered = sorted.filter(c => {
     if (activeFilter === "withOrders") return c.orderCount > 0;
     if (activeFilter === "balance")    return (c.balance || 0) > 0;
@@ -509,8 +527,20 @@ export default function Customers() {
             placeholder="Search name, email, phone…"
             style={{ maxWidth: 320 }}
           />
-          <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
-            {loading ? "Loading…" : `${filtered.length} customer${filtered.length !== 1 ? "s" : ""}${activeFilter ? " (filtered)" : ""}`}
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <button onClick={() => { setShowBuyerAccounts(true); setBuyerSearch(""); }}
+              style={{ fontSize: 12, padding: "6px 14px", borderRadius: 7, border: "1px solid var(--border)",
+                background: "var(--bg-elevated)", color: "var(--text-secondary)", cursor: "pointer", display: "flex", alignItems: "center", gap: 6 }}>
+              🏷 Buyer Accounts
+              {suspiciousCount > 0 && (
+                <span style={{ background: "#f59e0b", color: "#000", borderRadius: 10, fontSize: 10, fontWeight: 700, padding: "1px 6px" }}>
+                  {suspiciousCount} ⚠
+                </span>
+              )}
+            </button>
+            <div style={{ fontSize: 12, color: "var(--text-muted)" }}>
+              {loading ? "Loading…" : `${filtered.length} customer${filtered.length !== 1 ? "s" : ""}${activeFilter ? " (filtered)" : ""}`}
+            </div>
           </div>
         </div>
 
@@ -781,6 +811,72 @@ export default function Customers() {
                 Merge — Keep Selected, Delete Other
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Buyer Accounts modal */}
+      {showBuyerAccounts && (
+        <div className="modal-backdrop" onClick={() => setShowBuyerAccounts(false)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 700, maxHeight: "85vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+              <div>
+                <h2 style={{ margin: 0 }}>🏷 Buyer Accounts</h2>
+                <p style={{ margin: "4px 0 0", fontSize: 13, color: "var(--text-muted)" }}>
+                  {allBuyerAccounts.length} buyer accounts across {customers.filter(c => c.buyerAccounts?.length).length} customers
+                  {suspiciousCount > 0 && <span style={{ color: "#f59e0b", marginLeft: 10 }}>⚠ {suspiciousCount} may need review</span>}
+                </p>
+              </div>
+              <button onClick={() => setShowBuyerAccounts(false)}
+                style={{ background: "none", border: "none", fontSize: 20, cursor: "pointer", color: "var(--text-muted)" }}>✕</button>
+            </div>
+
+            <input
+              value={buyerSearch}
+              onChange={e => setBuyerSearch(e.target.value)}
+              placeholder="Search accounts or customers…"
+              style={{ marginBottom: 12, padding: "8px 12px", borderRadius: 7, border: "1px solid var(--border)", background: "var(--bg-elevated)", color: "var(--text-primary)", fontSize: 13 }}
+              autoFocus
+            />
+
+            <div style={{ overflowY: "auto", flex: 1 }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                <thead style={{ position: "sticky", top: 0, background: "var(--bg-panel)", zIndex: 1 }}>
+                  <tr>
+                    <th style={{ padding: "8px 12px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, borderBottom: "1px solid var(--border)" }}>Buyer Account</th>
+                    <th style={{ padding: "8px 12px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, borderBottom: "1px solid var(--border)" }}>Mapped to Customer</th>
+                    <th style={{ padding: "8px 12px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600, borderBottom: "1px solid var(--border)" }}>Flag</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {filteredBuyerAccounts.length === 0 && (
+                    <tr><td colSpan={3} style={{ padding: "30px", textAlign: "center", color: "var(--text-muted)" }}>No buyer accounts found.</td></tr>
+                  )}
+                  {filteredBuyerAccounts.map((b, i) => (
+                    <tr key={i} style={{ borderBottom: "1px solid var(--border)", background: b.suspicious ? "#f59e0b08" : "transparent" }}>
+                      <td style={{ padding: "9px 12px", fontWeight: 600, color: b.suspicious ? "#f59e0b" : "var(--text-primary)" }}>
+                        {b.account}
+                      </td>
+                      <td style={{ padding: "9px 12px", color: "#60a5fa", cursor: "pointer" }}
+                        onClick={() => { setShowBuyerAccounts(false); setEditing(customers.find(c => c._id === b.customerId)); }}>
+                        {b.customer}
+                      </td>
+                      <td style={{ padding: "9px 12px" }}>
+                        {b.suspicious && (
+                          <span style={{ fontSize: 11, color: "#f59e0b", background: "#f59e0b18", borderRadius: 5, padding: "2px 8px", fontWeight: 600 }}>
+                            ⚠ Review
+                          </span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <p style={{ fontSize: 11, color: "var(--text-muted)", marginTop: 12, marginBottom: 0 }}>
+              ⚠ flagged = single word or generic term (ltd, enterprise, company, etc.) — may be a customer name accidentally used as a buyer account. Click the customer name to edit.
+            </p>
           </div>
         </div>
       )}
