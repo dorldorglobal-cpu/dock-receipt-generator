@@ -612,6 +612,7 @@ export default function Expenses() {
       }));
       setSelected({}); setSelectedCache({});
       setBulkProofFile(null);
+      setPayCheckNo("");
       setFilterStatus("");
     } catch (err) {
       window.alert("Failed: " + err.message);
@@ -3008,9 +3009,11 @@ export default function Expenses() {
 
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
                 <button onClick={() => setPayConfirm(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
-                <button onClick={submitMarkPaid} disabled={!entered || entered <= 0}
-                  style={{ padding:"8px 20px", background: entered > 0 ? "#059669" : "var(--border)", color:"#fff", border:"none", borderRadius:8, cursor: entered > 0 ? "pointer" : "not-allowed", fontWeight:600 }}>
+                <button onClick={submitMarkPaid}
+                  disabled={!entered || entered <= 0 || (payConfirmMethod === "Check" && !payConfirmCheckNo.trim())}
+                  style={{ padding:"8px 20px", background: (entered > 0 && !(payConfirmMethod === "Check" && !payConfirmCheckNo.trim())) ? "#059669" : "var(--border)", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                   {isPartial ? "Record Partial Payment" : "✓ Mark Paid"}
+                  {payConfirmMethod === "Check" && !payConfirmCheckNo.trim() && <span style={{ display:"block", fontSize:10, fontWeight:400 }}>Enter check # first</span>}
                 </button>
               </div>
             </div>
@@ -3082,12 +3085,16 @@ export default function Expenses() {
               background: "var(--border)", color: "var(--text-secondary)", border: "none", borderRadius: 7,
               padding: "8px 18px", fontSize: 13, cursor: "pointer",
             }}>Cancel</button>
-            <button onClick={() => executeBulkAction(bulkPayConfirm.action)} style={{
-              background: bulkPayConfirm.action === "unpay" ? "#dc2626" : "#059669",
-              color: "#fff", border: "none", borderRadius: 7,
-              padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
-            }}>
+            <button onClick={() => executeBulkAction(bulkPayConfirm.action)}
+              disabled={bulkPayConfirm.action !== "unpay" && payMethod === "Check" && !payCheckNo.trim()}
+              style={{
+                background: bulkPayConfirm.action === "unpay" ? "#dc2626" : "#059669",
+                color: "#fff", border: "none", borderRadius: 7,
+                padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                opacity: (bulkPayConfirm.action !== "unpay" && payMethod === "Check" && !payCheckNo.trim()) ? 0.4 : 1,
+              }}>
               {bulkPayConfirm.action === "unpay" ? `↩ Confirm Mark Unpaid` : `✅ Confirm Mark Paid`}
+              {bulkPayConfirm.action !== "unpay" && payMethod === "Check" && !payCheckNo.trim() && <span style={{ display: "block", fontSize: 10, fontWeight: 400 }}>Enter check # first</span>}
             </button>
           </div>
         </Modal>
