@@ -1829,6 +1829,13 @@ export default function OrderDetails() {
       {/* ── Page Header ─────────────────────────────── */}
       <div className="page-header">
         <div>
+          {order.notes && (
+            <div style={{ display:"inline-flex", alignItems:"flex-start", gap:6, background:"#fefce8",
+              border:"1px solid #fbbf24", borderRadius:8, padding:"6px 12px", marginBottom:8, maxWidth:520 }}>
+              <span style={{ fontSize:15, flexShrink:0 }}>📝</span>
+              <span style={{ fontSize:13, color:"#92400e", fontWeight:600, lineHeight:1.4, whiteSpace:"pre-wrap" }}>{order.notes}</span>
+            </div>
+          )}
           <h1 style={{ fontSize: 32, fontWeight: 800 }}>Order #{order.refNumber}</h1>
           <p style={{ color: "var(--text-primary)", fontWeight: 500 }}>{order.year} {order.make} {order.model} — {order.vin}</p>
           {order.voyageFolderName && (
