@@ -1133,7 +1133,9 @@ export default function Containers() {
                     {[
                       { label:"Draft BL",            icon:"📝" },
                       { label:"Stamped BL",          icon:"📌" },
+                      { label:"HBL",                 icon:"🚢" },
                       { label:"Booking Confirmation",icon:"📋" },
+                      { label:"Title",               icon:"📃" },
                       { label:"Invoice",             icon:"🧾" },
                       { label:"Other",               icon:"📎" },
                     ].map(({ label, icon }) => (
@@ -1226,7 +1228,7 @@ export default function Containers() {
                                 }}
                                 style={{ fontSize:10, padding:"2px 4px", borderRadius:4, border:"1px solid var(--border)",
                                   background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
-                                {["Draft BL","Stamped BL","Booking Confirmation","Invoice","Other","Document"]
+                                {["Draft BL","Stamped BL","HBL","Booking Confirmation","Title","Invoice","Other","Document"]
                                   .map(o => <option key={o} value={o}>{o}</option>)}
                               </select>
                               <span style={{ fontSize:10, color:"var(--text-muted)" }}>
