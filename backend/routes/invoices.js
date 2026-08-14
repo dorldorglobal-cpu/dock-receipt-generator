@@ -842,30 +842,51 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   const TBL_HDR_H = 24;
   doc.rect(ML, y, W, TBL_HDR_H).fill(navy);
   doc.fill(white).font("Helvetica-Bold").fontSize(9).text("VEHICLE / DESCRIPTION", ML + 10, y + 8, { lineBreak:false });
-  doc.fill(white).font("Helvetica-Bold").fontSize(9).text("REF #", ML + 260, y + 8, { lineBreak:false });
+  doc.fill(white).font("Helvetica-Bold").fontSize(9).text("REF #", ML + 310, y + 8, { lineBreak:false });
   doc.fill(white).font("Helvetica-Bold").fontSize(9).text("AMOUNT", ML, y + 8, { align:"right", width: W - 10, lineBreak:false });
   y += TBL_HDR_H;
 
-  invoices.forEach((inv, idx) => {
-    const order = orderMap[String(inv.orderId)] || null;
-    const vehicle = txt(inv.vehicle || [order?.year, order?.make, order?.model].filter(Boolean).join(" ") || "—");
-    const vin = inv.vin || order?.vin || "";
-    const descLine1 = vehicle;
-    const descLine2 = vin ? `VIN: ${vin}` : "";
-    // also list first item description if meaningful
-    const itemDesc = (inv.items || []).map(i => txt(i.description || "")).filter(Boolean).join(" | ");
-    const fullDesc = [descLine1, descLine2, itemDesc].filter(Boolean).join("\n");
-    const textH = doc.heightOfString(fullDesc, { width: 240, font:"Helvetica", fontSize:9 });
-    const rowH = Math.max(28, textH + 12);
+  const ITEM_X = ML + 20; // indent for charge line items
+  const REF_X  = ML + 310;
+  const AMT_W  = W - 10;
 
-    if (idx % 2 === 0) doc.rect(ML, y, W, rowH).fill("#f8fafc");
-    else               doc.rect(ML, y, W, rowH).fill(white);
+  invoices.forEach((inv, idx) => {
+    const order   = orderMap[String(inv.orderId)] || null;
+    const vehicle = txt(inv.vehicle || [order?.year, order?.make, order?.model].filter(Boolean).join(" ") || "—");
+    const vin     = inv.vin || order?.vin || "";
+    const items   = (inv.items || []).filter(i => i.description && Number(i.amount || 0) !== 0);
+
+    // Calculate row height: vehicle header (28px) + item lines (14px each) + subtotal (18px) + padding
+    const rowH = 28 + items.length * 14 + (items.length > 0 ? 20 : 0);
+
+    const bg = idx % 2 === 0 ? "#f8fafc" : white;
+    doc.rect(ML, y, W, rowH).fill(bg);
     doc.rect(ML, y, W, rowH).lineWidth(0.3).strokeColor("#e2e8f0").stroke();
 
-    doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(descLine1, ML + 10, y + 6, { width:240, lineBreak:false });
-    if (descLine2) doc.fill(muted).font("Helvetica").fontSize(8).text(descLine2, ML + 10, y + 17, { width:240, lineBreak:false });
-    doc.fill(steel).font("Helvetica").fontSize(9).text(inv.orderRef || "—", ML + 260, y + 6, { lineBreak:false });
-    doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(fmt(Number(inv.total||0)), ML, y + 6, { align:"right", width: W - 10, lineBreak:false });
+    // Vehicle header line
+    doc.fill(dark).font("Helvetica-Bold").fontSize(9.5).text(vehicle, ML + 10, y + 7, { width: 290, lineBreak:false });
+    doc.fill(steel).font("Helvetica").fontSize(9).text(inv.orderRef || "—", REF_X, y + 7, { lineBreak:false });
+    if (vin) doc.fill(muted).font("Helvetica").fontSize(8).text(`VIN: ${vin}`, ML + 10, y + 19, { width: 290, lineBreak:false });
+
+    // Charge line items
+    let iy = y + (vin ? 33 : 22);
+    if (items.length > 0) {
+      items.forEach(item => {
+        doc.fill(muted).font("Helvetica").fontSize(8.5).text(txt(item.description || ""), ITEM_X, iy, { width: 270, lineBreak:false });
+        doc.fill(dark).font("Helvetica").fontSize(8.5).text(fmt(Number(item.amount || 0)), ML, iy, { align:"right", width: AMT_W, lineBreak:false });
+        iy += 14;
+      });
+      // Subtotal line for this vehicle
+      iy += 2;
+      doc.moveTo(REF_X, iy).lineTo(ML + W, iy).lineWidth(0.3).strokeColor("#d1d5db").stroke();
+      iy += 4;
+      doc.fill(dark).font("Helvetica-Bold").fontSize(9).text("Subtotal", ITEM_X, iy, { lineBreak:false });
+      doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(fmt(Number(inv.total||0)), ML, iy, { align:"right", width: AMT_W, lineBreak:false });
+    } else {
+      // No items — just show total on header line
+      doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(fmt(Number(inv.total||0)), ML, y + 7, { align:"right", width: AMT_W, lineBreak:false });
+    }
+
     y += rowH;
   });
 
