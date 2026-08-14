@@ -2351,7 +2351,17 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
 
         for (const split of row.splitBills) {
           if (!split.amount) continue;
-          if (split.createBill === false) continue;
+          if (split.createBill === false && !split.existingExpenseId) continue;
+
+          // 0. User manually picked an existing expense to mark paid
+          if (split.existingExpenseId) {
+            await Expense.updateOne(
+              { _id: split.existingExpenseId },
+              { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
+            );
+            updated++;
+            continue;
+          }
 
           const refKey = (split.orderRef || "").trim().toLowerCase();
 
@@ -2409,6 +2419,16 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       }
 
       // No bill on file at all — create one now from the payment proof details
+      // User manually picked an existing expense to mark paid (single row)
+      if (row.existingExpenseId) {
+        await Expense.updateOne(
+          { _id: row.existingExpenseId },
+          { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
+        );
+        updated++;
+        continue;
+      }
+
       if (row.createBill) {
         let orderId = null;
         if (row.orderRef) {

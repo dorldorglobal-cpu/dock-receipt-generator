@@ -836,6 +836,44 @@ export default function Expenses() {
   const [proofRows,        setProofRows]         = useState([]);
   const [proofLoading,     setProofLoading]      = useState(false);
   const [proofMsg,         setProofMsg]          = useState("");
+  // picker: { rowIdx, splitIdx (null=whole row), results, search }
+  const [expPicker,        setExpPicker]         = useState(null);
+  const [expPickerSearch,  setExpPickerSearch]   = useState("");
+  const [expPickerResults, setExpPickerResults]  = useState([]);
+  const [expPickerLoading, setExpPickerLoading]  = useState(false);
+
+  const openExpPicker = async (rowIdx, splitIdx = null, vendorHint = "") => {
+    setExpPicker({ rowIdx, splitIdx });
+    setExpPickerSearch("");
+    setExpPickerLoading(true);
+    setExpPickerResults([]);
+    try {
+      const q = vendorHint ? `?search=${encodeURIComponent(vendorHint)}&status=unpaid` : "?status=unpaid";
+      const res = await fetch(`${API}/api/expenses${q}`);
+      const data = await res.json();
+      setExpPickerResults(Array.isArray(data) ? data : []);
+    } catch (_) {}
+    finally { setExpPickerLoading(false); }
+  };
+
+  const selectExistingExp = (exp) => {
+    const { rowIdx, splitIdx } = expPicker;
+    setProofRows(rs => rs.map((r, i) => {
+      if (i !== rowIdx) return r;
+      if (splitIdx === null) {
+        // whole row — mark as picking existing
+        return { ...r, createBill: false, existingExpenseId: exp._id, existingExpenseDesc: `#${exp.orderRef || "—"} ${exp.description} ${fmt$(exp.amount)}`, selected: true };
+      } else {
+        // split line
+        const updated = r.splitBills.map((s, k) => k !== splitIdx ? s : {
+          ...s, createBill: false, existingExpenseId: exp._id,
+          existingExpenseDesc: `#${exp.orderRef || "—"} ${exp.description} ${fmt$(exp.amount)}`,
+        });
+        return { ...r, splitBills: updated };
+      }
+    }));
+    setExpPicker(null);
+  };
 
   const parseProofFile = async (file) => {
     setProofLoading(true); setProofMsg(""); setProofRows([]); setProofDriveFile(null);
@@ -2200,26 +2238,40 @@ export default function Expenses() {
                           <tr>
                             <td></td>
                             <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid var(--border-muted)" }}>
-                              <div style={{ display:"flex", gap:8, alignItems:"center", background:"var(--bg-base)", border:"1px solid #06b6d4", borderRadius:6, padding:"6px 10px" }}>
-                                <label style={{ fontSize:10, color:"var(--text-secondary)" }}>Order Ref
-                                  <input value={row.orderRef} placeholder="e.g. 13798" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))}
-                                    style={{ display:"block", width:80, marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"#60a5fa", fontSize:11, boxSizing:"border-box" }} />
-                                </label>
-                                <label style={{ fontSize:10, color:"var(--text-secondary)" }}>Category
-                                  <select value={row.newCategory} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newCategory:e.target.value}:r))}
-                                    style={{ display:"block", marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"var(--text-primary)", fontSize:11 }}>
-                                    {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
-                                  </select>
-                                </label>
-                                <label style={{ fontSize:10, color:"var(--text-secondary)", flex:1 }}>Description
-                                  <input value={row.newDescription} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newDescription:e.target.value}:r))}
-                                    style={{ display:"block", width:"100%", marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"var(--text-primary)", fontSize:11, boxSizing:"border-box" }} />
-                                </label>
+                              <div style={{ display:"flex", gap:8, alignItems:"center", background:"var(--bg-base)", border:"1px solid #06b6d4", borderRadius:6, padding:"6px 10px", flexWrap:"wrap" }}>
+                                {row.existingExpenseId ? (
+                                  <div style={{ flex:1, display:"flex", alignItems:"center", gap:8 }}>
+                                    <span style={{ fontSize:12, color:"#34d399", fontWeight:600 }}>🔗 Will mark paid: {row.existingExpenseDesc}</span>
+                                    <button onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,existingExpenseId:null,existingExpenseDesc:null}:r))}
+                                      style={{ fontSize:11, color:"#f87171", background:"none", border:"none", cursor:"pointer" }}>✕ Change</button>
+                                  </div>
+                                ) : (
+                                  <>
+                                    <label style={{ fontSize:10, color:"var(--text-secondary)" }}>Order Ref
+                                      <input value={row.orderRef} placeholder="e.g. 13798" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))}
+                                        style={{ display:"block", width:80, marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"#60a5fa", fontSize:11, boxSizing:"border-box" }} />
+                                    </label>
+                                    <label style={{ fontSize:10, color:"var(--text-secondary)" }}>Category
+                                      <select value={row.newCategory} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newCategory:e.target.value}:r))}
+                                        style={{ display:"block", marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"var(--text-primary)", fontSize:11 }}>
+                                        {CATEGORIES.map(c=><option key={c} value={c}>{c}</option>)}
+                                      </select>
+                                    </label>
+                                    <label style={{ fontSize:10, color:"var(--text-secondary)", flex:1 }}>Description
+                                      <input value={row.newDescription} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,newDescription:e.target.value}:r))}
+                                        style={{ display:"block", width:"100%", marginTop:2, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"2px 6px", color:"var(--text-primary)", fontSize:11, boxSizing:"border-box" }} />
+                                    </label>
+                                  </>
+                                )}
+                                <button onClick={() => openExpPicker(i, null, row.payeeName)}
+                                  style={{ fontSize:10, color:"#34d399", background:"none", border:"1px solid #34d399", borderRadius:5, padding:"4px 10px", cursor:"pointer", fontWeight:600, alignSelf:"flex-end", whiteSpace:"nowrap" }}>
+                                  🔗 Pick Existing Bill
+                                </button>
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, selected:true } : r))}
                                   style={{ fontSize:10, color:"#fff", background:"#059669", border:"none", borderRadius:5, padding:"4px 10px", cursor:"pointer", fontWeight:600, alignSelf:"flex-end" }}>
                                   ✓ Ready
                                 </button>
-                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill:false, selected:false } : r))}
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill:false, existingExpenseId:null, selected:false } : r))}
                                   style={{ fontSize:10, color:"var(--text-secondary)", background:"none", border:"1px solid var(--border)", borderRadius:5, padding:"4px 10px", cursor:"pointer", alignSelf:"flex-end" }}>
                                   Cancel
                                 </button>
@@ -2248,13 +2300,30 @@ export default function Expenses() {
                                       style={{ flex:1, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"var(--text-primary)", fontSize:11 }} />
                                     <input type="number" step="0.01" value={split.amount} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,amount:e.target.value}:s)}:r))}
                                       style={{ width:80, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"#34d399", fontSize:11, fontWeight:600 }} />
-                                    {/* Create Bill toggle per line */}
-                                    <button
-                                      title={split.createBill !== false ? "Will create a new bill — click to skip" : "Click to create a new bill for this line"}
-                                      onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,createBill:s.createBill===false?true:false}:s)}:r))}
-                                      style={{ fontSize:10, padding:"2px 6px", borderRadius:5, border:`1px solid ${split.createBill===false ? "var(--border)" : "#06b6d4"}`, background:"none", color: split.createBill===false ? "#4b5563" : "#06b6d4", cursor:"pointer", whiteSpace:"nowrap" }}>
-                                      {split.createBill === false ? "📝 Skip" : "📝 New Bill"}
-                                    </button>
+                                    {/* Pick existing or create new */}
+                                    {split.existingExpenseId ? (
+                                      <span style={{ fontSize:10, color:"#34d399", whiteSpace:"nowrap", maxWidth:140, overflow:"hidden", textOverflow:"ellipsis" }}
+                                        title={split.existingExpenseDesc}>
+                                        🔗 {split.existingExpenseDesc}
+                                        <button onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,existingExpenseId:null,existingExpenseDesc:null,createBill:true}:s)}:r))}
+                                          style={{ marginLeft:4, background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:11 }}>✕</button>
+                                      </span>
+                                    ) : (
+                                      <>
+                                        <button
+                                          title={split.createBill !== false ? "Will create a new bill — click to skip" : "Click to create a new bill for this line"}
+                                          onClick={() => setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,createBill:s.createBill===false?true:false}:s)}:r))}
+                                          style={{ fontSize:10, padding:"2px 6px", borderRadius:5, border:`1px solid ${split.createBill===false ? "var(--border)" : "#06b6d4"}`, background:"none", color: split.createBill===false ? "#4b5563" : "#06b6d4", cursor:"pointer", whiteSpace:"nowrap" }}>
+                                          {split.createBill === false ? "📝 Skip" : "📝 New Bill"}
+                                        </button>
+                                        <button
+                                          title="Pick an existing unpaid bill to mark as paid"
+                                          onClick={() => openExpPicker(i, k, row.payeeName)}
+                                          style={{ fontSize:10, padding:"2px 6px", borderRadius:5, border:"1px solid #34d399", background:"none", color:"#34d399", cursor:"pointer", whiteSpace:"nowrap" }}>
+                                          🔗 Pick Bill
+                                        </button>
+                                      </>
+                                    )}
                                     <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, splitBills: r.splitBills.filter((_,sk)=>sk!==k) } : r))}
                                       title="Remove this line"
                                       style={{ fontSize:12, color:"#f87171", background:"none", border:"none", cursor:"pointer", padding:"2px 4px" }}>
@@ -3109,6 +3178,68 @@ export default function Expenses() {
               {bulkPayConfirm.action !== "unpay" && payMethod === "Check" && !payCheckNo.trim() && <span style={{ display: "block", fontSize: 10, fontWeight: 400 }}>Enter check # first</span>}
             </button>
           </div>
+        </Modal>
+      )}
+
+      {/* ── Existing bill picker (for payment proof matching) ── */}
+      {expPicker && (
+        <Modal title="Pick an Existing Bill to Mark Paid" onClose={() => setExpPicker(null)}>
+          <input
+            value={expPickerSearch}
+            onChange={e => {
+              setExpPickerSearch(e.target.value);
+              const q = e.target.value.toLowerCase();
+              // filter client-side
+            }}
+            placeholder="Search by order #, VIN, description, vendor…"
+            autoFocus
+            style={{ width:"100%", padding:"8px 12px", borderRadius:7, border:"1px solid var(--border)", background:"var(--bg-elevated)", color:"var(--text-primary)", fontSize:13, boxSizing:"border-box", marginBottom:10 }}
+          />
+          {expPickerLoading && <p style={{ color:"var(--text-muted)", fontSize:13 }}>Loading…</p>}
+          <div style={{ maxHeight:360, overflowY:"auto", border:"1px solid var(--border)", borderRadius:8 }}>
+            <table style={{ width:"100%", borderCollapse:"collapse", fontSize:12 }}>
+              <thead style={{ position:"sticky", top:0, background:"var(--bg-panel)" }}>
+                <tr>
+                  {["Order","Vendor","Description","Amount","Status"].map(h => (
+                    <th key={h} style={{ padding:"6px 10px", textAlign:"left", color:"var(--text-muted)", fontWeight:600, borderBottom:"1px solid var(--border)" }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {(() => {
+                  const q = expPickerSearch.toLowerCase();
+                  const filtered = expPickerResults.filter(e =>
+                    !q ||
+                    (e.orderRef || "").toLowerCase().includes(q) ||
+                    (e.vendor || "").toLowerCase().includes(q) ||
+                    (e.description || "").toLowerCase().includes(q) ||
+                    (e.vin || "").toLowerCase().includes(q) ||
+                    String(e.amount || "").includes(q)
+                  );
+                  if (!filtered.length) return (
+                    <tr><td colSpan={5} style={{ padding:"20px", textAlign:"center", color:"var(--text-muted)" }}>No unpaid bills found.</td></tr>
+                  );
+                  return filtered.map(e => (
+                    <tr key={e._id} onClick={() => selectExistingExp(e)}
+                      style={{ borderTop:"1px solid var(--border)", cursor:"pointer" }}
+                      onMouseEnter={ev => ev.currentTarget.style.background = "var(--bg-hover)"}
+                      onMouseLeave={ev => ev.currentTarget.style.background = ""}>
+                      <td style={{ padding:"7px 10px", color:"#60a5fa", fontWeight:600 }}>{e.orderRef ? `#${e.orderRef}` : "—"}</td>
+                      <td style={{ padding:"7px 10px", color:"var(--text-secondary)" }}>{e.vendor || "—"}</td>
+                      <td style={{ padding:"7px 10px", color:"var(--text-primary)", maxWidth:220, overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }} title={e.description}>{e.description || "—"}</td>
+                      <td style={{ padding:"7px 10px", color:"#34d399", fontWeight:700, whiteSpace:"nowrap" }}>{fmt$(e.amount)}</td>
+                      <td style={{ padding:"7px 10px" }}>
+                        <span style={{ fontSize:10, padding:"2px 6px", borderRadius:4, fontWeight:600, background:"#f8717122", color:"#f87171" }}>{e.status}</span>
+                      </td>
+                    </tr>
+                  ));
+                })()}
+              </tbody>
+            </table>
+          </div>
+          <p style={{ fontSize:11, color:"var(--text-muted)", marginTop:8, marginBottom:0 }}>
+            Click a row to select it — the proof will be attached and the bill marked paid.
+          </p>
         </Modal>
       )}
 
