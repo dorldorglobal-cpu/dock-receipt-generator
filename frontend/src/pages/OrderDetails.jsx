@@ -55,6 +55,7 @@ const defaultCharges = {
   dryRunFee: "0.00",
   inOutFee: "0.00",
   miscellaneousFee: "0.00",
+  extraTows: [], // [{ description, amount, cost }]
 };
 
 function TowingVerifyForm({ verify, orderId, onDone }) {
@@ -860,6 +861,11 @@ export default function OrderDetails() {
       ].filter(Boolean).join(" — ");
       items.push({ description: towDesc, amount: charges.towingCharge });
     }
+    (charges.extraTows || []).forEach(t => {
+      if (t.amount && Number(t.amount) > 0) {
+        items.push({ description: t.description ? `Towing — ${t.description}` : "Towing", amount: String(t.amount) });
+      }
+    });
 
     if (charges.oceanFreight && Number(charges.oceanFreight) > 0) {
       const ocnCat  = charges.oceanCategory ? `Cat. ${charges.oceanCategory}` : "Cat. 1";
@@ -2014,11 +2020,12 @@ export default function OrderDetails() {
             const statusBg  = inv.status === "paid" ? "rgba(5,150,105,0.12)" : inv.status === "sent" ? "rgba(37,99,235,0.12)" : "rgba(107,114,128,0.12)";
 
             // Build current sell total from order charges to detect mismatch
-            const curTow  = Number(charges.towingCharge || 0);
+            const curTow      = Number(charges.towingCharge || 0);
+            const curExtraTows = (charges.extraTows || []).reduce((s,t) => s + Number(t.amount||0), 0);
             const curOcn  = Number(charges.oceanFreight || 0);
             const curFees = feeRows.reduce((s,[k]) => s + Number(charges[k]||0), 0);
             const curDisc = Number(charges.discount || 0);
-            const curSell = curTow + curOcn + curFees + curDisc;
+            const curSell = curTow + curExtraTows + curOcn + curFees + curDisc;
             const invTotal = Number(inv.total || 0);
             const outOfSync = inv.status !== "paid" && Math.abs(curSell - invTotal) >= 0.01;
 
@@ -4491,6 +4498,54 @@ export default function OrderDetails() {
                 value={charges.towingCharge}
                 onChange={(v) => updateCharge("towingCharge", v)}
               />
+
+              {/* Extra tow lines */}
+              {(charges.extraTows || []).map((tow, ti) => (
+                <div key={ti} style={{ display:"grid", gridTemplateColumns:"1fr 120px 120px auto", gap:6, alignItems:"center", marginBottom:4 }}>
+                  <input
+                    value={tow.description}
+                    onChange={e => {
+                      const updated = [...(charges.extraTows||[])];
+                      updated[ti] = { ...updated[ti], description: e.target.value };
+                      updateCharge("extraTows", updated);
+                    }}
+                    placeholder="e.g. Warehouse to Port"
+                    style={{ padding:"6px 8px", fontSize:12, border:"1px solid var(--border)", borderRadius:5, background:"var(--bg-input)", color:"var(--text-primary)" }}
+                  />
+                  <input
+                    type="number"
+                    value={tow.amount || ""}
+                    onChange={e => {
+                      const updated = [...(charges.extraTows||[])];
+                      updated[ti] = { ...updated[ti], amount: e.target.value };
+                      updateCharge("extraTows", updated);
+                    }}
+                    placeholder="Sell"
+                    style={{ padding:"6px 8px", fontSize:13, textAlign:"right", border:"1px solid var(--border)", borderRadius:5, background:"var(--bg-input)", color:"var(--accent)" }}
+                  />
+                  <input
+                    type="number"
+                    value={tow.cost || ""}
+                    onChange={e => {
+                      const updated = [...(charges.extraTows||[])];
+                      updated[ti] = { ...updated[ti], cost: e.target.value };
+                      updateCharge("extraTows", updated);
+                    }}
+                    placeholder="Cost"
+                    style={{ padding:"6px 8px", fontSize:13, textAlign:"right", border:"1px solid var(--border)", borderRadius:5, background:"var(--bg-input)", color:"#f87171" }}
+                  />
+                  <button onClick={() => {
+                    const updated = (charges.extraTows||[]).filter((_,i) => i !== ti);
+                    updateCharge("extraTows", updated);
+                  }} style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:16, padding:"0 4px" }}>✕</button>
+                </div>
+              ))}
+              <button onClick={() => updateCharge("extraTows", [...(charges.extraTows||[]), { description:"", amount:"", cost:"" }])}
+                style={{ fontSize:11, color:"var(--accent)", background:"none", border:"1px dashed var(--border)", borderRadius:5,
+                  padding:"4px 10px", cursor:"pointer", marginBottom:8, width:"100%" }}>
+                + Add Additional Tow
+              </button>
+
               <CostRow
                 label="Ocean Freight"
                 value={charges.oceanFreight}
