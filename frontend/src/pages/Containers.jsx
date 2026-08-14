@@ -1096,40 +1096,9 @@ export default function Containers() {
                     </div>
                   )}
 
-                  {/* Drag & drop upload zone */}
-                  <div
-                    onDragOver={e => { e.preventDefault(); setDragOver(true); }}
-                    onDragLeave={() => setDragOver(false)}
-                    onDrop={async e => {
-                      e.preventDefault(); setDragOver(false);
-                      const file = e.dataTransfer.files[0];
-                      if (!file) return;
-                      await uploadDocFile(file);
-                    }}
-                    style={{ border:`2px dashed ${dragOver ? "#7c3aed" : "var(--border)"}`,
-                      borderRadius:10, padding:"28px 20px", textAlign:"center", marginBottom:16,
-                      background: dragOver ? "rgba(124,58,237,0.08)" : "var(--bg-base)",
-                      transition:"all 0.15s", cursor:"pointer" }}
-                    onClick={() => document.getElementById("cl-doc-upload").click()}>
-                    <input id="cl-doc-upload" type="file" style={{ display:"none" }}
-                      onChange={async e => {
-                        const file = e.target.files[0];
-                        if (!file) return;
-                        e.target.value = "";
-                        await uploadDocFile(file);
-                      }} />
-                    {uploadingDoc
-                      ? <div style={{ color:"var(--text-muted)", fontSize:13 }}>⏳ Uploading…</div>
-                      : <>
-                          <div style={{ fontSize:28, marginBottom:6 }}>📎</div>
-                          <div style={{ fontSize:13, color:"var(--text-muted)" }}>Drag & drop or click to upload</div>
-                          <div style={{ fontSize:11, color:"var(--text-muted)", marginTop:4 }}>BL · Draft · Invoice · Any document</div>
-                        </>
-                    }
-                  </div>
-
-                  {/* Labeled upload zones */}
-                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(130px, 1fr))", gap:8, marginBottom:16 }}>
+                  {/* Doc type drop zones — drag or click to upload */}
+                  {uploadingDoc && <div style={{ textAlign:"center", color:"var(--text-muted)", fontSize:13, marginBottom:12 }}>⏳ Uploading…</div>}
+                  <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))", gap:8, marginBottom:16 }}>
                     {[
                       { label:"Draft BL",            icon:"📝" },
                       { label:"Stamped BL",          icon:"📌" },
@@ -1140,17 +1109,19 @@ export default function Containers() {
                       { label:"Other",               icon:"📎" },
                     ].map(({ label, icon }) => (
                       <label key={label} style={{ display:"flex", flexDirection:"column", alignItems:"center",
-                        gap:4, padding:"10px 8px", borderRadius:8, border:"2px dashed var(--border)",
+                        gap:5, padding:"14px 8px", borderRadius:10, border:"2px dashed var(--border)",
                         cursor:"pointer", fontSize:11, color:"var(--text-muted)", textAlign:"center",
-                        background:"var(--bg-panel)", transition:"border-color .15s, background .15s" }}
+                        background:"var(--bg-base)", transition:"border-color .15s, background .15s",
+                        userSelect:"none" }}
                         onMouseEnter={e=>{ e.currentTarget.style.borderColor="#60a5fa"; e.currentTarget.style.background="rgba(96,165,250,0.07)"; }}
                         onMouseLeave={e=>{ e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; }}
-                        onDragOver={e=>{ e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor="#60a5fa"; e.currentTarget.style.background="rgba(96,165,250,0.13)"; }}
+                        onDragOver={e=>{ e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor="#7c3aed"; e.currentTarget.style.background="rgba(124,58,237,0.10)"; }}
                         onDragLeave={e=>{ e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; }}
                         onDrop={e=>{ e.preventDefault(); e.stopPropagation(); e.currentTarget.style.borderColor=""; e.currentTarget.style.background=""; Array.from(e.dataTransfer.files).forEach(f => uploadDocFile(f, label)); }}>
-                        <span style={{ fontSize:20 }}>{icon}</span>
-                        {label}
-                        <input type="file" hidden onChange={e => {
+                        <span style={{ fontSize:22 }}>{icon}</span>
+                        <span style={{ fontWeight:600 }}>{label}</span>
+                        <span style={{ fontSize:10, opacity:0.6 }}>drop or click</span>
+                        <input type="file" hidden multiple onChange={e => {
                           Array.from(e.target.files).forEach(f => uploadDocFile(f, label));
                           e.target.value = "";
                         }} />
