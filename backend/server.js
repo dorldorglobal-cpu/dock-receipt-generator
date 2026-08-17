@@ -173,12 +173,19 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     // Carrier — Central Dispatch merges shipper+carrier on one line:
     // "Dor L'Dor Global LLC [Our Contact] [Carrier Company] [Carrier Contact]"
     // After our company + 1–3 word contact name, capture carrier name up to LLC/Inc/etc.
-    // Carrier — Central Dispatch two-column layout: "Dor L'Dor Global LLC [Contact] [Carrier LLC] [Contact]"
+    // Carrier — Central Dispatch merges shipper+carrier on one line:
+    // "Dor L'Dor Global LLC [Our Contact] [Carrier] LLC [Carrier Contact]"
+    // Split on LLC: parts[1] = " [Our Contact] [Carrier words]", parts[2] = " [Carrier Contact]"
     const _lines       = text.split("\n");
     const _scLine      = _lines.find(l => /Dor.*Global.*LLC/.test(l)) || "";
-    const _afterUs     = _scLine.replace(/^.*?LLC\s+\S+\s+\S+\s+/, "");
-    const _cm          = _afterUs.match(/^([\w &,.'.\-]+\s+(?:LLC|Inc|Corp|Ltd))/i);
-    const carrier      = _cm ? _cm[1].trim() : _afterUs.split(" ").slice(0, -2).join(" ").trim();
+    const _llcParts    = _scLine.split(/\s+LLC/);
+    let carrier = "";
+    if (_llcParts.length >= 3) {
+      const _bw = _llcParts[1].trim().split(/\s+/);
+      carrier = _bw.slice(2).join(" ") + " LLC"; // skip 2-word contact, take carrier + LLC
+    } else if (_llcParts.length === 2) {
+      carrier = _llcParts[1].trim().split(/\s+/).slice(2).join(" "); // no LLC suffix
+    }
 
     // Origin — line after "Origin Contact Info ..." header; strip right-column destination
     const _oidx        = _lines.findIndex(l => /Origin Contact Info/.test(l));

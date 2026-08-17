@@ -1072,9 +1072,15 @@ router.post("/parse-dispatch", memUpload.array("invoices", 50), async (req, res)
         // Carrier — Central Dispatch two-column layout: "Dor L'Dor Global LLC [Contact] [Carrier LLC] [Contact]"
         const _lines = text.split("\n");
         const _scLine = _lines.find(l => /Dor.*Global.*LLC/.test(l)) || "";
-        const _afterUs = _scLine.replace(/^.*?LLC\s+\S+\s+\S+\s+/, "");
-        const _cm = _afterUs.match(/^([\w &,.'.\-]+\s+(?:LLC|Inc|Corp|Ltd))/i);
-        const carrier = _cm ? _cm[1].trim() : (_afterUs.split(" ").slice(0, -2).join(" ").trim() || "Unknown Carrier");
+        const _llcParts = _scLine.split(/\s+LLC/);
+        let carrier = "Unknown Carrier";
+        if (_llcParts.length >= 3) {
+          const _bw = _llcParts[1].trim().split(/\s+/);
+          carrier = _bw.slice(2).join(" ") + " LLC";
+        } else if (_llcParts.length === 2) {
+          const _bw2 = _llcParts[1].trim().split(/\s+/);
+          carrier = _bw2.slice(2).join(" ") || "Unknown Carrier";
+        }
 
         // Vehicle YMM — strip VIN and everything after
         const ymmRaw = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i);

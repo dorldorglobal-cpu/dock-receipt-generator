@@ -116,9 +116,10 @@ router.post("/parse-dispatch", upload.single("file"), async (req, res) => {
     const dispatchDate = dateMatch ? dateMatch[1].trim() : "";
     const _lns2        = text.split("\n");
     const _scl2        = _lns2.find(l => /Dor.*Global.*LLC/.test(l)) || "";
-    const _au2         = _scl2.replace(/^.*?LLC\s+\S+\s+\S+\s+/, "");
-    const _cm2         = _au2.match(/^([\w &,.'.\-]+\s+(?:LLC|Inc|Corp|Ltd))/i);
-    const carrier      = _cm2 ? _cm2[1].trim() : _au2.split(" ").slice(0, -2).join(" ").trim();
+    const _lp2         = _scl2.split(/\s+LLC/);
+    const carrier      = _lp2.length >= 3 ? _lp2[1].trim().split(/\s+/).slice(2).join(" ") + " LLC"
+                       : _lp2.length === 2 ? _lp2[1].trim().split(/\s+/).slice(2).join(" ")
+                       : "";
     const _oi2         = _lns2.findIndex(l => /Origin Contact Info/.test(l));
     const _or2         = _oi2 >= 0 ? (_lns2[_oi2 + 1] || "") : "";
     const origin       = _or2.replace(/\s+--.*$/, "").replace(/\s+-\s*$/, "").trim();
