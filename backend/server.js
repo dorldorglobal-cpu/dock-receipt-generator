@@ -150,7 +150,7 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     const Groq = require("groq-sdk");
     const groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
     const aiResp = await groqClient.chat.completions.create({
-      model: "meta-llama/llama-4-scout-17b-16e-instruct",
+      model: "qwen/qwen3-32b",
       messages: [
         { role: "system", content: "You are a logistics document parser. Return ONLY a JSON object with these keys (empty string if not found, 0 for total): vin, ymm, total, loadId, dispatchDate, origin, carrier" },
         { role: "user", content: `Extract from this dispatch document:\n\n${text.slice(0, 6000)}` },
