@@ -783,7 +783,7 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   const extraLines = (opts.extraLines || []).filter(l => l.label && l.amount);
   const grandTotal = invoices.reduce((s, inv) => s + Number(inv.total || 0), 0)
                    + extraLines.reduce((s, l) => s + Number(l.amount || 0), 0);
-  const combinedNumber = `CMB-${invoices.map(i => i.invoiceNumber).join("+")}`;
+  const combinedNumber = load?.name ? `LOAD-${load.name}` : `CMB-${invoices.map(i => i.invoiceNumber).join("+")}`;
 
   // ── HEADER ──────────────────────────────────────────────────────────────────
   const HDR_H = 108;
