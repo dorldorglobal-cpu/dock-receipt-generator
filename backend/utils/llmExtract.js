@@ -8,7 +8,7 @@
 // via that same script.
 const Groq = require("groq-sdk");
 
-const MODEL = "llama3-70b-8192";
+const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 // Lazy singleton — constructing Groq() throws immediately if GROQ_API_KEY is
 // unset, and this module is required at load time by parseOrderDocs.js (used

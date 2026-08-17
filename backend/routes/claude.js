@@ -12,7 +12,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const MODEL = "llama3-70b-8192";
+const MODEL = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 async function pdfText(buffer) {
   const data = await pdfParse(buffer);
