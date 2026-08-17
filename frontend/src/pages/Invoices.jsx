@@ -40,6 +40,8 @@ export default function Invoices() {
   const [invoices,    setInvoices]    = useState([]);
   const [loading,     setLoading]     = useState(true);
   const [search,      setSearch]      = useState("");
+  const [search2,     setSearch2]     = useState("");
+  const [sortOrderRef, setSortOrderRef] = useState(null); // null | "asc" | "desc"
   const [statusTab,   setStatusTab]   = useState("all");
   const [from,        setFrom]        = useState("");
   const [to,          setTo]          = useState("");
@@ -75,11 +77,31 @@ export default function Invoices() {
     else if (which === "overdue")     { setStatusTab("all"); setQuickFilter("overdue"); }
   };
 
-  const displayedInvoices = invoices.filter(i => {
-    if (quickFilter === "outstanding") return i.status !== "paid";
-    if (quickFilter === "overdue")     return i.status !== "paid" && i.dueDate && new Date(i.dueDate) < new Date();
-    return true;
-  });
+  const displayedInvoices = (() => {
+    let list = invoices.filter(i => {
+      if (quickFilter === "outstanding") return i.status !== "paid";
+      if (quickFilter === "overdue")     return i.status !== "paid" && i.dueDate && new Date(i.dueDate) < new Date();
+      return true;
+    });
+    if (search2.trim()) {
+      const q = search2.trim().toLowerCase();
+      list = list.filter(i =>
+        (i.orderRef   || "").toLowerCase().includes(q) ||
+        (i.customerName || "").toLowerCase().includes(q) ||
+        (i.invoiceNumber || "").toLowerCase().includes(q) ||
+        (i.vin         || "").toLowerCase().includes(q) ||
+        (i.status      || "").toLowerCase().includes(q)
+      );
+    }
+    if (sortOrderRef) {
+      list = [...list].sort((a, b) => {
+        const ra = (a.orderRef || "").replace(/\D/g, "") || "0";
+        const rb = (b.orderRef || "").replace(/\D/g, "") || "0";
+        return sortOrderRef === "asc" ? Number(ra) - Number(rb) : Number(rb) - Number(ra);
+      });
+    }
+    return list;
+  })();
 
   const unpaidInvoices = displayedInvoices.filter(i => i.status !== "paid");
   const allUnpaidSelected = unpaidInvoices.length > 0 && unpaidInvoices.every(i => selectedIds.has(i._id));
@@ -433,6 +455,25 @@ export default function Invoices() {
           </div>
           <button type="submit" style={{ padding: "7px 14px", fontSize: 13 }}>Search</button>
         </form>
+        {/* Second filter — client-side, instant */}
+        <div style={{ position: "relative" }}>
+          <input value={search2} onChange={e => setSearch2(e.target.value)}
+            placeholder="Filter results…"
+            style={{ fontSize: 13, padding: "7px 28px 7px 10px", width: 180 }} />
+          {search2 && (
+            <button type="button" onClick={() => setSearch2("")} style={{
+              position:"absolute", right:6, top:"50%", transform:"translateY(-50%)",
+              background:"none", border:"none", color:"var(--text-muted)", cursor:"pointer", fontSize:14,
+            }}>✕</button>
+          )}
+        </div>
+        {/* Order ref sort */}
+        <button onClick={() => setSortOrderRef(s => s === "asc" ? "desc" : s === "desc" ? null : "asc")}
+          style={{ padding:"7px 12px", fontSize:12, fontWeight:600, borderRadius:7,
+            border:"1px solid var(--border)", background: sortOrderRef ? "rgba(124,58,237,0.12)" : "var(--bg-panel)",
+            color: sortOrderRef ? "#a78bfa" : "var(--text-secondary)", cursor:"pointer", whiteSpace:"nowrap" }}>
+          Order Ref {sortOrderRef === "asc" ? "↑" : sortOrderRef === "desc" ? "↓" : "↕"}
+        </button>
         <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ fontSize: 12, padding: "7px 10px" }} />
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>to</span>
         <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ fontSize: 12, padding: "7px 10px" }} />
