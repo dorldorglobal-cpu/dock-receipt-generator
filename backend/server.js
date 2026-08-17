@@ -175,8 +175,8 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     // After our company + 1–3 word contact name, capture carrier name up to LLC/Inc/etc.
     // Carrier — Central Dispatch two-column layout: "Dor L'Dor Global LLC [Contact] [Carrier LLC] [Contact]"
     const _lines       = text.split("\n");
-    const _scLine      = _lines.find(l => /L['']?Dor\s+Global\s+LLC/.test(l)) || "";
-    const _afterUs     = _scLine.replace(/^.*?L['']?Dor\s+Global\s+LLC\s+\S+\s+\S+\s*/, "");
+    const _scLine      = _lines.find(l => /Dor.*Global.*LLC/.test(l)) || "";
+    const _afterUs     = _scLine.replace(/^.*?LLC\s+\S+\s+\S+\s+/, "");
     const _cm          = _afterUs.match(/^([\w &,.'.\-]+\s+(?:LLC|Inc|Corp|Ltd))/i);
     const carrier      = _cm ? _cm[1].trim() : _afterUs.split(" ").slice(0, -2).join(" ").trim();
 
