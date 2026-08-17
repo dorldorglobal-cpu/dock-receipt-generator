@@ -114,15 +114,10 @@ router.post("/parse-dispatch", upload.single("file"), async (req, res) => {
     const loadId       = loadIdMatch ? loadIdMatch[1].trim() : "";
     const dateMatch    = text.match(/Dispatch Date\s*\n(\d{2}\/\d{2}\/\d{4})/i) || text.match(/(\d{2}\/\d{2}\/\d{4})/);
     const dispatchDate = dateMatch ? dateMatch[1].trim() : "";
-    const _lns2        = text.split("\n");
-    const _scl2        = _lns2.find(l => /Dor.*Global.*LLC/.test(l)) || "";
-    const _lp2         = _scl2.split(/\s+LLC/);
-    const carrier      = _lp2.length >= 3 ? _lp2[1].trim().split(/\s+/).slice(2).join(" ") + " LLC"
-                       : _lp2.length === 2 ? _lp2[1].trim().split(/\s+/).slice(2).join(" ")
-                       : "";
-    const _oi2         = _lns2.findIndex(l => /Origin Contact Info/.test(l));
-    const _or2         = _oi2 >= 0 ? (_lns2[_oi2 + 1] || "") : "";
-    const origin       = _or2.replace(/\s+--.*$/, "").replace(/\s+-\s*$/, "").trim();
+    const carrierM2    = text.match(/^Carrier\s*\n([^\n]+)/m);
+    const carrier      = carrierM2 ? carrierM2[1].trim() : "";
+    const originM2     = text.match(/^Origin\s*\n([^\n]+)\n([^\n]+)/m);
+    const origin       = originM2 ? (originM2[1].replace(/-\s*$/, "").trim() + " " + originM2[2].trim()).trim() : "";
     res.json({ vin, ymm, total, loadId, dispatchDate, origin, carrier, vendor: carrier });
   } catch (err) {
     console.error("parse-dispatch error:", err.message);

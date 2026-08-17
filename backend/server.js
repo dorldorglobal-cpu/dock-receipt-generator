@@ -173,24 +173,13 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     // Carrier — Central Dispatch merges shipper+carrier on one line:
     // "Dor L'Dor Global LLC [Our Contact] [Carrier Company] [Carrier Contact]"
     // After our company + 1–3 word contact name, capture carrier name up to LLC/Inc/etc.
-    // Carrier — Central Dispatch merges shipper+carrier on one line:
-    // "Dor L'Dor Global LLC [Our Contact] [Carrier] LLC [Carrier Contact]"
-    // Split on LLC: parts[1] = " [Our Contact] [Carrier words]", parts[2] = " [Carrier Contact]"
-    const _lines       = text.split("\n");
-    const _scLine      = _lines.find(l => /Dor.*Global.*LLC/.test(l)) || "";
-    const _llcParts    = _scLine.split(/\s+LLC/);
-    let carrier = "";
-    if (_llcParts.length >= 3) {
-      const _bw = _llcParts[1].trim().split(/\s+/);
-      carrier = _bw.slice(2).join(" ") + " LLC"; // skip 2-word contact, take carrier + LLC
-    } else if (_llcParts.length === 2) {
-      carrier = _llcParts[1].trim().split(/\s+/).slice(2).join(" "); // no LLC suffix
-    }
+    // pdf-parse puts each label on its own line, value on the next line
+    const carrierM = text.match(/^Carrier\s*\n([^\n]+)/m);
+    const carrier  = carrierM ? carrierM[1].trim() : "";
 
-    // Origin — line after "Origin Contact Info ..." header; strip right-column destination
-    const _oidx        = _lines.findIndex(l => /Origin Contact Info/.test(l));
-    const _originRaw   = _oidx >= 0 ? (_lines[_oidx + 1] || "") : "";
-    const origin       = _originRaw.replace(/\s+--.*$/, "").replace(/\s+-\s*$/, "").trim();
+    // Origin — "Origin" line, then city line, then auction name line
+    const originM  = text.match(/^Origin\s*\n([^\n]+)\n([^\n]+)/m);
+    const origin   = originM ? (originM[1].replace(/-\s*$/, "").trim() + " " + originM[2].trim()).trim() : "";
     // Upload dispatch PDF to Google Drive instead of local disk
     const { uploadBufferToDrive, getOrCreateFolder } = require("./googleDrive");
     let billFileName = "", billDriveId = "", billDriveUrl = "";

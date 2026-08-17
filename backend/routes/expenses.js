@@ -1069,27 +1069,17 @@ router.post("/parse-dispatch", memUpload.array("invoices", 50), async (req, res)
           || text.match(/Load\s+(\d{4,})\//i);
         const loadId = loadMatch?.[1] || "";
 
-        // Carrier — Central Dispatch two-column layout: "Dor L'Dor Global LLC [Contact] [Carrier LLC] [Contact]"
-        const _lines = text.split("\n");
-        const _scLine = _lines.find(l => /Dor.*Global.*LLC/.test(l)) || "";
-        const _llcParts = _scLine.split(/\s+LLC/);
-        let carrier = "Unknown Carrier";
-        if (_llcParts.length >= 3) {
-          const _bw = _llcParts[1].trim().split(/\s+/);
-          carrier = _bw.slice(2).join(" ") + " LLC";
-        } else if (_llcParts.length === 2) {
-          const _bw2 = _llcParts[1].trim().split(/\s+/);
-          carrier = _bw2.slice(2).join(" ") || "Unknown Carrier";
-        }
+        // pdf-parse puts each label on its own line, value on the next line
+        const carrierM = text.match(/^Carrier\s*\n([^\n]+)/m);
+        const carrier = carrierM ? carrierM[1].trim() : "Unknown Carrier";
 
-        // Vehicle YMM — strip VIN and everything after
-        const ymmRaw = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i);
-        const ymm = ymmRaw ? ymmRaw[1].replace(/\s+[A-HJ-NPR-Z0-9]{17}.*/, "").trim() : "";
+        // Vehicle YMM
+        const ymmRaw = text.match(/^Vehicle Year\/Make\/Model\s*\n([^\n]+)/im);
+        const ymm = ymmRaw ? ymmRaw[1].trim() : "";
 
-        // Origin — line after "Origin Contact Info ..." header; strip right-column destination
-        const _oidx = _lines.findIndex(l => /Origin Contact Info/.test(l));
-        const _originRaw = _oidx >= 0 ? (_lines[_oidx + 1] || "") : "";
-        const origin = _originRaw.replace(/\s+--.*$/, "").replace(/\s+-\s*$/, "").trim();
+        // Origin — city on next line, auction/location on line after
+        const originM = text.match(/^Origin\s*\n([^\n]+)\n([^\n]+)/m);
+        const origin = originM ? (originM[1].replace(/-\s*$/, "").trim() + " " + originM[2].trim()).trim() : "";
 
         // Dispatch date
         const dateMatch = text.match(/Dispatch Date\s*\n(\d{2}\/\d{2}\/\d{4})/i)
