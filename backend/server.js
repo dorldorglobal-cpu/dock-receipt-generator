@@ -146,26 +146,28 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     const data = await pdfParse(buffer);
     const text = data.text;
 
-    // Use Groq/Llama for reliable field extraction instead of brittle regex
-    const Groq = require("groq-sdk");
-    const groqClient = new Groq({ apiKey: process.env.GROQ_API_KEY });
-    const aiResp = await groqClient.chat.completions.create({
-      model: "qwen/qwen3-32b",
-      messages: [
-        { role: "system", content: "You are a logistics document parser. Return ONLY a JSON object with these keys (empty string if not found, 0 for total): vin, ymm, total, loadId, dispatchDate, origin, carrier" },
-        { role: "user", content: `Extract from this dispatch document:\n\n${text.slice(0, 6000)}` },
-      ],
-      response_format: { type: "json_object" },
-      temperature: 0.1,
-    });
-    const aiResult = JSON.parse(aiResp.choices[0].message.content);
-    const vin = aiResult.vin || "";
-    const ymm = aiResult.ymm || "";
-    const total = parseFloat(aiResult.total) || 0;
-    const loadId = aiResult.loadId || "";
-    const dispatchDate = aiResult.dispatchDate || "";
-    const origin = aiResult.origin || "";
-    const carrier = aiResult.carrier || "";
+    // Regex-based extraction from dispatch sheet text
+    const vinMatch      = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
+    const ymmMatch      = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i)
+                       || text.match(/(\d{4}\s+[A-Za-z][A-Za-z0-9 ]+(?:Vibe|Silverado|Camry|Accord|F-150|Explorer|Tahoe|Sierra|Ram|Charger|Challenger|Mustang|Wrangler|Cherokee|Equinox|Malibu|Impala|Cruze|Sonic|Trax|Traverse|Blazer|Colorado|Canyon|Escalade|Suburban|Yukon|Envoy|Trailblazer|Acadia|Terrain|Encore|Enclave|LaCrosse|Regal|Verano|Skylark|LeSabre|Park|Riviera|Electra|Century|Skylark|Special|Wildcat|Electra|Invicta|Lesabre)[^\n]*)/i);
+    const totalMatch    = text.match(/Total Price[^\n]*\$?([\d,]+(?:\.\d{2})?)/i)
+                       || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
+    const loadIdMatch   = text.match(/Load (?:ID|Number)[^\n]*\n([^\n]+)/i)
+                       || text.match(/Load\s+ID[:\s]+([^\n]+)/i);
+    const dateMatch     = text.match(/Dispatch Date[^\n]*\n([^\n]+)/i)
+                       || text.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+    const carrierMatch  = text.match(/Carrier\s*\n[^\n]*\n([^\n]+)/i)
+                       || text.match(/Carrier[:\s]+([^\n]+)/i);
+    const originMatch   = text.match(/Origin\s*\n[^\n]*\n([^\n]+)/i)
+                       || text.match(/Origin[:\s]+([^\n]+)/i);
+
+    const vin           = vinMatch ? vinMatch[1].trim() : "";
+    const ymm           = ymmMatch ? ymmMatch[1].trim() : "";
+    const total         = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
+    const loadId        = loadIdMatch ? loadIdMatch[1].trim() : "";
+    const dispatchDate  = dateMatch ? dateMatch[1].trim() : "";
+    const carrier       = carrierMatch ? carrierMatch[1].trim() : "";
+    const origin        = originMatch ? originMatch[1].trim() : "";
     // Upload dispatch PDF to Google Drive instead of local disk
     const { uploadBufferToDrive, getOrCreateFolder } = require("./googleDrive");
     let billFileName = "", billDriveId = "", billDriveUrl = "";

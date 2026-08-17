@@ -104,11 +104,21 @@ router.post("/parse-dispatch", upload.single("file"), async (req, res) => {
   try {
     const text = req.file ? await pdfText(req.file.buffer) : req.body.text;
     if (!text) return res.status(400).json({ error: "file or text required" });
-    const result = await aiJSON(
-      "You are a logistics document parser. Return ONLY a JSON object with these keys (empty string if not found, 0 for total): vin, ymm, total, loadId, dispatchDate, origin, carrier",
-      `Extract from this dispatch document:\n\n${text.slice(0, 6000)}`
-    );
-    res.json({ vin: result.vin || "", ymm: result.ymm || "", total: parseFloat(result.total) || 0, loadId: result.loadId || "", dispatchDate: result.dispatchDate || "", origin: result.origin || "", carrier: result.carrier || "", vendor: result.carrier || "" });
+    const vinMatch     = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
+    const ymmMatch     = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i) || text.match(/(\d{4}\s+[A-Za-z][A-Za-z0-9 ]{3,})/);
+    const totalMatch   = text.match(/Total Price[^\n]*\$?([\d,]+(?:\.\d{2})?)/i) || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
+    const loadIdMatch  = text.match(/Load\s+ID[^\n]*\n([^\n]+)/i) || text.match(/Load\s+ID[:\s]+([^\n]+)/i);
+    const dateMatch    = text.match(/Dispatch Date[^\n]*\n([^\n]+)/i) || text.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
+    const carrierMatch = text.match(/Carrier\s*\n[^\n]*\n([^\n]+)/i) || text.match(/Carrier[:\s]+([^\n]+)/i);
+    const originMatch  = text.match(/Origin\s*\n[^\n]*\n([^\n]+)/i) || text.match(/Origin[:\s]+([^\n]+)/i);
+    const vin          = vinMatch ? vinMatch[1].trim() : "";
+    const ymm          = ymmMatch ? ymmMatch[1].trim() : "";
+    const total        = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
+    const loadId       = loadIdMatch ? loadIdMatch[1].trim() : "";
+    const dispatchDate = dateMatch ? dateMatch[1].trim() : "";
+    const carrier      = carrierMatch ? carrierMatch[1].trim() : "";
+    const origin       = originMatch ? originMatch[1].trim() : "";
+    res.json({ vin, ymm, total, loadId, dispatchDate, origin, carrier, vendor: carrier });
   } catch (err) {
     console.error("parse-dispatch error:", err.message);
     res.status(500).json({ error: err.message });
