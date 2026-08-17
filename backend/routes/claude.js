@@ -114,10 +114,14 @@ router.post("/parse-dispatch", upload.single("file"), async (req, res) => {
     const loadId       = loadIdMatch ? loadIdMatch[1].trim() : "";
     const dateMatch    = text.match(/Dispatch Date\s*\n(\d{2}\/\d{2}\/\d{4})/i) || text.match(/(\d{2}\/\d{2}\/\d{4})/);
     const dispatchDate = dateMatch ? dateMatch[1].trim() : "";
-    const carrierLine  = text.match(/L['']?Dor\s+Global\s+LLC\s+(?:\w+\s+){1,3}([A-Z][\w &,.'.\-]+?(?:LLC|Inc|Corp|Ltd|Transport|Trucking|Logistics|Express|Freight|Auto|Moving|Lines?|Services?|Carriers?|Group))/i);
-    const carrier      = carrierLine ? carrierLine[1].trim() : "";
-    const originRaw    = text.match(/Origin Contact Info\s*\n([^\n]+)/i);
-    const origin       = originRaw ? originRaw[1].replace(/\s+--.*$/, "").trim() : "";
+    const _lns2        = text.split("\n");
+    const _scl2        = _lns2.find(l => /L['']?Dor\s+Global\s+LLC/.test(l)) || "";
+    const _au2         = _scl2.replace(/^.*?L['']?Dor\s+Global\s+LLC\s+\S+\s+\S+\s*/, "");
+    const _cm2         = _au2.match(/^([\w &,.'.\-]+\s+(?:LLC|Inc|Corp|Ltd))/i);
+    const carrier      = _cm2 ? _cm2[1].trim() : _au2.split(" ").slice(0, -2).join(" ").trim();
+    const _oi2         = _lns2.findIndex(l => /Origin Contact Info/.test(l));
+    const _or2         = _oi2 >= 0 ? (_lns2[_oi2 + 1] || "") : "";
+    const origin       = _or2.replace(/\s+--.*$/, "").replace(/\s+-\s*$/, "").trim();
     res.json({ vin, ymm, total, loadId, dispatchDate, origin, carrier, vendor: carrier });
   } catch (err) {
     console.error("parse-dispatch error:", err.message);

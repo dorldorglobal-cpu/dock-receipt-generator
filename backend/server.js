@@ -173,12 +173,17 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     // Carrier — Central Dispatch merges shipper+carrier on one line:
     // "Dor L'Dor Global LLC [Our Contact] [Carrier Company] [Carrier Contact]"
     // After our company + 1–3 word contact name, capture carrier name up to LLC/Inc/etc.
-    const carrierLine  = text.match(/L['']?Dor\s+Global\s+LLC\s+(?:\w+\s+){1,3}([A-Z][\w &,.'.\-]+?(?:LLC|Inc|Corp|Ltd|Transport|Trucking|Logistics|Express|Freight|Auto|Moving|Lines?|Services?|Carriers?|Group))/i);
-    const carrier      = carrierLine ? carrierLine[1].trim() : "";
+    // Carrier — Central Dispatch two-column layout: "Dor L'Dor Global LLC [Contact] [Carrier LLC] [Contact]"
+    const _lines       = text.split("\n");
+    const _scLine      = _lines.find(l => /L['']?Dor\s+Global\s+LLC/.test(l)) || "";
+    const _afterUs     = _scLine.replace(/^.*?L['']?Dor\s+Global\s+LLC\s+\S+\s+\S+\s*/, "");
+    const _cm          = _afterUs.match(/^([\w &,.'.\-]+\s+(?:LLC|Inc|Corp|Ltd))/i);
+    const carrier      = _cm ? _cm[1].trim() : _afterUs.split(" ").slice(0, -2).join(" ").trim();
 
-    // Origin — left column before the " --" destination separator
-    const originLine   = text.match(/Origin Contact Info\s*\n([^\n]+)/i);
-    const origin       = originLine ? originLine[1].replace(/\s+--.*$/, "").trim() : "";
+    // Origin — line after "Origin Contact Info ..." header; strip right-column destination
+    const _oidx        = _lines.findIndex(l => /Origin Contact Info/.test(l));
+    const _originRaw   = _oidx >= 0 ? (_lines[_oidx + 1] || "") : "";
+    const origin       = _originRaw.replace(/\s+--.*$/, "").replace(/\s+-\s*$/, "").trim();
     // Upload dispatch PDF to Google Drive instead of local disk
     const { uploadBufferToDrive, getOrCreateFolder } = require("./googleDrive");
     let billFileName = "", billDriveId = "", billDriveUrl = "";
