@@ -105,19 +105,19 @@ router.post("/parse-dispatch", upload.single("file"), async (req, res) => {
     const text = req.file ? await pdfText(req.file.buffer) : req.body.text;
     if (!text) return res.status(400).json({ error: "file or text required" });
     const vinMatch     = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
-    const ymmMatch     = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i) || text.match(/(\d{4}\s+[A-Za-z][A-Za-z0-9 ]{3,})/);
-    const totalMatch   = text.match(/Total Price[^\n]*\$?([\d,]+(?:\.\d{2})?)/i) || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
-    const loadIdMatch  = text.match(/Load\s+ID[^\n]*\n([^\n]+)/i) || text.match(/Load\s+ID[:\s]+([^\n]+)/i);
-    const dateMatch    = text.match(/Dispatch Date[^\n]*\n([^\n]+)/i) || text.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
-    const carrierMatch = text.match(/Carrier\s*\n[^\n]*\n([^\n]+)/i) || text.match(/Carrier[:\s]+([^\n]+)/i);
-    const originMatch  = text.match(/Origin\s*\n[^\n]*\n([^\n]+)/i) || text.match(/Origin[:\s]+([^\n]+)/i);
     const vin          = vinMatch ? vinMatch[1].trim() : "";
-    const ymm          = ymmMatch ? ymmMatch[1].trim() : "";
+    const ymmRaw       = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i);
+    const ymm          = ymmRaw ? ymmRaw[1].replace(/\s+[A-HJ-NPR-Z0-9]{17}.*/, "").trim() : "";
+    const totalMatch   = text.match(/Total Price[\s\S]{0,30}?\$\s*([\d,]+(?:\.\d{2})?)/i) || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
     const total        = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
+    const loadIdMatch  = text.match(/Load ID\s*\n([^\n]+)/i) || text.match(/Dispatch Sheet Load ([^\n]+?)(?:\s+Page)/i);
     const loadId       = loadIdMatch ? loadIdMatch[1].trim() : "";
+    const dateMatch    = text.match(/Dispatch Date\s*\n(\d{2}\/\d{2}\/\d{4})/i) || text.match(/(\d{2}\/\d{2}\/\d{4})/);
     const dispatchDate = dateMatch ? dateMatch[1].trim() : "";
-    const carrier      = carrierMatch ? carrierMatch[1].trim() : "";
-    const origin       = originMatch ? originMatch[1].trim() : "";
+    const carrierLine  = text.match(/L['']?Dor\s+Global\s+LLC\s+(?:\w+\s+){1,3}([A-Z][\w &,.'.\-]+?(?:LLC|Inc|Corp|Ltd|Transport|Trucking|Logistics|Express|Freight|Auto|Moving|Lines?|Services?|Carriers?|Group))/i);
+    const carrier      = carrierLine ? carrierLine[1].trim() : "";
+    const originRaw    = text.match(/Origin Contact Info\s*\n([^\n]+)/i);
+    const origin       = originRaw ? originRaw[1].replace(/\s+--.*$/, "").trim() : "";
     res.json({ vin, ymm, total, loadId, dispatchDate, origin, carrier, vendor: carrier });
   } catch (err) {
     console.error("parse-dispatch error:", err.message);

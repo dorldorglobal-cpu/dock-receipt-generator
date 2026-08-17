@@ -1055,36 +1055,36 @@ router.post("/parse-dispatch", memUpload.array("invoices", 50), async (req, res)
         const text = data.text;
 
         // VIN
-        const vinMatch = text.match(/\bVIN\b[\s\S]{0,30}?([A-HJ-NPR-Z0-9]{17})/i)
-          || text.match(/([A-HJ-NPR-Z0-9]{17})/);
+        const vinMatch = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
         const vin = vinMatch?.[1] || "";
 
-        // Total Price — "$300" or "Total Price\n$300"
-        const priceMatch = text.match(/Total Price[\s\S]{0,20}?\$\s*([\d,]+(?:\.\d{2})?)/i)
+        // Total Price
+        const priceMatch = text.match(/Total Price[\s\S]{0,30}?\$\s*([\d,]+(?:\.\d{2})?)/i)
           || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
         const total = priceMatch ? parseFloat(priceMatch[1].replace(/,/g, "")) : 0;
 
-        // Load ID — text format is "Load ID\n13744/48096146 PORT"
-        // Extract just the number before the "/"
-        const loadMatch = text.match(/Load ID\s*\n\s*(\d+)/i)                 // "Load ID\n13744/..."
-          || text.match(/Load\s+(\d{4,})\//i);                                // "Load 13744/..."
+        // Load ID — just the numeric part e.g. "13744" from "13744/48096146 PORT"
+        const loadMatch = text.match(/Load ID\s*\n\s*(\d+)/i)
+          || text.match(/Dispatch Sheet Load\s+(\d+)/i)
+          || text.match(/Load\s+(\d{4,})\//i);
         const loadId = loadMatch?.[1] || "";
 
-        // Carrier name
-        const carrierMatch = text.match(/Carrier\s+([A-Z][^\n]{3,60}LLC|[A-Z][^\n]{3,60}Inc|[A-Z][^\n]{3,60}Corp|[A-Z][^\n]{3,60}Trucking[^\n]*)/i)
-          || text.match(/Carrier\s*\n([^\n]{3,60})/i);
-        const carrier = carrierMatch?.[1]?.trim() || "Unknown Carrier";
+        // Carrier — Central Dispatch two-column layout merges shipper + carrier on one line:
+        // "Dor L'Dor Global LLC [Our Contact] [Carrier Company] [Carrier Contact]"
+        const carrierLine = text.match(/L['']?Dor\s+Global\s+LLC\s+(?:\w+\s+){1,3}([A-Z][\w &,.'.\-]+?(?:LLC|Inc|Corp|Ltd|Transport|Trucking|Logistics|Express|Freight|Auto|Moving|Lines?|Services?|Carriers?|Group))/i);
+        const carrier = carrierLine ? carrierLine[1].trim() : "Unknown Carrier";
 
-        // Vehicle YMM
-        const ymmMatch = text.match(/Vehicle Year\/Make\/Model\s*\n?([^\n]{5,60})/i);
-        const ymm = ymmMatch?.[1]?.trim() || "";
+        // Vehicle YMM — strip VIN and everything after
+        const ymmRaw = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i);
+        const ymm = ymmRaw ? ymmRaw[1].replace(/\s+[A-HJ-NPR-Z0-9]{17}.*/, "").trim() : "";
 
-        // Origin city (pickup)
-        const originMatch = text.match(/Origin\s*\n([^\n]{3,80})/i);
-        const origin = originMatch?.[1]?.trim() || "";
+        // Origin — left column; strip right-column destination after " --"
+        const originRaw = text.match(/Origin Contact Info\s*\n([^\n]+)/i);
+        const origin = originRaw ? originRaw[1].replace(/\s+--.*$/, "").trim() : "";
 
         // Dispatch date
-        const dateMatch = text.match(/Dispatch Date\s*\n?(\d{2}\/\d{2}\/\d{4})/i);
+        const dateMatch = text.match(/Dispatch Date\s*\n(\d{2}\/\d{2}\/\d{4})/i)
+          || text.match(/(\d{2}\/\d{2}\/\d{4})/);
         const dispatchDate = dateMatch?.[1] || "";
 
         // Match to order by VIN

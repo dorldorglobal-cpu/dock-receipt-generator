@@ -147,27 +147,38 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     const text = data.text;
 
     // Regex-based extraction from dispatch sheet text
-    const vinMatch      = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
-    const ymmMatch      = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i)
-                       || text.match(/(\d{4}\s+[A-Za-z][A-Za-z0-9 ]+(?:Vibe|Silverado|Camry|Accord|F-150|Explorer|Tahoe|Sierra|Ram|Charger|Challenger|Mustang|Wrangler|Cherokee|Equinox|Malibu|Impala|Cruze|Sonic|Trax|Traverse|Blazer|Colorado|Canyon|Escalade|Suburban|Yukon|Envoy|Trailblazer|Acadia|Terrain|Encore|Enclave|LaCrosse|Regal|Verano|Skylark|LeSabre|Park|Riviera|Electra|Century|Skylark|Special|Wildcat|Electra|Invicta|Lesabre)[^\n]*)/i);
-    const totalMatch    = text.match(/Total Price[^\n]*\$?([\d,]+(?:\.\d{2})?)/i)
-                       || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
-    const loadIdMatch   = text.match(/Load (?:ID|Number)[^\n]*\n([^\n]+)/i)
-                       || text.match(/Load\s+ID[:\s]+([^\n]+)/i);
-    const dateMatch     = text.match(/Dispatch Date[^\n]*\n([^\n]+)/i)
-                       || text.match(/(\d{1,2}\/\d{1,2}\/\d{2,4})/);
-    const carrierMatch  = text.match(/Carrier\s*\n[^\n]*\n([^\n]+)/i)
-                       || text.match(/Carrier[:\s]+([^\n]+)/i);
-    const originMatch   = text.match(/Origin\s*\n[^\n]*\n([^\n]+)/i)
-                       || text.match(/Origin[:\s]+([^\n]+)/i);
+    // VIN — standard 17-char pattern
+    const vinMatch     = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
+    const vin          = vinMatch ? vinMatch[1].trim() : "";
 
-    const vin           = vinMatch ? vinMatch[1].trim() : "";
-    const ymm           = ymmMatch ? ymmMatch[1].trim() : "";
-    const total         = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
-    const loadId        = loadIdMatch ? loadIdMatch[1].trim() : "";
-    const dispatchDate  = dateMatch ? dateMatch[1].trim() : "";
-    const carrier       = carrierMatch ? carrierMatch[1].trim() : "";
-    const origin        = originMatch ? originMatch[1].trim() : "";
+    // YMM — labeled field; strip VIN and everything after it
+    const ymmRaw       = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i);
+    const ymm          = ymmRaw ? ymmRaw[1].replace(/\s+[A-HJ-NPR-Z0-9]{17}.*/, "").trim() : "";
+
+    // Total Price
+    const totalMatch   = text.match(/Total Price[\s\S]{0,30}?\$\s*([\d,]+(?:\.\d{2})?)/i)
+                      || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);
+    const total        = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
+
+    // Load ID — full string e.g. "14086/61646876 PORT"
+    const loadIdMatch  = text.match(/Load ID\s*\n([^\n]+)/i)
+                      || text.match(/Dispatch Sheet Load ([^\n]+?)(?:\s+Page)/i);
+    const loadId       = loadIdMatch ? loadIdMatch[1].trim() : "";
+
+    // Dispatch date
+    const dateMatch    = text.match(/Dispatch Date\s*\n(\d{2}\/\d{2}\/\d{4})/i)
+                      || text.match(/(\d{2}\/\d{2}\/\d{4})/);
+    const dispatchDate = dateMatch ? dateMatch[1].trim() : "";
+
+    // Carrier — Central Dispatch merges shipper+carrier on one line:
+    // "Dor L'Dor Global LLC [Our Contact] [Carrier Company] [Carrier Contact]"
+    // After our company + 1–3 word contact name, capture carrier name up to LLC/Inc/etc.
+    const carrierLine  = text.match(/L['']?Dor\s+Global\s+LLC\s+(?:\w+\s+){1,3}([A-Z][\w &,.'.\-]+?(?:LLC|Inc|Corp|Ltd|Transport|Trucking|Logistics|Express|Freight|Auto|Moving|Lines?|Services?|Carriers?|Group))/i);
+    const carrier      = carrierLine ? carrierLine[1].trim() : "";
+
+    // Origin — left column before the " --" destination separator
+    const originLine   = text.match(/Origin Contact Info\s*\n([^\n]+)/i);
+    const origin       = originLine ? originLine[1].replace(/\s+--.*$/, "").trim() : "";
     // Upload dispatch PDF to Google Drive instead of local disk
     const { uploadBufferToDrive, getOrCreateFolder } = require("./googleDrive");
     let billFileName = "", billDriveId = "", billDriveUrl = "";
