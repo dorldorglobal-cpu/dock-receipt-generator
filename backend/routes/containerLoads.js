@@ -10,6 +10,7 @@ const {
   drive,
   createDriveFolder,
   uploadFileToDrive,
+  uploadBufferToDrive,
   listFilesInFolder,
 } = require("../googleDrive");
 
@@ -376,6 +377,32 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
     const pdfBuf = await generateCombinedInvoicePdf(invoices, orders, load, { extraLines });
     const filename = `Combined-Invoice-${load.name}.pdf`;
     const b64 = pdfBuf.toString("base64");
+
+    // Save a copy of the invoice PDF into the load's docs
+    try {
+      const loadDoc = await ContainerLoad.findById(req.params.id);
+      if (loadDoc) {
+        if (!loadDoc.driveFolderId) {
+          const { createDriveFolder: mkFolder } = require("../googleDrive");
+          const folder = await mkFolder(loadDoc.name || "Container Load", "root");
+          loadDoc.driveFolderId = folder.id;
+          loadDoc.driveFolderLink = folder.webViewLink;
+        }
+        const uploaded = await uploadBufferToDrive(pdfBuf, filename, "application/pdf", loadDoc.driveFolderId);
+        // Replace any existing combined invoice doc so we don't accumulate duplicates
+        loadDoc.files = (loadDoc.files || []).filter(f => !/^Combined-Invoice-/i.test(f.originalName));
+        loadDoc.files.push({
+          label: "Invoice",
+          originalName: filename,
+          filename: uploaded.name,
+          driveFileId: uploaded.id,
+          path: uploaded.webViewLink,
+          mimetype: "application/pdf",
+          uploadedAt: new Date(),
+        });
+        await loadDoc.save();
+      }
+    } catch (uploadErr) { console.warn("Could not save invoice to load docs:", uploadErr.message); }
 
     const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
     const boundary = "DDG_COMB_" + Date.now();
