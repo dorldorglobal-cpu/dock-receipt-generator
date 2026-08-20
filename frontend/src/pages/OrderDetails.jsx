@@ -5374,7 +5374,7 @@ export default function OrderDetails() {
         const onDragEnd = () => { previewDragRef.current = null; };
         return (
         <div className="modal-backdrop" onClick={() => setDocPreview(null)}
-          style={{ zIndex: 3000 }}>
+          style={{ zIndex: 10000 }}>
           {/* Prev arrow */}
           {hasPrev && (
             <button onClick={e => { e.stopPropagation(); goTo(previewIndex - 1); }}
