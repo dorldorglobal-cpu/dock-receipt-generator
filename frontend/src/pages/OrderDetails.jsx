@@ -4286,7 +4286,7 @@ export default function OrderDetails() {
                           <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8,
                             padding: "7px 12px", background: "var(--success-dim)", borderRadius: 7, marginBottom: 4 }}>
                             <span style={{ fontSize: 12, color: "var(--success)" }}>✓</span>
-                            <button onClick={() => { setShowDrPreview(false); setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label: f.label }); }}
+                            <button onClick={() => { setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label: f.label }); }}
                               style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
                                 fontSize: 13, color: "var(--accent)", textDecoration: "underline", textAlign: "left" }}>
                               {f.name}
