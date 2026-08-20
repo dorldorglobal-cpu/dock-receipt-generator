@@ -4169,9 +4169,11 @@ export default function OrderDetails() {
                 <>
                   {/* Transport Company banner */}
                   {(() => {
-                    const transportBill = bills.find(b =>
-                      /towing|transport/i.test(b.category || "") && b.vendor && b.vendor.trim()
-                    );
+                    const transportBill = bills.find(b => /towing|transport/i.test(b.category || ""));
+                    const vendorName = transportBill?.vendor?.trim() || "";
+                    // Also try to pull pickup city from the bill description e.g. "Transport — 2019 Honda — VIN:... — ATLANTA, GA"
+                    const descParts = (transportBill?.description || "").split("—").map(s => s.trim());
+                    const pickupHint = descParts.length >= 3 ? descParts[descParts.length - 1] : "";
                     if (!transportBill) return null;
                     return (
                       <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14,
@@ -4180,13 +4182,16 @@ export default function OrderDetails() {
                         <span style={{ fontSize:18 }}>🚛</span>
                         <div>
                           <div style={{ fontSize:10, color:"#a78bfa", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:600 }}>Transport Company</div>
-                          <div style={{ fontSize:16, fontWeight:800, color:"#c4b5fd" }}>{transportBill.vendor}</div>
+                          <div style={{ fontSize:16, fontWeight:800, color:"#c4b5fd" }}>{vendorName || "—"}</div>
                         </div>
-                        {transportBill.pickupLocation && (
+                        {pickupHint && (
                           <div style={{ marginLeft:16, fontSize:12, color:"#a78bfa" }}>
-                            📍 {transportBill.pickupLocation}
+                            📍 {pickupHint}
                           </div>
                         )}
+                        <div style={{ marginLeft:"auto", fontSize:11, color:"#a78bfa" }}>
+                          ${transportBill.amount?.toFixed(2)}
+                        </div>
                       </div>
                     );
                   })()}
