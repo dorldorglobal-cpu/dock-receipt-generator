@@ -4282,27 +4282,17 @@ export default function OrderDetails() {
                       Documents on File
                     </div>
                     {driveFiles.filter(f => /aes|dispatch/i.test(f.name)).length > 0
-                      ? driveFiles.filter(f => /aes|dispatch/i.test(f.name)).map(f => {
-                          const isDispatchFile = /dispatch/i.test(f.name);
-                          const tb = isDispatchFile && bills.find(b => /towing|transport/i.test(b.category || ""));
-                          return (
+                      ? driveFiles.filter(f => /aes|dispatch/i.test(f.name)).map(f => (
                           <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8,
                             padding: "7px 12px", background: "var(--success-dim)", borderRadius: 7, marginBottom: 4 }}>
                             <span style={{ fontSize: 12, color: "var(--success)" }}>✓</span>
-                            <a href={f.webViewLink} target="_blank" rel="noreferrer"
-                              style={{ fontSize: 13, color: "var(--accent)", textDecoration: "none" }}>
+                            <button onClick={() => { setShowDrPreview(false); setDocPreview({ id: f.id, name: f.name, url: f.webViewLink, label: f.label }); }}
+                              style={{ background: "none", border: "none", padding: 0, cursor: "pointer",
+                                fontSize: 13, color: "var(--accent)", textDecoration: "underline", textAlign: "left" }}>
                               {f.name}
-                            </a>
-                            {tb && tb.vendor && (
-                              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 700, color: "#c4b5fd",
-                                background: "rgba(124,58,237,0.18)", border: "1px solid rgba(124,58,237,0.4)",
-                                borderRadius: 6, padding: "2px 10px", whiteSpace: "nowrap" }}>
-                                🚛 {tb.vendor}
-                              </span>
-                            )}
+                            </button>
                           </div>
-                          );
-                        })
+                        ))
                       : <p style={{ fontSize: 12, color: "var(--warning)", margin: 0 }}>
                           ⚠ No AES / Dispatch found. Upload them first for full data.
                         </p>
