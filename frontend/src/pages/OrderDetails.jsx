@@ -4167,35 +4167,6 @@ export default function OrderDetails() {
               const d = drPayload || order;
               return (
                 <>
-                  {/* Transport Company banner */}
-                  {(() => {
-                    const transportBill = bills.find(b => /towing|transport/i.test(b.category || ""));
-                    const vendorName = transportBill?.vendor?.trim() || "";
-                    // Also try to pull pickup city from the bill description e.g. "Transport — 2019 Honda — VIN:... — ATLANTA, GA"
-                    const descParts = (transportBill?.description || "").split("—").map(s => s.trim());
-                    const pickupHint = descParts.length >= 3 ? descParts[descParts.length - 1] : "";
-                    if (!transportBill) return null;
-                    return (
-                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14,
-                        padding:"10px 18px", background:"rgba(124,58,237,0.12)",
-                        border:"2px solid rgba(124,58,237,0.4)", borderRadius:10 }}>
-                        <span style={{ fontSize:18 }}>🚛</span>
-                        <div>
-                          <div style={{ fontSize:10, color:"#a78bfa", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:600 }}>Transport Company</div>
-                          <div style={{ fontSize:16, fontWeight:800, color:"#c4b5fd" }}>{vendorName || "—"}</div>
-                        </div>
-                        {pickupHint && (
-                          <div style={{ marginLeft:16, fontSize:12, color:"#a78bfa" }}>
-                            📍 {pickupHint}
-                          </div>
-                        )}
-                        <div style={{ marginLeft:"auto", fontSize:11, color:"#a78bfa" }}>
-                          ${transportBill.amount?.toFixed(2)}
-                        </div>
-                      </div>
-                    );
-                  })()}
-
                   {/* Route */}
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18,
                     padding: "14px 18px", background: "var(--bg-panel)", borderRadius: 10,
@@ -4311,7 +4282,10 @@ export default function OrderDetails() {
                       Documents on File
                     </div>
                     {driveFiles.filter(f => /aes|dispatch/i.test(f.name)).length > 0
-                      ? driveFiles.filter(f => /aes|dispatch/i.test(f.name)).map(f => (
+                      ? driveFiles.filter(f => /aes|dispatch/i.test(f.name)).map(f => {
+                          const isDispatchFile = /dispatch/i.test(f.name);
+                          const tb = isDispatchFile && bills.find(b => /towing|transport/i.test(b.category || ""));
+                          return (
                           <div key={f.id} style={{ display: "flex", alignItems: "center", gap: 8,
                             padding: "7px 12px", background: "var(--success-dim)", borderRadius: 7, marginBottom: 4 }}>
                             <span style={{ fontSize: 12, color: "var(--success)" }}>✓</span>
@@ -4319,8 +4293,16 @@ export default function OrderDetails() {
                               style={{ fontSize: 13, color: "var(--accent)", textDecoration: "none" }}>
                               {f.name}
                             </a>
+                            {tb && tb.vendor && (
+                              <span style={{ marginLeft: 8, fontSize: 13, fontWeight: 700, color: "#c4b5fd",
+                                background: "rgba(124,58,237,0.18)", border: "1px solid rgba(124,58,237,0.4)",
+                                borderRadius: 6, padding: "2px 10px", whiteSpace: "nowrap" }}>
+                                🚛 {tb.vendor}
+                              </span>
+                            )}
                           </div>
-                        ))
+                          );
+                        })
                       : <p style={{ fontSize: 12, color: "var(--warning)", margin: 0 }}>
                           ⚠ No AES / Dispatch found. Upload them first for full data.
                         </p>
