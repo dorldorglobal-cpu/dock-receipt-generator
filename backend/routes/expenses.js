@@ -2107,6 +2107,8 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       const addendaSansBookings = addenda.replace(/S3-\s*\d+/gi, " ");
       const plainRefs = [...new Set((addendaSansBookings.match(/\b\d{3,8}\b/g) || []))];
       const isMultiBooking = bookingNumbers.length > 1 || plainRefs.length > 1;
+      // When multiple order refs are present, show all of them upfront
+      if (plainRefs.length > 1) orderRef = plainRefs.join(" / ");
       // What to pre-fill the Split form with — real order refs are far more
       // useful than booking numbers when we have them.
       const splitSeed = plainRefs.length > 1 ? plainRefs : bookingNumbers;

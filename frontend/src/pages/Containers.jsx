@@ -4,11 +4,12 @@ import { useNavigate, useLocation } from "react-router-dom";
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 const LOAD_STATUS_COLORS = {
-  "Pending": { bg:"rgba(251,191,36,0.12)",  border:"rgba(251,191,36,0.35)",  text:"#fbbf24" },
-  "Booked":  { bg:"rgba(37,99,235,0.12)",   border:"rgba(37,99,235,0.35)",   text:"#60a5fa" },
-  "Loaded":  { bg:"rgba(124,58,237,0.12)",  border:"rgba(124,58,237,0.35)",  text:"#a78bfa" },
-  "Sailed":  { bg:"rgba(52,211,153,0.12)",  border:"rgba(52,211,153,0.35)",  text:"#34d399" },
-  "Arrived": { bg:"rgba(74,222,128,0.12)",  border:"rgba(74,222,128,0.35)",  text:"#4ade80" },
+  "Pending":  { bg:"rgba(251,191,36,0.12)",  border:"rgba(251,191,36,0.35)",  text:"#fbbf24" },
+  "Booked":   { bg:"rgba(37,99,235,0.12)",   border:"rgba(37,99,235,0.35)",   text:"#60a5fa" },
+  "Loaded":   { bg:"rgba(124,58,237,0.12)",  border:"rgba(124,58,237,0.35)",  text:"#a78bfa" },
+  "Sailed":   { bg:"rgba(52,211,153,0.12)",  border:"rgba(52,211,153,0.35)",  text:"#34d399" },
+  "Arrived":  { bg:"rgba(74,222,128,0.12)",  border:"rgba(74,222,128,0.35)",  text:"#4ade80" },
+  "Released": { bg:"rgba(16,185,129,0.18)",  border:"rgba(16,185,129,0.5)",   text:"#10b981" },
 };
 const ORDER_STATUS_COLORS = {
   "New Order":       { bg:"rgba(96,165,250,0.12)",  border:"rgba(96,165,250,0.35)",  text:"#60a5fa" },
@@ -632,6 +633,36 @@ export default function Containers() {
                       color:"#34d399", cursor:"pointer", whiteSpace:"nowrap" }}>
                     ✉️ Email
                   </button>
+                  {l.status !== "Released" ? (
+                    <button onClick={async () => {
+                        if (!window.confirm(`Mark "${l.name}" as Released to Customer?`)) return;
+                        await fetch(`${API}/api/container-loads/${l._id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ status: "Released" }),
+                        });
+                        refresh();
+                      }}
+                      style={{ padding:"6px 12px", fontSize:12, fontWeight:700, borderRadius:8,
+                        background:"rgba(16,185,129,0.15)", border:"1px solid rgba(16,185,129,0.45)",
+                        color:"#10b981", cursor:"pointer", whiteSpace:"nowrap" }}>
+                      ✅ Released
+                    </button>
+                  ) : (
+                    <button onClick={async () => {
+                        await fetch(`${API}/api/container-loads/${l._id}`, {
+                          method: "PATCH",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ status: "Arrived" }),
+                        });
+                        refresh();
+                      }}
+                      style={{ padding:"6px 12px", fontSize:12, fontWeight:700, borderRadius:8,
+                        background:"rgba(16,185,129,0.3)", border:"2px solid #10b981",
+                        color:"#10b981", cursor:"pointer", whiteSpace:"nowrap" }}>
+                      ✅ Released
+                    </button>
+                  )}
                   <button onClick={()=>deleteLoad(l)}
                     style={{ padding:"6px 10px", fontSize:12, borderRadius:8,
                       background:"rgba(220,38,38,0.12)", border:"1px solid rgba(220,38,38,0.3)",
@@ -640,6 +671,17 @@ export default function Containers() {
                   </button>
                 </div>
               </div>
+
+              {/* Released to Customer banner */}
+              {l.status === "Released" && (
+                <div style={{ background:"rgba(16,185,129,0.18)", borderTop:"2px solid #10b981",
+                  padding:"10px 20px", display:"flex", alignItems:"center", gap:10 }}>
+                  <span style={{ fontSize:22 }}>✅</span>
+                  <span style={{ fontSize:16, fontWeight:800, color:"#10b981", letterSpacing:1.5, textTransform:"uppercase" }}>
+                    Released to Customer
+                  </span>
+                </div>
+              )}
 
               {/* Collapsed: VIN chips */}
               {!open && (
@@ -888,7 +930,7 @@ export default function Containers() {
                   <div style={{ gridColumn:"1/-1" }}>
                     <label style={lbl}>STATUS</label>
                     <select value={editForm.status} onChange={e=>setEF("status")(e.target.value)} style={inp}>
-                      {["Pending","Booked","Loaded","Sailed","Arrived"].map(s=><option key={s}>{s}</option>)}
+                      {["Pending","Booked","Loaded","Sailed","Arrived","Released"].map(s=><option key={s}>{s}</option>)}
                     </select>
                   </div>
                   <F label="VESSEL" value={editForm.vessel} onChange={setEF("vessel")} />

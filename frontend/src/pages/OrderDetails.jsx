@@ -4167,6 +4167,30 @@ export default function OrderDetails() {
               const d = drPayload || order;
               return (
                 <>
+                  {/* Transport Company banner */}
+                  {(() => {
+                    const transportBill = bills.find(b =>
+                      /towing|transport/i.test(b.category || "") && b.vendor && b.vendor.trim()
+                    );
+                    if (!transportBill) return null;
+                    return (
+                      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:14,
+                        padding:"10px 18px", background:"rgba(124,58,237,0.12)",
+                        border:"2px solid rgba(124,58,237,0.4)", borderRadius:10 }}>
+                        <span style={{ fontSize:18 }}>🚛</span>
+                        <div>
+                          <div style={{ fontSize:10, color:"#a78bfa", textTransform:"uppercase", letterSpacing:"0.07em", fontWeight:600 }}>Transport Company</div>
+                          <div style={{ fontSize:16, fontWeight:800, color:"#c4b5fd" }}>{transportBill.vendor}</div>
+                        </div>
+                        {transportBill.pickupLocation && (
+                          <div style={{ marginLeft:16, fontSize:12, color:"#a78bfa" }}>
+                            📍 {transportBill.pickupLocation}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })()}
+
                   {/* Route */}
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 18,
                     padding: "14px 18px", background: "var(--bg-panel)", borderRadius: 10,
