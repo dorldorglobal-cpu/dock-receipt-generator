@@ -6,6 +6,7 @@ const Counter = require("../models/Counter");
 const multer = require("multer");
 const { parseAES, parseDispatch, parseBuyerReceipt } = require("../utils/parseOrderDocs");
 const AddressBook = require("../models/AddressBook");
+const Invoice = require("../models/Invoice");
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
@@ -607,6 +608,10 @@ router.put("/:id", async (req, res) => {
 
     await order.save();
     autoLinkExpenses(order); // non-blocking
+    // Sync customerName to any invoices on this order
+    if (req.body.customerName) {
+      Invoice.updateMany({ orderId: order._id }, { customerName: req.body.customerName }).catch(() => {});
+    }
     res.json(order);
   } catch (err) {
     console.error("Update order error:", err);

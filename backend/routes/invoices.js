@@ -304,6 +304,8 @@ router.put("/:id", async (req, res) => {
         notes:    notes ?? undefined,
         dueDate:  computedDueDate,
         updatedAt: new Date(),
+        // Always keep customerName in sync with the order
+        ...(order?.customerName ? { customerName: order.customerName } : {}),
       },
       { new: true }
     ).lean();

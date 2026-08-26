@@ -2114,6 +2114,20 @@ export default function OrderDetails() {
                     ✓ Mark Paid
                   </button>
                 )}
+                {inv.status === "paid" && (
+                  <button onClick={async () => {
+                    if (!window.confirm("Undo Paid — revert this invoice to Sent?")) return;
+                    await fetch(`${API}/api/invoices/${inv._id}/status`, {
+                      method: "PATCH", headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ status: "sent" }),
+                    });
+                    fetchOrderInvoices(); fetchOrder();
+                    setMessage(`Invoice ${inv.invoiceNumber} reverted to Sent`);
+                  }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "none",
+                    background: "rgba(220,38,38,0.15)", color: "#f87171", cursor: "pointer", fontWeight: 600 }}>
+                    ↩ Undo Paid
+                  </button>
+                )}
                 {inv.status === "draft" && (
                   <button onClick={async () => {
                     await fetch(`${API}/api/invoices/${inv._id}/status`, {
