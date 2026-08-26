@@ -296,6 +296,7 @@ export default function OrderDetails() {
   const [cardSaving, setCardSaving] = useState(false);
   const [cardCustSuggestions, setCardCustSuggestions] = useState([]);
 
+  const [invStatusPopup, setInvStatusPopup] = useState(null); // { inv }
   const [showDrPreview, setShowDrPreview] = useState(false);
   const [drPayload, setDrPayload] = useState(null);
   const [drLoading, setDrLoading] = useState(false);
@@ -2086,9 +2087,13 @@ export default function OrderDetails() {
                     ⚠ order total ${curSell.toFixed(2)}
                   </span>
                 )}
-                <span style={{ fontWeight: 700, color: statusClr, textTransform: "uppercase", fontSize: 11 }}>
-                  {inv.status}
-                </span>
+                <button onClick={() => setInvStatusPopup({ inv })}
+                  title="Click to change status"
+                  style={{ fontWeight: 700, color: statusClr, textTransform: "uppercase", fontSize: 11,
+                    background: statusBg, border: `1px solid ${statusClr}55`, borderRadius: 5,
+                    padding: "2px 8px", cursor: "pointer" }}>
+                  {inv.status} ▾
+                </button>
                 <button onClick={() => window.open(`${API}/api/invoices/${inv._id}/pdf`, "_blank")}
                   style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "1px solid var(--border)",
                     background: "var(--bg-panel)", color: "var(--text-secondary)", cursor: "pointer" }}>
@@ -2099,46 +2104,6 @@ export default function OrderDetails() {
                     style={{ fontSize: 11, padding: "2px 10px", borderRadius: 5, border: "none",
                       background: "rgba(251,191,36,0.25)", color: "#f59e0b", cursor: "pointer", fontWeight: 700 }}>
                     ⚡ Sync to ${curSell.toFixed(2)}
-                  </button>
-                )}
-                {inv.status !== "paid" && (
-                  <button onClick={async () => {
-                    await fetch(`${API}/api/invoices/${inv._id}/status`, {
-                      method: "PATCH", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ status: "paid" }),
-                    });
-                    fetchOrderInvoices(); fetchOrder();
-                    setMessage(`Invoice ${inv.invoiceNumber} marked as Paid`);
-                  }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "none",
-                    background: "rgba(5,150,105,0.2)", color: "#34d399", cursor: "pointer", fontWeight: 600 }}>
-                    ✓ Mark Paid
-                  </button>
-                )}
-                {inv.status === "paid" && (
-                  <button onClick={async () => {
-                    if (!window.confirm("Undo Paid — revert this invoice to Sent?")) return;
-                    await fetch(`${API}/api/invoices/${inv._id}/status`, {
-                      method: "PATCH", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ status: "sent" }),
-                    });
-                    fetchOrderInvoices(); fetchOrder();
-                    setMessage(`Invoice ${inv.invoiceNumber} reverted to Sent`);
-                  }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "none",
-                    background: "rgba(220,38,38,0.15)", color: "#f87171", cursor: "pointer", fontWeight: 600 }}>
-                    ↩ Undo Paid
-                  </button>
-                )}
-                {inv.status === "draft" && (
-                  <button onClick={async () => {
-                    await fetch(`${API}/api/invoices/${inv._id}/status`, {
-                      method: "PATCH", headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ status: "sent" }),
-                    });
-                    fetchOrderInvoices(); fetchOrder();
-                    setMessage(`Invoice ${inv.invoiceNumber} marked as Sent`);
-                  }} style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "none",
-                    background: "rgba(37,99,235,0.2)", color: "#60a5fa", cursor: "pointer", fontWeight: 600 }}>
-                  ✈ Mark Sent
                   </button>
                 )}
               </div>
@@ -4151,6 +4116,47 @@ export default function OrderDetails() {
               <button type="button" onClick={() => setShowEdit(false)}
                 style={{ background: "var(--bg-panel)", border: "1px solid var(--border)",
                   color: "var(--text-secondary)" }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Invoice Status Modal ─────────────────────── */}
+      {invStatusPopup && (
+        <div className="modal-backdrop" onClick={() => setInvStatusPopup(null)}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:"var(--bg-card)", borderRadius:14, padding:"28px 32px", width:320,
+              boxShadow:"0 20px 60px rgba(0,0,0,0.5)", display:"flex", flexDirection:"column", gap:16 }}>
+            <h3 style={{ margin:0, fontSize:16 }}>Change Invoice Status</h3>
+            <div style={{ fontSize:12, color:"var(--text-muted)" }}>{invStatusPopup.inv.invoiceNumber}</div>
+            <select defaultValue={invStatusPopup.inv.status}
+              id="inv-status-select"
+              style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)",
+                background:"var(--bg-input)", color:"var(--text-primary)", fontSize:14, width:"100%" }}>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="paid">Paid</option>
+            </select>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={async () => {
+                  const sel = document.getElementById("inv-status-select").value;
+                  await fetch(`${API}/api/invoices/${invStatusPopup.inv._id}/status`, {
+                    method: "PATCH", headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ status: sel }),
+                  });
+                  setInvStatusPopup(null);
+                  fetchOrderInvoices(); fetchOrder();
+                  setMessage(`Invoice ${invStatusPopup.inv.invoiceNumber} → ${sel}`);
+                }}
+                style={{ flex:1, padding:"10px", borderRadius:8, border:"none", background:"#7c3aed",
+                  color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+                Save
+              </button>
+              <button onClick={() => setInvStatusPopup(null)}
+                style={{ padding:"10px 16px", borderRadius:8, border:"1px solid var(--border)",
+                  background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
                 Cancel
               </button>
             </div>
