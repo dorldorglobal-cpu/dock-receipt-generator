@@ -145,6 +145,9 @@ export default function Invoices() {
     load();
   };
 
+  const [statusModal, setStatusModal] = useState(null); // { inv }
+  const [statusSel,   setStatusSel]   = useState("");
+
   // Payment modal state
   const [payModal,    setPayModal]    = useState(null);  // { inv, editPayment? }
   const [payAmount,   setPayAmount]   = useState("");
@@ -566,7 +569,11 @@ export default function Invoices() {
                       )}
                     </td>
                     <td>
-                      <StatusBadge status={inv.status} />
+                      <button onClick={() => { setStatusModal({ inv }); setStatusSel(inv.status); }}
+                        title="Click to change status"
+                        style={{ background:"none", border:"none", padding:0, cursor:"pointer" }}>
+                        <StatusBadge status={inv.status} />
+                      </button>
                       {isOverdue && <span style={{ fontSize: 10, color: "#f87171", display: "block", marginTop: 2 }}>Overdue</span>}
                       {/* Payment history */}
                       {payments.length > 0 && (
@@ -733,6 +740,47 @@ export default function Invoices() {
                 style={{ padding:"9px 22px", background:"#059669", color:"#fff", border:"none",
                   borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14, opacity: bulkSaving ? 0.6 : 1 }}>
                 {bulkSaving ? "Saving…" : `Mark ${selectedIds.size} as Paid`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Status Change Modal ── */}
+      {statusModal && (
+        <div onClick={() => setStatusModal(null)}
+          style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.65)", zIndex:9999,
+            display:"flex", alignItems:"center", justifyContent:"center" }}>
+          <div onClick={e => e.stopPropagation()}
+            style={{ background:"var(--bg-card)", borderRadius:14, padding:"28px 32px", width:320,
+              boxShadow:"0 20px 60px rgba(0,0,0,0.5)", display:"flex", flexDirection:"column", gap:16 }}>
+            <h3 style={{ margin:0, fontSize:16 }}>Change Invoice Status</h3>
+            <div style={{ fontSize:12, color:"var(--text-muted)" }}>{statusModal.inv.invoiceNumber} — {statusModal.inv.customerName}</div>
+            <select value={statusSel} onChange={e => setStatusSel(e.target.value)}
+              style={{ padding:"10px 12px", borderRadius:8, border:"1px solid var(--border)",
+                background:"var(--bg-input)", color:"var(--text-primary)", fontSize:14, width:"100%" }}>
+              <option value="draft">Draft</option>
+              <option value="sent">Sent</option>
+              <option value="paid">Paid</option>
+            </select>
+            <div style={{ display:"flex", gap:10 }}>
+              <button onClick={async () => {
+                  await fetch(`${API}/api/invoices/${statusModal.inv._id}/status`, {
+                    method:"PATCH", headers:{"Content-Type":"application/json"},
+                    body: JSON.stringify({ status: statusSel }),
+                  });
+                  setStatusModal(null);
+                  load();
+                  setMessage(`Invoice ${statusModal.inv.invoiceNumber} → ${statusSel}`);
+                }}
+                style={{ flex:1, padding:"10px", borderRadius:8, border:"none", background:"#7c3aed",
+                  color:"#fff", fontWeight:700, fontSize:14, cursor:"pointer" }}>
+                Save
+              </button>
+              <button onClick={() => setStatusModal(null)}
+                style={{ padding:"10px 16px", borderRadius:8, border:"1px solid var(--border)",
+                  background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
+                Cancel
               </button>
             </div>
           </div>
