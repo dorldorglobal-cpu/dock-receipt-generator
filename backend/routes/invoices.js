@@ -35,13 +35,17 @@ async function replaceInvoiceFileOnOrder(order, pdfBuffer, invoiceNumber) {
   if (!order?.driveFolderId) return false;
   try {
     const oldInvoiceFiles = (order.files || []).filter(
-      (f) => (f.label || "").toLowerCase() === "invoice"
+      (f) => (f.label || "").toLowerCase() === "invoice" ||
+             /^Invoice-/i.test(f.originalName || f.filename || "")
     );
     for (const f of oldInvoiceFiles) {
-      if (f.driveFileId) await deleteDriveFile(f.driveFileId);
+      if (f.driveFileId) await deleteDriveFile(f.driveFileId).catch(() => {});
     }
+    const oldIds = new Set(oldInvoiceFiles.map(f => f.driveFileId).filter(Boolean));
     order.files = (order.files || []).filter(
-      (f) => (f.label || "").toLowerCase() !== "invoice"
+      (f) => (f.label || "").toLowerCase() !== "invoice" &&
+             !/^Invoice-/i.test(f.originalName || f.filename || "") &&
+             !oldIds.has(f.driveFileId)
     );
 
     const fileName = `Invoice-${invoiceNumber}.pdf`;
