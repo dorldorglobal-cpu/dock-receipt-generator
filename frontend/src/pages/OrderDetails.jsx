@@ -2141,7 +2141,7 @@ export default function OrderDetails() {
           <span>Request Date</span>
           <strong className="small">{order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</strong>
         </div>
-        <div className="dashboard-card" onClick={() => setCardPopup({ card: "vin", form: { vin: order.vin || "", lotNumber: order.lotNumber || "", pin: order.pin || "" } })}
+        <div className="dashboard-card" onClick={() => setCardPopup({ card: "vin", form: { vin: order.vin || "", lotNumber: order.lotNumber || "", pin: order.pin || "", buyerName: order.buyerName || "" } })}
           style={{ cursor: "pointer" }} title="Click to edit">
           <span>VIN / Chassis</span>
           <strong className="small" style={{ fontFamily: "monospace", letterSpacing: "0.04em" }}>
@@ -2154,6 +2154,11 @@ export default function OrderDetails() {
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
               PIN <strong style={{ color: order.pin ? "#fbbf24" : "var(--text-muted)" }}>{order.pin || "—"}</strong>
             </span>
+            {order.buyerName && (
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                Buyer# <strong style={{ color: "var(--text-secondary)" }}>{order.buyerName}</strong>
+              </span>
+            )}
           </div>
         </div>
         {/* Sailed Workflow — replaces status card */}
@@ -3729,6 +3734,13 @@ export default function OrderDetails() {
                   <input value={cardPopup.form.pin}
                     onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, pin: e.target.value.toUpperCase() } }))}
                     style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"#fbbf24", fontSize:14, fontWeight:700, fontFamily:"monospace", boxSizing:"border-box" }} />
+                </label>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  Buyer #
+                  <input value={cardPopup.form.buyerName || ""}
+                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, buyerName: e.target.value } }))}
+                    placeholder="Buyer account number"
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
                 </label>
               </div>
             )}
