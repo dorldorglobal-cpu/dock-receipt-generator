@@ -1099,6 +1099,21 @@ async function parseBuyerReceipt(filePath) {
   let customerName = "";
   let customerNameLineIdx = -1;
 
+  // Extract buyer/member number — Copart: "MEMBER: 964631", IAA: "Buyer # 690717"
+  let buyerNumber = "";
+  const memberNumLine = lines.find(l => /MEMBER:\s*\d+/i.test(l));
+  if (memberNumLine) {
+    const mn = memberNumLine.match(/MEMBER:\s*(\d+)/i);
+    if (mn) buyerNumber = mn[1];
+  }
+  if (!buyerNumber) {
+    const buyerNumLine = lines.find(l => /Buyer\s*#\s*\d+/i.test(l));
+    if (buyerNumLine) {
+      const bn = buyerNumLine.match(/Buyer\s*#\s*(\d+)/i);
+      if (bn) buyerNumber = bn[1];
+    }
+  }
+
   const memberHeaderIdx = lines.findIndex(l => /MEMBER:\s*\d+/i.test(l));
   // Sub-header: "LOT: SELLER:", "ADDRESS OF LOT:", "ADDRESS OF LOT: SELLER:" etc.
   // Also catches when the PDF splits "PHYSICAL" and "ADDRESS OF LOT:" onto separate lines
@@ -1395,6 +1410,7 @@ async function parseBuyerReceipt(filePath) {
     make,
     model,
     lotNumber,
+    buyerNumber,
     pickupLocation,
     pickupName,
     pickupAddress,

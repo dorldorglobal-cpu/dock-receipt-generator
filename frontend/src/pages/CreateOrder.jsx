@@ -161,6 +161,7 @@ export default function CreateOrder() {
           ...(f.vin              ? { vin:               f.vin              } : {}),
           ...(f.color            ? { color:             f.color            } : {}),
           ...(f.buyerName        ? { buyerName:         f.buyerName        } : {}),
+          ...(f.buyerNumber      ? { buyerNumber:       f.buyerNumber      } : {}),
           ...(f.lotNumber        ? { lotNumber:         f.lotNumber        } : {}),
           ...(f.pickupName       ? { pickupName:        f.pickupName       } : {}),
           ...(f.pickupAddress    ? { pickupAddress:     f.pickupAddress    } : {}),
