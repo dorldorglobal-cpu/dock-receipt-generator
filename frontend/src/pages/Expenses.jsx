@@ -586,6 +586,7 @@ export default function Expenses() {
   const bulkAction = async (action) => {
     if (!selectedIds.length) return;
     setBulkPayConfirm({ action, expenses: selectedExpenses });
+    setBulkAmtOverrides({});
   };
 
   const executeBulkAction = async (action) => {
@@ -600,6 +601,7 @@ export default function Expenses() {
       fd.append("paidDate", payDate);
       fd.append("paymentMethod", bulkMethod);
       fd.append("action", action);
+      if (Object.keys(bulkAmtOverrides).length) fd.append("amountOverrides", JSON.stringify(bulkAmtOverrides));
       if (bulkProofFile && action !== "unpay") fd.append("proof", bulkProofFile);
 
       const res = await fetch(`${API}/api/expenses/bulk-pay`, { method: "POST", body: fd });
@@ -657,6 +659,7 @@ export default function Expenses() {
 
   // ── Bulk-pay confirm modal ───────────────────────────────────────────────────
   const [bulkPayConfirm, setBulkPayConfirm] = useState(null); // { action, expenses }
+  const [bulkAmtOverrides, setBulkAmtOverrides] = useState({}); // { expId: "amount string" }
 
   // ── Assign orphaned expense to order ────────────────────────────────────────
   const [assignModal, setAssignModal]     = useState(null); // expense object
@@ -3125,7 +3128,8 @@ export default function Expenses() {
                   <th style={{ padding: "6px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600 }}>Order</th>
                   <th style={{ padding: "6px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600 }}>Vendor</th>
                   <th style={{ padding: "6px 10px", textAlign: "left", color: "var(--text-muted)", fontWeight: 600 }}>Description</th>
-                  <th style={{ padding: "6px 10px", textAlign: "right", color: "var(--text-muted)", fontWeight: 600 }}>Amount</th>
+                  <th style={{ padding: "6px 10px", textAlign: "right", color: "var(--text-muted)", fontWeight: 600 }}>Total</th>
+                  <th style={{ padding: "6px 10px", textAlign: "right", color: "var(--text-muted)", fontWeight: 600 }}>Paying</th>
                   <th style={{ padding: "6px 10px", textAlign: "center", color: "var(--text-muted)", fontWeight: 600 }}>Current</th>
                 </tr>
               </thead>
@@ -3137,6 +3141,18 @@ export default function Expenses() {
                     <td style={{ padding: "6px 10px", color: "var(--text-primary)", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
                       title={e.description}>{e.description || "—"}</td>
                     <td style={{ padding: "6px 10px", textAlign: "right", fontWeight: 600 }}>{fmt$(e.amount)}</td>
+                    <td style={{ padding: "6px 10px", textAlign: "right" }}>
+                      {bulkPayConfirm.action !== "unpay" ? (
+                        <input
+                          type="number" min="0.01" step="0.01"
+                          value={bulkAmtOverrides[e._id] ?? String(e.amount)}
+                          onChange={ev => setBulkAmtOverrides(o => ({ ...o, [e._id]: ev.target.value }))}
+                          style={{ width: 72, padding: "3px 6px", borderRadius: 5, border: "1px solid var(--border)",
+                            background: "var(--bg-base)", color:
+                              parseFloat(bulkAmtOverrides[e._id] ?? e.amount) < e.amount ? "#f97316" : "var(--text-primary)",
+                            fontSize: 12, textAlign: "right" }} />
+                      ) : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                    </td>
                     <td style={{ padding: "6px 10px", textAlign: "center" }}>
                       <span style={{ fontSize: 10, padding: "1px 6px", borderRadius: 4, fontWeight: 600,
                         background: e.status === "paid" ? "#34d39922" : "#f8717122",

@@ -421,10 +421,11 @@ router.put("/:id", uploadFields, async (req, res) => {
 // ── POST /api/expenses/bulk-pay — mark many as paid, optional proof upload ────
 router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
   try {
-    const ids           = JSON.parse(req.body.ids || "[]");
-    const paidDate      = req.body.paidDate;
-    const paymentMethod = req.body.paymentMethod;
-    const action        = req.body.action;
+    const ids             = JSON.parse(req.body.ids || "[]");
+    const paidDate        = req.body.paidDate;
+    const paymentMethod   = req.body.paymentMethod;
+    const action          = req.body.action;
+    const amountOverrides = req.body.amountOverrides ? JSON.parse(req.body.amountOverrides) : {};
 
     if (!ids || !ids.length) return res.status(400).json({ error: "No expense IDs provided" });
     const dateObj = paidDate ? new Date(paidDate) : new Date();
@@ -455,14 +456,23 @@ router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
     // Add a payment record to each expense
     const expenses = await Expense.find({ _id: { $in: ids } });
     await Promise.all(expenses.map(exp => {
+      const payAmt = amountOverrides[exp._id.toString()]
+        ? parseFloat(amountOverrides[exp._id.toString()])
+        : exp.amount;
+      const isPartial = payAmt < exp.amount - 0.005;
       exp.payments.push({
-        amount: exp.amount,
+        amount: payAmt,
         date:   dateObj,
         method: paymentMethod || "",
         notes:  "",
         ...proofFields,
       });
-      Object.assign(exp, setFields);
+      const prevPaid = exp.paidAmount || 0;
+      exp.paidAmount = prevPaid + payAmt;
+      exp.status = exp.paidAmount >= exp.amount - 0.005 ? "paid" : "partial";
+      exp.paidDate = dateObj;
+      exp.paymentMethod = paymentMethod || "";
+      if (proofFields.receiptFileName) Object.assign(exp, proofFields);
       return exp.save();
     }));
 
