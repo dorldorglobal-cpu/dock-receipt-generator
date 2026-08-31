@@ -3742,13 +3742,6 @@ export default function OrderDetails() {
                     placeholder="e.g. 690717"
                     style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
                 </label>
-                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
-                  Buyer Name <span style={{ color:"var(--text-muted)", fontWeight:400 }}>(auction account name)</span>
-                  <input value={cardPopup.form.buyerName || ""}
-                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, buyerName: e.target.value } }))}
-                    placeholder="e.g. ADAMS AUTO SOLUTION LIMITED"
-                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
-                </label>
               </div>
             )}
 
