@@ -42,8 +42,9 @@ function getBody(parts = []) {
 async function pollCopart() {
   try {
     const processed = await EmailOrder.distinct("gmailMessageId");
-    const q = `from:member_pickup@copart.com subject:"Vehicles assigned to you for pickup"`;
-    const list = await gmail.users.messages.list({ userId: "me", q, maxResults: 20 });
+    // Match direct Copart emails AND self-forwarded ones (both have the same subject)
+    const q = `subject:"Vehicles assigned to you for pickup" has:attachment`;
+    const list = await gmail.users.messages.list({ userId: "me", q, maxResults: 50 });
     const messages = list.data.messages || [];
 
     for (const msg of messages) {
