@@ -8,6 +8,7 @@ export default function EmailOrders() {
   const [items, setItems]         = useState([]);
   const [loading, setLoading]     = useState(true);
   const [syncing, setSyncing]     = useState(false);
+  const [cleaning, setCleaning]   = useState(false);
   const [tab, setTab]             = useState("pending"); // pending | approved | rejected
   const [editing, setEditing]     = useState(null);      // EmailOrder being reviewed
   const [saving, setSaving]       = useState(false);
@@ -30,6 +31,17 @@ export default function EmailOrders() {
     const t = setTimeout(() => setMessage(""), 4000);
     return () => clearTimeout(t);
   }, [message]);
+
+  const cleanup = async () => {
+    setCleaning(true);
+    try {
+      const r = await fetch(`${API}/api/email-orders/cleanup`, { method: "POST" });
+      const d = await r.json();
+      setMessage(`Cleaned up ${d.cleaned} item(s). ${d.remaining} pending remaining.`);
+      load();
+    } catch { setMessage("Cleanup failed"); }
+    setCleaning(false);
+  };
 
   const sync = async () => {
     setSyncing(true);
@@ -82,6 +94,10 @@ export default function EmailOrders() {
           <p className="page-subtitle">Copart pickup emails auto-parsed into orders</p>
         </div>
         <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <button onClick={cleanup} disabled={cleaning}
+            style={{ padding: "9px 18px", background: "var(--bg-elevated)", color: "var(--text-secondary)", border: "1px solid var(--border)", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
+            {cleaning ? "Cleaning…" : "🧹 Remove Already-Done"}
+          </button>
           <button onClick={sync} disabled={syncing}
             style={{ padding: "9px 18px", background: "var(--accent)", color: "#fff", border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 700, fontSize: 13 }}>
             {syncing ? "Checking…" : "🔄 Check Gmail Now"}
