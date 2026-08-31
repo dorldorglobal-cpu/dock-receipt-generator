@@ -6,13 +6,13 @@ const Order      = require("../models/Order");
 const Counter    = require("../models/Counter");
 const { uploadBufferToDrive, createDriveFolder } = require("../googleDrive");
 
-const REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || "https://dock-receipt-backend.onrender.com/oauth2callback";
+const REDIRECT_URI = "https://dock-receipt-backend.onrender.com/oauth2callback";
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET,
   REDIRECT_URI
 );
-oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+// Note: oauth2Client here is only used to generate the auth URL, not to call Gmail directly
 
 // ── GET /api/email-orders — list pending email orders ────────────────────────
 router.get("/", async (req, res) => {

@@ -12,13 +12,11 @@ const EmailOrder    = require("../models/EmailOrder");
 
 // Reuse the same OAuth2 client as Drive
 const oauth2Client = new google.auth.OAuth2(
-  process.env.GOOGLE_CLIENT_ID,
-  process.env.GOOGLE_CLIENT_SECRET,
-  process.env.RENDER_URL
-    ? `${process.env.RENDER_URL}/oauth2callback`
-    : "http://localhost:4001/oauth2callback"
+  process.env.GMAIL_CLIENT_ID,
+  process.env.GMAIL_CLIENT_SECRET,
+  "https://dock-receipt-backend.onrender.com/oauth2callback"
 );
-oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
+oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_OAUTH_REFRESH_TOKEN });
 const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
 // ── PDF text parser ───────────────────────────────────────────────────────────

@@ -223,20 +223,20 @@ app.get("/oauth2callback", async (req, res) => {
   if (!code) return res.status(400).send("Missing code");
   try {
     const { google } = require("googleapis");
-    const REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || "https://dock-receipt-backend.onrender.com/oauth2callback";
+    const REDIRECT_URI = "https://dock-receipt-backend.onrender.com/oauth2callback";
     const client = new google.auth.OAuth2(
-      process.env.GOOGLE_CLIENT_ID,
-      process.env.GOOGLE_CLIENT_SECRET,
+      process.env.GMAIL_CLIENT_ID,
+      process.env.GMAIL_CLIENT_SECRET,
       REDIRECT_URI
     );
     const { tokens } = await client.getToken(code);
-    console.log("=== NEW REFRESH TOKEN (copy to GOOGLE_REFRESH_TOKEN) ===");
+    console.log("=== NEW REFRESH TOKEN (copy to GMAIL_OAUTH_REFRESH_TOKEN) ===");
     console.log(tokens.refresh_token || "(no new refresh token — reuse existing)");
     console.log("=== END TOKEN ===");
     res.send(`
       <h2>✅ Authorization successful!</h2>
-      <p>Gmail access granted. Copy the refresh token from your Render logs and update <code>GOOGLE_REFRESH_TOKEN</code> in Render environment variables.</p>
-      ${tokens.refresh_token ? `<p><strong>New refresh token:</strong><br><code style="word-break:break-all">${tokens.refresh_token}</code></p>` : "<p>No new refresh token returned — your existing token may already work.</p>"}
+      <p>Gmail access granted. Copy the refresh token from your Render logs and add it as <code>GMAIL_OAUTH_REFRESH_TOKEN</code> in Render environment variables.</p>
+      ${tokens.refresh_token ? `<p><strong>New refresh token (also shown in Render logs):</strong><br><code style="word-break:break-all">${tokens.refresh_token}</code></p>` : "<p>No new refresh token returned — your existing token may already work.</p>"}
       <p>You can close this tab.</p>
     `);
   } catch (e) {
@@ -245,7 +245,7 @@ app.get("/oauth2callback", async (req, res) => {
 });
 
 // ── Start Copart email poller ──────────────────────────────────────────────────
-if (process.env.GOOGLE_REFRESH_TOKEN) {
+if (process.env.GMAIL_OAUTH_REFRESH_TOKEN) {
   const { startPoller } = require("./services/copartPoller");
   startPoller();
 }
