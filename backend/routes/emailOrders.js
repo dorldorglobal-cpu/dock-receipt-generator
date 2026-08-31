@@ -128,6 +128,27 @@ router.post("/sync", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── POST /api/email-orders/cleanup — mark pending items as approved if order already exists ──
+router.post("/cleanup", async (req, res) => {
+  try {
+    const pending = await EmailOrder.find({ status: "pending" });
+    let cleaned = 0;
+    for (const eo of pending) {
+      if (!eo.vin) continue;
+      const existing = await Order.findOne({ vin: eo.vin });
+      if (existing) {
+        eo.status = "approved";
+        eo.orderId = existing._id;
+        eo.orderRef = existing.refNumber;
+        await eo.save();
+        cleaned++;
+      }
+    }
+    const remaining = await EmailOrder.countDocuments({ status: "pending" });
+    res.json({ ok: true, cleaned, remaining });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── GET /api/gmail-auth — generate OAuth URL with Gmail scope ─────────────────
 router.get("/gmail-auth-url", (req, res) => {
   const url = oauth2Client.generateAuthUrl({

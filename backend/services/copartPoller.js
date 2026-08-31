@@ -152,6 +152,16 @@ async function pollCopart() {
       const extracted = parseCopartPDF(parsed.text);
       extracted.pin = pin || extracted.pin;
 
+      // Skip if a real order already exists with this VIN
+      if (extracted.vin) {
+        const existing = await Order.findOne({ vin: extracted.vin });
+        if (existing) {
+          await EmailOrder.create({ gmailMessageId: msg.id, status: "approved", vin: extracted.vin, orderId: existing._id, orderRef: existing.refNumber });
+          console.log(`[Copart Poller] Skipping VIN ${extracted.vin} — order ${existing.refNumber} already exists`);
+          continue;
+        }
+      }
+
       // Save EmailOrder record (pending review)
       await EmailOrder.create({
         gmailMessageId: msg.id,
