@@ -101,8 +101,11 @@ async function pollCopart() {
         try { fs.unlinkSync(tmpPath); } catch {}
       }
 
-      // Skip PDFs that don't look like buyer receipts (no VIN = not a receipt)
-      if (!extracted.vin) {
+      // Skip PDFs that don't look like buyer receipts
+      // Must have a real VIN (17 chars, not containing "NUMBER") AND a lot number
+      const isRealVin = extracted.vin && /^[A-HJ-NPR-Z0-9]{17}$/.test(extracted.vin);
+      const hasLot = !!(extracted.lotNumber);
+      if (!isRealVin || !hasLot) {
         await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
         continue;
       }
