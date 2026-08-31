@@ -149,12 +149,14 @@ export default function Invoices() {
   const [statusSel,   setStatusSel]   = useState("");
 
   // Payment modal state
-  const [payModal,    setPayModal]    = useState(null);  // { inv, editPayment? }
-  const [payAmount,   setPayAmount]   = useState("");
-  const [payMethod,   setPayMethod]   = useState("Bank ACH");
-  const [payDate,     setPayDate]     = useState(todayISO());
-  const [payNotes,    setPayNotes]    = useState("");
-  const [paySaving,   setPaySaving]   = useState(false);
+  const [payModal,       setPayModal]       = useState(null);  // { inv, editPayment? }
+  const [payAmount,      setPayAmount]      = useState("");
+  const [payMethod,      setPayMethod]      = useState("Bank ACH");
+  const [payDate,        setPayDate]        = useState(todayISO());
+  const [payNotes,       setPayNotes]       = useState("");
+  const [paySaving,      setPaySaving]      = useState(false);
+  const [customerCredit, setCustomerCredit] = useState(0);   // existing credit for this customer
+  const [applyCredit,    setApplyCredit]    = useState(false); // user chose to apply credit
 
   const load = async () => {
     setLoading(true);
@@ -259,13 +261,22 @@ export default function Invoices() {
   };
 
   // ── Payment modal helpers ─────────────────────────────────────────────────
-  const openAddPayment = (inv) => {
+  const openAddPayment = async (inv) => {
     const paid = (inv.payments || []).reduce((s, p) => s + p.amount, 0);
     const remaining = Math.max(0, (inv.total || 0) - paid);
     setPayModal({ inv, editPayment: null });
     setPayAmount(remaining > 0 ? remaining.toFixed(2) : "");
     setPayMethod("Bank ACH");
     setPayDate(todayISO());
+    setApplyCredit(false);
+    setCustomerCredit(0);
+    if (inv.customerName) {
+      try {
+        const r = await fetch(`${API}/api/invoices/credits/${encodeURIComponent(inv.customerName)}`);
+        const d = await r.json();
+        setCustomerCredit(d.balance || 0);
+      } catch {}
+    }
     setPayNotes("");
   };
 
@@ -281,8 +292,11 @@ export default function Invoices() {
     if (!payAmount || isNaN(Number(payAmount))) return alert("Enter a valid amount");
     setPaySaving(true);
     try {
-      const body = { amount: Number(payAmount), method: payMethod, date: payDate, notes: payNotes };
       const { inv, editPayment } = payModal;
+      const body = {
+        amount: Number(payAmount), method: payMethod, date: payDate, notes: payNotes,
+        ...(applyCredit && customerCredit > 0 ? { applyCredit: Math.min(customerCredit, Number(payAmount)) } : {}),
+      };
       let url, method;
       if (editPayment) {
         url    = `${API}/api/invoices/${inv._id}/payments/${editPayment._id}`;
@@ -294,7 +308,19 @@ export default function Invoices() {
       const res  = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed");
-      setMessage(editPayment ? "Payment updated" : `Payment of ${f$(body.amount)} recorded`);
+
+      const paid = Number(payAmount);
+      const prevPaid = (inv.payments || []).reduce((s, p) => s + p.amount, 0);
+      const remaining = Math.max(0, (inv.total || 0) - prevPaid);
+      const excess = paid - remaining;
+
+      if (!editPayment && excess > 0.005) {
+        setMessage(`Payment recorded — ${f$(excess)} credit added to ${inv.customerName}`);
+      } else if (!editPayment && applyCredit) {
+        setMessage(`Payment recorded with credit applied`);
+      } else {
+        setMessage(editPayment ? "Payment updated" : `Payment of ${f$(paid)} recorded`);
+      }
       setPayModal(null);
       load();
     } catch (e) { alert(e.message); }
@@ -809,6 +835,30 @@ export default function Invoices() {
                   : null;
               })()}
             </div>
+            {/* Credit banner — shown when customer has credit and this is a new payment */}
+            {!payModal.editPayment && customerCredit > 0.005 && (
+              <div style={{ background: "rgba(16,185,129,0.12)", border: "1px solid rgba(16,185,129,0.4)",
+                borderRadius: 10, padding: "12px 14px", marginBottom: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                  <div>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: "#10b981" }}>💰 Credit Available</span>
+                    <span style={{ fontSize: 12, color: "var(--text-secondary)", marginLeft: 8 }}>
+                      {payModal.inv.customerName} has <strong style={{ color: "#10b981" }}>{f$(customerCredit)}</strong> on account
+                    </span>
+                  </div>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, cursor: "pointer", fontSize: 12, color: "var(--text-secondary)", whiteSpace: "nowrap" }}>
+                    <input type="checkbox" checked={applyCredit} onChange={e => setApplyCredit(e.target.checked)}
+                      style={{ cursor: "pointer" }} />
+                    Apply credit
+                  </label>
+                </div>
+                {applyCredit && (
+                  <div style={{ fontSize: 11, color: "#10b981", marginTop: 6 }}>
+                    ✓ Up to {f$(Math.min(customerCredit, Number(payAmount) || 0))} will be deducted from this customer's credit balance
+                  </div>
+                )}
+              </div>
+            )}
             <div style={{ display: "grid", gap: 14 }}>
               <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)" }}>
                 Amount *

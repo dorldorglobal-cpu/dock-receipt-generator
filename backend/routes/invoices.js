@@ -1,8 +1,9 @@
 const express = require("express");
 const router  = express.Router();
 const path    = require("path");
-const Invoice = require("../models/Invoice");
-const Order   = require("../models/Order");
+const Invoice        = require("../models/Invoice");
+const Order          = require("../models/Order");
+const CustomerCredit = require("../models/CustomerCredit");
 const PDFDocument = require("pdfkit");
 const { uploadBufferToDrive, deleteDriveFile } = require("../googleDrive");
 
@@ -439,15 +440,57 @@ router.post("/:id/payments", express.json(), async (req, res) => {
   try {
     const inv = await Invoice.findById(req.params.id);
     if (!inv) return res.status(404).json({ error: "Invoice not found" });
-    const { amount, method, date, notes } = req.body;
+    const { amount, method, date, notes, applyCredit } = req.body;
     if (!amount || isNaN(Number(amount))) return res.status(400).json({ error: "amount required" });
-    inv.payments.push({ amount: Number(amount), method: method || "", date: date ? new Date(date) : new Date(), notes: notes || "" });
+
+    const payAmt = Number(amount);
+    const prevPaid = (inv.payments || []).reduce((s, p) => s + p.amount, 0);
+    const remaining = Math.max(0, (inv.total || 0) - prevPaid);
+
+    inv.payments.push({ amount: payAmt, method: method || "", date: date ? new Date(date) : new Date(), notes: notes || "" });
     inv.status = recalcStatus(inv);
     if (inv.status === "paid" && !inv.paidAt) inv.paidAt = new Date();
     if (inv.status !== "paid") inv.paidAt = null;
     await inv.save();
     await syncOrderStatus(inv);
-    res.json(inv);
+
+    // Handle overpayment → add excess to customer credit
+    const excess = payAmt - remaining;
+    let creditBalance = null;
+    if (excess > 0.005 && inv.customerName) {
+      const cc = await CustomerCredit.findOneAndUpdate(
+        { customerName: inv.customerName },
+        {
+          $inc: { balance: excess },
+          $push: { transactions: { amount: excess, date: date ? new Date(date) : new Date(), notes: `Overpayment on ${inv.invoiceNumber}`, invoiceId: inv._id, invoiceNumber: inv.invoiceNumber } },
+        },
+        { upsert: true, new: true }
+      );
+      creditBalance = cc.balance;
+    }
+
+    // Handle applying existing credit toward this invoice
+    if (applyCredit && applyCredit > 0 && inv.customerName) {
+      const cc = await CustomerCredit.findOneAndUpdate(
+        { customerName: inv.customerName },
+        {
+          $inc: { balance: -Number(applyCredit) },
+          $push: { transactions: { amount: -Number(applyCredit), date: date ? new Date(date) : new Date(), notes: `Applied to ${inv.invoiceNumber}`, invoiceId: inv._id, invoiceNumber: inv.invoiceNumber } },
+        },
+        { new: true }
+      );
+      creditBalance = cc ? cc.balance : null;
+    }
+
+    res.json({ invoice: inv, creditBalance, overpayment: excess > 0.005 ? excess : 0 });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// ── GET /api/invoices/credits/:customerName — get customer credit balance ────
+router.get("/credits/:customerName", async (req, res) => {
+  try {
+    const cc = await CustomerCredit.findOne({ customerName: req.params.customerName });
+    res.json({ balance: cc ? cc.balance : 0, transactions: cc ? cc.transactions : [] });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
