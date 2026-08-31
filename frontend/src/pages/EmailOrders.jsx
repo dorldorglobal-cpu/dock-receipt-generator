@@ -9,6 +9,7 @@ export default function EmailOrders() {
   const [loading, setLoading]     = useState(true);
   const [syncing, setSyncing]     = useState(false);
   const [cleaning, setCleaning]   = useState(false);
+  const [selected, setSelected]   = useState(new Set());
   const [tab, setTab]             = useState("pending"); // pending | approved | rejected
   const [editing, setEditing]     = useState(null);      // EmailOrder being reviewed
   const [saving, setSaving]       = useState(false);
@@ -24,13 +25,36 @@ export default function EmailOrders() {
     setLoading(false);
   };
 
-  useEffect(() => { load(); }, [tab]);
+  useEffect(() => { load(); setSelected(new Set()); }, [tab]);
 
   useEffect(() => {
     if (!message) return;
     const t = setTimeout(() => setMessage(""), 4000);
     return () => clearTimeout(t);
   }, [message]);
+
+  const toggleSelect = (id) => setSelected(prev => {
+    const next = new Set(prev);
+    next.has(id) ? next.delete(id) : next.add(id);
+    return next;
+  });
+  const toggleAll = () => setSelected(prev => prev.size === items.length ? new Set() : new Set(items.map(i => i._id)));
+
+  const batchDismiss = async () => {
+    if (!selected.size) return;
+    if (!window.confirm(`Dismiss ${selected.size} item(s)?`)) return;
+    await Promise.all([...selected].map(id => fetch(`${API}/api/email-orders/${id}/reject`, { method: "POST" })));
+    setSelected(new Set());
+    load();
+  };
+
+  const batchMarkDone = async () => {
+    if (!selected.size) return;
+    await Promise.all([...selected].map(id => fetch(`${API}/api/email-orders/${id}/reject`, { method: "POST" })));
+    setSelected(new Set());
+    setMessage(`Marked ${selected.size} item(s) as done`);
+    load();
+  };
 
   const cleanup = async () => {
     setCleaning(true);
@@ -138,9 +162,28 @@ export default function EmailOrders() {
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {/* Batch action bar */}
+          <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "8px 4px" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 7, cursor: "pointer", fontSize: 13, color: "var(--text-secondary)", userSelect: "none" }}>
+              <input type="checkbox" checked={selected.size === items.length && items.length > 0} onChange={toggleAll}
+                style={{ width: 16, height: 16, cursor: "pointer" }} />
+              Select All ({items.length})
+            </label>
+            {selected.size > 0 && (<>
+              <span style={{ fontSize: 13, color: "var(--text-muted)" }}>{selected.size} selected</span>
+              <button onClick={batchDismiss}
+                style={{ padding: "5px 14px", background: "none", border: "1px solid rgba(239,68,68,0.5)", color: "#ef4444", borderRadius: 7, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>
+                Dismiss Selected
+              </button>
+            </>)}
+          </div>
+
           {items.map(item => (
-            <div key={item._id} style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 12, padding: "18px 22px" }}>
+            <div key={item._id} style={{ background: "var(--bg-panel)", border: `1px solid ${selected.has(item._id) ? "var(--accent)" : "var(--border)"}`, borderRadius: 12, padding: "18px 22px" }}>
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16, flexWrap: "wrap" }}>
+                <div style={{ flex: 1, display: "flex", gap: 12, alignItems: "flex-start" }}>
+                <input type="checkbox" checked={selected.has(item._id)} onChange={() => toggleSelect(item._id)}
+                  style={{ width: 16, height: 16, marginTop: 3, cursor: "pointer", flexShrink: 0 }} />
                 <div style={{ flex: 1 }}>
                   <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 6, flexWrap: "wrap" }}>
                     <span style={{ fontWeight: 800, fontSize: 16, color: "var(--text-primary)" }}>
@@ -189,6 +232,7 @@ export default function EmailOrders() {
                   </button>
                 )}
               </div>
+                </div>
             </div>
           ))}
         </div>
