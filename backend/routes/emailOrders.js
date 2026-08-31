@@ -123,8 +123,10 @@ router.post("/sync", async (req, res) => {
   try {
     const { pollCopart } = require("../services/copartPoller");
     await pollCopart();
-    const count = await EmailOrder.countDocuments({ status: "pending" });
-    res.json({ ok: true, pending: count });
+    const pending  = await EmailOrder.countDocuments({ status: "pending" });
+    const approved = await EmailOrder.countDocuments({ status: "approved" });
+    const noPdf    = await EmailOrder.countDocuments({ status: "no-pdf" });
+    res.json({ ok: true, pending, approved, noPdf });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -42,9 +42,11 @@ function getBody(parts = []) {
 async function pollCopart() {
   try {
     const processed = await EmailOrder.distinct("gmailMessageId");
-    // Match direct Copart emails AND self-forwarded ones (both have the same subject)
-    const q = `subject:"Vehicles assigned to you for pickup" has:attachment`;
-    const list = await gmail.users.messages.list({ userId: "me", q, maxResults: 50 });
+    // Scan all emails with PDF attachments in the last 90 days — detect by content, not sender/subject
+    const q = `has:attachment filename:pdf newer_than:90d`;
+    console.log(`[Copart Poller] Querying Gmail: ${q}`);
+    const list = await gmail.users.messages.list({ userId: "me", q, maxResults: 100 });
+    console.log(`[Copart Poller] Found ${(list.data.messages || []).length} message(s), ${processed.length} already processed`);
     const messages = list.data.messages || [];
 
     for (const msg of messages) {
@@ -80,7 +82,8 @@ async function pollCopart() {
       await findAttachments(payload.parts || [payload]);
 
       if (!pdfData) {
-        await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", pin, bodyText });
+        // Mark as seen so we don't recheck this email
+        await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
         continue;
       }
 
@@ -90,29 +93,29 @@ async function pollCopart() {
       let extracted = {};
       try {
         extracted = await parseBuyerReceipt(tmpPath);
+      } catch (parseErr) {
+        console.log(`[Copart Poller] PDF parse failed for msg ${msg.id}: ${parseErr.message}`);
+        await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
+        continue;
       } finally {
         try { fs.unlinkSync(tmpPath); } catch {}
       }
 
-      // PIN from email body overrides anything in PDF
-      if (pin) extracted.pin = pin;
+      // Skip PDFs that don't look like buyer receipts (no VIN = not a receipt)
+      if (!extracted.vin) {
+        await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
+        continue;
+      }
 
-      // Also extract lot number directly (parseBuyerReceipt returns lotNumber)
+      if (pin) extracted.pin = pin;
       const lot = extracted.lotNumber || "";
 
-      // Sale date from PDF text directly
-      const saleDateM = bodyText.match(/Sale:\s*([\d/]+)/i) ||
-                        (pdfData.toString("utf8") || "").match(/Sale:\s*([\d/]+)/i);
-      const saleDate = saleDateM ? saleDateM[1] : "";
-
       // Skip if a real order already exists with this VIN
-      if (extracted.vin) {
-        const existing = await Order.findOne({ vin: extracted.vin });
-        if (existing) {
-          await EmailOrder.create({ gmailMessageId: msg.id, status: "approved", vin: extracted.vin, orderId: existing._id, orderRef: existing.refNumber });
-          console.log(`[Copart Poller] Skipping VIN ${extracted.vin} — order ${existing.refNumber} already exists`);
-          continue;
-        }
+      const existing = await Order.findOne({ vin: extracted.vin });
+      if (existing) {
+        await EmailOrder.create({ gmailMessageId: msg.id, status: "approved", vin: extracted.vin, orderId: existing._id, orderRef: existing.refNumber });
+        console.log(`[Copart Poller] Skipping VIN ${extracted.vin} — order ${existing.refNumber} already exists`);
+        continue;
       }
 
       await EmailOrder.create({
@@ -131,7 +134,6 @@ async function pollCopart() {
         pickupZip:     extracted.pickupZip     || "",
         pin:           extracted.pin           || pin || "",
         buyerNumber:   extracted.buyerNumber   || "",
-        saleDate,
         pdfBuffer:     pdfData,
         pdfFilename,
         bodyText,
