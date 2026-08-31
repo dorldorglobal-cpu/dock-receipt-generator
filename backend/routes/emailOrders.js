@@ -6,12 +6,11 @@ const Order      = require("../models/Order");
 const Counter    = require("../models/Counter");
 const { uploadBufferToDrive, createDriveFolder } = require("../googleDrive");
 
+const REDIRECT_URI = process.env.OAUTH_REDIRECT_URI || "https://dock-receipt-backend.onrender.com/oauth2callback";
 const oauth2Client = new google.auth.OAuth2(
   process.env.GOOGLE_CLIENT_ID,
   process.env.GOOGLE_CLIENT_SECRET,
-  process.env.RENDER_URL
-    ? `${process.env.RENDER_URL}/oauth2callback`
-    : "http://localhost:4001/oauth2callback"
+  REDIRECT_URI
 );
 oauth2Client.setCredentials({ refresh_token: process.env.GOOGLE_REFRESH_TOKEN });
 
