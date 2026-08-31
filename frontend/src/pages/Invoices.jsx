@@ -470,13 +470,6 @@ export default function Invoices() {
             }}>✕</button>
           )}
         </div>
-        {/* Order ref sort */}
-        <button onClick={() => setSortOrderRef(s => s === "asc" ? "desc" : s === "desc" ? null : "asc")}
-          style={{ padding:"7px 12px", fontSize:12, fontWeight:600, borderRadius:7,
-            border:"1px solid var(--border)", background: sortOrderRef ? "rgba(124,58,237,0.12)" : "var(--bg-panel)",
-            color: sortOrderRef ? "#a78bfa" : "var(--text-secondary)", cursor:"pointer", whiteSpace:"nowrap" }}>
-          Order Ref {sortOrderRef === "asc" ? "↑" : sortOrderRef === "desc" ? "↓" : "↕"}
-        </button>
         <input type="date" value={from} onChange={e => setFrom(e.target.value)} style={{ fontSize: 12, padding: "7px 10px" }} />
         <span style={{ fontSize: 12, color: "var(--text-muted)" }}>to</span>
         <input type="date" value={to} onChange={e => setTo(e.target.value)} style={{ fontSize: 12, padding: "7px 10px" }} />
@@ -514,7 +507,11 @@ export default function Invoices() {
                     style={{ cursor:"pointer", width:15, height:15 }} />
                 </th>
                 <th>Invoice #</th>
-                <th>Order Ref</th>
+                <th onClick={() => setSortOrderRef(s => s === "asc" ? "desc" : s === "desc" ? null : "asc")}
+                  style={{ cursor:"pointer", userSelect:"none", whiteSpace:"nowrap",
+                    color: sortOrderRef ? "#a78bfa" : undefined }}>
+                  Order Ref {sortOrderRef === "asc" ? "↑" : sortOrderRef === "desc" ? "↓" : "↕"}
+                </th>
                 <th>Customer</th>
                 <th>Vehicle</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
