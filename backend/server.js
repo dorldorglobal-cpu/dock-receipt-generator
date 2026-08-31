@@ -215,6 +215,13 @@ app.use("/api/invoices", require("./routes/invoices"));
 app.use("/api/claude",   require("./routes/claude"));
 app.use("/api/bl-separator", require("./routes/blSeparator"));
 app.use("/api/container-loads", require("./routes/containerLoads"));
+app.use("/api/email-orders",   require("./routes/emailOrders"));
+
+// ── Start Copart email poller ──────────────────────────────────────────────────
+if (process.env.GOOGLE_REFRESH_TOKEN) {
+  const { startPoller } = require("./services/copartPoller");
+  startPoller();
+}
 
 // ── POST /api/customer-statement  — generate a customer statement PDF ─────────
 app.post("/api/customer-statement", async (req, res) => {

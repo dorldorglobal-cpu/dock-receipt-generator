@@ -28,24 +28,45 @@ const icons = {
   schedule: "M8 6h13 M8 12h13 M8 18h13 M3 6h.01 M3 12h.01 M3 18h.01",
   settings: "M12 15a3 3 0 100-6 3 3 0 000 6z M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z",
   ai: "M12 2a2 2 0 012 2c0 .74-.4 1.38-1 1.72V7h1a7 7 0 017 7h1a1 1 0 010 2h-1v1a2 2 0 01-2 2v1a1 1 0 01-2 0v-1H7v1a1 1 0 01-2 0v-1a2 2 0 01-2-2v-1H2a1 1 0 010-2h1a7 7 0 017-7h1V5.72A2 2 0 0110 4a2 2 0 012-2z M9 14a1 1 0 100-2 1 1 0 000 2z M15 14a1 1 0 100-2 1 1 0 000 2z",
+  emailOrders: "M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z M22 6l-10 7L2 6",
   menu: "M3 12h18 M3 6h18 M3 18h18",
   close: "M18 6L6 18 M6 6l12 12",
 };
 
-function NavItem({ to, iconKey, label, end = false, collapsed, onClick }) {
+function NavItem({ to, iconKey, label, end = false, collapsed, onClick, badge }) {
   return (
-    <NavLink to={to} end={end} onClick={onClick} title={collapsed ? label : undefined}>
+    <NavLink to={to} end={end} onClick={onClick} title={collapsed ? label : undefined} style={{ position: "relative" }}>
       <Icon path={icons[iconKey]} />
       {!collapsed && <span className="nav-label">{label}</span>}
+      {badge > 0 && (
+        <span style={{
+          position: "absolute", top: 6, right: collapsed ? 4 : 10,
+          background: "#ef4444", color: "#fff", borderRadius: "50%",
+          fontSize: 10, fontWeight: 800, width: 16, height: 16,
+          display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1,
+        }}>{badge > 9 ? "9+" : badge}</span>
+      )}
     </NavLink>
   );
 }
+
+const API = import.meta.env.VITE_API_URL || "";
 
 export default function Sidebar() {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
+  const [emailBadge, setEmailBadge] = useState(0);
   const location = useLocation();
+
+  useEffect(() => {
+    const fetchBadge = () => {
+      fetch(`${API}/api/email-orders/count`).then(r => r.json()).then(d => setEmailBadge(d.count || 0)).catch(() => {});
+    };
+    fetchBadge();
+    const t = setInterval(fetchBadge, 5 * 60 * 1000);
+    return () => clearInterval(t);
+  }, []);
 
   // Close mobile drawer on navigation
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
@@ -86,10 +107,11 @@ export default function Sidebar() {
 
       {!isMobile && <div className="sidebar-section-label">Orders</div>}
       <nav className="sidebar-nav">
-        <NavItem to="/orders"     iconKey="orders"      label="All Orders"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
-        <NavItem to="/containers" iconKey="container"   label="Containers"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
-        <NavItem to="/orders/new" iconKey="createOrder" label="New Order"   collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
-        <NavItem to="/customers"  iconKey="customers"   label="Customers"   collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/orders"       iconKey="orders"      label="All Orders"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/email-orders" iconKey="emailOrders" label="Email Pickups" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} badge={emailBadge} />
+        <NavItem to="/containers"   iconKey="container"   label="Containers"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/orders/new"   iconKey="createOrder" label="New Order"     collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/customers"    iconKey="customers"   label="Customers"     collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
       </nav>
 
       {!isMobile && <div className="sidebar-section-label">Operations</div>}

@@ -24,6 +24,7 @@ import Invoices  from "./pages/Invoices";
 import VesselSchedule from "./pages/VesselSchedule";
 import AiAssistant from "./pages/AiAssistant";
 import BlSeparator from "./pages/BlSeparator";
+import EmailOrders from "./pages/EmailOrders";
 import SignDocuments from "./pages/SignDocuments";
 
 import "./App.css";
@@ -71,6 +72,7 @@ export default function App() {
             element={<OrderDetails />}
           />
 
+          <Route path="/email-orders" element={<EmailOrders />} />
           <Route path="/containers" element={<Containers />} />
           <Route path="/customers" element={<Customers />} />
           <Route path="/expenses"  element={<Expenses />} />
