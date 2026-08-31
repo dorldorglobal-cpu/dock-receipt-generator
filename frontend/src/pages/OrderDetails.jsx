@@ -2141,7 +2141,7 @@ export default function OrderDetails() {
           <span>Request Date</span>
           <strong className="small">{order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</strong>
         </div>
-        <div className="dashboard-card" onClick={() => setCardPopup({ card: "vin", form: { vin: order.vin || "", lotNumber: order.lotNumber || "", pin: order.pin || "", buyerName: order.buyerName || "" } })}
+        <div className="dashboard-card" onClick={() => setCardPopup({ card: "vin", form: { vin: order.vin || "", lotNumber: order.lotNumber || "", pin: order.pin || "", buyerNumber: order.buyerNumber || "", buyerName: order.buyerName || "" } })}
           style={{ cursor: "pointer" }} title="Click to edit">
           <span>VIN / Chassis</span>
           <strong className="small" style={{ fontFamily: "monospace", letterSpacing: "0.04em" }}>
@@ -2154,9 +2154,9 @@ export default function OrderDetails() {
             <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
               PIN <strong style={{ color: order.pin ? "#fbbf24" : "var(--text-muted)" }}>{order.pin || "—"}</strong>
             </span>
-            {order.buyerName && (
+            {order.buyerNumber && (
               <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                Buyer# <strong style={{ color: "var(--text-secondary)" }}>{order.buyerName}</strong>
+                Buyer# <strong style={{ color: "var(--text-secondary)" }}>{order.buyerNumber}</strong>
               </span>
             )}
           </div>
@@ -3736,10 +3736,17 @@ export default function OrderDetails() {
                     style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"#fbbf24", fontSize:14, fontWeight:700, fontFamily:"monospace", boxSizing:"border-box" }} />
                 </label>
                 <label style={{ fontSize:12, color:"var(--text-muted)" }}>
-                  Buyer #
+                  Buyer # <span style={{ color:"var(--text-muted)", fontWeight:400 }}>(IAA / Copart member number)</span>
+                  <input value={cardPopup.form.buyerNumber || ""}
+                    onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, buyerNumber: e.target.value } }))}
+                    placeholder="e.g. 690717"
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                </label>
+                <label style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  Buyer Name <span style={{ color:"var(--text-muted)", fontWeight:400 }}>(auction account name)</span>
                   <input value={cardPopup.form.buyerName || ""}
                     onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, buyerName: e.target.value } }))}
-                    placeholder="Buyer account number"
+                    placeholder="e.g. ADAMS AUTO SOLUTION LIMITED"
                     style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
                 </label>
               </div>
