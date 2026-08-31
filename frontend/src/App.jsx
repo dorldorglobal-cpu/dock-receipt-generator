@@ -40,6 +40,8 @@ function ComingSoon({ title }) {
 }
 
 export default function App() {
+  const [authed, setAuthed] = useState(!!localStorage.getItem("ddg_auth"));
+  if (!authed) return <Login onLogin={() => setAuthed(true)} />;
 
   return (
     <BrowserRouter>
