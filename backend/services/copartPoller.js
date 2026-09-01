@@ -38,9 +38,25 @@ function getBody(parts = []) {
   return "";
 }
 
+// ── Auto-cleanup: mark pending items done if order already exists ─────────────
+async function autoCleanup() {
+  const pending = await EmailOrder.find({ status: "pending" });
+  for (const eo of pending) {
+    if (!eo.vin) continue;
+    const existing = await Order.findOne({ vin: eo.vin });
+    if (existing) {
+      eo.status = "approved";
+      eo.orderId = existing._id;
+      eo.orderRef = existing.refNumber;
+      await eo.save();
+    }
+  }
+}
+
 // ── Main poll function ────────────────────────────────────────────────────────
 async function pollCopart() {
   try {
+    await autoCleanup();
     const processed = await EmailOrder.distinct("gmailMessageId");
     // Scan all emails with PDF attachments in the last 90 days — detect by content, not sender/subject
     const q = `has:attachment filename:pdf newer_than:90d`;
