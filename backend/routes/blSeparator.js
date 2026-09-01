@@ -75,13 +75,14 @@ function parseACL(pageTexts) {
     if (pageNum === 1) {
       if (current) bls.push(current);
 
-      const bookingMatch = text.match(/S329\d+/);
+      const bookingMatch = text.match(/S3[23]\d{7,}/);
       const booking = bookingMatch ? bookingMatch[0] : "";
 
-      // On data pages: "GRANDE VESSEL RefNo"; on 1-page BLs: "BookingNo RefNo BookingNo"
+      // On data pages: "GRANDE VESSEL RefNo"; on 1-page BLs: "BookingNo RefNo BookingNo" or "Ref. No.XXXXX"
       const refMatch =
         text.match(/GRANDE\s+\S+\s+(\d{4,6})/i) ||
-        text.match(/S329\d+\s+(\d{4,6})\s+S329\d+/i);
+        text.match(/S3[23]\d+\s+(\d{4,6})\s+S3[23]\d+/i) ||
+        text.match(/Ref\.?\s*No\.?\s*(\d{4,6})/i);
       const ref = refMatch ? refMatch[1] : "";
 
       const vinMatch = text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
@@ -121,7 +122,9 @@ function parseACL(pageTexts) {
         current.pages[1] = i;
         // Ref# and vessel/voyage may appear on the data page (page 2 of 2)
         if (!current.refNumber) {
-          const refMatch = text.match(/GRANDE\s+\S+\s+(\d{4,6})/i);
+          const refMatch =
+            text.match(/GRANDE\s+\S+\s+(\d{4,6})/i) ||
+            text.match(/Ref\.?\s*No\.?\s*(\d{4,6})/i);
           if (refMatch) current.refNumber = refMatch[1];
         }
         if (!current.vessel) {
