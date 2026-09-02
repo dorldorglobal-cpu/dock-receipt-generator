@@ -12,7 +12,7 @@ const fD = (d) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 const toInput = (d) => d ? new Date(d).toISOString().slice(0, 10) : "";
 
-const PAYMENT_METHODS = ["Bank ACH", "Wire", "Zelle", "Venmo", "Check", "Cash", "Other"];
+const PAYMENT_METHODS = ["Wire", "Bank ACH", "Zelle", "Venmo", "Check", "Cash", "Other"];
 
 const STATUS_STYLES = {
   draft: { bg: "rgba(107,114,128,0.15)", color: "var(--text-secondary)", border: "rgba(107,114,128,0.3)", label: "Draft" },
@@ -63,7 +63,7 @@ export default function Invoices() {
   // Bulk selection
   const [selectedIds,   setSelectedIds]   = useState(new Set());
   const [bulkModal,     setBulkModal]     = useState(false);
-  const [bulkMethod,    setBulkMethod]    = useState("Bank ACH");
+  const [bulkMethod,    setBulkMethod]    = useState("Wire");
   const [bulkDate,      setBulkDate]      = useState(todayISO());
   const [bulkNotes,     setBulkNotes]     = useState("");
   const [bulkSaving,    setBulkSaving]    = useState(false);
@@ -151,7 +151,7 @@ export default function Invoices() {
   // Payment modal state
   const [payModal,       setPayModal]       = useState(null);  // { inv, editPayment? }
   const [payAmount,      setPayAmount]      = useState("");
-  const [payMethod,      setPayMethod]      = useState("Bank ACH");
+  const [payMethod,      setPayMethod]      = useState("Wire");
   const [payDate,        setPayDate]        = useState(todayISO());
   const [payNotes,       setPayNotes]       = useState("");
   const [paySaving,      setPaySaving]      = useState(false);
@@ -283,7 +283,7 @@ export default function Invoices() {
   const openEditPayment = (inv, payment) => {
     setPayModal({ inv, editPayment: payment });
     setPayAmount(String(payment.amount));
-    setPayMethod(payment.method || "Bank ACH");
+    setPayMethod(payment.method || "Wire");
     setPayDate(toInput(payment.date) || todayISO());
     setPayNotes(payment.notes || "");
   };
