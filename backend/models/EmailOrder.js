@@ -6,6 +6,7 @@ const emailOrderSchema = new mongoose.Schema({
 
   // Extracted fields
   customerName:  String,
+  requestType:   String,
   lot:           String,
   vin:           String,
   year:          String,
@@ -17,6 +18,7 @@ const emailOrderSchema = new mongoose.Schema({
   pickupState:   String,
   pickupZip:     String,
   pin:           String,
+  buyerNumber:   String,
   saleDate:      String,
   charges:       mongoose.Schema.Types.Mixed,
 

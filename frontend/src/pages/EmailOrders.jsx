@@ -14,6 +14,7 @@ export default function EmailOrders() {
   const [editing, setEditing]     = useState(null);      // EmailOrder being reviewed
   const [saving, setSaving]       = useState(false);
   const [message, setMessage]     = useState("");
+  const [custSuggestions, setCustSuggestions] = useState([]);
   const navigate = useNavigate();
 
   const load = async () => {
@@ -102,7 +103,7 @@ export default function EmailOrders() {
     load();
   };
 
-  const openEdit = (item) => setEditing({ ...item });
+  const openEdit = (item) => { setEditing({ ...item }); setCustSuggestions([]); };
   const f = (k) => (e) => setEditing(prev => ({ ...prev, [k]: e.target.value }));
 
   const inp = {
@@ -246,8 +247,33 @@ export default function EmailOrders() {
             <p style={{ margin: "0 0 20px", fontSize: 12, color: "var(--text-muted)" }}>Edit any fields before creating the order. The buyer receipt PDF will be attached automatically.</p>
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
+              {/* Customer Name with autocomplete */}
+              <label style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", gridColumn: "1 / -1", position: "relative" }}>
+                Customer Name
+                <input value={editing.customerName || ""} onChange={async e => {
+                  const val = e.target.value;
+                  setEditing(prev => ({ ...prev, customerName: val }));
+                  if (val.length < 2) { setCustSuggestions([]); return; }
+                  try {
+                    const r = await fetch(`${API}/api/address-book?search=${encodeURIComponent(val)}&type=customer`);
+                    const d = await r.json();
+                    setCustSuggestions(d.slice(0, 6));
+                  } catch { setCustSuggestions([]); }
+                }} style={{ ...inp, marginTop: 4 }} />
+                {custSuggestions.length > 0 && (
+                  <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "var(--bg-elevated)", border: "1px solid var(--border)", borderRadius: 8, zIndex: 100, boxShadow: "0 4px 16px rgba(0,0,0,0.3)", marginTop: 2 }}>
+                    {custSuggestions.map(c => (
+                      <div key={c._id} onClick={() => { setEditing(prev => ({ ...prev, customerName: c.companyName })); setCustSuggestions([]); }}
+                        style={{ padding: "8px 12px", cursor: "pointer", fontSize: 13, color: "var(--text-primary)", borderBottom: "1px solid var(--border-muted)" }}
+                        onMouseEnter={e => e.currentTarget.style.background = "var(--bg-panel)"}
+                        onMouseLeave={e => e.currentTarget.style.background = ""}>
+                        {c.companyName}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </label>
               {[
-                ["customerName", "Customer Name"],
                 ["year", "Year"],
                 ["make", "Make"],
                 ["model", "Model"],
@@ -261,7 +287,7 @@ export default function EmailOrders() {
                 ["pickupZip", "Pickup ZIP"],
                 ["requestType", "Request Type"],
               ].map(([key, label]) => (
-                <label key={key} style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", gridColumn: key === "vin" || key === "customerName" || key === "pickupAddress" || key === "notes" ? "1 / -1" : undefined }}>
+                <label key={key} style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", gridColumn: key === "vin" || key === "pickupAddress" ? "1 / -1" : undefined }}>
                   {label}
                   {key === "requestType" ? (
                     <select value={editing[key] || "RORO"} onChange={f(key)} style={{ ...inp, marginTop: 4 }}>

@@ -22,8 +22,28 @@ oauth2Client.setCredentials({ refresh_token: process.env.GMAIL_OAUTH_REFRESH_TOK
 const gmail = google.gmail({ version: "v1", auth: oauth2Client });
 
 function parsePIN(body) {
-  const m = body.match(/Gate Pass PIN:\s*(\d+)/i);
+  // Body: "Gate Pass PIN: 5F2D" or subject reply "PICK UP PIN: 5F2D"
+  const m = body.match(/(?:Gate Pass PIN|PICK UP PIN)[:\s]+([A-Z0-9]{4,8})/i);
   return m ? m[1] : "";
+}
+
+function parseSubject(headers = []) {
+  const subj = (headers.find(h => h.name.toLowerCase() === "subject") || {}).value || "";
+  // e.g. "PICK UP FOR CONTAINER 2017 HONDA CR-V #7FARW5H39HE008018 DENIS ANABA"
+  // or   "Re: PICK UP FOR CONTAINER ..."
+  const clean = subj.replace(/^Re:\s*/i, "").trim();
+
+  // Request type
+  let requestType = "";
+  if (/\bCONTAINER\b/i.test(clean)) requestType = "Container";
+  else if (/\bRORO\b/i.test(clean))  requestType = "RORO";
+
+  // Customer name: words after the VIN pattern (#VINXXX or just the 17-char VIN)
+  let customerName = "";
+  const afterVin = clean.match(/[#]?[A-HJ-NPR-Z0-9]{17}\s+(.+)/i);
+  if (afterVin) customerName = afterVin[1].trim();
+
+  return { requestType, customerName };
 }
 
 function b64(data) {
@@ -70,9 +90,11 @@ async function pollCopart() {
 
       const full = await gmail.users.messages.get({ userId: "me", id: msg.id, format: "full" });
       const payload = full.data.payload;
+      const headers = payload.headers || [];
 
       const bodyText = getBody(payload.parts || [payload]);
-      const pin = parsePIN(bodyText);
+      const pin = parsePIN(bodyText) || parsePIN((headers.find(h => h.name.toLowerCase() === "subject") || {}).value || "");
+      const { requestType: subjRequestType, customerName: subjCustomerName } = parseSubject(headers);
 
       // Find PDF attachment
       let pdfData = null;
@@ -126,8 +148,12 @@ async function pollCopart() {
         continue;
       }
 
-      if (pin) extracted.pin = pin;
+      const resolvedPin = extracted.pin || pin || "";
       const lot = extracted.lotNumber || "";
+      // Customer name: prefer PDF extraction, fall back to email subject
+      const resolvedCustomer = extracted.customerName || subjCustomerName || "";
+      // Request type: prefer email subject (explicit CONTAINER/RORO), PDF rarely has this
+      const resolvedRequestType = subjRequestType || "RORO";
 
       // Skip if a real order already exists with this VIN
       const existing = await Order.findOne({ vin: extracted.vin });
@@ -137,10 +163,26 @@ async function pollCopart() {
         continue;
       }
 
+      // Dedup by VIN: if a pending EmailOrder already exists for this VIN,
+      // just patch in the PIN (second email) rather than creating a duplicate
+      const existingPending = await EmailOrder.findOne({ vin: extracted.vin, status: "pending" });
+      if (existingPending) {
+        let updated = false;
+        if (!existingPending.pin && resolvedPin) { existingPending.pin = resolvedPin; updated = true; }
+        if (!existingPending.customerName && resolvedCustomer) { existingPending.customerName = resolvedCustomer; updated = true; }
+        if (!existingPending.requestType && resolvedRequestType) { existingPending.requestType = resolvedRequestType; updated = true; }
+        if (updated) await existingPending.save();
+        // Mark this message as seen
+        await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
+        console.log(`[Copart Poller] Merged duplicate email for VIN ${extracted.vin} into existing pending`);
+        continue;
+      }
+
       await EmailOrder.create({
         gmailMessageId: msg.id,
         status:        "pending",
-        customerName:  extracted.customerName  || "",
+        customerName:  resolvedCustomer,
+        requestType:   resolvedRequestType,
         lot,
         vin:           extracted.vin           || "",
         year:          extracted.year          || "",
@@ -151,14 +193,14 @@ async function pollCopart() {
         pickupCity:    extracted.pickupCity    || "",
         pickupState:   extracted.pickupState   || "",
         pickupZip:     extracted.pickupZip     || "",
-        pin:           extracted.pin           || pin || "",
+        pin:           resolvedPin,
         buyerNumber:   extracted.buyerNumber   || "",
         pdfBuffer:     pdfData,
         pdfFilename,
         bodyText,
       });
 
-      console.log(`[Copart Poller] New pickup email: LOT ${lot} — ${extracted.year} ${extracted.make} ${extracted.model}`);
+      console.log(`[Copart Poller] New pickup email: LOT ${lot} — ${extracted.year} ${extracted.make} ${extracted.model} (${resolvedRequestType}) — ${resolvedCustomer}`);
     }
   } catch (err) {
     if (err.code === 401 || (err.message || "").includes("invalid_grant")) {
