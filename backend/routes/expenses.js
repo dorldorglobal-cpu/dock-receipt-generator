@@ -2311,20 +2311,27 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
 
       if (row.matchedIds?.length) {
-        // Always record the bank amount as a traceable payment and compute
-        // paid/partial from the real numbers — never blindly set "paid".
-        // `markPartial` only changes how the bank amount is divided when it
-        // covers multiple matched bills (row.markPartial → split evenly);
-        // without it, the whole amount applies to each matched bill (the
-        // normal case is a single match). Either way the resulting status
-        // must reflect what was actually paid, since a bill's total can
-        // change later (e.g. a line item added after the match) and only an
-        // honest paidAmount lets that be caught on the next edit.
+        // Always record a traceable payment per bill and compute paid/partial
+        // from the real numbers — never blindly set "paid". Three cases:
+        //   1. Single matched bill -> the whole bank amount applies to it.
+        //   2. markPartial + multiple bills -> this payment is only a partial
+        //      installment split evenly across them.
+        //   3. Multiple bills, not markPartial (the "combined" / candidate-
+        //      picker case: several DIFFERENT bills whose amounts sum to the
+        //      bank total) -> each bill is paid its OWN remaining amount, not
+        //      the full bank total — applying the full amount to every bill
+        //      here would wildly overstate paidAmount on each one.
+        // Either way the resulting status must reflect what was actually
+        // paid, since a bill's total can change later (e.g. a line item
+        // added after the match) and only an honest paidAmount lets that be
+        // caught on the next edit.
         const expenses = await Expense.find({ _id: { $in: row.matchedIds } });
         const bankAmt = Number(row.amount) || 0;
-        const perAmt = row.markPartial && expenses.length > 1 ? bankAmt / expenses.length : bankAmt;
         for (const exp of expenses) {
           const prev = exp.paidAmount || 0;
+          const perAmt = expenses.length > 1
+            ? (row.markPartial ? bankAmt / expenses.length : Math.max(exp.amount - prev, 0))
+            : bankAmt;
           const newTotal = prev + perAmt;
           const fullyPaid = newTotal >= exp.amount - 0.005;
           exp.payments.push({ amount: perAmt, date: dateObj, method: paymentMethod || "Bank ACH", notes: "" });

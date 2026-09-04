@@ -2132,7 +2132,14 @@ export default function Expenses() {
                                 }
                                 return <span style={{ display:"block", color:"var(--text-primary)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{list.map(c=>c.description).join(", ")}</span>;
                               }
-                              if (row.candidates?.length) return <span style={{display:"block",color:"var(--warning)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>;
+                              if (row.candidates?.length) return (
+                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, _showCandidates: !r._showCandidates } : r))}
+                                  style={{ background:"none", border:"none", cursor:"pointer", padding:0, textAlign:"left" }}>
+                                  <span style={{display:"block",color:"var(--warning)",fontSize:11,textDecoration:"underline dotted"}}>
+                                    ⚠ {row.candidates.length} candidate(s) — click to pick
+                                  </span>
+                                </button>
+                              );
                               if (row.createBill) return <span style={{display:"block",color:"#34d399",whiteSpace:"nowrap"}}>Will create new bill</span>;
                               return <span style={{display:"block",color:"#f87171",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>No bill on file for #{row.orderRef}</span>;
                             })()}
@@ -2279,6 +2286,78 @@ export default function Expenses() {
                                   style={{ fontSize:10, color:"var(--text-secondary)", background:"none", border:"1px solid var(--border)", borderRadius:5, padding:"4px 10px", cursor:"pointer", alignSelf:"flex-end" }}>
                                   Cancel
                                 </button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        {/* ── Candidate picker (review rows) ── */}
+                        {row._showCandidates && row.candidates?.length > 0 && !row.splitBills && (
+                          <tr>
+                            <td></td>
+                            <td colSpan={6} style={{ padding:"4px 8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
+                              <div style={{ background:"var(--bg-base)", border:"1px solid var(--warning)", borderRadius:6, padding:"8px 10px" }}>
+                                <div style={{ fontSize:11, color:"var(--warning)", fontWeight:700, marginBottom:6 }}>
+                                  Select which bills to apply — total must equal {fmt$(row.amount)}
+                                </div>
+                                {(() => {
+                                  // Partial bills already have some amount paid — what's actually
+                                  // owed (and what this row needs to sum to) is the remaining
+                                  // balance, not the bill's original full amount. Matches the
+                                  // effectiveAmt() logic the backend's own auto-match already uses.
+                                  const owed = c => c.status === "partial" ? Math.max((c.amount || 0) - (c.paidAmount || 0), 0) : (c.amount || 0);
+                                  return row.candidates.map(c => {
+                                  const checked = (row._pickedCandidates || []).includes(c._id);
+                                  return (
+                                    <label key={c._id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, cursor:"pointer" }}>
+                                      <input type="checkbox" checked={checked} onChange={() => {
+                                        setProofRows(rs => rs.map((r, j) => {
+                                          if (j !== i) return r;
+                                          const cur = r._pickedCandidates || [];
+                                          const next = checked ? cur.filter(id => id !== c._id) : [...cur, c._id];
+                                          const pickedObjs = (r.candidates || []).filter(x => next.includes(x._id));
+                                          const total = pickedObjs.reduce((s, x) => s + owed(x), 0);
+                                          const balanced = Math.abs(total - r.amount) < 0.01;
+                                          return {
+                                            ...r,
+                                            _pickedCandidates: next,
+                                            matchedIds: next,
+                                            selected: balanced,
+                                            // An exact-sum picker selection is never a partial
+                                            // installment — clear a stale ½ Partial toggle so the
+                                            // backend applies each bill's own amount, not an even split.
+                                            ...(balanced ? { markPartial: false } : {}),
+                                          };
+                                        }));
+                                      }} style={{ width:14, height:14 }} />
+                                      <span style={{ fontSize:11, color:"#60a5fa", minWidth:60 }}>#{c.orderRef || "—"}</span>
+                                      <span style={{ fontSize:11, color:"var(--text-secondary)", flex:1 }}>{c.description}{c.status === "partial" && <span style={{color:"var(--warning)"}}> (partial — {fmt$(owed(c))} owed)</span>}</span>
+                                      <span style={{ fontSize:11, color:"#34d399", fontWeight:700, minWidth:60, textAlign:"right" }}>{fmt$(owed(c))}</span>
+                                    </label>
+                                  );
+                                  });
+                                })()}
+                                {/* Running total */}
+                                {(() => {
+                                  const owed = c => c.status === "partial" ? Math.max((c.amount || 0) - (c.paidAmount || 0), 0) : (c.amount || 0);
+                                  const picked = (row.candidates || []).filter(c => (row._pickedCandidates||[]).includes(c._id));
+                                  const total = picked.reduce((s, c) => s + owed(c), 0);
+                                  const balanced = picked.length > 0 && Math.abs(total - row.amount) < 0.01;
+                                  const over = total > row.amount + 0.01;
+                                  return picked.length > 0 ? (
+                                    <div style={{ marginTop:6, display:"flex", justifyContent:"flex-end", gap:10, fontSize:11, fontWeight:700 }}>
+                                      <span style={{ color:"var(--text-muted)" }}>Selected: {fmt$(total)}</span>
+                                      <span style={{ color: balanced ? "#34d399" : over ? "#ef4444" : "var(--warning)" }}>
+                                        {balanced ? "✓ Balanced" : over ? `Over by ${fmt$(total - row.amount)}` : `Short by ${fmt$(row.amount - total)}`}
+                                      </span>
+                                      {balanced && (
+                                        <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, _showCandidates:false, selected:true } : r))}
+                                          style={{ fontSize:10, fontWeight:700, color:"#fff", background:"#059669", border:"none", borderRadius:5, padding:"2px 10px", cursor:"pointer" }}>
+                                          ✓ Confirm
+                                        </button>
+                                      )}
+                                    </div>
+                                  ) : null;
+                                })()}
                               </div>
                             </td>
                           </tr>
