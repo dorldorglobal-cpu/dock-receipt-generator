@@ -45,6 +45,13 @@ const invoiceSchema = new mongoose.Schema(
     sentAt: Date,
     paidAt: Date,
 
+    // Overdue-reminder automation (see services/invoiceReminders.js)
+    // reminderStage: 0 = none sent, 1 = arrival-day notice sent, 2 = +3-day
+    // sent, 3 = +7-day/weekly sent (after which reminders go daily, gated by
+    // lastReminderSentAt rather than advancing the stage further).
+    reminderStage:      { type: Number, default: 0 },
+    lastReminderSentAt: { type: Date,   default: null },
+
     payments: [
       {
         amount:  { type: Number, required: true },

@@ -254,6 +254,16 @@ router.get("/overdue", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── POST /api/invoices/run-reminders — manually trigger the overdue-invoice ──
+// reminder job (normally runs automatically once a day). Useful for testing.
+router.post("/run-reminders", async (req, res) => {
+  try {
+    const { runInvoiceReminders } = require("../services/invoiceReminders");
+    const summary = await runInvoiceReminders();
+    res.json(summary);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── GET /api/invoices/:id — single invoice ────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {

@@ -1305,6 +1305,10 @@ mongoose
         setInterval(sendNewOrderAlert, 24 * 60 * 60 * 1000);
       }, msUntil8amEastern());
       console.log(`[new-order-alert] Scheduled — first run in ${Math.round(msUntil8amEastern()/60000)} min (8 AM Eastern)`);
+
+      // ── Overdue invoice reminder emails (arrival-date based escalation) ──
+      const { startInvoiceReminderScheduler } = require("./services/invoiceReminders");
+      startInvoiceReminderScheduler();
     });
   })
   .catch((err) => {
