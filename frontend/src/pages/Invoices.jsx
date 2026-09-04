@@ -1,5 +1,6 @@
 ﻿import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authUrl } from "../lib/auth";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -184,7 +185,7 @@ export default function Invoices() {
 
   const handleSearch = (e) => { e.preventDefault(); load(); };
 
-  const downloadPdf = (inv) => window.open(`${API}/api/invoices/${inv._id}/pdf`, "_blank");
+  const downloadPdf = (inv) => window.open(authUrl(`/api/invoices/${inv._id}/pdf`), "_blank");
 
   const updateStatus = async (inv, status) => {
     if (!window.confirm(status === "sent" ? "Mark as Sent?" : status === "draft" ? "Revert to Draft?" : "Mark as Paid?")) return;

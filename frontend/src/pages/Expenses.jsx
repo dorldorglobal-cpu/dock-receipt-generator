@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { authUrl } from "../lib/auth";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -232,7 +233,7 @@ function AttachmentsCard({ expId, attachments, onUpdate }) {
               background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 7,
             }}>
               <span style={{ fontSize: 16 }}>{icon(att.mime)}</span>
-              <a href={`${API}/api/expenses/${expId}/attachments/${i}`} target="_blank" rel="noreferrer"
+              <a href={authUrl(`/api/expenses/${expId}/attachments/${i}`)} target="_blank" rel="noreferrer"
                 style={{ flex: 1, fontSize: 12, color: "#60a5fa", textDecoration: "none", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                 {att.name}
               </a>
@@ -2659,10 +2660,10 @@ export default function Expenses() {
                     {/* Docs — bill + receipt combined */}
                     <td style={{ ...td, whiteSpace: "nowrap" }} onClick={e => e.stopPropagation()}>
                       {exp.billFileName
-                        ? <a href={`${API}/api/expenses/${exp._id}/bill`} target="_blank" rel="noopener noreferrer" title="View bill" style={{ color: "#a78bfa", fontSize: 16, textDecoration: "none", marginRight: 6 }}>📄</a>
+                        ? <a href={authUrl(`/api/expenses/${exp._id}/bill`)} target="_blank" rel="noopener noreferrer" title="View bill" style={{ color: "#a78bfa", fontSize: 16, textDecoration: "none", marginRight: 6 }}>📄</a>
                         : <span style={{ color: "var(--border)", marginRight: 6 }}>📄</span>}
                       {exp.receiptFileName
-                        ? <a href={`${API}/api/expenses/${exp._id}/receipt`} target="_blank" rel="noopener noreferrer" title="View receipt" style={{ color: "#60a5fa", fontSize: 16, textDecoration: "none" }}>📎</a>
+                        ? <a href={authUrl(`/api/expenses/${exp._id}/receipt`)} target="_blank" rel="noopener noreferrer" title="View receipt" style={{ color: "#60a5fa", fontSize: 16, textDecoration: "none" }}>📎</a>
                         : <span style={{ color: "var(--border)" }}>📎</span>}
                       {exp.attachments?.length > 0 && (
                         <span title={`${exp.attachments.length} attachment(s)`}
@@ -2991,7 +2992,7 @@ export default function Expenses() {
                       <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                         <span style={{ color:"#34d399", fontWeight:600 }}>{fmt$(p.amount)}</span>
                         {p.receiptDriveId
-                          ? <a href={`${API}/api/expenses/${exp._id}/payments/${i}/receipt`} target="_blank" rel="noreferrer"
+                          ? <a href={authUrl(`/api/expenses/${exp._id}/payments/${i}/receipt`)} target="_blank" rel="noreferrer"
                               style={{ fontSize:10, color:"#60a5fa", textDecoration:"none" }}>📎 Proof</a>
                           : <span style={{ fontSize:10, color:"var(--text-muted)" }}>no proof</span>
                         }

@@ -1,5 +1,6 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
+import { authUrl } from "../lib/auth";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -1655,7 +1656,7 @@ export default function OrderDetails() {
 
       // Download the PDF
       const a = document.createElement("a");
-      a.href     = `${API}/api/invoices/${inv._id}/pdf`;
+      a.href     = authUrl(`/api/invoices/${inv._id}/pdf`);
       a.download = `Invoice-${inv.invoiceNumber}.pdf`;
       a.target   = "_blank";
       a.click();
@@ -2094,7 +2095,7 @@ export default function OrderDetails() {
                     padding: "2px 8px", cursor: "pointer" }}>
                   {inv.status} ▾
                 </button>
-                <button onClick={() => window.open(`${API}/api/invoices/${inv._id}/pdf`, "_blank")}
+                <button onClick={() => window.open(authUrl(`/api/invoices/${inv._id}/pdf`), "_blank")}
                   style={{ fontSize: 11, padding: "2px 8px", borderRadius: 5, border: "1px solid var(--border)",
                     background: "var(--bg-panel)", color: "var(--text-secondary)", cursor: "pointer" }}>
                   PDF
@@ -3499,11 +3500,11 @@ export default function OrderDetails() {
                   </td>
                   <td style={{ whiteSpace:"nowrap" }}>
                     {bill.billFileName
-                      ? <a href={`${API}/api/expenses/${bill._id}/bill`} target="_blank" rel="noreferrer"
+                      ? <a href={authUrl(`/api/expenses/${bill._id}/bill`)} target="_blank" rel="noreferrer"
                           title="Bill document" style={{ fontSize:16, textDecoration:"none", marginRight:6 }}>📄</a>
                       : null}
                     {bill.receiptFileName
-                      ? <a href={`${API}/api/expenses/${bill._id}/receipt`} target="_blank" rel="noreferrer"
+                      ? <a href={authUrl(`/api/expenses/${bill._id}/receipt`)} target="_blank" rel="noreferrer"
                           title="Receipt" style={{ fontSize:16, textDecoration:"none" }}>📎</a>
                       : null}
                     {!bill.billFileName && !bill.receiptFileName
@@ -5482,7 +5483,7 @@ export default function OrderDetails() {
             {(() => {
               const m = docPreview.url.match(/\/d\/([a-zA-Z0-9_-]+)/);
               // Proxy through backend — avoids Google auth wall and enables copy/paste
-              const src = m ? `${API}/api/drive-proxy/${m[1]}` : docPreview.url;
+              const src = m ? authUrl(`/api/drive-proxy/${m[1]}`) : docPreview.url;
               const isHeic  = /\.heic$/i.test(docPreview.name || "");
               const isImage = /\.(jpe?g|png|gif|webp|bmp)$/i.test(docPreview.name || "");
               // HEIC: use Drive iframe with embed URL (browsers can't render HEIC natively)

@@ -2,6 +2,7 @@ import { NavLink, useLocation } from "react-router-dom";
 import { useState, useEffect } from "react";
 import "./Sidebar.css";
 import logo from "../logo.png";
+import { logout } from "../lib/auth";
 
 const Icon = ({ path, size = 18 }) => (
   <svg className="nav-icon" width={size} height={size} viewBox="0 0 24 24" fill="none"
@@ -192,6 +193,15 @@ export default function Sidebar() {
           >
             {theme === "dark" ? "☀️" : "🌙"}
           </button>
+          <button
+            onClick={logout}
+            title="Sign out"
+            style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-secondary)", padding:"4px 6px", borderRadius:6, display:"flex", alignItems:"center", lineHeight:1 }}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4 M16 17l5-5-5-5 M21 12H9" />
+            </svg>
+          </button>
         </div>
       </aside>
 
@@ -235,13 +245,22 @@ export default function Sidebar() {
                 <span className="status-dot" />
                 <span>System online</span>
               </div>
-              <button
-                onClick={toggleTheme}
-                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-                style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-secondary)", padding:"4px 6px", borderRadius:6, fontSize:16 }}
-              >
-                {theme === "dark" ? "☀️" : "🌙"}
-              </button>
+              <div style={{ display:"flex", alignItems:"center", gap:4 }}>
+                <button
+                  onClick={toggleTheme}
+                  title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                  style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-secondary)", padding:"4px 6px", borderRadius:6, fontSize:16 }}
+                >
+                  {theme === "dark" ? "☀️" : "🌙"}
+                </button>
+                <button
+                  onClick={logout}
+                  title="Sign out"
+                  style={{ background:"none", border:"none", cursor:"pointer", color:"var(--text-secondary)", padding:"4px 8px", borderRadius:6, fontSize:13, fontWeight:600 }}
+                >
+                  Sign out
+                </button>
+              </div>
             </div>
           </div>
         </div>

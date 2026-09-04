@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { authUrl } from "../lib/auth";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -1592,7 +1593,7 @@ export default function Containers() {
                         </button>
                         <button disabled={disabled} onClick={async()=>{
                             const a = document.createElement("a");
-                            a.href = `${API}/api/container-loads/${billingLoad._id}/combined-invoice-pdf`;
+                            a.href = authUrl(`/api/container-loads/${billingLoad._id}/combined-invoice-pdf`);
                             a.download = `Combined-Invoice-${billingLoad.name}.pdf`;
                             document.body.appendChild(a); a.click(); document.body.removeChild(a);
                             buildPreview(true);

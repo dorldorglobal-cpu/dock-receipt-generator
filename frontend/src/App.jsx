@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { useState } from "react";
 import Login from "./components/Login";
 import Layout from "./components/Layout";
+import { isLoggedIn } from "./lib/auth";
 
 import DockReceiptPage from "./pages/DockReceiptPage";
 
@@ -40,7 +41,7 @@ function ComingSoon({ title }) {
 }
 
 export default function App() {
-  const [authed, setAuthed] = useState(!!localStorage.getItem("ddg_auth"));
+  const [authed, setAuthed] = useState(isLoggedIn());
   if (!authed) return <Login onLogin={() => setAuthed(true)} />;
 
   return (

@@ -1,20 +1,34 @@
-﻿import { useState } from "react";
+import { useState } from "react";
 import logo from "../logo.png";
-
-const PASSWORD = import.meta.env.VITE_APP_PASSWORD;
+import { API, setToken } from "../lib/auth";
 
 export default function Login({ onLogin }) {
   const [input, setInput] = useState("");
-  const [error, setError] = useState(false);
+  const [error, setError] = useState("");
+  const [busy, setBusy] = useState(false);
 
-  const attempt = () => {
-    if (input === PASSWORD) {
-      localStorage.setItem("ddg_auth", "1");
-      onLogin();
-    } else {
-      setError(true);
-      setInput("");
-      setTimeout(() => setError(false), 2000);
+  const attempt = async () => {
+    if (!input || busy) return;
+    setBusy(true);
+    setError("");
+    try {
+      const res = await fetch(`${API}/api/auth/login`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: input }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok && data.token) {
+        setToken(data.token);
+        onLogin();
+      } else {
+        setError(data.error || "Incorrect password.");
+        setInput("");
+      }
+    } catch {
+      setError("Can't reach the server. Try again.");
+    } finally {
+      setBusy(false);
     }
   };
 
@@ -39,6 +53,7 @@ export default function Login({ onLogin }) {
           onKeyDown={e => e.key === "Enter" && attempt()}
           placeholder="Enter password"
           autoFocus
+          disabled={busy}
           style={{
             width: "100%", padding: "11px 14px", borderRadius: 8, fontSize: 14,
             background: "var(--bg-base)", border: `1px solid ${error ? "#f85149" : "var(--border)"}`,
@@ -49,19 +64,20 @@ export default function Login({ onLogin }) {
 
         {error && (
           <div style={{ color: "#f85149", fontSize: 12, marginBottom: 10 }}>
-            Incorrect password. Try again.
+            {error}
           </div>
         )}
 
         <button
           onClick={attempt}
+          disabled={busy}
           style={{
             width: "100%", padding: "11px", borderRadius: 8, fontSize: 14, fontWeight: 600,
             background: "linear-gradient(135deg,#2563eb,#0e4db5)", border: "none",
-            color: "#fff", cursor: "pointer",
+            color: "#fff", cursor: busy ? "default" : "pointer", opacity: busy ? 0.7 : 1,
           }}
         >
-          Sign In
+          {busy ? "Signing in…" : "Sign In"}
         </button>
 
         <div style={{ color: "#484f58", fontSize: 11, marginTop: 24 }}>
