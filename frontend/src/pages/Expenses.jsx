@@ -1786,7 +1786,7 @@ export default function Expenses() {
         {(sallaumMsg || (sallaumParsed && sallaumRows.length > 0)) && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", marginBottom: 10 }}>🚢 Sallaum Results</div>
-            {sallaumMsg && <div style={{ marginBottom: 10, fontSize: 13, color: sallaumMsg.startsWith("✅") ? "#34d399" : sallaumMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{sallaumMsg}</div>}
+            {sallaumMsg && <div style={{ marginBottom: 10, fontSize: 13, color: sallaumMsg.startsWith("✅") ? "#34d399" : sallaumMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{sallaumMsg}</div>}
             {sallaumParsed && sallaumRows.length > 0 && (
               <>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -1812,16 +1812,16 @@ export default function Expenses() {
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-primary)" }}>{row.ymm||"—"}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:11, color:"var(--text-muted)" }}>{row.bookingRef||"—"}</td>
-                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setSallaumRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:110}}/>}</td>
+                          <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setSallaumRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--warning)",borderRadius:6,padding:"3px 8px",color:"var(--warning)",fontSize:12,width:110}}/>}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-secondary)", fontSize:12 }}>{row.customerName||"—"}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", color:"#34d399", fontWeight:600 }}>${row.total.toLocaleString("en-US",{minimumFractionDigits:2,maximumFractionDigits:2})}</td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)", fontSize:11 }}>
                             <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
                               {row.freight>0 && <span style={{color:"var(--text-muted)"}}>Freight ${row.freight?.toFixed(2)}</span>}
                               {row.baf>0     && <span style={{color:"var(--text-muted)"}}>BAF ${row.baf?.toFixed(2)}</span>}
-                              {row.thc>0     && <span style={{color:"#f59e0b",fontWeight:600}}>⚠ THC ${row.thc?.toFixed(2)}</span>}
-                              {row.storage>0 && <span style={{color:"#f59e0b",fontWeight:600}}>⚠ Storage ${row.storage?.toFixed(2)}</span>}
-                              {row.other>0   && <span style={{color:"#f59e0b",fontWeight:600}}>⚠ Other ${row.other?.toFixed(2)}</span>}
+                              {row.thc>0     && <span style={{color:"var(--warning)",fontWeight:600}}>⚠ THC ${row.thc?.toFixed(2)}</span>}
+                              {row.storage>0 && <span style={{color:"var(--warning)",fontWeight:600}}>⚠ Storage ${row.storage?.toFixed(2)}</span>}
+                              {row.other>0   && <span style={{color:"var(--warning)",fontWeight:600}}>⚠ Other ${row.other?.toFixed(2)}</span>}
                             </div>
                           </td>
                           <td style={{ padding:"8px 12px", borderBottom:"1px solid var(--border-muted)" }}>
@@ -1829,7 +1829,7 @@ export default function Expenses() {
                               ? <span style={{color:"#f87171",fontSize:12}}>🔁 Already expensed</span>
                               : row.matched
                                 ? <span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>
-                                : <span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}
+                                : <span style={{color:"var(--warning)",fontSize:12}}>⚠ No match</span>}
                           </td>
                         </tr>
                       ))}
@@ -1851,7 +1851,7 @@ export default function Expenses() {
         {(aclMsg || aclRows.length > 0) && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", marginBottom: 10 }}>⚓ ACL / Grimaldi Results</div>
-            {aclMsg && <div style={{ marginBottom: 10, fontSize: 13, color: aclMsg.startsWith("✅") ? "#34d399" : aclMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{aclMsg}</div>}
+            {aclMsg && <div style={{ marginBottom: 10, fontSize: 13, color: aclMsg.startsWith("✅") ? "#34d399" : aclMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{aclMsg}</div>}
             {aclRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
@@ -1866,10 +1866,10 @@ export default function Expenses() {
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{[row.vessel,row.voyage].filter(Boolean).join(" / ")||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,whiteSpace:"nowrap"}}>{row.pod||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--warning)",borderRadius:6,padding:"3px 8px",color:"var(--warning)",fontSize:12,width:100}}/>}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setAclRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:140}}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"var(--warning)",fontSize:12}}>⚠ No match</span>}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1890,7 +1890,7 @@ export default function Expenses() {
         {(dispatchMsg || dispatchRows.length > 0) && (
           <div id="dispatch-section" style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#f59e0b", marginBottom: 10 }}>🚛 Dispatch Results</div>
-            {dispatchMsg && <div style={{ marginBottom: 10, fontSize: 13, color: dispatchMsg.startsWith("✅") ? "#34d399" : dispatchMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{dispatchMsg}</div>}
+            {dispatchMsg && <div style={{ marginBottom: 10, fontSize: 13, color: dispatchMsg.startsWith("✅") ? "#34d399" : dispatchMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{dispatchMsg}</div>}
             {dispatchRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
@@ -1907,11 +1907,11 @@ export default function Expenses() {
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,whiteSpace:"nowrap"}}>{row.origin||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}</td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--warning)",borderRadius:6,padding:"3px 8px",color:"var(--warning)",fontSize:12,width:100}}/>}</td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:130}}/></td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
-                            {row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"#f59e0b",fontSize:12}}>⚠ No match</span>}
+                            {row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"var(--warning)",fontSize:12}}>⚠ No match</span>}
                             <button onClick={()=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,lineItems:[...(r.lineItems||[]),{description:"",amount:""}]}:r))}
                               style={{marginLeft:8,fontSize:10,padding:"1px 7px",borderRadius:5,border:"1px solid var(--border)",background:"none",color:"#34d399",cursor:"pointer"}}>
                               + Extra
@@ -1957,7 +1957,7 @@ export default function Expenses() {
         {(containerMsg || containerResults.length > 0) && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#ec4899", marginBottom: 10 }}>📦 Container Results</div>
-            {containerMsg && <div style={{ marginBottom: 10, fontSize: 13, color: containerMsg.startsWith("✅") ? "#34d399" : containerMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{containerMsg}</div>}
+            {containerMsg && <div style={{ marginBottom: 10, fontSize: 13, color: containerMsg.startsWith("✅") ? "#34d399" : containerMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{containerMsg}</div>}
             {containerResults.map((inv, ii) => (
               <div key={ii} style={{ marginBottom: 20 }}>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10 }}>
@@ -1981,7 +1981,7 @@ export default function Expenses() {
                               {row.matched ? <span style={{ color:"#60a5fa", fontWeight:600 }}>{row.orderRef}</span>
                                 : <input value={row.orderRef} placeholder="Enter ref…"
                                     onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, orderRef: e.target.value } : rr) }))}
-                                    style={{ background:"var(--bg-elevated)", border:"1px solid #f59e0b", borderRadius:6, padding:"3px 8px", color:"#fbbf24", fontSize:12, width:100 }}/>}
+                                    style={{ background:"var(--bg-elevated)", border:"1px solid var(--warning)", borderRadius:6, padding:"3px 8px", color:"var(--warning)", fontSize:12, width:100 }}/>}
                             </td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-secondary)", fontSize:12 }}>{row.customerName || "—"}</td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
@@ -1992,7 +1992,7 @@ export default function Expenses() {
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               {row.duplicate ? <span style={{ color:"#94a3b8", fontSize:12 }}>Already Created</span>
                                 : row.matched ? <span style={{ color:"#34d399", fontSize:12 }}>✅ Matched</span>
-                                : <span style={{ color:"#f59e0b", fontSize:12 }}>⚠ No match</span>}
+                                : <span style={{ color:"var(--warning)", fontSize:12 }}>⚠ No match</span>}
                             </td>
                           </tr>
                         ))}
@@ -2017,7 +2017,7 @@ export default function Expenses() {
         {(miscMsg || miscResults.length > 0) && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#10b981", marginBottom: 10 }}>📋 Other / Misc Results</div>
-            {miscMsg && <div style={{ marginBottom: 10, fontSize: 13, color: miscMsg.startsWith("✅") ? "#34d399" : miscMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{miscMsg}</div>}
+            {miscMsg && <div style={{ marginBottom: 10, fontSize: 13, color: miscMsg.startsWith("✅") ? "#34d399" : miscMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{miscMsg}</div>}
             {miscResults.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
@@ -2041,7 +2041,7 @@ export default function Expenses() {
                             {row.matched
                               ? <span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>
                               : <input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))}
-                                  style={{background:"var(--bg-elevated)",border:"1px solid #f59e0b",borderRadius:6,padding:"3px 8px",color:"#fbbf24",fontSize:12,width:100}}/>}
+                                  style={{background:"var(--bg-elevated)",border:"1px solid var(--warning)",borderRadius:6,padding:"3px 8px",color:"var(--warning)",fontSize:12,width:100}}/>}
                           </td>
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             <input type="number" value={row.total} min="0" step="0.01" onChange={e=>setMiscResults(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))}
@@ -2054,7 +2054,7 @@ export default function Expenses() {
                           <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
                             {row.error ? <span style={{color:"#f87171",fontSize:11}}>❌ Error</span>
                               : <div style={{display:"flex",flexDirection:"column",gap:3}}>
-                                  <span style={{color:row.matched?"#34d399":"#f59e0b",fontSize:12}}>{row.matched?"✅ Matched":"⚠ No match"}</span>
+                                  <span style={{color:row.matched?"#34d399":"var(--warning)",fontSize:12}}>{row.matched?"✅ Matched":"⚠ No match"}</span>
                                   {row.isPaid && <span style={{color:"#60a5fa",fontSize:11}}>💳 Auto-paid</span>}
                                 </div>
                             }
@@ -2079,7 +2079,7 @@ export default function Expenses() {
         {(proofMsg || proofRows.length > 0) && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#06b6d4", marginBottom: 10 }}>🏦 Payment Proof Results</div>
-            {proofMsg && <div style={{ marginBottom: 10, fontSize: 13, color: proofMsg.startsWith("✅") ? "#34d399" : proofMsg.startsWith("❌") ? "#f87171" : "#fbbf24" }}>{proofMsg}</div>}
+            {proofMsg && <div style={{ marginBottom: 10, fontSize: 13, color: proofMsg.startsWith("✅") ? "#34d399" : proofMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{proofMsg}</div>}
             {proofRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>
@@ -2290,7 +2290,7 @@ export default function Expenses() {
                           <tr>
                             <td></td>
                             <td colSpan={6} style={{ padding:"4px 8px 8px", borderBottom:"1px solid var(--border-muted)" }}>
-                              <div style={{ background:"var(--bg-base)", border:`1px solid ${balanced ? "#34d399" : "#fbbf24"}`, borderRadius:6, padding:"8px 10px" }}>
+                              <div style={{ background:"var(--bg-base)", border:`1px solid ${balanced ? "#34d399" : "var(--warning)"}`, borderRadius:6, padding:"8px 10px" }}>
                                 {row.splitBills.map((split, k) => (
                                   <div key={k} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6 }}>
                                     <span style={{ fontSize:10, color:"var(--text-muted)", width:14 }}>{k+1}.</span>
@@ -2340,7 +2340,7 @@ export default function Expenses() {
                                   + Add Line
                                 </button>
                                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginTop:6 }}>
-                                  <span style={{ fontSize:11, color: balanced ? "#34d399" : "#fbbf24" }}>
+                                  <span style={{ fontSize:11, color: balanced ? "#34d399" : "var(--warning)" }}>
                                     {balanced ? `✓ Sums to $${row.amount.toFixed(2)}` : `⚠ Sums to $${sum.toFixed(2)} — must equal $${row.amount.toFixed(2)}`}
                                   </span>
                                   <div style={{ display:"flex", gap:6 }}>
@@ -2679,7 +2679,7 @@ export default function Expenses() {
                         {!exp.orderId && !exp.orderRef && (
                           <button onClick={e => { e.stopPropagation(); setAssignModal(exp); setAssignRef(""); setAssignMsg(""); }}
                             title="Assign to an order" style={{
-                            background: "#f59e0b20", color: "#f59e0b", border: "1px solid #f59e0b44", borderRadius: 5,
+                            background: "var(--warning-dim)", color: "var(--warning)", border: "1px solid var(--warning)", borderRadius: 5,
                             padding: "4px 10px", fontSize: 11, fontWeight: 600, cursor: "pointer",
                           }}>
                             🔗 Assign
@@ -2730,7 +2730,7 @@ export default function Expenses() {
                       </td>
                       <td style={{ ...td, borderTop: "none" }} />
                       <td style={{ ...td, borderTop: "none" }} />
-                      <td style={{ ...td, borderTop: "none", textAlign: "right", fontSize: 12, color: "#f59e0b", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                      <td style={{ ...td, borderTop: "none", textAlign: "right", fontSize: 12, color: "var(--warning)", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
                         {fmt$(li.amount)}
                       </td>
                       <td style={{ ...td, borderTop: "none" }} colSpan={3} />
@@ -2762,7 +2762,7 @@ export default function Expenses() {
       {/* ── Duplicate Warning Modal ── */}
       {dupWarning && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
-          <div style={{ background:"var(--bg-panel)", border:"1px solid #f59e0b", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid var(--warning)", borderRadius:12, padding:28, width:420, maxWidth:"95vw" }}>
             <div style={{ fontSize:20, marginBottom:12 }}>⚠️ Possible Duplicate</div>
             <p style={{ fontSize:13, color:"var(--text-secondary)", marginBottom:16 }}>
               A similar expense already exists:
@@ -2863,7 +2863,7 @@ export default function Expenses() {
       {selectedIds.length > 0 && (
         <div style={{
           position: "fixed", bottom: 0, left: 228, right: 0, zIndex: 100,
-          background: "var(--bg-base)", borderTop: "2px solid #f59e0b",
+          background: "var(--bg-base)", borderTop: "2px solid var(--warning)",
           padding: "14px 32px", display: "flex", alignItems: "center", gap: 20, flexWrap: "wrap",
           boxShadow: "0 -4px 24px rgba(0,0,0,0.5)",
         }}>
@@ -2877,7 +2877,7 @@ export default function Expenses() {
                 {Object.entries(selectedByVendor).map(([vendor, amt]) => (
                   <span key={vendor} style={{ fontSize: 11, color: "var(--text-secondary)", background: "var(--bg-panel)", borderRadius: 5, padding: "2px 8px", border: "1px solid var(--border)" }}>
                     <span style={{ color: "var(--text-primary)" }}>{vendor}</span>
-                    <span style={{ color: "#f59e0b", marginLeft: 6, fontWeight: 600 }}>{fmt$(amt)}</span>
+                    <span style={{ color: "var(--warning)", marginLeft: 6, fontWeight: 600 }}>{fmt$(amt)}</span>
                   </span>
                 ))}
               </div>
@@ -3044,7 +3044,7 @@ export default function Expenses() {
                   Check Number
                   <input value={payConfirmCheckNo} onChange={e => setPayConfirmCheckNo(e.target.value)}
                     placeholder="e.g. 1042" autoFocus
-                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid #f59e0b", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                    style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--warning)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
                 </label>
               )}
 
@@ -3174,7 +3174,7 @@ export default function Expenses() {
                 onChange={e => setPayCheckNo(e.target.value)}
                 placeholder="Required"
                 autoFocus
-                style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${payCheckNo.trim() ? "var(--border)" : "#f59e0b"}`, background: "var(--bg-elevated)", color: "var(--text-primary)", fontSize: 14, fontWeight: 600 }}
+                style={{ flex: 1, padding: "8px 12px", borderRadius: 7, border: `1px solid ${payCheckNo.trim() ? "var(--border)" : "var(--warning)"}`, background: "var(--bg-elevated)", color: "var(--text-primary)", fontSize: 14, fontWeight: 600 }}
               />
             </div>
           )}
@@ -3284,7 +3284,7 @@ export default function Expenses() {
               padding: "8px 18px", fontSize: 13, cursor: "pointer",
             }}>Cancel</button>
             <button onClick={assignToOrder} disabled={assignSaving || !assignRef.trim()} style={{
-              background: "#f59e0b", color: "#000", border: "none", borderRadius: 7,
+              background: "var(--warning)", color: "#000", border: "none", borderRadius: 7,
               padding: "8px 20px", fontSize: 13, fontWeight: 700, cursor: "pointer", opacity: assignSaving ? 0.6 : 1,
             }}>
               {assignSaving ? "Saving…" : "🔗 Assign"}
