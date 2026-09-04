@@ -49,6 +49,9 @@ export default function Invoices() {
   const [message,     setMessage]     = useState("");
   const [overdue,     setOverdue]     = useState([]);
   const [showOverdue, setShowOverdue] = useState(false);
+  const [reminderLoading, setReminderLoading] = useState(false);
+  const [reminderMsg,     setReminderMsg]     = useState("");
+  const [rowReminders,    setRowReminders]    = useState({}); // { [invoiceId]: { loading, msg } }
   const [previewInv,  setPreviewInv]  = useState(null);
   // Client-side filter applied on top of statusTab — "outstanding" and "overdue"
   // don't map to a single invoice status, so they're filtered after fetch.
@@ -76,6 +79,53 @@ export default function Invoices() {
     else if (which === "paid")   { setStatusTab("paid"); setQuickFilter(null); }
     else if (which === "outstanding") { setStatusTab("all"); setQuickFilter("outstanding"); }
     else if (which === "overdue")     { setStatusTab("all"); setQuickFilter("overdue"); }
+  };
+
+  // Manually trigger the automated overdue-reminder job (normally runs once
+  // daily at 9 AM Eastern) — for sending reminders right now instead of
+  // waiting, or for testing.
+  const sendReminders = async () => {
+    if (reminderLoading) return;
+    setReminderLoading(true);
+    setReminderMsg("");
+    try {
+      const res = await fetch(`${API}/api/invoices/run-reminders`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send reminders");
+      const parts = [`✅ ${data.sent} reminder${data.sent !== 1 ? "s" : ""} sent`];
+      if (data.skippedNoEmail)  parts.push(`${data.skippedNoEmail} skipped (no email on file)`);
+      if (data.skippedNoAnchor) parts.push(`${data.skippedNoAnchor} skipped (no due/arrival date)`);
+      if (data.errors?.length)  parts.push(`${data.errors.length} failed`);
+      setReminderMsg(parts.join(" · "));
+    } catch (err) {
+      setReminderMsg("❌ " + err.message);
+    } finally {
+      setReminderLoading(false);
+    }
+  };
+
+  // Send just one invoice's reminder right now, regardless of the daily
+  // schedule — for a specific customer you want to nudge immediately.
+  const sendOneReminder = async (inv) => {
+    setRowReminders(r => ({ ...r, [inv._id]: { loading: true, msg: "" } }));
+    try {
+      const res = await fetch(`${API}/api/invoices/run-reminders`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ invoiceId: inv._id, force: true }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to send");
+      let msg;
+      if (data.sent) msg = "✅ Sent";
+      else if (data.skippedExcluded) msg = "⏭ Handled separately";
+      else if (data.skippedNoEmail) msg = "❌ No email on file";
+      else if (data.skippedNoAnchor) msg = "❌ No due/arrival date";
+      else if (data.skippedNotDue) msg = "Not due yet";
+      else msg = "Nothing to send";
+      setRowReminders(r => ({ ...r, [inv._id]: { loading: false, msg } }));
+    } catch (err) {
+      setRowReminders(r => ({ ...r, [inv._id]: { loading: false, msg: "❌ " + err.message } }));
+    }
   };
 
   const displayedInvoices = (() => {
@@ -390,19 +440,49 @@ export default function Invoices() {
               background:"rgba(220,38,38,0.2)", color:"#f87171", cursor:"pointer", fontWeight:600 }}>
             Filter Overdue
           </button>
+          <button onClick={sendReminders} disabled={reminderLoading}
+            title="Manually run the overdue-invoice reminder job now, instead of waiting for its daily 9 AM run"
+            style={{ fontSize:12, padding:"5px 12px", borderRadius:7, border:"none",
+              background:"#dc2626", color:"#fff", cursor:reminderLoading?"default":"pointer", fontWeight:600,
+              opacity:reminderLoading?0.6:1, display:"flex", alignItems:"center", gap:6 }}>
+            {reminderLoading ? "Sending…" : "📧 Send Reminders Now"}
+          </button>
+        </div>
+      )}
+      {reminderMsg && (
+        <div style={{ fontSize:13, color: reminderMsg.startsWith("❌") ? "#f87171" : "#34d399",
+          marginTop:-10, marginBottom:18 }}>
+          {reminderMsg}
         </div>
       )}
       {showOverdue && overdue.length > 0 && (
         <div style={{ background:"var(--bg-panel)", border:"1px solid rgba(220,38,38,0.25)", borderRadius:10, padding:16, marginBottom:18 }}>
           <div style={{ fontSize:11, fontWeight:700, color:"#f87171", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Overdue Invoices</div>
-          {overdue.map(inv => (
+          {overdue.map(inv => {
+            const rowState = rowReminders[inv._id] || {};
+            return (
             <div key={inv._id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:13 }}>
               <span style={{ fontFamily:"monospace", color:"var(--accent)", fontWeight:700, minWidth:120 }}>{inv.invoiceNumber}</span>
               <span style={{ flex:1, color:"var(--text-primary)" }}>{inv.customerName || "—"}</span>
+              <span style={{ minWidth:150, display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end" }}>
+                {rowState.msg && (
+                  <span style={{ fontSize:11, color: rowState.msg.startsWith("❌") ? "#f87171" : rowState.msg.startsWith("✅") ? "#34d399" : "var(--text-muted)" }}>
+                    {rowState.msg}
+                  </span>
+                )}
+                <button onClick={() => sendOneReminder(inv)} disabled={rowState.loading}
+                  title="Send this customer a reminder email right now"
+                  style={{ fontSize:11, padding:"3px 9px", borderRadius:6, border:"1px solid rgba(220,38,38,0.35)",
+                    background:"none", color:"#f87171", cursor:rowState.loading?"default":"pointer", fontWeight:600,
+                    opacity:rowState.loading?0.6:1, whiteSpace:"nowrap" }}>
+                  {rowState.loading ? "Sending…" : "📧 Remind"}
+                </button>
+              </span>
               <span style={{ color:"#f87171", fontSize:11 }}>Due {fD(inv.dueDate)}</span>
               <span style={{ fontFamily:"monospace", fontWeight:700, color:"#f87171" }}>{f$(inv.total)}</span>
             </div>
-          ))}
+            );
+          })}
         </div>
       )}
 

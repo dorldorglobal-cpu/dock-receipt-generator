@@ -122,14 +122,21 @@ async function sendReminderEmail(inv, stage, daysSince, toEmail) {
   if (!resp.ok) throw new Error(result.error?.message || `Gmail API error ${resp.status}`);
 }
 
-// ── Main job — call once per day ──────────────────────────────────────────────
+// ── Main job — call once per day, or on-demand for one invoice ───────────────
 // dryRun:true computes exactly what would happen (same eligibility/stage
 // logic) without sending any email or writing to the database — for testing.
-async function runInvoiceReminders({ dryRun = false } = {}) {
+// invoiceId scopes the run to a single invoice (e.g. a per-row "Send Reminder
+// Now" button). force:true (only meaningful with invoiceId) sends the
+// current urgency-level message right away even if one already went out
+// today or this exact stage was already sent before — for a deliberate
+// single click, not the daily batch.
+async function runInvoiceReminders({ dryRun = false, invoiceId = null, force = false } = {}) {
   const today = new Date();
-  const summary = { sent: 0, skippedNoEmail: 0, skippedExcluded: 0, skippedNoAnchor: 0, errors: [], details: [] };
+  const summary = { sent: 0, skippedNoEmail: 0, skippedExcluded: 0, skippedNoAnchor: 0, skippedNotDue: 0, errors: [], details: [] };
 
-  const invoices = await Invoice.find({ status: "sent" });
+  const query = { status: "sent" };
+  if (invoiceId) query._id = invoiceId;
+  const invoices = await Invoice.find(query);
 
   for (const inv of invoices) {
     if (isExcludedCustomer(inv.customerName)) { summary.skippedExcluded++; continue; }
@@ -150,7 +157,7 @@ async function runInvoiceReminders({ dryRun = false } = {}) {
     if (!anchor) { summary.skippedNoAnchor++; continue; }
 
     const daysSince = daysBetween(anchor, today);
-    if (daysSince < 0) continue; // hasn't arrived / isn't due yet
+    if (daysSince < 0) { summary.skippedNotDue++; continue; } // hasn't arrived / isn't due yet
 
     // Target stage based on how overdue it actually is right now — not just
     // "one stage past whatever we last sent". An invoice that's already 61
@@ -169,6 +176,10 @@ async function runInvoiceReminders({ dryRun = false } = {}) {
       // "URGENT: N days past due" wording instead of repeating the fixed
       // "1 Week Past Due" text forever.
       stageToSend = 4;
+    } else if (force) {
+      // Explicit single-invoice resend — ignore the "already sent today" /
+      // "already at this stage" gates and just resend the current level.
+      stageToSend = inv.reminderStage >= 3 ? 4 : targetStage;
     }
 
     if (stageToSend === null) continue;
