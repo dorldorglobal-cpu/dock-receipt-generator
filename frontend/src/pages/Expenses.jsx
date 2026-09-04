@@ -2097,7 +2097,7 @@ export default function Expenses() {
                     <tbody>
                       {proofRows.map((row, i) => (
                         <React.Fragment key={i}>
-                        <tr style={{ opacity: row.selected ? 1 : 0.5 }}>
+                        <tr style={{ opacity: row.selected ? 1 : 0.85 }}>
                           <td style={{padding:"3px 8px",borderBottom:"1px solid var(--border-muted)",lineHeight:1.2}}>
                             <input type="checkbox" checked={row.selected} disabled={!row.matchedIds?.length && !row.createBill && !row.splitBills && !row.attachOnly}
                               onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,selected:e.target.checked, ...(e.target.checked?{}:{attachOnly:false})}:r))}/>
@@ -2121,7 +2121,7 @@ export default function Expenses() {
                                       {list.map(c => (
                                         <div key={c._id} style={{ display:"flex", gap:6, alignItems:"center", minWidth:0 }}>
                                           <span style={{ color:"#60a5fa", fontWeight:600, flexShrink:0 }}>{c.orderRef ? `#${c.orderRef}` : "—"}</span>
-                                          <span style={{ overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{c.description}</span>
+                                          <span style={{ color:"var(--text-primary)", overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap", minWidth:0 }}>{c.description}</span>
                                           <span style={{ color: c.status === "paid" ? "#34d399" : "#f87171", fontSize:10, flexShrink:0 }}>
                                             {c.status === "paid" ? "✓ paid" : "unpaid"}
                                           </span>
@@ -2130,9 +2130,9 @@ export default function Expenses() {
                                     </div>
                                   );
                                 }
-                                return <span style={{ display:"block", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{list.map(c=>c.description).join(", ")}</span>;
+                                return <span style={{ display:"block", color:"var(--text-primary)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{list.map(c=>c.description).join(", ")}</span>;
                               }
-                              if (row.candidates?.length) return <span style={{display:"block",color:"#fbbf24",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>;
+                              if (row.candidates?.length) return <span style={{display:"block",color:"var(--warning)",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>⚠ {row.candidates.length} candidate(s) don't sum to ${row.amount.toFixed(2)}</span>;
                               if (row.createBill) return <span style={{display:"block",color:"#34d399",whiteSpace:"nowrap"}}>Will create new bill</span>;
                               return <span style={{display:"block",color:"#f87171",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}}>No bill on file for #{row.orderRef}</span>;
                             })()}
