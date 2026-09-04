@@ -94,23 +94,56 @@ function emailContent(inv, stage, daysSince) {
   };
 }
 
-// ── Send one reminder email via Gmail ─────────────────────────────────────────
+// ── Send one reminder email via Gmail, with the invoice PDF attached ─────────
 async function sendReminderEmail(inv, stage, daysSince, toEmail) {
   const { subject, body } = emailContent(inv, stage, daysSince);
   const accessToken = await getGmailAccessToken();
   const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
   const to = String(toEmail).split(",").map(s => s.trim()).filter(Boolean).join(", ");
 
-  const mimeLines = [
-    `From: ${from}`,
-    `To: ${to}`,
-    `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-    `MIME-Version: 1.0`,
-    `Content-Type: text/plain; charset="UTF-8"`,
-    `Content-Transfer-Encoding: 7bit`,
-    ``,
-    body,
-  ];
+  // Same PDF the "Send Invoice" button generates. Best-effort: a PDF-generation
+  // failure shouldn't block the reminder itself from going out.
+  let pdfBase64 = null;
+  try {
+    const { generateInvoicePdf } = require("../routes/invoices");
+    const order = inv.orderId ? await Order.findById(inv.orderId).lean() : null;
+    const pdfBuffer = await generateInvoicePdf(inv, order);
+    pdfBase64 = pdfBuffer.toString("base64");
+  } catch (err) {
+    console.warn(`[invoice-reminders] Could not generate PDF for ${inv.invoiceNumber}:`, err.message);
+  }
+
+  const boundary = "DDG_REMIND_" + Date.now();
+  const mimeLines = pdfBase64
+    ? [
+        `From: ${from}`,
+        `To: ${to}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+        `MIME-Version: 1.0`,
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
+        ``,
+        `--${boundary}`,
+        `Content-Type: text/plain; charset="UTF-8"`,
+        ``,
+        body,
+        `--${boundary}`,
+        `Content-Type: application/pdf; name="Invoice-${inv.invoiceNumber}.pdf"`,
+        `Content-Transfer-Encoding: base64`,
+        `Content-Disposition: attachment; filename="Invoice-${inv.invoiceNumber}.pdf"`,
+        ``,
+        pdfBase64,
+        `--${boundary}--`,
+      ]
+    : [
+        `From: ${from}`,
+        `To: ${to}`,
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+        `MIME-Version: 1.0`,
+        `Content-Type: text/plain; charset="UTF-8"`,
+        `Content-Transfer-Encoding: 7bit`,
+        ``,
+        body,
+      ];
   const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
 
   const resp = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
