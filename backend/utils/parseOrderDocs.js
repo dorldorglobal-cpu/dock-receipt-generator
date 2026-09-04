@@ -96,10 +96,42 @@ function findVin(text) {
   // e.g. "5UXWZ7C55G0R32171HYM1024" — space between VIN and title code was dropped.
   const embedded = [...upper.matchAll(/\b([A-HJ-NPR-Z0-9]{17})[A-HJ-NPR-Z0-9]+\b/g)];
   for (const m of embedded) candidates.push(m[1]);
+  // Pattern 6: VIN glued to LEADING junk with no separator at all, e.g. an IAA
+  // dense row where a leftover mileage digit sticks directly to the VIN's front:
+  // "...Silver14T1BF1FKXDU212078" — the real VIN is 1 character in, so it has
+  // no boundary of its own and patterns 1-5 (which all anchor to a boundary)
+  // never generate it as a candidate. Slide a 17-char window across every long
+  // bounded run and let checksum validation (below) pick the real one out.
+  // Uses the full A-Z0-9 alphabet (not the VIN-safe subset) to find the run's
+  // true boundaries — \b doesn't know I/O/Q are VIN-illegal, so a restricted
+  // class here would falsely split the run right at a word-internal I/O/Q
+  // (e.g. "Silver" or "Toyota") and hide the real VIN inside a fragment.
+  // isValidVinChecksum() below rejects any window that still contains one.
+  const longRuns = [...upper.matchAll(/\b[A-Z0-9]{18,80}\b/g)];
+  const longRunFallbacks = [];
+  for (const m of longRuns) {
+    const run = m[0];
+    for (let i = 0; i + 17 <= run.length; i++) {
+      const window = run.slice(i, i + 17);
+      // A VIN's start is either the very beginning of the glued run or right
+      // after a mileage digit — never mid-word inside a make/color name (e.g.
+      // "Silver" or "Toyota"). Try those plausible offsets first; the mod-11
+      // checksum alone is weak enough (~1-in-11) that a long run can produce
+      // an unrelated window that coincidentally also validates, so offsets
+      // that could only be a coincidence go in a separate, lower-priority list.
+      if (i === 0 || /\d/.test(run[i - 1])) candidates.push(window);
+      else longRunFallbacks.push(window);
+    }
+  }
 
   // Prefer whichever candidate actually passes real VIN checksum validation,
   // regardless of which pattern found it first.
   for (const c of candidates) {
+    if (isValidVinChecksum(c)) return c;
+  }
+  // Structurally-implausible long-run offsets — only reached if nothing above
+  // validated. Still real checksum matches, just less likely to be genuine.
+  for (const c of longRunFallbacks) {
     if (isValidVinChecksum(c)) return c;
   }
   // Font-rendering glitches occasionally turn a "0" into a stray "O" (or "1"
@@ -575,7 +607,7 @@ async function parseDispatch(filePath) {
   let pickup = {};
   let delivery = {};
 
-  const dispatchVin = cleanUpper(text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/)?.[0] || "");
+  const dispatchVin = findVin(text);
   const lbsMatch = text.match(/Max Weight\s*([\d,]+)\s*lbs/i) || text.match(/([\d,]+)\s*lbs/i);
   const dispatchWeightKgs = lbsMatch
     ? Math.round(parseInt(lbsMatch[1].replace(/,/g, ""), 10) * 0.453592).toString()
@@ -688,6 +720,13 @@ function stateNameToAbbrev(name) {
 //   Invoice To:  customer name (may be split across rows) + "Buyer Name" field (reliable)
 //   Bottom note: "Sold At (USPPI): 465 - Fort Worth North 3748 McPherson Dr., Justin, TX , 76247."
 function parseIAAReceipt(text, lines, vin, vehicle) {
+  // ── Buyer # (member number) ─────────────────────────────────────────────
+  // Usually "Buyer # 690717", but pdf-parse sometimes flattens the table so
+  // the number comes BEFORE the label instead: "690717Buyer #".
+  let buyerNumber = "";
+  const buyerNumMatch = text.match(/Buyer\s*#\s*(\d{4,9})|(\d{4,9})\s*Buyer\s*#/i);
+  if (buyerNumMatch) buyerNumber = buyerNumMatch[1] || buyerNumMatch[2];
+
   // ── Customer Name ──────────────────────────────────────────────────────
   // Primary: explicit "Buyer Name XXXX" cell in the right-side table
   let customerName = "";
@@ -930,6 +969,7 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
     model: cleanModel,
     color,
     lotNumber,
+    buyerNumber,
     pickupLocation,
     pickupName,
     pickupAddress,
@@ -1425,4 +1465,5 @@ module.exports = {
   parseAESRegex,
   parseDispatch,
   parseBuyerReceipt,
+  findVin,
 };

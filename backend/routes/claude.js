@@ -7,6 +7,7 @@ const Expense = require("../models/Expense");
 const ScheduleRow = require("../models/Schedule");
 const AddressBook = require("../models/AddressBook");
 const AiRule = require("../models/AiRule");
+const { findVin } = require("../utils/parseOrderDocs");
 
 const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
@@ -104,8 +105,7 @@ router.post("/parse-dispatch", upload.single("file"), async (req, res) => {
   try {
     const text = req.file ? await pdfText(req.file.buffer) : req.body.text;
     if (!text) return res.status(400).json({ error: "file or text required" });
-    const vinMatch     = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
-    const vin          = vinMatch ? vinMatch[1].trim() : "";
+    const vin          = findVin(text);
     const ymmRaw       = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i);
     const ymm          = ymmRaw ? ymmRaw[1].replace(/\s+[A-HJ-NPR-Z0-9]{17}.*/, "").trim() : "";
     const totalMatch   = text.match(/Total Price[\s\S]{0,30}?\$\s*([\d,]+(?:\.\d{2})?)/i) || text.match(/\$\s*([\d,]+(?:\.\d{2})?)/);

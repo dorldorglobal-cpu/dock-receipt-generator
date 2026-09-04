@@ -13,6 +13,7 @@ const nodemailer = require("nodemailer");
 const pricingRoutes = require("./routes/pricing");
 const scheduleRoutes = require("./routes/scheduleRoutes");
 const ScheduleRow = require("./models/Schedule");
+const { findVin } = require("./utils/parseOrderDocs");
 
 require("dotenv").config();
 
@@ -159,9 +160,7 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
     const text = data.text;
 
     // Regex-based extraction from dispatch sheet text
-    // VIN — standard 17-char pattern
-    const vinMatch     = text.match(/\b([A-HJ-NPR-Z0-9]{17})\b/);
-    const vin          = vinMatch ? vinMatch[1].trim() : "";
+    const vin          = findVin(text);
 
     // YMM — labeled field; strip VIN and everything after it
     const ymmRaw       = text.match(/Vehicle Year\/Make\/Model\s*\n([^\n]+)/i);
@@ -449,18 +448,6 @@ function cleanUpper(v) {
   return clean(v).toUpperCase();
 }
 
-function formatExcelDate(value) {
-  if (!value) return "";
-
-  if (typeof value === "number") {
-    const d = XLSX.SSF.parse_date_code(value);
-    if (!d) return value.toString();
-    return `${d.m}/${d.d}/${d.y}`;
-  }
-
-  return clean(value);
-}
-
 function normalizePort(v) {
   const u = cleanUpper(v);
 
@@ -479,102 +466,6 @@ function normalizePort(v) {
   if (u.includes("LOME")) return "LOME";
 
   return u;
-}
-
-function countryFromPod(pod) {
-  const p = normalizePort(pod);
-  if (p === "LAGOS") return "NIGERIA";
-  if (p === "TEMA") return "GHANA";
-  if (p === "COTONOU") return "BENIN";
-  if (p === "LOME") return "TOGO";
-  return "";
-}
-
-function lineAfter(lines, label) {
-  const i = lines.findIndex((l) => cleanUpper(l).includes(cleanUpper(label)));
-  return i !== -1 ? clean(lines[i + 1]) : "";
-}
-
-function parseAddressParts(t) {
-  const p = clean(t).split(",").map(clean).filter(Boolean);
-
-  let address = p[0] || "";
-  let city = "";
-  let state = "";
-  let zip = "";
-
-  if (p[1] && /^(STE|SUITE|UNIT|APT|#)/i.test(p[1])) {
-    address = `${p[0]} ${p[1]}`;
-    city = p[2] || "";
-    state = (p[3] || "").split(" ")[0] || "";
-    zip = (p[3] || "").split(" ")[1] || "";
-  } else {
-    city = p[1] || "";
-    state = (p[2] || "").split(" ")[0] || "";
-    zip = (p[2] || "").split(" ")[1] || "";
-  }
-
-  return {
-    address: cleanUpper(address.replace(/,\s*US$/i, "")),
-    city: cleanUpper(city),
-    state: cleanUpper(state),
-    zip,
-  };
-}
-
-function findVin(text) {
-  const upper = text.toUpperCase();
-
-  const afterWeight = upper.match(/\b\d{3,5}\s+([A-HJ-NPR-Z0-9]{17})\b/);
-  if (afterWeight) return afterWeight[1];
-
-  const normalMatch = upper.match(/\b[A-HJ-NPR-Z0-9]{17}\b/);
-  if (normalMatch) return normalMatch[0];
-
-  return "";
-}
-
-function extractVehicleDataFromAes(text) {
-  const raw = text.toUpperCase();
-  const compact = raw.replace(/\s+/g, " ");
-
-  const vin = findVin(compact);
-  let weightKgs = "";
-  let value = "";
-
-  const verifyWeight = compact.match(/\b1\s+NO\s+(\d{3,6})\s+VERIFY:/i);
-  if (verifyWeight) {
-    weightKgs = verifyWeight[1];
-  }
-
-  if (!weightKgs) {
-    const commodityStart = compact.indexOf("20. SCH B/HTS DESCRIPTION");
-    const verifyIndex = compact.indexOf("VERIFY:");
-
-    if (commodityStart !== -1 && verifyIndex !== -1 && verifyIndex > commodityStart) {
-      const beforeVerify = compact.slice(commodityStart, verifyIndex);
-      const nums = beforeVerify.match(/\b\d{3,6}\b/g) || [];
-      if (nums.length) weightKgs = nums[nums.length - 1];
-    }
-  }
-
-  if (vin) {
-    const vinIndex = compact.indexOf(vin);
-
-    if (vinIndex !== -1) {
-      const afterVin = compact.slice(vinIndex + vin.length, vinIndex + vin.length + 200);
-
-      const stateValueMatch = afterVin.match(/\/\s*[A-Z]{2}\s+(\d{3,8})\b/);
-      if (stateValueMatch) {
-        value = stateValueMatch[1];
-      } else {
-        const nums = afterVin.match(/\b\d{3,8}\b/g) || [];
-        value = nums.length ? nums[nums.length - 1] : "";
-      }
-    }
-  }
-
-  return { vin, weightKgs, value };
 }
 
 async function saveShipment(data) {
@@ -605,200 +496,6 @@ async function saveShipment(data) {
   );
 }
 
-// ================= AES PARSER =================
-
-function parseAes(text) {
-  const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
-
-  const bookingNumber =
-    clean(text.match(/S3-\d+/i)?.[0] || "") ||
-    lineAfter(lines, "3. TRANSPORTATION REFERENCE NO.");
-
-  const referenceNumber = lineAfter(lines, "14. SHIPMENT REFERENCE NO.");
-
-  const exporterName = lineAfter(lines, "1a. U.S. PRINCIPAL PARTY");
-  const exporterAddressLine = lineAfter(lines, exporterName);
-  const exporter = parseAddressParts(exporterAddressLine);
-
-  const consigneeName = lineAfter(lines, "4a. ULTIMATE CONSIGNEE");
-
-  const consigneeIndex = lines.findIndex(
-    (l) => cleanUpper(l) === cleanUpper(consigneeName)
-  );
-
-  const consigneeLine1 = consigneeIndex !== -1 ? lines[consigneeIndex + 1] || "" : "";
-  const consigneeLine2 = consigneeIndex !== -1 ? lines[consigneeIndex + 2] || "" : "";
-
-  let combined = `${consigneeLine1} ${consigneeLine2}`.trim();
-
-  combined = combined
-    .replace(/ULTIMATE CONSIGNEE TYPE:.*$/i, "")
-    .replace(/\s+[A-Z]{2}\s*$/i, ", $&")
-    .trim();
-
-  const consigneeParts = combined.split(",").map(clean).filter(Boolean);
-
-  let consigneeAddress = "";
-  let consigneeCity = "";
-
-  if (consigneeParts.length >= 2) {
-    const lastPart = consigneeParts[consigneeParts.length - 1];
-
-    if (/^[A-Z]{2}$/.test(lastPart)) {
-      consigneeCity = consigneeParts[consigneeParts.length - 2];
-      consigneeAddress = consigneeParts.slice(0, -2).join(", ");
-    } else {
-      consigneeCity = lastPart;
-      consigneeAddress = consigneeParts.slice(0, -1).join(", ");
-    }
-  } else {
-    consigneeAddress = combined;
-  }
-
-  const vessel = lineAfter(lines, "9. EXPORTING CARRIER");
-
-  const polRaw = lineAfter(lines, "10. PORT OF EXPORT");
-  const pol = normalizePort(polRaw);
-
-  const podIndex = lines.findIndex((l) => cleanUpper(l).includes("11. PORT OF UNLADING"));
-  let podRaw = podIndex !== -1 ? `${lines[podIndex + 1] || ""} ${lines[podIndex + 2] || ""}` : "";
-  const pod = normalizePort(podRaw);
-
-  const commodity = lines.join(" ");
-  const vehicleMatch = commodity.match(/\b\d{4}\s+[A-Z]{2,}[A-Z0-9 \-]+?(?=\s+EXPORT INFO CODE)/i);
-  const vehicleYearMakeModel = cleanUpper((vehicleMatch?.[0] || "").replace("EXPORT INFO CODE", ""));
-
-  const vehicleData = extractVehicleDataFromAes(text);
-
-  const aesWeightMatch = text.toUpperCase().match(/1\s+NO\s+(\d{3,6})\s+VERIFY:/);
-  const aesWeightKgs = aesWeightMatch ? aesWeightMatch[1] : "";
-
-  return {
-    bookingNumber: clean(bookingNumber),
-    referenceNumber: clean(referenceNumber),
-
-    exporterName: cleanUpper(exporterName),
-    exporterAddress: exporter.address,
-    exporterCity: exporter.city,
-    exporterState: exporter.state,
-    exporterZip: exporter.zip,
-    exporterCountry: "UNITED STATES",
-
-    consigneeName: cleanUpper(consigneeName),
-    consigneeAddress: cleanUpper(consigneeAddress),
-    consigneeCity: cleanUpper(consigneeCity),
-    consigneeCountry: countryFromPod(pod),
-
-    vehicleType: "RORO",
-    weightKgs: aesWeightKgs || vehicleData.weightKgs,
-    vehicleYearMakeModel,
-    vin: vehicleData.vin,
-    value:
-      vehicleData.value ||
-      clean(text.match(/\/\s*[A-Z]{2}\s+(\d{3,8})\s*(?:Sensitive Information|Do not submit|$)/i)?.[1] || ""),
-
-    aesItn: clean(text.match(/X\d{14}/i)?.[0] || ""),
-    portOfLoading: pol,
-    portOfDischarge: pod,
-    vessel: cleanUpper(vessel),
-  };
-}
-
-// ================= DISPATCH PARSER =================
-
-function parseDispatch(text) {
-  const lines = text.split(/\r?\n/).map(clean).filter(Boolean);
-
-  const originIndex = lines.findIndex((l) => cleanUpper(l) === "ORIGIN");
-  const destinationIndex = lines.findIndex((l) => cleanUpper(l) === "DESTINATION");
-
-  let pickup = {};
-  let delivery = {};
-
-  const dispatchVin = cleanUpper(text.match(/\b[A-HJ-NPR-Z0-9]{17}\b/)?.[0] || "");
-
-  const lbsMatch = text.match(/Max Weight\s*([\d,]+)\s*lbs/i) || text.match(/([\d,]+)\s*lbs/i);
-  const dispatchWeightKgs = lbsMatch
-    ? Math.round(parseInt(lbsMatch[1].replace(/,/g, ""), 10) * 0.453592).toString()
-    : "";
-
-  if (originIndex !== -1) {
-    const block = lines.slice(originIndex + 1, originIndex + 15);
-
-    const cityStateLine = block.find((l) => /,\s*[A-Z]{2}\s*-?/i.test(l)) || "";
-    const auctionLine = block.find((l) => /COPART|IAAI/i.test(l)) || "";
-
-    const cleanCityState = cityStateLine.replace(/\s*-\s*.*$/i, "");
-    const city = clean(cleanCityState.split(",")[0]);
-    const state = clean((cleanCityState.split(",")[1] || "").replace("-", ""));
-
-    const auction = auctionLine.match(/COPART|IAAI/i)?.[0]?.toUpperCase() || "";
-    const extraName = auctionLine.replace(/COPART|IAAI/i, "").trim();
-
-    const addressLine =
-      block.find((l) =>
-        /\d+/.test(l) &&
-        !/\(\d{3}\)/.test(l) &&
-        !/,\s*[A-Z]{2}\s+\d{5}/i.test(l) &&
-        !cleanUpper(l).includes("CONTACT")
-      ) || "";
-
-    const cityZipLine = block.find((l) => /,\s*[A-Z]{2}\s+\d{5}/i.test(l)) || "";
-    const zip = cityZipLine.match(/\b\d{5}\b/)?.[0] || "";
-
-    pickup = {
-      pickupName: cleanUpper(`${auction} ${city} ${state} ${extraName}`),
-      pickupAddress: cleanUpper(addressLine),
-      pickupCity: cleanUpper(city),
-      pickupState: cleanUpper(state),
-      pickupZip: zip,
-    };
-  }
-
-  if (destinationIndex !== -1) {
-    const block = lines.slice(destinationIndex + 1, destinationIndex + 15);
-
-    const nameLines = [];
-    if (block[0]) nameLines.push(block[0]);
-    if (block[1] && !/\d/.test(block[1]) && !/CONTACT/i.test(block[1]) && !/,\s*[A-Z]{2}/i.test(block[1])) {
-      nameLines.push(block[1]);
-    }
-
-    const addressLine =
-      block.find((l) =>
-        /\d+/.test(l) &&
-        !/\(\d{3}\)/.test(l) &&
-        !/,\s*[A-Z]{2}\s+\d{5}/i.test(l) &&
-        !/^\d{5}$/.test(l) &&
-        !cleanUpper(l).includes("CONTACT")
-      ) || "";
-
-    const cityStateZipLine = block.find((l) => /,\s*[A-Z]{2}(\s+\d{5})?$/i.test(l)) || "";
-    const cityMatch = cityStateZipLine.match(/^(.*),\s*([A-Z]{2})(?:\s+(\d{5}))?$/i);
-
-    let zip = cityMatch?.[3] || "";
-    if (!zip) {
-      const zipLine = block.find((l) => /^\d{5}$/.test(l) || /\b\d{5}\b/.test(l)) || "";
-      zip = zipLine.match(/\b\d{5}\b/)?.[0] || "";
-    }
-
-    delivery = {
-      deliveryName: cleanUpper(nameLines.join(" ")),
-      deliveryAddress: cleanUpper(addressLine),
-      deliveryCity: cleanUpper(cityMatch?.[1] || ""),
-      deliveryState: cleanUpper(cityMatch?.[2] || ""),
-      deliveryZip: zip,
-    };
-  }
-
-  return {
-    ...pickup,
-    ...delivery,
-    dispatchVin,
-    dispatchWeightKgs,
-  };
-}
-
 // ================= SCHEDULE =================
 
 function readScheduleExcel(buffer) {
@@ -812,31 +509,6 @@ function readScheduleExcel(buffer) {
   return rows;
 }
 
-function getSavedScheduleRows() {
-  if (!fs.existsSync(masterSchedulePath)) return [];
-  return readScheduleExcel(fs.readFileSync(masterSchedulePath));
-}
-
-function getCell(row, names) {
-  for (const name of names) {
-    if (row[name] !== undefined) return row[name];
-  }
-  return "";
-}
-
-function findScheduleMatch(rows, vessel, pol, pod) {
-  const v = cleanUpper(vessel).split(" V:")[0].trim();
-  const p1 = normalizePort(pol);
-  const p2 = normalizePort(pod);
-
-  return rows.find((r) => {
-    const rv = cleanUpper(getCell(r, ["Vessel", "Vessel Name"]));
-    const rpol = normalizePort(getCell(r, ["POL", "Port Of Loading", "Port of Loading"]));
-    const rpod = normalizePort(getCell(r, ["POD", "Port Of Discharge", "Port of Discharge"]));
-
-    return rv.includes(v) && rpol === p1 && rpod === p2;
-  });
-}
 
 // ================= ROUTES =================
 
