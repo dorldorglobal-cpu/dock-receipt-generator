@@ -1,18 +1,23 @@
 /**
  * Overdue invoice reminder emails.
  *
- * Schedule (anchored to the invoice's arrival date — falls back to due date
- * when arrival date is missing/unparseable, since due date is itself usually
- * copied from arrival date at invoice-creation time):
- *   day 0   (arrival day)   -> stage 1, first notice
+ * Schedule (anchored to the invoice's due date — due date is normally set
+ * from the vehicle's arrival date at invoice-creation time anyway, and is
+ * far more reliably populated on older records, so it's the primary anchor;
+ * arrivalDate is still used as a fallback for the few invoices missing a
+ * due date but not an arrival date):
+ *   day 0   (due date)      -> stage 1, first notice
  *   day 3+  (still unpaid)  -> stage 2, reminder
  *   day 7+  (still unpaid)  -> stage 3, overdue notice
  *   day 7+  thereafter      -> daily, once per calendar day, until paid
  *
  * Only invoices with status "sent" (not draft, not already paid) and a real
- * customerEmail are eligible. Customer "Dor Ldor Global Ghana" (an internal
- * entity, not an external customer) is excluded for now per explicit request
- * — that flow will be handled separately later.
+ * customer email are eligible. If the invoice's own customerEmail/arrivalDate
+ * is blank, the linked Order's is used instead (many older invoices weren't
+ * copied over at creation time, even though the order has it).
+ *
+ * Customer "Dor Ldor Global Ghana" (an internal entity, not an external
+ * customer) is excluded for now per explicit request — handled separately.
  *
  * Runs once daily; wired up from server.js via startInvoiceReminderScheduler().
  */
@@ -26,17 +31,22 @@ function isExcludedCustomer(name) {
   return norm === "DORLDORGLOBALGHANA" || norm === "DORLDORGHANA";
 }
 
-// ── Anchor date: arrival date, falling back to due date ───────────────────────
-function getAnchorDate(inv) {
-  if (inv.arrivalDate) {
-    const d = new Date(inv.arrivalDate);
-    if (!isNaN(d)) return d;
-  }
-  if (inv.dueDate) {
-    const d = new Date(inv.dueDate);
+// ── Anchor date: due date first, then arrival date; either can come from the
+// invoice itself or (as a fallback) its linked order ──────────────────────────
+function getAnchorDate(inv, order) {
+  for (const raw of [inv.dueDate, inv.arrivalDate, order?.arrivalDate]) {
+    if (!raw) continue;
+    const d = new Date(raw);
     if (!isNaN(d)) return d;
   }
   return null;
+}
+
+// ── Customer email: invoice's own, falling back to its linked order's ────────
+function resolveEmail(inv, order) {
+  const invEmail = (inv.customerEmail || "").trim();
+  if (invEmail) return invEmail;
+  return (order?.customerEmail || "").trim();
 }
 
 function daysBetween(a, b) {
@@ -85,11 +95,11 @@ function emailContent(inv, stage, daysSince) {
 }
 
 // ── Send one reminder email via Gmail ─────────────────────────────────────────
-async function sendReminderEmail(inv, stage, daysSince) {
+async function sendReminderEmail(inv, stage, daysSince, toEmail) {
   const { subject, body } = emailContent(inv, stage, daysSince);
   const accessToken = await getGmailAccessToken();
   const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
-  const to = String(inv.customerEmail).split(",").map(s => s.trim()).filter(Boolean).join(", ");
+  const to = String(toEmail).split(",").map(s => s.trim()).filter(Boolean).join(", ");
 
   const mimeLines = [
     `From: ${from}`,
@@ -123,9 +133,20 @@ async function runInvoiceReminders({ dryRun = false } = {}) {
 
   for (const inv of invoices) {
     if (isExcludedCustomer(inv.customerName)) { summary.skippedExcluded++; continue; }
-    if (!inv.customerEmail || !inv.customerEmail.trim()) { summary.skippedNoEmail++; continue; }
 
-    const anchor = getAnchorDate(inv);
+    // Only bother fetching the linked order if the invoice itself is
+    // missing something we might need from it.
+    const invHasEmail  = !!(inv.customerEmail && inv.customerEmail.trim());
+    const invHasAnchor = getAnchorDate(inv) !== null;
+    let order = null;
+    if ((!invHasEmail || !invHasAnchor) && inv.orderId) {
+      order = await Order.findById(inv.orderId).select("customerEmail arrivalDate").lean();
+    }
+
+    const email = resolveEmail(inv, order);
+    if (!email) { summary.skippedNoEmail++; continue; }
+
+    const anchor = getAnchorDate(inv, order);
     if (!anchor) { summary.skippedNoAnchor++; continue; }
 
     const daysSince = daysBetween(anchor, today);
@@ -155,7 +176,8 @@ async function runInvoiceReminders({ dryRun = false } = {}) {
     if (dryRun) {
       summary.sent++;
       summary.details.push({
-        invoiceNumber: inv.invoiceNumber, customerEmail: inv.customerEmail,
+        invoiceNumber: inv.invoiceNumber, customerEmail: email,
+        emailFromOrder: !inv.customerEmail?.trim() && !!email,
         daysSince, stageToSend, anchor: anchor.toISOString().slice(0, 10),
         subject: emailContent(inv, stageToSend, daysSince).subject,
       });
@@ -163,12 +185,12 @@ async function runInvoiceReminders({ dryRun = false } = {}) {
     }
 
     try {
-      await sendReminderEmail(inv, stageToSend, daysSince);
+      await sendReminderEmail(inv, stageToSend, daysSince, email);
       inv.reminderStage      = Math.max(inv.reminderStage, stageToSend);
       inv.lastReminderSentAt = today;
       await inv.save();
       summary.sent++;
-      console.log(`[invoice-reminders] Sent stage ${stageToSend} reminder for ${inv.invoiceNumber} (${daysSince}d) to ${inv.customerEmail}`);
+      console.log(`[invoice-reminders] Sent stage ${stageToSend} reminder for ${inv.invoiceNumber} (${daysSince}d) to ${email}`);
     } catch (err) {
       summary.errors.push({ invoiceNumber: inv.invoiceNumber, error: err.message });
       console.error(`[invoice-reminders] Failed to send for ${inv.invoiceNumber}:`, err.message);
@@ -208,4 +230,4 @@ function startInvoiceReminderScheduler() {
   }, delay);
 }
 
-module.exports = { runInvoiceReminders, startInvoiceReminderScheduler, isExcludedCustomer, getAnchorDate };
+module.exports = { runInvoiceReminders, startInvoiceReminderScheduler, isExcludedCustomer, getAnchorDate, resolveEmail };
