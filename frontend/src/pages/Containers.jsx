@@ -225,6 +225,39 @@ export default function Containers() {
   const setF  = k => v => setForm(f=>({...f,[k]:v}));
   const setEF = k => v => setEditForm(f=>({...f,[k]:v}));
 
+  // Split a flat per-container BAF amount evenly across the cars in the load
+  // and write it to each order's charges. Prompts for the amount ($400 default).
+  const [bafBusy, setBafBusy] = useState(false);
+  const splitBaf = async (load) => {
+    const carCount = billingRows.length || (load.orderIds || []).length;
+    const input = window.prompt(
+      `Split the container BAF across ${carCount} car(s).\n\nTotal BAF for the full container:`, "400");
+    if (input === null) return;
+    const amount = parseFloat(input);
+    if (!(amount > 0)) { flash("❌ Enter a valid amount"); return; }
+    setBafBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${load._id}/split-baf`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amount }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Failed");
+      const per = d.results.map(x => `$${x.perCar}`).join(" / ");
+      let msg = `✅ BAF split: ${per} across ${d.count} car(s)`;
+      if (d.invoicedCount) msg += ` — ⚠️ ${d.invoicedCount} order(s) already invoiced; regenerate those invoices to apply the new BAF`;
+      flash(msg);
+      // refresh billing summary
+      const rs = await fetch(`${API}/api/container-loads/${load._id}/billing-summary`);
+      const ds = await rs.json();
+      setBillingRows(ds.rows || []);
+    } catch (e) {
+      flash("❌ " + e.message);
+    } finally {
+      setBafBusy(false);
+    }
+  };
+
   // Available orders: Container type, NOT Canceled, NO existing booking number, NOT already in a load
   const loadedIds = new Set(loads.flatMap(l=>(l.orderIds||[]).map(o=>o._id||o)));
   const availableOrders = allOrders.filter(o =>
@@ -1371,8 +1404,19 @@ export default function Containers() {
                   {billingLoad.vessel}{billingLoad.pol ? ` · ${billingLoad.pol} → ${billingLoad.pod}` : ""}
                 </div>
               </div>
-              <button onClick={()=>{ setBillingLoad(null); setSendResults(null); }}
-                style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"var(--text-muted)" }}>✕</button>
+              <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                {!sendResults && !billingLoading && billingRows.length > 0 && (
+                  <button onClick={()=>splitBaf(billingLoad)} disabled={bafBusy}
+                    title="Divide the flat per-container BAF fee across the cars in this load and write it to each order's charges"
+                    style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
+                      background:"rgba(180,83,9,0.18)", border:"1px solid rgba(180,83,9,0.45)",
+                      color:"var(--warning)", cursor:bafBusy?"default":"pointer", opacity:bafBusy?0.6:1, whiteSpace:"nowrap" }}>
+                    {bafBusy ? "Splitting…" : "⚖️ Split Container BAF"}
+                  </button>
+                )}
+                <button onClick={()=>{ setBillingLoad(null); setSendResults(null); }}
+                  style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"var(--text-muted)" }}>✕</button>
+              </div>
             </div>
 
             <div style={{ overflowY:"auto", flex:1, padding:"16px 24px" }}>

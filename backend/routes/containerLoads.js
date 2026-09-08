@@ -225,6 +225,50 @@ router.get("/:id/billing-summary", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/container-loads/:id/split-baf — divide a per-container BAF amount
+// evenly across the cars actually in the load and write it to each order's
+// charges (both the sell price and the cost). BAF is a flat per-container fee
+// from the shipping line, but it's billed per car, so a 3-car container was
+// under-recovering ($100 x 3 = $300 vs a $400 cost). Body: { amount } (default
+// 400). Split to whole cents; any leftover cents land on the first orders so
+// the parts sum back to exactly `amount`.
+router.post("/:id/split-baf", express.json(), async (req, res) => {
+  try {
+    const Invoice = require("../models/Invoice");
+    const amount = Number(req.body?.amount) > 0 ? Number(req.body.amount) : 400;
+
+    const load = await ContainerLoad.findById(req.params.id).lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+
+    const orders = await Order.find({ _id: { $in: load.orderIds } });
+    if (!orders.length) return res.status(400).json({ error: "This load has no orders" });
+
+    const n = orders.length;
+    const cents = Math.round(amount * 100);
+    const base = Math.floor(cents / n);
+    const remainder = cents - base * n;
+
+    const results = [];
+    for (let i = 0; i < orders.length; i++) {
+      const o = orders[i];
+      const per = ((base + (i < remainder ? 1 : 0)) / 100).toFixed(2);
+      o.charges = { ...(o.charges || {}), emergencyBafFee: per, emergencyBafFeeCost: per };
+      o.markModified("charges");
+      o.timeline = o.timeline || [];
+      o.timeline.push({ action: "BAF Split", details: `Container BAF split — $${per} of $${amount.toFixed(2)} across ${n} car(s) in load "${load.name}".`, createdAt: new Date() });
+      await o.save();
+      const invoiced = await Invoice.exists({ orderId: o._id });
+      results.push({ refNumber: o.refNumber, perCar: per, alreadyInvoiced: !!invoiced });
+    }
+
+    res.json({ amount, count: n, perCar: (base / 100).toFixed(2), results,
+      invoicedCount: results.filter(r => r.alreadyInvoiced).length });
+  } catch (e) {
+    console.error("[ContainerLoad] split-baf error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/container-loads/:id/send-all-invoices — send invoices for all orders in load
 router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
   try {
