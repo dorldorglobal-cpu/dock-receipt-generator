@@ -270,12 +270,19 @@ export default function Containers() {
       `This records a payment for each invoice's remaining balance.\n\n` +
       `Payment method (e.g. Wire, Zelle, Cash) — optional:`, "Wire");
     if (method === null) return;
+    const today = new Date().toISOString().slice(0, 10);
+    const dateInput = window.prompt("Payment date (YYYY-MM-DD):", today);
+    if (dateInput === null) return;
+    const date = (dateInput || "").trim() || today;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date).getTime())) {
+      flash("❌ Enter the date as YYYY-MM-DD"); return;
+    }
     const reference = window.prompt("Reference / confirmation # — optional:", "") || "";
     setPaidBusy(true);
     try {
       const r = await fetch(`${API}/api/container-loads/${load._id}/mark-all-paid`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ method, reference }),
+        body: JSON.stringify({ method, date, reference }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Failed");
