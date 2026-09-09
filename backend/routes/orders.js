@@ -1627,7 +1627,9 @@ router.get("/:id/dr-payload", async (req, res) => {
       }
     }
 
-    // ── Step 2: Schedule lookup from master-schedule.xlsx ────────────
+    // ── Step 2: Schedule lookup — call the shared function in-process.
+    // (Was an HTTP self-fetch to /api/schedule/lookup, which started 401ing
+    // once the login/auth middleware was added — silently blanking the dates.)
     const vessel = aesData.vessel || o.vessel || "";
     const polNorm = (aesData.portOfLoading || aesData.pol || o.pol || "").toUpperCase();
     const podNorm = (aesData.portOfDischarge || aesData.pod || o.pod || "").toUpperCase();
@@ -1635,10 +1637,8 @@ router.get("/:id/dr-payload", async (req, res) => {
 
     if (vessel && polNorm && podNorm) {
       try {
-        const lookupRes = await fetch(
-          `http://localhost:4000/api/schedule/lookup?vessel=${encodeURIComponent(vessel)}&pol=${encodeURIComponent(polNorm)}&pod=${encodeURIComponent(podNorm)}`
-        );
-        const lookupData = await lookupRes.json();
+        const { lookupSchedule } = require("./scheduleRoutes");
+        const lookupData = await lookupSchedule({ vessel, pol: polNorm, pod: podNorm });
         if (lookupData.found) {
           scheduleData = {
             voyage:      lookupData.voyage      || "",

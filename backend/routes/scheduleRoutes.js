@@ -1096,64 +1096,66 @@ router.post("/upload-excel", upload.single("schedule"), async (req, res) => {
   }
 });
 
-// GET /api/schedule/lookup — DB is the single source of truth
+// Shared schedule lookup — used by GET /lookup AND called in-process by the
+// orders /dr-payload route (which must NOT self-fetch over HTTP, or it hits
+// the auth middleware and 401s).
 //   voyageName = voyage folder name e.g. "26LA01 LIBERTY PASSION"
 //   vessel     = fallback AES vessel name
+async function lookupSchedule({ voyageName, vessel, pol, pod }) {
+  if (!pol || !pod) return { found: false };
+
+  const polUp = normalizePolPod(pol);
+  const podUp = normalizePolPod(pod);
+  const esc   = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+  const folderName = (voyageName || "").toUpperCase().trim();
+  const codeMatch  = folderName.match(/^(\d+[A-Z]+\d+[A-Z]*)\s+(.*)/);
+  const voyageCode = codeMatch ? codeMatch[1] : folderName;
+  const vesselPart = codeMatch ? codeMatch[2].trim() : folderName;
+
+  let dbRow = null;
+
+  if (voyageCode) {
+    dbRow = await ScheduleRow.findOne({ voyage: { $regex: `^${esc(voyageCode)}$`, $options: "i" }, pol: polUp, pod: podUp });
+  }
+  if (!dbRow && vesselPart) {
+    dbRow = await ScheduleRow.findOne({ vessel: { $regex: `^${esc(vesselPart)}$`, $options: "i" }, pol: polUp, pod: podUp });
+  }
+  if (!dbRow && vesselPart) {
+    const lastWord = vesselPart.split(/\s+/).filter(w => w.length > 3).pop();
+    if (lastWord) dbRow = await ScheduleRow.findOne({ vessel: { $regex: lastWord, $options: "i" }, pol: polUp, pod: podUp });
+  }
+  if (!dbRow && vessel) {
+    const vUp = vessel.toUpperCase().replace(/^(M\/V|MV|SS|MS)\s+/i, "").split(" V:")[0].trim();
+    dbRow = await ScheduleRow.findOne({ vessel: { $regex: `^${esc(vUp)}$`, $options: "i" }, pol: polUp, pod: podUp });
+    if (!dbRow) {
+      const lastWord = vUp.split(/\s+/).filter(w => w.length > 3).pop();
+      if (lastWord) dbRow = await ScheduleRow.findOne({ vessel: { $regex: lastWord, $options: "i" }, pol: polUp, pod: podUp });
+    }
+  }
+
+  if (dbRow) {
+    return {
+      found:       true,
+      vessel:      dbRow.vessel,
+      voyage:      dbRow.voyage,
+      pol:         dbRow.pol,
+      pod:         dbRow.pod,
+      cutoffDate:  dbRow.cutoffDate  || "",
+      sailDate:    dbRow.sailDate    || "",
+      arrivalDate: dbRow.arrivalDate || "",
+    };
+  }
+  console.log(`[Schedule Lookup] No match — voyageName="${voyageName}" voyageCode="${voyageCode}" vesselPart="${vesselPart}" pol="${polUp}" pod="${podUp}"`);
+  return { found: false };
+}
+
+// GET /api/schedule/lookup — DB is the single source of truth
 router.get("/lookup", async (req, res) => {
   try {
     const { voyageName, vessel, pol, pod } = req.query;
     if (!pol || !pod) return res.status(400).json({ error: "pol and pod required" });
-
-    const polUp = normalizePolPod(pol);
-    const podUp = normalizePolPod(pod);
-    const esc   = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-
-    // Parse voyage folder name: "26LA01 LIBERTY PASSION" → code="26LA01", vessel="LIBERTY PASSION"
-    const folderName = (voyageName || "").toUpperCase().trim();
-    const codeMatch  = folderName.match(/^(\d+[A-Z]+\d+[A-Z]*)\s+(.*)/);
-    const voyageCode = codeMatch ? codeMatch[1] : folderName;
-    const vesselPart = codeMatch ? codeMatch[2].trim() : folderName;
-
-    let dbRow = null;
-
-    // 1. Exact voyage code
-    if (voyageCode) {
-      dbRow = await ScheduleRow.findOne({ voyage: { $regex: `^${esc(voyageCode)}$`, $options: "i" }, pol: polUp, pod: podUp });
-    }
-    // 2. Exact vessel name from folder
-    if (!dbRow && vesselPart) {
-      dbRow = await ScheduleRow.findOne({ vessel: { $regex: `^${esc(vesselPart)}$`, $options: "i" }, pol: polUp, pod: podUp });
-    }
-    // 3. Partial vessel word from folder
-    if (!dbRow && vesselPart) {
-      const lastWord = vesselPart.split(/\s+/).filter(w => w.length > 3).pop();
-      if (lastWord) dbRow = await ScheduleRow.findOne({ vessel: { $regex: lastWord, $options: "i" }, pol: polUp, pod: podUp });
-    }
-    // 4. Fallback: AES vessel name
-    if (!dbRow && vessel) {
-      const vUp = vessel.toUpperCase().replace(/^(M\/V|MV|SS|MS)\s+/i, "").split(" V:")[0].trim();
-      dbRow = await ScheduleRow.findOne({ vessel: { $regex: `^${esc(vUp)}$`, $options: "i" }, pol: polUp, pod: podUp });
-      if (!dbRow) {
-        const lastWord = vUp.split(/\s+/).filter(w => w.length > 3).pop();
-        if (lastWord) dbRow = await ScheduleRow.findOne({ vessel: { $regex: lastWord, $options: "i" }, pol: polUp, pod: podUp });
-      }
-    }
-
-    if (dbRow) {
-      return res.json({
-        found:       true,
-        vessel:      dbRow.vessel,
-        voyage:      dbRow.voyage,
-        pol:         dbRow.pol,
-        pod:         dbRow.pod,
-        cutoffDate:  dbRow.cutoffDate  || "",
-        sailDate:    dbRow.sailDate    || "",
-        arrivalDate: dbRow.arrivalDate || "",
-      });
-    }
-
-    console.log(`[Schedule Lookup] No match — voyageName="${voyageName}" voyageCode="${voyageCode}" vesselPart="${vesselPart}" pol="${polUp}" pod="${podUp}"`);
-    res.json({ found: false });
+    res.json(await lookupSchedule({ voyageName, vessel, pol, pod }));
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1297,3 +1299,4 @@ router.get("/last-update", async (req, res) => {
 });
 
 module.exports = router;
+module.exports.lookupSchedule = lookupSchedule;
