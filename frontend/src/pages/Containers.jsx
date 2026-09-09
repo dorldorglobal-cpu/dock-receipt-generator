@@ -258,6 +258,40 @@ export default function Containers() {
     }
   };
 
+  // Record one container-wide payment: marks every unpaid invoice in the load
+  // as paid for its own remaining balance. For when a customer pays for the
+  // whole container at once and you don't want to open each invoice by VIN.
+  const [paidBusy, setPaidBusy] = useState(false);
+  const markAllPaid = async (load) => {
+    const unpaid = billingRows.filter(r => r.invoice && r.invoice.status !== "paid");
+    if (!unpaid.length) { flash("Nothing to mark — every invoice in this load is already paid or not generated"); return; }
+    const method = window.prompt(
+      `Mark ${unpaid.length} invoice(s) in "${load.name}" as PAID.\n\n` +
+      `This records a payment for each invoice's remaining balance.\n\n` +
+      `Payment method (e.g. Wire, Zelle, Cash) — optional:`, "Wire");
+    if (method === null) return;
+    const reference = window.prompt("Reference / confirmation # — optional:", "") || "";
+    setPaidBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${load._id}/mark-all-paid`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ method, reference }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Failed");
+      let msg = `✅ Marked ${d.paidCount} invoice(s) paid — $${d.totalRecorded.toLocaleString()} recorded`;
+      if (d.ordersWithoutInvoice?.length) msg += ` · ⚠️ no invoice yet for ${d.ordersWithoutInvoice.join(", ")}`;
+      flash(msg);
+      const rs = await fetch(`${API}/api/container-loads/${load._id}/billing-summary`);
+      const ds = await rs.json();
+      setBillingRows(ds.rows || []);
+    } catch (e) {
+      flash("❌ " + e.message);
+    } finally {
+      setPaidBusy(false);
+    }
+  };
+
   // Available orders: Container type, NOT Canceled, NO existing booking number, NOT already in a load
   const loadedIds = new Set(loads.flatMap(l=>(l.orderIds||[]).map(o=>o._id||o)));
   const availableOrders = allOrders.filter(o =>
@@ -1412,6 +1446,15 @@ export default function Containers() {
                       background:"rgba(180,83,9,0.18)", border:"1px solid rgba(180,83,9,0.45)",
                       color:"var(--warning)", cursor:bafBusy?"default":"pointer", opacity:bafBusy?0.6:1, whiteSpace:"nowrap" }}>
                     {bafBusy ? "Splitting…" : "⚖️ Split Container BAF"}
+                  </button>
+                )}
+                {!sendResults && !billingLoading && billingRows.some(r=>r.invoice && r.invoice.status!=="paid") && (
+                  <button onClick={()=>markAllPaid(billingLoad)} disabled={paidBusy}
+                    title="Record a container-wide payment — marks every unpaid invoice in this load as paid for its remaining balance"
+                    style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
+                      background:"rgba(22,101,52,0.18)", border:"1px solid rgba(22,101,52,0.5)",
+                      color:"var(--success, #15803d)", cursor:paidBusy?"default":"pointer", opacity:paidBusy?0.6:1, whiteSpace:"nowrap" }}>
+                    {paidBusy ? "Marking…" : "💰 Mark All Paid"}
                   </button>
                 )}
                 <button onClick={()=>{ setBillingLoad(null); setSendResults(null); }}

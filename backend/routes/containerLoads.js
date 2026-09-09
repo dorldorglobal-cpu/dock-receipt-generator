@@ -269,6 +269,63 @@ router.post("/:id/split-baf", express.json(), async (req, res) => {
   }
 });
 
+// POST /api/container-loads/:id/mark-all-paid — record one container payment
+// against every unpaid invoice in the load, each for its own remaining
+// balance. Body: { method, date, reference }. For when a customer pays for a
+// whole container at once and you don't want to open each invoice.
+router.post("/:id/mark-all-paid", express.json(), async (req, res) => {
+  try {
+    const Invoice = require("../models/Invoice");
+    const { method = "", date, reference = "" } = req.body || {};
+    const when = date ? new Date(date) : new Date();
+
+    const load = await ContainerLoad.findById(req.params.id).lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+
+    const invoices = await Invoice.find({ orderId: { $in: load.orderIds } });
+    const orders   = await Order.find({ _id: { $in: load.orderIds } }).select("refNumber").lean();
+    const refByOrder = Object.fromEntries(orders.map(o => [String(o._id), o.refNumber]));
+
+    const noInvoice = orders.filter(o => !invoices.some(i => String(i.orderId) === String(o._id)));
+    const results = [];
+    let paidCount = 0, totalRecorded = 0;
+
+    for (const inv of invoices) {
+      if (inv.status === "paid") { results.push({ invoiceNumber: inv.invoiceNumber, skipped: "already paid" }); continue; }
+      const prevPaid  = (inv.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+      const remaining = Math.max(0, (inv.total || 0) - prevPaid);
+      if (remaining <= 0.005) { results.push({ invoiceNumber: inv.invoiceNumber, skipped: "nothing outstanding" }); continue; }
+
+      inv.payments.push({
+        amount: remaining, method, date: when,
+        notes: `Container payment — Load "${load.name}"${reference ? ` (ref: ${reference})` : ""}`,
+      });
+      inv.status = "paid";
+      inv.paidAt = when;
+      await inv.save();
+      if (inv.orderId) {
+        await Order.findByIdAndUpdate(inv.orderId, {
+          $set: { status: "Completed" },
+          $push: { timeline: { action: "Invoice Paid", details: `Invoice ${inv.invoiceNumber} paid via container payment for load "${load.name}"`, createdAt: new Date() } },
+        });
+      }
+      paidCount++;
+      totalRecorded += remaining;
+      results.push({ invoiceNumber: inv.invoiceNumber, refNumber: refByOrder[String(inv.orderId)], amount: Number(remaining.toFixed(2)) });
+    }
+
+    res.json({
+      paidCount,
+      totalRecorded: Number(totalRecorded.toFixed(2)),
+      ordersWithoutInvoice: noInvoice.map(o => o.refNumber),
+      results,
+    });
+  } catch (e) {
+    console.error("[ContainerLoad] mark-all-paid error:", e.message);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/container-loads/:id/send-all-invoices — send invoices for all orders in load
 router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
   try {
