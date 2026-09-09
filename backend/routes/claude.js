@@ -13,7 +13,7 @@ const router = express.Router();
 const upload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY });
-const MODEL = "qwen/qwen3-32b";
+const MODEL = "openai/gpt-oss-120b"; // qwen/qwen3-32b was removed from Groq
 
 async function pdfText(buffer) {
   const data = await pdfParse(buffer);

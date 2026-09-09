@@ -8,7 +8,9 @@
 // via that same script.
 const Groq = require("groq-sdk");
 
-const MODEL = "qwen/qwen3-32b";
+// qwen/qwen3-32b was removed from Groq — every call 404'd and silently fell
+// back to the regex parsers. openai/gpt-oss-120b is a current Groq model.
+const MODEL = "openai/gpt-oss-120b";
 
 // Lazy singleton — constructing Groq() throws immediately if GROQ_API_KEY is
 // unset, and this module is required at load time by parseOrderDocs.js (used

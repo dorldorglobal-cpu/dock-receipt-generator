@@ -431,7 +431,15 @@ export default function DockReceiptPage() {
     setMsg("✅ Copied to clipboard", "success");
   };
 
-  const hiddenKeys = ["_id", "__v", "createdAt", "updatedAt", "scheduleRowsRead", "scheduleMatchFound", "dispatchVin", "dispatchWeightKgs"];
+  const hiddenKeys = ["_id", "__v", "createdAt", "updatedAt", "scheduleRowsRead", "scheduleMatchFound", "scheduleMatchReason", "scheduleUpdatedAt", "dispatchVin", "dispatchWeightKgs"];
+
+  // How stale is the loaded schedule for a carrier? Returns { text, stale }.
+  const scheduleAge = (updatedAt) => {
+    if (!updatedAt) return null;
+    const days = Math.floor((Date.now() - new Date(updatedAt)) / 86400000);
+    const text = days === 0 ? "today" : days === 1 ? "yesterday" : `${days} days ago`;
+    return { text, stale: days > 10 };
+  };
 
   // ─────────────────────────────────────────────────────────────────────────────
 
@@ -465,16 +473,22 @@ export default function DockReceiptPage() {
         <span style={{ fontSize: 12, fontWeight: 700, color: "var(--text-secondary)", textTransform: "uppercase", letterSpacing: "0.06em" }}>
           Schedule
         </span>
-        <span style={{ fontSize: 13 }}>
-          {scheduleStatus?.sallaum?.loaded
-            ? <span style={{ color: "#34d399" }}>✅ Sallaum — {scheduleStatus.sallaum.rows} routes</span>
-            : <span style={{ color: "#f87171" }}>⚪ Sallaum not loaded</span>}
-        </span>
-        <span style={{ fontSize: 13 }}>
-          {scheduleStatus?.acl?.loaded
-            ? <span style={{ color: "#34d399" }}>✅ ACL — {scheduleStatus.acl.rows} routes</span>
-            : <span style={{ color: "#f87171" }}>⚪ ACL not loaded</span>}
-        </span>
+        {["sallaum", "acl"].map(c => {
+          const s = scheduleStatus?.[c];
+          const age = scheduleAge(s?.updatedAt);
+          return (
+            <span key={c} style={{ fontSize: 13 }}>
+              {s?.loaded ? (
+                <span style={{ color: age?.stale ? "#fbbf24" : "#34d399" }}>
+                  {age?.stale ? "⚠️" : "✅"} {c === "acl" ? "ACL" : "Sallaum"} — {s.rows} routes
+                  {age && <span style={{ color: "var(--text-muted)", fontSize: 11 }}> (updated {age.text})</span>}
+                </span>
+              ) : (
+                <span style={{ color: "#f87171" }}>⚪ {c === "acl" ? "ACL" : "Sallaum"} not loaded</span>
+              )}
+            </span>
+          );
+        })}
         <button onClick={() => navigate("/vessel-schedule")}
           style={{ marginLeft: "auto", padding: "5px 14px", borderRadius: 7, fontSize: 12,
             border: "1px solid var(--border)", background: "var(--bg-elevated)",
@@ -662,11 +676,20 @@ export default function DockReceiptPage() {
           )}
 
           {/* Schedule match indicator */}
-          <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: "var(--radius-sm)", background: "var(--bg-panel)", fontSize: 12 }}>
+          <div style={{ marginBottom: 16, padding: "10px 14px", borderRadius: "var(--radius-sm)",
+            background: result.scheduleMatchFound === "YES" ? "var(--bg-panel)" : "rgba(251,191,36,0.08)",
+            border: result.scheduleMatchFound === "YES" ? "none" : "1px solid rgba(251,191,36,0.35)", fontSize: 12 }}>
             <span style={{ color: "var(--text-muted)" }}>Schedule match: </span>
-            <span style={{ color: result.scheduleMatchFound === "YES" ? "var(--success)" : "var(--warning)", fontWeight: 500 }}>
-              {result.scheduleMatchFound === "YES" ? `✅ Found — ${result.vessel} | Voyage: ${result.voyage}` : "⚠ No match — enter voyage manually"}
+            <span style={{ color: result.scheduleMatchFound === "YES" ? "var(--success)" : "var(--warning)", fontWeight: 600 }}>
+              {result.scheduleMatchFound === "YES"
+                ? `✅ Found — ${result.vessel} | Voyage: ${result.voyage}`
+                : "⚠ No match — enter voyage & dates manually"}
             </span>
+            {result.scheduleMatchReason && (
+              <div style={{ color: "var(--text-secondary)", fontSize: 11, marginTop: 4 }}>
+                {result.scheduleMatchReason}
+              </div>
+            )}
           </div>
 
           {/* Editable field grid */}

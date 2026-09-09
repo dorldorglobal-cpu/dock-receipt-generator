@@ -590,6 +590,8 @@ app.post("/upload", upload.any(), async (req, res) => {
 
     // Look up schedule from MongoDB ScheduleRow — same source as Orders page
     let match = null;
+    let matchReason = "";       // human-readable "why" for the DR page
+    let scheduleUpdatedAt = null;
     {
       const vUpper = cleanUpper(aesData.vessel).split(" V:")[0].trim();
       const polNorm = normalizePort(aesData.portOfLoading);
@@ -604,23 +606,45 @@ app.post("/upload", upload.any(), async (req, res) => {
         ? { $in: ["PROVIDENCE", "DAVISVILLE"] }
         : polNorm;
 
+      // Carrier expected from the booking prefix — so route-only fallback
+      // can't grab a row from the wrong carrier.
+      const bk = cleanUpper(aesData.bookingNumber);
+      const expectedCarrier = bk.startsWith("SLSE") || bk.startsWith("SLS") ? "SALLAUM"
+        : bk.startsWith("ACL") || bk.startsWith("GLL") ? "ACL" : null;
+      const carrierFilter = expectedCarrier ? { carrier: expectedCarrier } : {};
+
+      // How fresh is the schedule for that carrier?
+      const freshRow = await ScheduleRow.findOne(expectedCarrier ? { carrier: expectedCarrier } : {}).sort({ updatedAt: -1 });
+      scheduleUpdatedAt = freshRow?.updatedAt || null;
+
       // 1. Exact vessel name
       let dbMatch = await ScheduleRow.findOne({
+        ...carrierFilter,
         vessel: { $regex: `^${esc(vClean)}$`, $options: "i" },
         pol: polAliases, pod: podNorm,
       });
+      if (dbMatch) matchReason = "matched vessel name exactly";
       // 2. Last-word vessel match (e.g. "AMSTERDAM" finds "RCC AMSTERDAM")
       if (!dbMatch) {
         dbMatch = await ScheduleRow.findOne({
+          ...carrierFilter,
           vessel: { $regex: esc(vesselSearchWord), $options: "i" },
           pol: polAliases, pod: podNorm,
         });
+        if (dbMatch) matchReason = `matched on "${vesselSearchWord}"`;
       }
-      // 3. Vessel stored as voyage code (e.g. "26AT01") — match on POL+POD only, pick most recent
+      // 3. Route-only fallback (vessel stored as a voyage code, or a slight
+      //    name mismatch) — same carrier + POL + POD, most recent. Only when
+      //    exactly ONE such route exists, so it can't silently pick a wrong
+      //    voyage from several options.
       if (!dbMatch) {
-        dbMatch = await ScheduleRow.findOne({ pol: polAliases, pod: podNorm })
-          .sort({ updatedAt: -1 });
+        const routeRows = await ScheduleRow.find({ ...carrierFilter, pol: polAliases, pod: podNorm }).sort({ updatedAt: -1 });
+        if (routeRows.length === 1) {
+          dbMatch = routeRows[0];
+          matchReason = `matched on route only (${polNorm}→${podNorm}) — vessel name "${vClean}" not found`;
+        }
       }
+
       if (dbMatch) {
         match = {
           voyage:      dbMatch.voyage,
@@ -629,7 +653,23 @@ app.post("/upload", upload.any(), async (req, res) => {
           arrivalDate: dbMatch.arrivalDate,
           carrier:     dbMatch.carrier,
         };
-        console.log(`[schedule] matched ${dbMatch.carrier} ${dbMatch.vessel} ${dbMatch.voyage} for ${vClean} ${polNorm}→${podNorm}`);
+        console.log(`[schedule] ${matchReason}: ${dbMatch.carrier} ${dbMatch.vessel} ${dbMatch.voyage} for ${vClean} ${polNorm}→${podNorm}`);
+      } else {
+        // Explain the miss for the DR page
+        const anyForCarrier = expectedCarrier
+          ? await ScheduleRow.countDocuments({ carrier: expectedCarrier })
+          : await ScheduleRow.estimatedDocumentCount();
+        const anyForRoute = await ScheduleRow.countDocuments({ ...carrierFilter, pol: polAliases, pod: podNorm });
+        if (!anyForCarrier) {
+          matchReason = expectedCarrier
+            ? `${expectedCarrier} schedule is not loaded — upload it on the Vessel Schedule page`
+            : `no vessel schedule is loaded`;
+        } else if (!anyForRoute) {
+          matchReason = `no ${expectedCarrier || ""} sailing on file for ${polNorm}→${podNorm}${scheduleUpdatedAt ? ` (schedule last updated ${new Date(scheduleUpdatedAt).toLocaleDateString("en-US")})` : ""}`;
+        } else {
+          matchReason = `"${vClean}" not found in the ${expectedCarrier || ""} schedule for ${polNorm}→${podNorm} — check the vessel name or re-upload the schedule${scheduleUpdatedAt ? ` (last updated ${new Date(scheduleUpdatedAt).toLocaleDateString("en-US")})` : ""}`;
+        }
+        console.log(`[schedule] NO MATCH — ${matchReason}`);
       }
     }
 
@@ -681,6 +721,8 @@ app.post("/upload", upload.any(), async (req, res) => {
       arrivalDate: match ? (match.arrivalDate || "") : "",
       shippingLine,
       scheduleMatchFound: match ? "YES" : "NO",
+      scheduleMatchReason: matchReason,
+      scheduleUpdatedAt,
     };
 
     await saveShipment(output);
