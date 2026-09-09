@@ -887,7 +887,14 @@ export default function Expenses() {
       const res = await fetch(`${API}/api/expenses/parse-payment-proof`, { method: "POST", body: fd });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
-      setProofRows(data.rows);
+      // Seed the candidate-picker checkboxes from whatever the backend
+      // auto-matched, so opening the picker on a combined match shows those
+      // bills already ticked instead of a blank list.
+      setProofRows(data.rows.map(r => (
+        r.matchedIds?.length && r.candidates?.length
+          ? { ...r, _pickedCandidates: r.matchedIds }
+          : r
+      )));
       setProofDriveFile(data.proofFile || null);
       const alreadyPaidCount = data.rows.filter(r => r.matchType === "already_paid" || r.matchType === "already_paid_mismatch").length;
       const needsReview = data.rows.filter(r => r.matchType === "review" || r.matchType === "none" || r.matchType === "already_paid_mismatch").length;

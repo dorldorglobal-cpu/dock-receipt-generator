@@ -2112,6 +2112,11 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // plain order refs (e.g. "13734 13754 13759") mean this single payment
       // covers more than one order — flag it so the UI can offer a split.
       const bookingNumbers = [...addenda.matchAll(/S3-\s*\d+/gi)].map(m => m[0].replace(/\s+/g, ""));
+      // The carrier/steamship booking number the bank quotes alongside the ref,
+      // e.g. "BK 272951625 REF 13855" or "BK# 24597256". One booking covers a
+      // whole container (all its cars), so it's the key to pulling in siblings.
+      const bkNumMatch = addenda.match(/\bBK(?:ING)?#?\.?:?\s*([A-Z]{0,4}\d{6,15})\b/i);
+      const carrierBooking = bkNumMatch ? bkNumMatch[1] : "";
       // Exclude the digits already claimed by booking numbers so they don't
       // also get picked up as "plain order refs".
       const addendaSansBookings = addenda.replace(/S3-\s*\d+/gi, " ");
@@ -2172,6 +2177,50 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         } else if (alreadyPaid.length) {
           const sumPaid = alreadyPaid.reduce((s, c) => s + c.amount, 0);
           matchType = Math.abs(sumPaid - amount) < 0.01 ? "already_paid" : "already_paid_mismatch";
+        }
+      }
+
+      // Container payment: the bank references one order + one carrier booking,
+      // but the money covers every car in that container. When the single-ref
+      // lookup can't account for the whole amount, find the container load
+      // (by carrier booking number, or by the order ref belonging to a load)
+      // and pull in the unpaid bills of every sibling order.
+      if ((matchType === "none" || matchType === "review") && orderRef && plainRefs.length <= 1) {
+        const ContainerLoad = require("../models/ContainerLoad");
+        const loadOr = [];
+        if (carrierBooking) loadOr.push({ bookingNumber: { $regex: esc(carrierBooking), $options: "i" } });
+        // The order ref itself may be a load member — resolve its Order _id.
+        const selfOrder = await Order.findOne({ refNumber: { $regex: `^${esc(orderRef)}$`, $options: "i" } }).select("_id bookingNumber").lean();
+        if (selfOrder) {
+          loadOr.push({ orderIds: selfOrder._id });
+          if (selfOrder.bookingNumber) loadOr.push({ bookingNumber: { $regex: esc(selfOrder.bookingNumber), $options: "i" } });
+        }
+        const load = loadOr.length ? await ContainerLoad.findOne({ $or: loadOr }).select("orderIds name").lean() : null;
+
+        if (load && (load.orderIds || []).length) {
+          const sibOrders = await Order.find({ _id: { $in: load.orderIds } }).select("refNumber").lean();
+          const sibRefs = sibOrders.map(o => o.refNumber).filter(Boolean);
+          const sibExpenses = await Expense.find({
+            orderRef: { $in: sibRefs.map(r => new RegExp(`^${esc(r)}$`, "i")) },
+          }).select("_id description vendor amount paidAmount orderRef status paidDate receiptFileName").lean();
+
+          const unpaidSib = sibExpenses.filter(c => c.status === "unpaid" || c.status === "partial");
+          const paidSib   = sibExpenses.filter(c => c.status === "paid");
+          const sumUnpaid = unpaidSib.reduce((s, c) => s + (c.status === "partial" ? c.amount - (c.paidAmount || 0) : c.amount), 0);
+          const sumPaid   = paidSib.reduce((s, c) => s + c.amount, 0);
+
+          if (unpaidSib.length) {
+            candidates = unpaidSib;
+            if (Math.abs(sumUnpaid - amount) < 0.01) {
+              matchedIds = unpaidSib.map(c => c._id);
+              matchType  = unpaidSib.length === 1 ? "exact" : "combined";
+            } else {
+              matchType = "review";
+            }
+          } else if (paidSib.length && Math.abs(sumPaid - amount) < 0.01) {
+            alreadyPaid = paidSib;
+            matchType = "already_paid";
+          }
         }
       }
 
