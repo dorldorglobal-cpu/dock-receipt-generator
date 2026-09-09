@@ -262,22 +262,19 @@ export default function Containers() {
   // as paid for its own remaining balance. For when a customer pays for the
   // whole container at once and you don't want to open each invoice by VIN.
   const [paidBusy, setPaidBusy] = useState(false);
-  const markAllPaid = async (load) => {
+  const [payForm, setPayForm]   = useState(null); // { method, date, reference }
+  const todayStr = () => new Date().toISOString().slice(0, 10);
+  const openPayForm = () => {
     const unpaid = billingRows.filter(r => r.invoice && r.invoice.status !== "paid");
     if (!unpaid.length) { flash("Nothing to mark — every invoice in this load is already paid or not generated"); return; }
-    const method = window.prompt(
-      `Mark ${unpaid.length} invoice(s) in "${load.name}" as PAID.\n\n` +
-      `This records a payment for each invoice's remaining balance.\n\n` +
-      `Payment method (e.g. Wire, Zelle, Cash) — optional:`, "Wire");
-    if (method === null) return;
-    const today = new Date().toISOString().slice(0, 10);
-    const dateInput = window.prompt("Payment date (YYYY-MM-DD):", today);
-    if (dateInput === null) return;
-    const date = (dateInput || "").trim() || today;
+    setPayForm({ method: "Wire", date: todayStr(), reference: "" });
+  };
+  const submitPayForm = async () => {
+    const load = billingLoad;
+    const { method, date, reference } = payForm;
     if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || isNaN(new Date(date).getTime())) {
       flash("❌ Enter the date as YYYY-MM-DD"); return;
     }
-    const reference = window.prompt("Reference / confirmation # — optional:", "") || "";
     setPaidBusy(true);
     try {
       const r = await fetch(`${API}/api/container-loads/${load._id}/mark-all-paid`, {
@@ -289,6 +286,7 @@ export default function Containers() {
       let msg = `✅ Marked ${d.paidCount} invoice(s) paid — $${d.totalRecorded.toLocaleString()} recorded`;
       if (d.ordersWithoutInvoice?.length) msg += ` · ⚠️ no invoice yet for ${d.ordersWithoutInvoice.join(", ")}`;
       flash(msg);
+      setPayForm(null);
       const rs = await fetch(`${API}/api/container-loads/${load._id}/billing-summary`);
       const ds = await rs.json();
       setBillingRows(ds.rows || []);
@@ -1435,7 +1433,7 @@ export default function Containers() {
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.85)", zIndex:1000,
           display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
           <div style={{ background:"var(--bg-card)", borderRadius:14, width:"100%", maxWidth:920,
-            maxHeight:"90vh", display:"flex", flexDirection:"column", border:"1px solid var(--border)" }}>
+            maxHeight:"90vh", display:"flex", flexDirection:"column", border:"1px solid var(--border)", position:"relative" }}>
 
             <div style={{ padding:"18px 24px", borderBottom:"1px solid var(--border)",
               display:"flex", alignItems:"center", justifyContent:"space-between" }}>
@@ -1456,7 +1454,7 @@ export default function Containers() {
                   </button>
                 )}
                 {!sendResults && !billingLoading && billingRows.some(r=>r.invoice && r.invoice.status!=="paid") && (
-                  <button onClick={()=>markAllPaid(billingLoad)} disabled={paidBusy}
+                  <button onClick={openPayForm} disabled={paidBusy}
                     title="Record a container-wide payment — marks every unpaid invoice in this load as paid for its remaining balance"
                     style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
                       background:"rgba(22,101,52,0.18)", border:"1px solid rgba(22,101,52,0.5)",
@@ -1464,10 +1462,47 @@ export default function Containers() {
                     {paidBusy ? "Marking…" : "💰 Mark All Paid"}
                   </button>
                 )}
-                <button onClick={()=>{ setBillingLoad(null); setSendResults(null); }}
+                <button onClick={()=>{ setBillingLoad(null); setSendResults(null); setPayForm(null); }}
                   style={{ background:"none", border:"none", fontSize:20, cursor:"pointer", color:"var(--text-muted)" }}>✕</button>
               </div>
             </div>
+
+            {payForm && (
+              <div style={{ position:"absolute", inset:0, background:"rgba(0,0,0,0.6)", zIndex:1100,
+                display:"flex", alignItems:"center", justifyContent:"center", padding:16, borderRadius:14 }}>
+                <div style={{ background:"var(--bg-card)", borderRadius:12, padding:20, width:"100%", maxWidth:380,
+                  border:"1px solid var(--border)" }}>
+                  <h3 style={{ margin:"0 0 4px", fontSize:15 }}>💰 Record Container Payment</h3>
+                  <div style={{ fontSize:12, color:"var(--text-muted)", marginBottom:14 }}>
+                    Marks {billingRows.filter(r=>r.invoice && r.invoice.status!=="paid").length} unpaid invoice(s) in
+                    {" "}"{billingLoad.name}" as paid, each for its remaining balance.
+                  </div>
+                  <label style={{ fontSize:12, fontWeight:600, display:"block", marginBottom:4 }}>Payment method</label>
+                  <input value={payForm.method} onChange={e=>setPayForm(f=>({...f, method:e.target.value}))}
+                    placeholder="Wire, Zelle, Cash…"
+                    style={{ width:"100%", padding:"7px 10px", borderRadius:7, border:"1px solid var(--border)",
+                      background:"var(--bg-input, var(--bg-card))", color:"var(--text)", marginBottom:12, fontSize:13 }} />
+                  <label style={{ fontSize:12, fontWeight:600, display:"block", marginBottom:4 }}>Payment date</label>
+                  <input type="date" value={payForm.date} onChange={e=>setPayForm(f=>({...f, date:e.target.value}))}
+                    style={{ width:"100%", padding:"7px 10px", borderRadius:7, border:"1px solid var(--border)",
+                      background:"var(--bg-input, var(--bg-card))", color:"var(--text)", marginBottom:12, fontSize:13 }} />
+                  <label style={{ fontSize:12, fontWeight:600, display:"block", marginBottom:4 }}>Reference / confirmation # <span style={{ color:"var(--text-muted)", fontWeight:400 }}>(optional)</span></label>
+                  <input value={payForm.reference} onChange={e=>setPayForm(f=>({...f, reference:e.target.value}))}
+                    style={{ width:"100%", padding:"7px 10px", borderRadius:7, border:"1px solid var(--border)",
+                      background:"var(--bg-input, var(--bg-card))", color:"var(--text)", marginBottom:18, fontSize:13 }} />
+                  <div style={{ display:"flex", gap:8, justifyContent:"flex-end" }}>
+                    <button onClick={()=>setPayForm(null)} disabled={paidBusy}
+                      style={{ padding:"7px 14px", fontSize:13, borderRadius:7, border:"1px solid var(--border)",
+                        background:"none", color:"var(--text-muted)", cursor:"pointer" }}>Cancel</button>
+                    <button onClick={submitPayForm} disabled={paidBusy}
+                      style={{ padding:"7px 14px", fontSize:13, fontWeight:600, borderRadius:7, border:"none",
+                        background:"var(--success, #15803d)", color:"#fff", cursor:paidBusy?"default":"pointer", opacity:paidBusy?0.6:1 }}>
+                      {paidBusy ? "Marking…" : "Mark All Paid"}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
 
             <div style={{ overflowY:"auto", flex:1, padding:"16px 24px" }}>
               {billingLoading ? (
