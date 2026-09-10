@@ -209,6 +209,14 @@ export default function CreateOrder() {
     return () => clearTimeout(timer);
   }, [form.customerName]);
 
+  // Dor L'Dor Global Ghana as the customer ⇒ default the office to Ghana
+  useEffect(() => {
+    const norm = (form.customerName || "").toUpperCase().replace(/[^A-Z]/g, "");
+    if ((norm === "DORLDORGLOBALGHANA" || norm === "DORLDORGHANA") && form.source !== "GHANA OFFICE") {
+      update("source", "GHANA OFFICE");
+    }
+  }, [form.customerName]); // eslint-disable-line
+
   const lookupSchedule = async (vessel, pol, pod) => {
     if (!vessel || !pol || !pod) return;
     setScheduleLooking(true);

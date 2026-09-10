@@ -7,6 +7,7 @@ const multer = require("multer");
 const { parseAES, parseDispatch, parseBuyerReceipt } = require("../utils/parseOrderDocs");
 const AddressBook = require("../models/AddressBook");
 const Invoice = require("../models/Invoice");
+const { isGhanaCustomer } = require("../utils/ghana");
 const path = require("path");
 const PDFDocument = require("pdfkit");
 const fs = require("fs");
@@ -335,8 +336,13 @@ router.post("/", async (req, res) => {
       console.warn("Drive folder creation failed (non-fatal):", driveErr.message);
     }
 
+    // Dor L'Dor Global Ghana as the customer ⇒ always the Ghana office
+    const sourceOverride = isGhanaCustomer(req.body.customerName)
+      ? { source: "GHANA OFFICE" } : {};
+
     const order = await Order.create({
       ...req.body,
+      ...sourceOverride,
       vin: vinInput || req.body.vin,
       refNumber,
       driveFolderId:   driveFolder.id   || null,
@@ -591,6 +597,9 @@ router.put("/:id", async (req, res) => {
 
     Object.assign(order, req.body);
     if (req.body.charges) order.markModified("charges");
+
+    // Dor L'Dor Global Ghana as the customer ⇒ always the Ghana office
+    if (isGhanaCustomer(order.customerName)) order.source = "GHANA OFFICE";
 
     if (req.body.status && req.body.status !== oldStatus) {
       if (order.driveFolderId) {
