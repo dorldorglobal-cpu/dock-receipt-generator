@@ -6,6 +6,7 @@ const Order          = require("../models/Order");
 const CustomerCredit = require("../models/CustomerCredit");
 const PDFDocument = require("pdfkit");
 const { uploadBufferToDrive, deleteDriveFile } = require("../googleDrive");
+const { b64lines } = require("../utils/mime");
 
 // ── Auto-generate next invoice number ─────────────────────────────────────────
 async function nextInvoiceNumber() {
@@ -1069,7 +1070,7 @@ router.post("/:id/send", async (req, res) => {
         `Content-Transfer-Encoding: base64`,
         `Content-Disposition: attachment; filename="${att.filename}"`,
         ``,
-        att.content,
+        b64lines(att.content),
       );
     }
     mimeLines.push(`--${boundary}--`);

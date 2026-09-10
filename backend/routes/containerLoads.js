@@ -8,6 +8,7 @@ const Order         = require("../models/Order");
 const AddressBook   = require("../models/AddressBook");
 const { getGmailAccessToken } = require("../utils/gmail");
 const { WAREHOUSES, findWarehouse } = require("../utils/warehouses");
+const { b64lines } = require("../utils/mime");
 const {
   drive,
   createDriveFolder,
@@ -471,7 +472,7 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
         `Content-Transfer-Encoding: base64`,
         `Content-Disposition: attachment; filename="${att.filename}"`,
         ``,
-        att.content,
+        b64lines(att.content),
         ``
       );
     }
@@ -577,7 +578,7 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
       `Content-Type: application/pdf; name="${filename}"`,
       `Content-Transfer-Encoding: base64`,
       `Content-Disposition: attachment; filename="${filename}"`,
-      ``, b64, ``, `--${boundary}--`,
+      ``, b64lines(b64), ``, `--${boundary}--`,
     ];
 
     const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
@@ -685,7 +686,7 @@ router.post("/:id/email-draft-bl", express.json(), async (req, res) => {
       `Content-Transfer-Encoding: base64`,
       `Content-Disposition: attachment; filename="${draftFile.originalName || "Draft-BL.pdf"}"`,
       ``,
-      draftBuf.toString("base64"),
+      b64lines(draftBuf),
       ``,
       `--${boundary}--`,
     ];

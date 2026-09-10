@@ -988,6 +988,7 @@ mailer.verify(err => {
 
 // ── Gmail REST API helper ─────────────────────────────────────────────────────
 const { getGmailAccessToken } = require("./utils/gmail");
+const { b64lines } = require("./utils/mime");
 
 // GET /api/google-access-token — returns a short-lived access token for client-side API calls
 app.get("/api/google-access-token", async (req, res) => {
@@ -1030,7 +1031,7 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
         `Content-Transfer-Encoding: base64`,
         `Content-Disposition: attachment; filename="${pdfName || "document.pdf"}"`,
         ``,
-        pdfBase64,
+        b64lines(pdfBase64),
         `--${boundary}--`,
       ];
     } else {

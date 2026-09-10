@@ -24,6 +24,7 @@
 const Invoice = require("../models/Invoice");
 const Order   = require("../models/Order");
 const { getGmailAccessToken } = require("../utils/gmail");
+const { b64lines } = require("../utils/mime");
 
 // ── Excluded customers (handled separately — see file header) ────────────────
 function isExcludedCustomer(name) {
@@ -131,7 +132,7 @@ async function sendReminderEmail(inv, stage, daysSince, toEmail) {
         `Content-Transfer-Encoding: base64`,
         `Content-Disposition: attachment; filename="Invoice-${inv.invoiceNumber}.pdf"`,
         ``,
-        pdfBase64,
+        b64lines(pdfBase64),
         `--${boundary}--`,
       ]
     : [
