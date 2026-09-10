@@ -112,6 +112,7 @@ router.post("/:id/approve", express.json(), async (req, res) => {
       color:         data.color || "",
       vin:           data.vin || "",
       lotNumber:     data.lot || "",
+      buyerNumber:   data.buyerNumber || "",
       pin:           data.pin || "",
       pickupLocation: pickupFull,
       pickupAddress: data.pickupAddress || "",

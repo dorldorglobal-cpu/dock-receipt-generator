@@ -199,6 +199,7 @@ export default function EmailOrders() {
                   </div>
                   <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "4px 20px", fontSize: 12, color: "var(--text-secondary)" }}>
                     <span>🔖 <strong>Lot:</strong> {item.lot || "—"}</span>
+                    <span>🪪 <strong>Buyer #:</strong> {item.buyerNumber || "—"}</span>
                     <span>🚗 <strong>VIN:</strong> <span style={{ fontFamily: "monospace", letterSpacing: 1 }}>{item.vin || "—"}</span></span>
                     <span>📌 <strong>PIN:</strong> {item.pin || "—"}</span>
                     <span>👤 <strong>Customer:</strong> {item.customerName || "—"}</span>
@@ -280,6 +281,7 @@ export default function EmailOrders() {
                 ["color", "Color"],
                 ["vin", "VIN"],
                 ["lot", "Lot #"],
+                ["buyerNumber", "Buyer / Member #"],
                 ["pin", "Gate Pass PIN"],
                 ["pickupAddress", "Pickup Address"],
                 ["pickupCity", "Pickup City"],

@@ -12,6 +12,7 @@ const path          = require("path");
 const Order         = require("../models/Order");
 const EmailOrder    = require("../models/EmailOrder");
 const { parseBuyerReceipt } = require("../utils/parseOrderDocs");
+const { decodeVin } = require("../utils/vinDecode");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GMAIL_CLIENT_ID,
@@ -156,6 +157,12 @@ async function pollCopart() {
         const resolvedCustomer = extracted.customerName || subjCustomerName || "";
         const resolvedRequestType = subjRequestType || "RORO";
 
+        // Trust the VIN decoder for year/make/model over the mangled receipt text
+        const decoded = await decodeVin(extracted.vin);
+        const year  = decoded?.year  || extracted.year  || "";
+        const make  = decoded?.make  || extracted.make  || "";
+        const model = decoded?.model || extracted.model || "";
+
         // Skip if a real order already exists with this VIN
         const existing = await Order.findOne({ vin: extracted.vin });
         if (existing) {
@@ -185,9 +192,9 @@ async function pollCopart() {
           requestType:   resolvedRequestType,
           lot,
           vin:           extracted.vin           || "",
-          year:          extracted.year          || "",
-          make:          extracted.make          || "",
-          model:         extracted.model         || "",
+          year,
+          make,
+          model,
           color:         extracted.color         || "",
           pickupAddress: extracted.pickupAddress || "",
           pickupCity:    extracted.pickupCity    || "",
@@ -200,7 +207,7 @@ async function pollCopart() {
           bodyText,
         });
         createdForThisMsg++;
-        console.log(`[Copart Poller] New pickup: LOT ${lot} — ${extracted.year} ${extracted.make} ${extracted.model} (${resolvedRequestType}) — ${resolvedCustomer}`);
+        console.log(`[Copart Poller] New pickup: LOT ${lot} — ${year} ${make} ${model} (${resolvedRequestType}) — ${resolvedCustomer}`);
       }
 
       // Nothing usable in any attachment — leave a marker so we don't rescan
