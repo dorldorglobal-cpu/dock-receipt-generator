@@ -428,6 +428,11 @@ export default function OrderDetails() {
   const [tartanBody,           setTartanBody]           = useState("");
   const [tartanSending,        setTartanSending]        = useState(false);
 
+  // Warehouse delivery-appointment email (Container orders)
+  const [warehouses,          setWarehouses]           = useState([]);
+  const [whEmail,             setWhEmail]              = useState(null); // { to, cc, subject, carrier, date }
+  const [whSending,           setWhSending]            = useState(false);
+
   useEffect(() => {
     fetchOrder();
     fetchVoyages();
@@ -436,6 +441,9 @@ export default function OrderDetails() {
     // Load port/terminal entries from address book on mount so DR generation always has them
     fetch(`${API}/api/address-book?type=port`)
       .then(r => r.json()).then(d => setDrPortEntries(Array.isArray(d) ? d : []))
+      .catch(() => {});
+    fetch(`${API}/api/container-loads/config`)
+      .then(r => r.json()).then(d => setWarehouses(d?.warehouses || []))
       .catch(() => {});
     // Load Google contacts for email autocomplete (fetched client-side to avoid server network restrictions)
     fetch(`${API}/api/google-access-token`)
@@ -1552,6 +1560,90 @@ export default function OrderDetails() {
     }
   };
 
+  // ── Warehouse delivery-appointment email ──────────────────────────────────
+  // Mirrors backend/utils/warehouses.js aliases so POL values like "NEW YORK"
+  // or "HOUSTON" resolve to the right loading warehouse.
+  const WH_ALIASES = {
+    "NJ":"EZ CARGO","NEW YORK":"EZ CARGO","NEW JERSEY":"EZ CARGO","EZCARGO":"EZ CARGO","OLD BRIDGE":"EZ CARGO",
+    "SAVANNAH":"SAVANNAH AUTO EXPORT","GA":"SAVANNAH AUTO EXPORT","POOLER":"SAVANNAH AUTO EXPORT","BRUNSWICK":"SAVANNAH AUTO EXPORT",
+    "HOUSTON":"ISHIP","TX":"ISHIP","FREEPORT":"ISHIP",
+    "CA":"CEDARS EXPRESS","COMPTON":"CEDARS EXPRESS","LOS ANGELES":"CEDARS EXPRESS","LONG BEACH":"CEDARS EXPRESS","CEDARS":"CEDARS EXPRESS",
+  };
+  const findWarehouse = (o) => {
+    const hay = `${o.pol || ""} ${o.deliveryName || ""} ${o.deliveryLocation || ""}`.toUpperCase();
+    const direct = warehouses.find(w => hay.includes(w.key) || hay.includes(w.name.toUpperCase()));
+    if (direct) return direct;
+    for (const [tok, key] of Object.entries(WH_ALIASES)) {
+      if (new RegExp(`\\b${tok}\\b`).test(hay)) {
+        const w = warehouses.find(x => x.key === key);
+        if (w) return w;
+      }
+    }
+    return null;
+  };
+  const nextMonday = () => {
+    const d = new Date();
+    d.setDate(d.getDate() + ((8 - d.getDay()) % 7 || 7));
+    return d.toISOString().slice(0, 10);
+  };
+  const whDateLabel = (iso) => {
+    if (!iso) return "MONDAY";
+    const d = new Date(iso + "T00:00:00");
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }).toUpperCase();
+  };
+  const whBody = (carrier, iso) =>
+    `${(carrier || "[CARRIER]").toUpperCase()} WOULD LIKE TO DELIVER THIS UNIT ON ${whDateLabel(iso)}. PLEASE MAKE AN APPOINTMENT\n` +
+    `-- \nRegards,\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`;
+
+  const openWarehouseEmail = () => {
+    const wh = findWarehouse(order);
+    // best-effort carrier guess from the timeline ("Dispatched to …")
+    const dispEntry = [...(order.timeline || [])].reverse()
+      .find(t => /dispatch/i.test(t.action || "") || /dispatch/i.test(t.details || ""));
+    const carrierGuess = dispEntry?.details?.match(/to\s+([A-Z0-9 .&'-]{3,40})/i)?.[1]?.trim() || "";
+    const date = nextMonday();
+    setWhEmail({
+      to:      wh?.loaderTo || "",
+      cc:      wh?.loaderCc || "",
+      subject: `${[order.year, order.make, order.model].filter(Boolean).join(" ")} ${order.vin || ""}`.trim(),
+      carrier: carrierGuess,
+      date,
+      body:    whBody(carrierGuess, date),
+      bodyEdited: false,
+      warehouseName: wh?.name || "",
+    });
+  };
+  const setWhField = (patch) => setWhEmail(m => {
+    const next = { ...m, ...patch };
+    // keep the body in sync with carrier/date unless the user hand-edited it
+    if (("carrier" in patch || "date" in patch) && !next.bodyEdited) {
+      next.body = whBody(next.carrier, next.date);
+    }
+    return next;
+  });
+  const sendWarehouseEmail = async () => {
+    if (!whEmail?.to) { setMessage("❌ No warehouse email — set the order's Port of Loading first"); return; }
+    setWhSending(true);
+    try {
+      const res = await fetch(`${API}/api/send-email`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ to: whEmail.to, cc: whEmail.cc, subject: whEmail.subject, body: whEmail.body }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
+      await fetch(`${API}/api/orders/${id}/timeline`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "Warehouse Delivery Email Sent", details: `${whEmail.subject} → ${whEmail.to}` }),
+      });
+      fetchOrder();
+      setWhEmail(null);
+      setMessage("✅ Warehouse delivery email sent");
+    } catch (err) {
+      setMessage("❌ Warehouse email failed: " + err.message);
+    } finally {
+      setWhSending(false);
+    }
+  };
+
   const sendSallaumNotify = async () => {
     setSallaumSending(true);
     try {
@@ -2030,6 +2122,11 @@ export default function OrderDetails() {
         <button onClick={openTextOfficeModal} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#7c3aed", color:"white", cursor:"pointer", fontSize:"13px" }}>
           📱 Text Office
         </button>
+        {order.requestType === "Container" && (
+          <button onClick={openWarehouseEmail} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#c2410c", color:"white", cursor:"pointer", fontSize:"13px" }}>
+            🏭 Email Warehouse
+          </button>
+        )}
       </div>
 
       {/* ── Invoice Status Bar ───────────────────────── */}
@@ -5111,6 +5208,51 @@ export default function OrderDetails() {
               <button onClick={() => setDrSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
               <button onClick={sendDrEmail} disabled={drSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {drSending ? "Sending…" : "Send DR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Warehouse Delivery Email Modal ── */}
+      {whEmail && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #c2410c", borderRadius:12, padding:28, width:520, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 4px", color:"#fb923c" }}>🏭 Email Warehouse — Delivery Appointment</h3>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
+              {whEmail.warehouseName ? <>Warehouse: <strong style={{color:"var(--text-primary)"}}>{whEmail.warehouseName}</strong></>
+                : <span style={{color:"var(--warning)"}}>⚠ No warehouse matched — set the order's Port of Loading, or fill TO manually.</span>}
+            </p>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:12 }}>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>TO
+                <input value={whEmail.to} onChange={e=>setWhField({ to:e.target.value })}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>CC
+                <input value={whEmail.cc} onChange={e=>setWhField({ cc:e.target.value })}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>TRUCKER / CARRIER
+                <input value={whEmail.carrier} onChange={e=>setWhField({ carrier:e.target.value })} placeholder="e.g. BIBI CARRIERS"
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>DELIVERY DATE
+                <input type="date" value={whEmail.date} onChange={e=>setWhField({ date:e.target.value })}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+            </div>
+            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>SUBJECT
+              <input value={whEmail.subject} onChange={e=>setWhField({ subject:e.target.value })}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+            </label>
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>MESSAGE
+              <textarea value={whEmail.body} onChange={e=>setWhField({ body:e.target.value, bodyEdited:true })} rows={7}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box", fontFamily:"inherit" }} />
+            </label>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setWhEmail(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
+              <button onClick={sendWarehouseEmail} disabled={whSending || !whEmail.to} style={{ padding:"8px 20px", background:"#c2410c", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600, opacity:(whSending||!whEmail.to)?0.6:1 }}>
+                {whSending ? "Sending…" : "Send to Warehouse"}
               </button>
             </div>
           </div>
