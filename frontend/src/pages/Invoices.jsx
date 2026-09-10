@@ -460,10 +460,28 @@ export default function Invoices() {
           <div style={{ fontSize:11, fontWeight:700, color:"#f87171", textTransform:"uppercase", letterSpacing:1, marginBottom:10 }}>Overdue Invoices</div>
           {overdue.map(inv => {
             const rowState = rowReminders[inv._id] || {};
+            const daysOver = inv.dueDate ? Math.floor((Date.now() - new Date(inv.dueDate)) / 86400000) : null;
             return (
             <div key={inv._id} style={{ display:"flex", alignItems:"center", gap:12, padding:"8px 0", borderBottom:"1px solid rgba(255,255,255,0.05)", fontSize:13 }}>
               <span style={{ fontFamily:"monospace", color:"var(--accent)", fontWeight:700, minWidth:120 }}>{inv.invoiceNumber}</span>
-              <span style={{ flex:1, color:"var(--text-primary)" }}>{inv.customerName || "—"}</span>
+              {inv.orderId ? (
+                <button onClick={() => navigate(`/orders/${inv.orderId}`)}
+                  title="Open order"
+                  style={{ fontFamily:"monospace", fontWeight:700, color:"#60a5fa", background:"none", border:"none",
+                    cursor:"pointer", minWidth:64, textAlign:"left", padding:0 }}>
+                  #{inv.orderRef || "—"}
+                </button>
+              ) : (
+                <span style={{ fontFamily:"monospace", color:"var(--text-muted)", minWidth:64 }}>#{inv.orderRef || "—"}</span>
+              )}
+              <span style={{ flex:1, minWidth:0, display:"flex", flexDirection:"column", lineHeight:1.35 }}>
+                <span style={{ color:"var(--text-primary)" }}>{inv.customerName || "—"}</span>
+                {(inv.vehicle || inv.vin) && (
+                  <span style={{ fontSize:11, color:"var(--text-muted)" }}>
+                    {inv.vehicle || ""}{inv.vehicle && inv.vin ? " · " : ""}{inv.vin ? <span style={{ fontFamily:"monospace" }}>{inv.vin}</span> : ""}
+                  </span>
+                )}
+              </span>
               <span style={{ minWidth:150, display:"flex", alignItems:"center", gap:8, justifyContent:"flex-end" }}>
                 {rowState.msg && (
                   <span style={{ fontSize:11, color: rowState.msg.startsWith("❌") ? "#f87171" : rowState.msg.startsWith("✅") ? "#34d399" : "var(--text-muted)" }}>
@@ -478,8 +496,13 @@ export default function Invoices() {
                   {rowState.loading ? "Sending…" : "📧 Remind"}
                 </button>
               </span>
-              <span style={{ color:"#f87171", fontSize:11 }}>Due {fD(inv.dueDate)}</span>
-              <span style={{ fontFamily:"monospace", fontWeight:700, color:"#f87171" }}>{f$(inv.total)}</span>
+              <span style={{ color:"#f87171", fontSize:11, textAlign:"right", minWidth:130 }}>
+                Due {fD(inv.dueDate)}
+                {daysOver != null && daysOver > 0 && (
+                  <span style={{ display:"block", fontSize:10, opacity:0.85 }}>{daysOver} day{daysOver !== 1 ? "s" : ""} overdue</span>
+                )}
+              </span>
+              <span style={{ fontFamily:"monospace", fontWeight:700, color:"#f87171", minWidth:80, textAlign:"right" }}>{f$(inv.total)}</span>
             </div>
             );
           })}

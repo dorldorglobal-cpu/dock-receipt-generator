@@ -250,7 +250,7 @@ router.get("/overdue", async (req, res) => {
     const overdue = await Invoice.find({
       status:  { $ne: "paid" },
       dueDate: { $lt: today },
-    }).select("invoiceNumber customerName total dueDate status orderId orderRef").sort({ dueDate: 1 }).lean();
+    }).select("invoiceNumber customerName total dueDate status orderId orderRef vehicle vin sentAt").sort({ dueDate: 1 }).lean();
     res.json(overdue);
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
