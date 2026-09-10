@@ -151,6 +151,7 @@ router.post("/:id/approve", express.json(), async (req, res) => {
       pol,
       pod,
       shippingLine,
+      titleStatus:   data.titleStatus || "Title",
       status:        "New Order",
       source:        "Copart Email",
       notes:         data.notes || "",
