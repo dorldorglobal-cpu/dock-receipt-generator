@@ -44,7 +44,21 @@ function F({ label, value, onChange, placeholder, type="text", full }) {
 // Defined at module level (not inside the component) so React never recreates it
 // as a new component type on re-render — that was causing inputs to lose focus
 // after every keystroke.
-function ConsigneeSection({ vals, set }) {
+function ConsigneeSection({ vals, set, setAll }) {
+  const copyConsigneeToNotify = () => setAll(f => ({
+    ...f,
+    notifyName:    f.consigneeName,
+    notifyAddress: f.consigneeAddress,
+    notifyPhone:   f.consigneePhone,
+    notifyEmail:   f.consigneeEmail,
+    notifyTin:     f.consigneeTin,
+  }));
+  const notifyMatchesConsignee =
+    (vals.notifyName || "")    === (vals.consigneeName || "") &&
+    (vals.notifyAddress || "") === (vals.consigneeAddress || "") &&
+    (vals.notifyPhone || "")   === (vals.consigneePhone || "") &&
+    (vals.notifyEmail || "")   === (vals.consigneeEmail || "") &&
+    (vals.notifyTin || "")     === (vals.consigneeTin || "");
   return (
     <>
       <div style={sec()}>Consignee Info</div>
@@ -55,7 +69,17 @@ function ConsigneeSection({ vals, set }) {
         <F label="EMAIL" value={vals.consigneeEmail} onChange={set("consigneeEmail")} type="email" />
         <F label="TIN #" value={vals.consigneeTin} onChange={set("consigneeTin")} full />
       </div>
-      <div style={sec()}>Notify Party Info</div>
+      <div style={{ ...sec(), display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <span>Notify Party Info</span>
+        <button type="button" onClick={copyConsigneeToNotify} disabled={notifyMatchesConsignee}
+          style={{ fontSize:10, fontWeight:700, letterSpacing:"0.04em", textTransform:"none",
+            padding:"4px 10px", borderRadius:6, border:"1px solid var(--border)",
+            background: notifyMatchesConsignee ? "var(--bg-panel)" : "rgba(37,99,235,0.15)",
+            color: notifyMatchesConsignee ? "var(--text-muted)" : "#60a5fa",
+            cursor: notifyMatchesConsignee ? "default" : "pointer" }}>
+          {notifyMatchesConsignee ? "✓ Same as Consignee" : "⧉ Same as Consignee"}
+        </button>
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
         <F label="NAME" value={vals.notifyName} onChange={set("notifyName")} full />
         <F label="ADDRESS / CITY / COUNTRY" value={vals.notifyAddress} onChange={set("notifyAddress")} placeholder="Street, City, Country" full />
@@ -845,7 +869,7 @@ export default function Containers() {
             </div>
 
             {/* Consignee + Notify */}
-            <ConsigneeSection vals={form} set={setF} />
+            <ConsigneeSection vals={form} set={setF} setAll={setForm} />
 
             {/* Order picker */}
             <div style={sec("#fbbf24")}>
@@ -1024,7 +1048,7 @@ export default function Containers() {
 
               {/* ─ Consignee tab ─ */}
               {editTab === "consignee" && (
-                <ConsigneeSection vals={editForm} set={setEF} />
+                <ConsigneeSection vals={editForm} set={setEF} setAll={setEditForm} />
               )}
 
               {/* ─ Orders tab ─ */}
