@@ -1839,7 +1839,18 @@ export default function OrderDetails() {
             </div>
           )}
           <h1 style={{ fontSize: 32, fontWeight: 800 }}>Order #{order.refNumber}</h1>
-          <p style={{ color: "var(--text-primary)", fontWeight: 500 }}>{order.year} {order.make} {order.model} — {order.vin}</p>
+          <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
+            <p style={{ color: "var(--text-primary)", fontWeight: 500, margin:0 }}>{order.year} {order.make} {order.model} — {order.vin}</p>
+            {order.dispatchMethod === "Self Dispatch" && (
+              <span style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                background:"#d97706", color:"#fff", fontWeight:900,
+                fontSize:15, letterSpacing:"0.08em", textTransform:"uppercase",
+                padding:"7px 16px", borderRadius:8, border:"2px solid #b45309",
+                whiteSpace:"nowrap",
+              }}>🚛 Self Dispatch</span>
+            )}
+          </div>
           {order.voyageFolderName && (
             <div style={{ marginTop: "8px", display: "flex", alignItems: "center", gap: 10 }}>
               <p style={{ margin: 0 }}>
