@@ -13,6 +13,7 @@ const Order         = require("../models/Order");
 const EmailOrder    = require("../models/EmailOrder");
 const { parseBuyerReceipt } = require("../utils/parseOrderDocs");
 const { decodeVin } = require("../utils/vinDecode");
+const { podToShippingLine } = require("../utils/warehouses");
 
 const oauth2Client = new google.auth.OAuth2(
   process.env.GMAIL_CLIENT_ID,
@@ -28,23 +29,51 @@ function parsePIN(body) {
   return m ? m[1] : "";
 }
 
+// The user's subject convention:
+//   "PICK UP FOR <RORO|CONTAINER> <year make model> #<VIN> <CUSTOMER NAME> <WAREHOUSE> <POD>"
+// e.g. "... #7FARW5H39HE008018 DENIS ANABA EZ CARGO TEMA"
+// We pull request type, POD, warehouse and shipping line out of that tail and
+// treat whatever text is left as the customer name.
+const POD_RX      = /\b(TEMA|LAGOS|APAPA|LOME|LOMÉ|COTONOU|DAKAR|ABIDJAN|DURBAN)\b/i;
+const LINE_RX     = /\b(SALLAUM|ACL|GRIMALDI)\b/i;
+const WAREHOUSE_RX = /\b(EZ\s*CARGO|EZCARGO|SAVANNAH(?:\s+AUTO(?:\s+EXPORT)?)?|I-?SHIP|CEDARS(?:\s+EXPRESS)?)\b/i;
+const WH_CANON = s => {
+  const u = s.toUpperCase().replace(/\s+/g, " ").trim();
+  if (/EZ\s*CARGO|EZCARGO/.test(u)) return "EZ CARGO";
+  if (/SAVANNAH/.test(u))           return "SAVANNAH AUTO EXPORT";
+  if (/I-?SHIP/.test(u))            return "ISHIP";
+  if (/CEDARS/.test(u))             return "CEDARS EXPRESS";
+  return u;
+};
+
 function parseSubject(headers = []) {
   const subj = (headers.find(h => h.name.toLowerCase() === "subject") || {}).value || "";
-  // e.g. "PICK UP FOR CONTAINER 2017 HONDA CR-V #7FARW5H39HE008018 DENIS ANABA"
-  // or   "Re: PICK UP FOR CONTAINER ..."
-  const clean = subj.replace(/^Re:\s*/i, "").trim();
+  const clean = subj.replace(/^(Re|Fwd):\s*/i, "").trim();
 
-  // Request type
   let requestType = "";
   if (/\bCONTAINER\b/i.test(clean)) requestType = "Container";
   else if (/\bRORO\b/i.test(clean))  requestType = "RORO";
 
-  // Customer name: words after the VIN pattern (#VINXXX or just the 17-char VIN)
+  const pod  = (clean.match(POD_RX)  || [])[1] ? (clean.match(POD_RX)[1]).toUpperCase().replace("LOMÉ", "LOME") : "";
+  let shippingLine = (clean.match(LINE_RX) || [])[1] ? clean.match(LINE_RX)[1].toUpperCase() : "";
+  if (shippingLine === "GRIMALDI") shippingLine = "ACL";
+  const whMatch = clean.match(WAREHOUSE_RX);
+  const deliveryName = whMatch ? WH_CANON(whMatch[1]) : "";
+
+  // Customer name: the tail after the VIN, minus the tokens we just consumed
   let customerName = "";
   const afterVin = clean.match(/[#]?[A-HJ-NPR-Z0-9]{17}\s+(.+)/i);
-  if (afterVin) customerName = afterVin[1].trim();
+  if (afterVin) {
+    customerName = afterVin[1]
+      .replace(WAREHOUSE_RX, " ")
+      .replace(POD_RX, " ")
+      .replace(LINE_RX, " ")
+      .replace(/\b(RORO|CONTAINER|PICK ?UP|FOR)\b/gi, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }
 
-  return { requestType, customerName };
+  return { requestType, customerName, pod, shippingLine, deliveryName };
 }
 
 function b64(data) {
@@ -99,7 +128,8 @@ async function pollCopart() {
 
       const bodyText = getBody(payload.parts || [payload]);
       const pin = parsePIN(bodyText) || parsePIN((headers.find(h => h.name.toLowerCase() === "subject") || {}).value || "");
-      const { requestType: subjRequestType, customerName: subjCustomerName } = parseSubject(headers);
+      const { requestType: subjRequestType, customerName: subjCustomerName,
+              pod: subjPod, shippingLine: subjLine, deliveryName: subjWarehouse } = parseSubject(headers);
 
       // Collect EVERY PDF attachment — a customer often forwards several buyer
       // receipts in one email, and each is its own order.
@@ -156,6 +186,7 @@ async function pollCopart() {
         const lot = extracted.lotNumber || "";
         const resolvedCustomer = extracted.customerName || subjCustomerName || "";
         const resolvedRequestType = subjRequestType || "RORO";
+        const resolvedLine = subjLine || podToShippingLine(subjPod) || "";
 
         // Trust the VIN decoder for year/make/model over the mangled receipt text
         const decoded = await decodeVin(extracted.vin);
@@ -179,6 +210,10 @@ async function pollCopart() {
           if (!existingPending.pin && resolvedPin) { existingPending.pin = resolvedPin; updated = true; }
           if (!existingPending.customerName && resolvedCustomer) { existingPending.customerName = resolvedCustomer; updated = true; }
           if (!existingPending.requestType && resolvedRequestType) { existingPending.requestType = resolvedRequestType; updated = true; }
+          if (!existingPending.pod && subjPod) { existingPending.pod = subjPod; updated = true; }
+          if (!existingPending.shippingLine && resolvedLine) { existingPending.shippingLine = resolvedLine; updated = true; }
+          if (!existingPending.deliveryName && subjWarehouse) { existingPending.deliveryName = subjWarehouse; updated = true; }
+          if (!existingPending.buyerNumber && extracted.buyerNumber) { existingPending.buyerNumber = extracted.buyerNumber; updated = true; }
           if (updated) await existingPending.save();
           console.log(`[Copart Poller] Merged duplicate receipt for VIN ${extracted.vin} into existing pending`);
           createdForThisMsg++;
@@ -202,6 +237,9 @@ async function pollCopart() {
           pickupZip:     extracted.pickupZip     || "",
           pin:           resolvedPin,
           buyerNumber:   extracted.buyerNumber   || "",
+          pod:           subjPod,
+          shippingLine:  resolvedLine,
+          deliveryName:  subjWarehouse,
           pdfBuffer:     pdfData,
           pdfFilename,
           bodyText,
@@ -246,4 +284,4 @@ function startPoller() {
   setInterval(pollCopart, 5 * 60 * 1000);
 }
 
-module.exports = { startPoller, pollCopart };
+module.exports = { startPoller, pollCopart, parseSubject };

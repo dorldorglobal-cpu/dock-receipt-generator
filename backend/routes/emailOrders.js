@@ -60,6 +60,7 @@ router.post("/:id/approve", express.json(), async (req, res) => {
       { name: "WILMINGTON",   city: "Wilmington",   state: "NC", zip: "28401", lat: 34.23, lng: -77.95 },
       { name: "BRUNSWICK",    city: "Brunswick",    state: "GA", zip: "31525", lat: 31.14, lng: -81.49 },
     ];
+    const { findWarehouse, podToShippingLine } = require("../utils/warehouses");
     const WH_CENTROIDS = {
       AL:[32.80,-86.79],AZ:[34.05,-111.09],AR:[34.97,-92.37],CA:[36.78,-119.42],
       CO:[39.06,-105.31],CT:[41.60,-72.70],DE:[38.99,-75.51],FL:[27.99,-81.76],
@@ -85,19 +86,41 @@ router.post("/:id/approve", express.json(), async (req, res) => {
 
     const reqType = data.requestType || "RORO";
     const pickupState = (data.pickupState || "").toUpperCase().trim();
+    const pod = (data.pod || "").toUpperCase().trim();
+    const shippingLine = data.shippingLine || podToShippingLine(pod) || "";
+
     let deliveryCity = data.deliveryCity || "";
     let deliveryState = data.deliveryState || "";
     let deliveryZip = data.deliveryZip || "";
     let deliveryName = data.deliveryName || "";
-    if (!deliveryCity && pickupState) {
-      const dest = reqType === "Container"
-        ? nearest(WH_LIST, pickupState)
-        : nearest(PORT_LIST, pickupState);
+    let deliveryAddress = data.deliveryAddress || "";
+    let pol = data.pol || "";
+
+    // POL per warehouse (WH_LIST above has address/zip but no POL)
+    const WH_POL = { "EZ CARGO": "NEW YORK", "SAVANNAH AUTO EXPORT": "SAVANNAH", "ISHIP": "HOUSTON", "CEDARS EXPRESS": "LONG BEACH" };
+
+    if (reqType === "Container") {
+      // Warehouse: from the subject if named, else nearest to pickup
+      const named = data.deliveryName ? findWarehouse(data.deliveryName) : null;
+      const nearWh = pickupState ? nearest(WH_LIST, pickupState) : null;
+      const whName = named?.name || nearWh?.name || "";
+      const wh = WH_LIST.find(w => w.name === whName);
+      if (wh) {
+        deliveryName    = wh.name;
+        deliveryAddress = deliveryAddress || wh.address || "";
+        deliveryCity    = deliveryCity  || wh.city  || "";
+        deliveryState   = deliveryState || wh.state || "";
+        deliveryZip     = deliveryZip   || wh.zip   || "";
+        pol = pol || WH_POL[wh.name] || wh.name;
+      }
+    } else if (!deliveryCity && pickupState) {
+      const dest = nearest(PORT_LIST, pickupState);
       if (dest) {
         deliveryCity  = dest.city;
         deliveryState = dest.state;
         deliveryZip   = dest.zip;
         deliveryName  = dest.name;
+        pol = pol || dest.name;
       }
     }
 
@@ -124,6 +147,10 @@ router.post("/:id/approve", express.json(), async (req, res) => {
       deliveryState,
       deliveryZip,
       deliveryName,
+      deliveryAddress,
+      pol,
+      pod,
+      shippingLine,
       status:        "New Order",
       source:        "Copart Email",
       notes:         data.notes || "",

@@ -204,6 +204,8 @@ export default function EmailOrders() {
                     <span>📌 <strong>PIN:</strong> {item.pin || "—"}</span>
                     <span>👤 <strong>Customer:</strong> {item.customerName || "—"}</span>
                     <span>📍 <strong>Pickup:</strong> {[item.pickupCity, item.pickupState].filter(Boolean).join(", ") || item.pickupAddress || "—"}</span>
+                    <span>🚢 <strong>POD:</strong> {item.pod || "—"}{item.shippingLine ? ` · ${item.shippingLine}` : ""}</span>
+                    {item.deliveryName && <span>🏭 <strong>Warehouse:</strong> {item.deliveryName}</span>}
                     <span>📅 <strong>Sale Date:</strong> {item.saleDate || "—"}</span>
                     {item.orderRef && <span>✅ <strong>Order Ref:</strong> #{item.orderRef}</span>}
                   </div>
@@ -288,6 +290,9 @@ export default function EmailOrders() {
                 ["pickupState", "Pickup State"],
                 ["pickupZip", "Pickup ZIP"],
                 ["requestType", "Request Type"],
+                ["deliveryName", "Warehouse (Container)"],
+                ["pod", "Port of Discharge"],
+                ["shippingLine", "Shipping Line"],
               ].map(([key, label]) => (
                 <label key={key} style={{ display: "block", fontSize: 12, color: "var(--text-secondary)", gridColumn: key === "vin" || key === "pickupAddress" ? "1 / -1" : undefined }}>
                   {label}
@@ -296,6 +301,12 @@ export default function EmailOrders() {
                       <option>RORO</option>
                       <option>Container</option>
                       <option>Inland Only</option>
+                    </select>
+                  ) : key === "shippingLine" ? (
+                    <select value={editing[key] || ""} onChange={f(key)} style={{ ...inp, marginTop: 4 }}>
+                      <option value="">—</option>
+                      <option>ACL</option>
+                      <option>SALLAUM</option>
                     </select>
                   ) : (
                     <input value={editing[key] || ""} onChange={f(key)} style={{ ...inp, marginTop: 4 }} />

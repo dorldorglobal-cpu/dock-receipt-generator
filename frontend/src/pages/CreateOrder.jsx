@@ -107,6 +107,7 @@ export default function CreateOrder() {
     titleStatus: "Title",
 
     buyerName: "",
+    buyerNumber: "",
     lotNumber: "",
     pin: "",
 
@@ -607,6 +608,7 @@ export default function CreateOrder() {
       customerEmail:    rec?.email        || data.customerEmail || prev.customerEmail,
       source:           rec?.defaultOffice || "USA OFFICE",
       buyerName:        data.buyerName    || prev.buyerName,
+      buyerNumber:      data.buyerNumber  || prev.buyerNumber,
       consigneeName:    data.consigneeName    || data.buyerName || data.customerName || prev.consigneeName,
       consigneeAddress: data.consigneeAddress || prev.consigneeAddress,
       consigneeCity:    data.consigneeCity    || prev.consigneeCity,
@@ -1074,6 +1076,15 @@ export default function CreateOrder() {
                 onChange={(e) => update("buyerName", e.target.value)}
                 placeholder="e.g. GOLDEN NOOR INTERNATIONAL"
                 style={{ color: "var(--text-secondary)" }}
+              />
+            </label>
+
+            <label>
+              Buyer / Member #
+              <input
+                value={form.buyerNumber}
+                onChange={(e) => update("buyerNumber", e.target.value)}
+                placeholder="e.g. 690717"
               />
             </label>
 

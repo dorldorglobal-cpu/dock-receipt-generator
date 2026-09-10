@@ -23,6 +23,11 @@ const emailOrderSchema = new mongoose.Schema({
   pin:           String,
   buyerNumber:   String,
   saleDate:      String,
+
+  // From the email subject line the user writes
+  pod:           String,
+  shippingLine:  String,
+  deliveryName:  String, // warehouse (Container) named in the subject
   charges:       mongoose.Schema.Types.Mixed,
 
   // Raw data kept for upload and audit
