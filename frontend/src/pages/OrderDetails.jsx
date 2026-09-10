@@ -1592,7 +1592,7 @@ export default function OrderDetails() {
     return d.toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }).toUpperCase();
   };
   const whBody = (carrier, iso) =>
-    `${(carrier || "[CARRIER]").toUpperCase()} WOULD LIKE TO DELIVER THIS UNIT ON ${whDateLabel(iso)}. PLEASE MAKE AN APPOINTMENT\n` +
+    `${(carrier || "[CARRIER]").toUpperCase()} WOULD LIKE TO DELIVER THIS UNIT ON ${whDateLabel(iso)}. PLEASE MAKE AN APPOINTMENT\n\n\n` +
     `-- \nRegards,\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`;
 
   const openWarehouseEmail = () => {
