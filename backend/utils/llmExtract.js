@@ -42,7 +42,8 @@ const AES_SYSTEM_PROMPT =
   "- referenceNumber: from the field labeled \"SHIPMENT REFERENCE NO.\"\n" +
   "- exporterName, exporterAddress, exporterCity, exporterState, exporterZip\n" +
   "- consigneeName, consigneeAddress, consigneeCity\n" +
-  "- vessel\n" +
+  "- vessel: the ship name from the field labeled \"9. EXPORTING CARRIER/CONVEYANCE NAME\" " +
+  "(e.g. \"GRANDE ABIDJAN\", \"GLOVIS SUN\") — it sits on the line directly under that label\n" +
   "- portOfLoading, portOfDischarge: JUST the port city name (e.g. \"BALTIMORE\", \"TEMA\") — no " +
   "state, country, or extra text\n" +
   "- vin: EXACTLY 17 characters (letters and digits, no I/O/Q) — no more, no fewer\n" +

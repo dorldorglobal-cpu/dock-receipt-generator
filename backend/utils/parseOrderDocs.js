@@ -512,6 +512,24 @@ async function parseAESRegex(filePath) {
   };
 }
 
+// AES field 9 ("EXPORTING CARRIER/CONVEYANCE NAME") is the vessel. It's an
+// unambiguous label, so a deterministic scan beats the LLM here (which has
+// been seen to return "" for ACL/Grimaldi filings, blanking the DR's vessel
+// and therefore its schedule lookup / cutoff / sail / arrival dates).
+function findAesVessel(text) {
+  const lines = (text || "").split(/\r?\n/).map(l => l.trim());
+  const i = lines.findIndex(l => /9\.\s*EXPORTING CARRIER\s*\/?\s*CONVEYANCE NAME/i.test(l));
+  if (i === -1) return "";
+  for (let j = i + 1; j < Math.min(i + 6, lines.length); j++) {
+    const l = lines[j];
+    if (!l) continue;
+    if (/^\d{1,2}[a-z]?\.\s/i.test(l)) return "";           // hit next field label → no value
+    if (/EQUIPMENT NUMBER|SEAL NUMBER/i.test(l)) continue;
+    return l.replace(/\s+/g, " ").trim().toUpperCase();
+  }
+  return "";
+}
+
 // ── Full AES parsing — LLM implementation (Groq/Llama) ────────────────────────
 // Prompt validated against real production AES filings; see
 // backend/utils/llmExtract.js and backend/scripts/try-llm-extraction.js.
@@ -541,7 +559,7 @@ async function parseAESWithLLM(filePath) {
     consigneeCity: cleanUpper(r.consigneeCity || ""),
     consigneeCountry: countryFromPod(pod),
 
-    vessel: cleanUpper(r.vessel || ""),
+    vessel: cleanUpper(r.vessel || "") || findAesVessel(text),
     portOfLoading: pol,
     portOfDischarge: pod,
     pol,

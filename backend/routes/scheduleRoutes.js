@@ -1113,24 +1113,48 @@ async function lookupSchedule({ voyageName, vessel, pol, pod }) {
   const voyageCode = codeMatch ? codeMatch[1] : folderName;
   const vesselPart = codeMatch ? codeMatch[2].trim() : folderName;
 
+  // When a vessel runs the route on several voyages (e.g. GRANDE ABIDJAN
+  // GAB0426 + GAB0526), a bare findOne returns an arbitrary one. Collect all
+  // candidates from the first query that hits, then pick the voyage whose
+  // sail date is the soonest one still in the future (falling back to the
+  // most recent past sailing).
+  const parseSail = s => {
+    const m = String(s || "").match(/^(\d{1,2})\/(\d{1,2})(?:\/(\d{2,4}))?$/);
+    if (!m) return null;
+    let y = m[3] ? parseInt(m[3]) : new Date().getFullYear();
+    if (y < 100) y += 2000;
+    return new Date(y, parseInt(m[1]) - 1, parseInt(m[2])).getTime();
+  };
+  const pickBest = (rows) => {
+    if (!rows || !rows.length) return null;
+    if (rows.length === 1) return rows[0];
+    const now = Date.now();
+    const withDate = rows.map(r => ({ r, t: parseSail(r.sailDate) })).filter(x => x.t != null);
+    if (!withDate.length) return rows[0];
+    const future = withDate.filter(x => x.t >= now - 3 * 86400000).sort((a, b) => a.t - b.t);
+    if (future.length) return future[0].r;
+    return withDate.sort((a, b) => b.t - a.t)[0].r;
+  };
+
   let dbRow = null;
+  const q = (extra) => ScheduleRow.find({ ...extra, pol: polUp, pod: podUp }).lean();
 
   if (voyageCode) {
-    dbRow = await ScheduleRow.findOne({ voyage: { $regex: `^${esc(voyageCode)}$`, $options: "i" }, pol: polUp, pod: podUp });
+    dbRow = pickBest(await q({ voyage: { $regex: `^${esc(voyageCode)}$`, $options: "i" } }));
   }
   if (!dbRow && vesselPart) {
-    dbRow = await ScheduleRow.findOne({ vessel: { $regex: `^${esc(vesselPart)}$`, $options: "i" }, pol: polUp, pod: podUp });
+    dbRow = pickBest(await q({ vessel: { $regex: `^${esc(vesselPart)}$`, $options: "i" } }));
   }
   if (!dbRow && vesselPart) {
     const lastWord = vesselPart.split(/\s+/).filter(w => w.length > 3).pop();
-    if (lastWord) dbRow = await ScheduleRow.findOne({ vessel: { $regex: lastWord, $options: "i" }, pol: polUp, pod: podUp });
+    if (lastWord) dbRow = pickBest(await q({ vessel: { $regex: lastWord, $options: "i" } }));
   }
   if (!dbRow && vessel) {
     const vUp = vessel.toUpperCase().replace(/^(M\/V|MV|SS|MS)\s+/i, "").split(" V:")[0].trim();
-    dbRow = await ScheduleRow.findOne({ vessel: { $regex: `^${esc(vUp)}$`, $options: "i" }, pol: polUp, pod: podUp });
+    dbRow = pickBest(await q({ vessel: { $regex: `^${esc(vUp)}$`, $options: "i" } }));
     if (!dbRow) {
       const lastWord = vUp.split(/\s+/).filter(w => w.length > 3).pop();
-      if (lastWord) dbRow = await ScheduleRow.findOne({ vessel: { $regex: lastWord, $options: "i" }, pol: polUp, pod: podUp });
+      if (lastWord) dbRow = pickBest(await q({ vessel: { $regex: lastWord, $options: "i" } }));
     }
   }
 
