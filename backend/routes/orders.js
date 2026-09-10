@@ -740,6 +740,17 @@ router.post(
             order.weightKgs = parsed.dispatchWeightKgs;
           }
 
+          // Carrier + delivery date — latest dispatch sheet wins
+          if (parsed.dispatchCarrier && parsed.dispatchCarrier !== order.dispatchCarrier) {
+            order.dispatchCarrier = parsed.dispatchCarrier; updates.push("dispatchCarrier");
+          }
+          if (parsed.dispatchPickupDate && parsed.dispatchPickupDate !== order.dispatchPickupDate) {
+            order.dispatchPickupDate = parsed.dispatchPickupDate; updates.push("dispatchPickupDate");
+          }
+          if (parsed.dispatchDeliveryDate && parsed.dispatchDeliveryDate !== order.dispatchDeliveryDate) {
+            order.dispatchDeliveryDate = parsed.dispatchDeliveryDate; updates.push("dispatchDeliveryDate");
+          }
+
           // Towing cost verification — attach to response but don't auto-save
           if (parsed.dispatchTowingCost) {
             const storedCost   = Number((order.charges || {}).towingCost   || 0);
@@ -888,6 +899,15 @@ router.post("/:id/parse-drive-files", async (req, res) => {
           }
         }
         if (parsed.dispatchWeightKgs && !order.weightKgs) order.weightKgs = parsed.dispatchWeightKgs;
+        if (parsed.dispatchCarrier && parsed.dispatchCarrier !== order.dispatchCarrier) {
+          order.dispatchCarrier = parsed.dispatchCarrier; updates.push("dispatchCarrier");
+        }
+        if (parsed.dispatchPickupDate && parsed.dispatchPickupDate !== order.dispatchPickupDate) {
+          order.dispatchPickupDate = parsed.dispatchPickupDate; updates.push("dispatchPickupDate");
+        }
+        if (parsed.dispatchDeliveryDate && parsed.dispatchDeliveryDate !== order.dispatchDeliveryDate) {
+          order.dispatchDeliveryDate = parsed.dispatchDeliveryDate; updates.push("dispatchDeliveryDate");
+        }
 
         let towingCostVerification = null;
         if (parsed.dispatchTowingCost) {

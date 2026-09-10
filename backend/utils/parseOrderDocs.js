@@ -681,6 +681,29 @@ async function parseDispatch(filePath) {
 
   const dispatchTowingCost = extractTowingCost(text);
 
+  // Carrier company name — the line right after a standalone "Carrier" label
+  // (Central Dispatch "Shipper Info / Carrier Info" block). Guard against the
+  // "Carrier will receive $X…" payment-terms sentence.
+  let dispatchCarrier = "";
+  const carrierIdx = lines.findIndex(l => cleanUpper(l) === "CARRIER");
+  if (carrierIdx !== -1 && lines[carrierIdx + 1] && !/^carrier will/i.test(lines[carrierIdx + 1])) {
+    dispatchCarrier = clean(lines[carrierIdx + 1]);
+  }
+
+  // Requested pick-up / delivery dates → ISO yyyy-mm-dd
+  const toIso = (m) => m ? `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}` : "";
+  const dateAfter = (label) => {
+    const i = lines.findIndex(l => cleanUpper(l) === label);
+    if (i === -1) return "";
+    for (let j = i + 1; j < Math.min(i + 4, lines.length); j++) {
+      const m = lines[j].match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (m) return toIso(m);
+    }
+    return "";
+  };
+  const dispatchPickupDate   = dateAfter("REQUESTED PICK UP");
+  const dispatchDeliveryDate = dateAfter("REQUESTED DELIVERY");
+
   return {
     ...pickup,
     ...delivery,
@@ -688,6 +711,9 @@ async function parseDispatch(filePath) {
     dispatchVin,
     dispatchWeightKgs,
     dispatchTowingCost,
+    dispatchCarrier,
+    dispatchPickupDate,
+    dispatchDeliveryDate,
     condition: condition || undefined,
   };
 }

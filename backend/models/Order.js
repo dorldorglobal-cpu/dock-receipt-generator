@@ -68,6 +68,11 @@ const orderSchema = new mongoose.Schema(
     lotNumber: { type: String, default: "" },
     pin:       { type: String, default: "" },
 
+    // From the Central Dispatch sheet
+    dispatchCarrier:      { type: String, default: "" }, // hauling company
+    dispatchPickupDate:   { type: String, default: "" }, // ISO yyyy-mm-dd
+    dispatchDeliveryDate: { type: String, default: "" }, // ISO yyyy-mm-dd (est. warehouse delivery)
+
     shippingLine: String,
     pol: String,
     pod: String,

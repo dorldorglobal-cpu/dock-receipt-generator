@@ -1597,11 +1597,10 @@ export default function OrderDetails() {
 
   const openWarehouseEmail = () => {
     const wh = findWarehouse(order);
-    // best-effort carrier guess from the timeline ("Dispatched to …")
-    const dispEntry = [...(order.timeline || [])].reverse()
-      .find(t => /dispatch/i.test(t.action || "") || /dispatch/i.test(t.details || ""));
-    const carrierGuess = dispEntry?.details?.match(/to\s+([A-Z0-9 .&'-]{3,40})/i)?.[1]?.trim() || "";
-    const date = nextMonday();
+    // Carrier + delivery date come straight from the parsed dispatch sheet
+    // when it's on file; otherwise fall back to a blank carrier + next Monday.
+    const carrierGuess = order.dispatchCarrier || "";
+    const date = order.dispatchDeliveryDate || nextMonday();
     setWhEmail({
       to:      wh?.loaderTo || "",
       cc:      wh?.loaderCc || "",
