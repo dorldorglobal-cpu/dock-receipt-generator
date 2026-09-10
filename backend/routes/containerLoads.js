@@ -5,7 +5,9 @@ const fs      = require("fs");
 const path    = require("path");
 const ContainerLoad = require("../models/ContainerLoad");
 const Order         = require("../models/Order");
+const AddressBook   = require("../models/AddressBook");
 const { getGmailAccessToken } = require("../utils/gmail");
+const { WAREHOUSES, findWarehouse } = require("../utils/warehouses");
 const {
   drive,
   createDriveFolder,
@@ -31,6 +33,52 @@ async function getContainerParentFolder() {
 const LOADER_TO = "info@e-zcargo.com";
 const LOADER_CC = "shipping@e-zcargo.com";
 
+// Fill in loaderEmail / loaderCc from the POL's warehouse when the caller
+// didn't set them explicitly. A blank string counts as "not set".
+function deriveLoader({ pol, loaderEmail, loaderCc }) {
+  const wh = findWarehouse(pol);
+  return {
+    loaderEmail: (loaderEmail && loaderEmail.trim()) || (wh ? wh.loaderTo : "") || "",
+    loaderCc:    (loaderCc && loaderCc.trim())       || (wh ? wh.loaderCc : "") || "",
+  };
+}
+
+// Save the consignee + notify party as a reusable "consignee" address-book
+// entry, so it shows up in the dropdown next time. Matches on name (loosely)
+// and updates the stored details if they've changed.
+async function upsertConsignee(load) {
+  const name = (load.consigneeName || "").trim();
+  if (!name) return;
+  try {
+    const norm = name.toUpperCase().replace(/[^A-Z0-9]/g, "");
+    const existing = (await AddressBook.find({ type: "consignee" }).lean())
+      .find(e => (e.companyName || "").toUpperCase().replace(/[^A-Z0-9]/g, "") === norm);
+    const doc = {
+      companyName: name,
+      address: load.consigneeAddress || "",
+      phone:   load.consigneePhone   || "",
+      email:   load.consigneeEmail   || "",
+      notes:   [
+        load.consigneeTin ? `TIN#: ${load.consigneeTin}` : "",
+        load.notifyName   ? `NOTIFY: ${load.notifyName} | ${load.notifyAddress || ""} | ${load.notifyPhone || ""} | ${load.notifyEmail || ""} | ${load.notifyTin || ""}` : "",
+      ].filter(Boolean).join("\n"),
+      type: "consignee",
+    };
+    if (existing) await AddressBook.findByIdAndUpdate(existing._id, doc);
+    else          await AddressBook.create(doc);
+  } catch (e) {
+    console.warn("[ContainerLoad] consignee upsert failed:", e.message);
+  }
+}
+
+// GET /api/container-loads/config — POL warehouse list for the new-load form
+router.get("/config", (_req, res) => {
+  res.json({
+    warehouses: WAREHOUSES.map(w => ({ key: w.key, name: w.name, city: w.city, state: w.state, loaderTo: w.loaderTo, loaderCc: w.loaderCc })),
+    pods: ["TEMA", "LAGOS", "LOME"],
+  });
+});
+
 // GET /api/container-loads
 router.get("/", async (req, res) => {
   try {
@@ -45,17 +93,20 @@ router.get("/", async (req, res) => {
 router.post("/", express.json(), async (req, res) => {
   try {
     const {
-      name, orderIds, vessel, pol, pod, loaderEmail, notes,
+      name, orderIds, vessel, pol, pod, loaderEmail, loaderCc, notes,
       consigneeName, consigneeAddress, consigneePhone, consigneeEmail, consigneeTin,
       notifyName, notifyAddress, notifyPhone, notifyEmail, notifyTin,
     } = req.body;
     if (!orderIds?.length) return res.status(400).json({ error: "Select at least one order" });
 
     const load = await ContainerLoad.create({
-      name, orderIds, vessel, pol, pod, loaderEmail, notes,
+      name, orderIds, vessel, pol, pod, notes,
+      ...deriveLoader({ pol, loaderEmail, loaderCc }),
       consigneeName, consigneeAddress, consigneePhone, consigneeEmail, consigneeTin,
       notifyName, notifyAddress, notifyPhone, notifyEmail, notifyTin,
     });
+
+    await upsertConsignee(load);
 
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
     res.json(populated);
@@ -70,17 +121,25 @@ router.patch("/:id", express.json(), async (req, res) => {
   try {
     const fields = [
       "name","bookingNumber","containerNumber","sealNumber","sailCutoff","arrivalDate","status",
-      "vessel","pol","pod","loaderEmail","notes",
+      "vessel","pol","pod","loaderEmail","loaderCc","notes",
       "consigneeName","consigneeAddress","consigneePhone","consigneeEmail","consigneeTin",
       "notifyName","notifyAddress","notifyPhone","notifyEmail","notifyTin",
     ];
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
 
+    const polChanged = req.body.pol !== undefined && req.body.pol !== load.pol;
     for (const f of fields) {
       if (req.body[f] !== undefined) load[f] = req.body[f];
     }
+    // POL changed and the caller didn't hand us a fresh loader email → refill it
+    if (polChanged && req.body.loaderEmail === undefined) {
+      const d = deriveLoader({ pol: load.pol, loaderEmail: "", loaderCc: "" });
+      load.loaderEmail = d.loaderEmail;
+      load.loaderCc    = d.loaderCc;
+    }
     await load.save();
+    await upsertConsignee(load);
 
     if (req.body.bookingNumber) {
       await Order.updateMany(
@@ -136,7 +195,8 @@ router.post("/:id/send-email", express.json(), async (req, res) => {
     await sendRawEmail({ to, cc, subject, body });
 
     load.emailSentAt = new Date();
-    if (to !== LOADER_TO) load.loaderEmail = to;
+    load.loaderEmail = to;
+    if (cc !== undefined) load.loaderCc = cc;
     await load.save();
 
     res.json({ success: true });
@@ -1115,7 +1175,12 @@ function buildEmailDraft(load, orders) {
     `Dor Ldor Global`,
   ].join("\n");
 
-  return { to: LOADER_TO, cc: LOADER_CC, subject, body };
+  const wh = findWarehouse(load.pol);
+  return {
+    to: load.loaderEmail || (wh ? wh.loaderTo : LOADER_TO),
+    cc: load.loaderCc    || (wh ? wh.loaderCc : LOADER_CC),
+    subject, body,
+  };
 }
 
 // GET /api/container-loads/:id/email-draft

@@ -44,7 +44,7 @@ function F({ label, value, onChange, placeholder, type="text", full }) {
 // Defined at module level (not inside the component) so React never recreates it
 // as a new component type on re-render — that was causing inputs to lose focus
 // after every keystroke.
-function ConsigneeSection({ vals, set, setAll }) {
+function ConsigneeSection({ vals, set, setAll, book = [], onPick }) {
   const copyConsigneeToNotify = () => setAll(f => ({
     ...f,
     notifyName:    f.consigneeName,
@@ -61,7 +61,16 @@ function ConsigneeSection({ vals, set, setAll }) {
     (vals.notifyTin || "")     === (vals.consigneeTin || "");
   return (
     <>
-      <div style={sec()}>Consignee Info</div>
+      <div style={{ ...sec(), display:"flex", alignItems:"center", justifyContent:"space-between", gap:12 }}>
+        <span>Consignee Info</span>
+        {onPick && (
+          <select value="" onChange={e=>{ const b = book.find(x=>x._id===e.target.value); if (b) onPick(b); }}
+            style={{ ...inp, width:"auto", maxWidth:260, fontSize:11, padding:"4px 8px", textTransform:"none", letterSpacing:0 }}>
+            <option value="">📖 Pick from saved consignees…</option>
+            {book.map(b => <option key={b._id} value={b._id}>{b.companyName}</option>)}
+          </select>
+        )}
+      </div>
       <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
         <F label="NAME" value={vals.consigneeName} onChange={set("consigneeName")} full />
         <F label="ADDRESS / CITY / COUNTRY" value={vals.consigneeAddress} onChange={set("consigneeAddress")} placeholder="Street, City, Country" full />
@@ -92,13 +101,23 @@ function ConsigneeSection({ vals, set, setAll }) {
 }
 
 const BLANK = {
-  name:"", vessel:"", pol:"NJ", pod:"", loaderEmail:"", notes:"",
+  name:"", vessel:"", pol:"EZ CARGO", pod:"", loaderEmail:"", loaderCc:"", notes:"",
   consigneeName:"FIRST OPTION LOGISTICS LTD", consigneeAddress:"P.O.BOX BT 429, COMMUNITY 2, TEMA", consigneePhone:"+233540127767", consigneeEmail:"godwin.dorldorglobal@gmail.com", consigneeTin:"C0057412421",
   notifyName:"FIRST OPTION LOGISTICS LTD", notifyAddress:"P.O.BOX BT 429, COMMUNITY 2, TEMA", notifyPhone:"+233540127767", notifyEmail:"godwin.dorldorglobal@gmail.com", notifyTin:"C0057412421",
 };
 
+// Loader recipients for a POL — the form's own loader email wins, otherwise
+// fall back to the warehouse defaults from /config, otherwise EZ Cargo.
+function loaderRecipients(form, config) {
+  const wh = (config?.warehouses || []).find(w => w.key === form.pol || w.name === form.pol);
+  return {
+    to: (form.loaderEmail || "").trim() || wh?.loaderTo || "info@e-zcargo.com",
+    cc: (form.loaderCc    || "").trim() || wh?.loaderCc || "shipping@e-zcargo.com",
+  };
+}
+
 // Build email draft on frontend (mirrors backend logic)
-function buildDraft(form, orders) {
+function buildDraft(form, orders, config) {
   const dest    = (form.pod || "DESTINATION").toUpperCase();
   const cust    = orders[0]?.customerName || "";
   const subject = `${form.name} CONTAINER TO ${dest} - ${cust}`.trim();
@@ -140,7 +159,7 @@ function buildDraft(form, orders) {
     `Dor Ldor Global`,
   ].join("\n");
 
-  return { to:"info@e-zcargo.com", cc:"shipping@e-zcargo.com", subject, body };
+  return { ...loaderRecipients(form, config), subject, body };
 }
 
 export default function Containers() {
@@ -158,6 +177,11 @@ export default function Containers() {
   const [orderSearch, setOrderSearch] = useState("");
   const [picked,      setPicked]      = useState([]);
   const [creating,    setCreating]    = useState(false);
+  const [config,      setConfig]      = useState({ warehouses: [], pods: ["TEMA","LAGOS","LOME"] });
+  const [consigneeBook, setConsigneeBook] = useState([]);
+  const loadConsigneeBook = () =>
+    fetch(`${API}/api/address-book?type=consignee`).then(r=>r.json())
+      .then(d => setConsigneeBook(Array.isArray(d) ? d : [])).catch(()=>{});
 
   // Email preview modal
   const [emailModal,  setEmailModal]  = useState(null); // { loadId, to, cc, subject, body }
@@ -208,6 +232,12 @@ export default function Containers() {
       .catch(()=>{});
   };
   useEffect(refresh, []);
+  useEffect(() => {
+    fetch(`${API}/api/container-loads/config`).then(r=>r.json())
+      .then(d => d && setConfig(c => ({ warehouses: d.warehouses || [], pods: d.pods || c.pods })))
+      .catch(()=>{});
+    loadConsigneeBook();
+  }, []);
 
   // Auto-open billing modal when returning from OrderDetails (e.g. after invoice generation)
   useEffect(() => {
@@ -248,6 +278,45 @@ export default function Containers() {
   const flash = (m) => { setMsg(m); setTimeout(()=>setMsg(""),4000); };
   const setF  = k => v => setForm(f=>({...f,[k]:v}));
   const setEF = k => v => setEditForm(f=>({...f,[k]:v}));
+
+  // Pick a POL warehouse → also drop in that warehouse's loader email/cc
+  const pickPol = (pol) => {
+    const wh = (config.warehouses || []).find(w => w.key === pol);
+    setForm(f => ({ ...f, pol,
+      loaderEmail: wh ? wh.loaderTo : f.loaderEmail,
+      loaderCc:    wh ? wh.loaderCc : f.loaderCc,
+    }));
+  };
+  const setEditPol = (pol) => {
+    const wh = (config.warehouses || []).find(w => w.key === pol);
+    setEditForm(f => ({ ...f, pol,
+      loaderEmail: wh ? wh.loaderTo : f.loaderEmail,
+      loaderCc:    wh ? wh.loaderCc : f.loaderCc,
+    }));
+  };
+
+  // Apply a saved consignee-book entry to the form (consignee + notify fields).
+  const applyConsignee = (entry, setter) => {
+    if (!entry) return;
+    const notifyLine = (entry.notes || "").split("\n").find(l => /^NOTIFY:/i.test(l));
+    const [nName, nAddr, nPhone, nEmail, nTin] = notifyLine
+      ? notifyLine.replace(/^NOTIFY:\s*/i, "").split("|").map(s => s.trim())
+      : [];
+    const tinLine = (entry.notes || "").match(/TIN#:\s*(.+)/i);
+    setter(f => ({
+      ...f,
+      consigneeName:    entry.companyName || "",
+      consigneeAddress: entry.address || "",
+      consigneePhone:   entry.phone || "",
+      consigneeEmail:   entry.email || "",
+      consigneeTin:     tinLine ? tinLine[1].trim() : (f.consigneeTin || ""),
+      notifyName:    nName  || entry.companyName || "",
+      notifyAddress: nAddr  || entry.address || "",
+      notifyPhone:   nPhone || entry.phone || "",
+      notifyEmail:   nEmail || entry.email || "",
+      notifyTin:     nTin   || "",
+    }));
+  };
 
   // Split a flat per-container BAF amount evenly across the cars in the load
   // and write it to each order's charges. Prompts for the amount ($400 default).
@@ -358,7 +427,10 @@ export default function Containers() {
   const openNew = () => {
     const d = new Date();
     const name = `LOAD-${d.toLocaleString("en-US",{month:"short"}).toUpperCase()}${d.getDate()}`;
-    setForm({ ...BLANK, name });
+    const wh = (config.warehouses || []).find(w => w.key === BLANK.pol);
+    setForm({ ...BLANK, name,
+      loaderEmail: wh ? wh.loaderTo : "",
+      loaderCc:    wh ? wh.loaderCc : "" });
     setPicked([]); setOrderSearch(""); setShowNew(true);
   };
 
@@ -375,10 +447,11 @@ export default function Containers() {
 
       setShowNew(false);
       refresh();
+      loadConsigneeBook(); // backend auto-saved this consignee — pull it in
 
       // Build email draft and open preview modal
       const pickedOrders = availableOrders.filter(o=>picked.includes(o._id));
-      const draft = buildDraft(form, pickedOrders);
+      const draft = buildDraft(form, pickedOrders, config);
       setEmailModal({ loadId: data._id, ...draft });
     } catch(e) { flash("❌ "+e.message); }
     setCreating(false);
@@ -413,6 +486,7 @@ export default function Containers() {
       pol:              l.pol              || "",
       pod:              l.pod              || "",
       loaderEmail:      l.loaderEmail      || "",
+      loaderCc:         l.loaderCc         || "",
       notes:            l.notes            || "",
       consigneeName:    l.consigneeName    || "",
       consigneeAddress: l.consigneeAddress || "",
@@ -439,6 +513,7 @@ export default function Containers() {
         body: JSON.stringify(editForm),
       });
       if (!res.ok) { const d=await res.json(); throw new Error(d.error||"Failed"); }
+      loadConsigneeBook();
       flash("✅ Load updated");
       setEditLoad(null);
       refresh();
@@ -858,9 +933,25 @@ export default function Containers() {
             <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12, marginBottom:4 }}>
               <F label="LOAD NAME / REFERENCE" value={form.name} onChange={setF("name")} placeholder="LOAD-JUN29" />
               <F label="VESSEL (optional)" value={form.vessel} onChange={setF("vessel")} />
-              <F label="PORT OF LOADING" value={form.pol} onChange={setF("pol")} placeholder="NJ" />
-              <F label="PORT OF DISCHARGE" value={form.pod} onChange={setF("pod")} placeholder="Tema, Lagos…" />
-              <F label="LOADER EMAIL (for email preview)" value={form.loaderEmail} onChange={setF("loaderEmail")} type="email" placeholder="info@e-zcargo.com" full />
+              <div>
+                <label style={lbl}>PORT OF LOADING (WAREHOUSE)</label>
+                <select value={form.pol} onChange={e=>pickPol(e.target.value)} style={inp}>
+                  {!(config.warehouses||[]).some(w=>w.key===form.pol) && form.pol && <option value={form.pol}>{form.pol}</option>}
+                  {(config.warehouses||[]).map(w => (
+                    <option key={w.key} value={w.key}>{w.name} — {w.city}, {w.state}</option>
+                  ))}
+                </select>
+              </div>
+              <div>
+                <label style={lbl}>PORT OF DISCHARGE</label>
+                <input list="pod-options" value={form.pod} onChange={e=>setF("pod")(e.target.value.toUpperCase())}
+                  placeholder="TEMA, LAGOS…" style={inp} />
+                <datalist id="pod-options">
+                  {(config.pods||[]).map(p => <option key={p} value={p} />)}
+                </datalist>
+              </div>
+              <F label="LOADER EMAIL — TO" value={form.loaderEmail} onChange={setF("loaderEmail")} placeholder="auto-filled from warehouse" />
+              <F label="LOADER EMAIL — CC" value={form.loaderCc} onChange={setF("loaderCc")} placeholder="auto-filled from warehouse" />
               <div style={{ gridColumn:"1/-1" }}>
                 <label style={lbl}>NOTES (optional)</label>
                 <textarea value={form.notes||""} onChange={e=>setF("notes")(e.target.value)} rows={2}
@@ -869,13 +960,37 @@ export default function Containers() {
             </div>
 
             {/* Consignee + Notify */}
-            <ConsigneeSection vals={form} set={setF} setAll={setForm} />
+            <ConsigneeSection vals={form} set={setF} setAll={setForm}
+              book={consigneeBook} onPick={(b)=>applyConsignee(b, setForm)} />
 
             {/* Order picker */}
             <div style={sec("#fbbf24")}>
               Select Orders to Include
               {picked.length > 0 && <span style={{ marginLeft:10, color:"#a78bfa" }}>({picked.length} selected)</span>}
             </div>
+
+            {/* Pinned strip of what's in the load — always visible, no scrolling */}
+            {picked.length > 0 && (
+              <div style={{ display:"flex", flexWrap:"wrap", gap:6, marginBottom:10,
+                padding:"8px 10px", background:"rgba(124,58,237,0.08)",
+                border:"1px solid rgba(124,58,237,0.25)", borderRadius:8 }}>
+                {picked.map(id => {
+                  const o = allOrders.find(x=>x._id===id) || availableOrders.find(x=>x._id===id);
+                  if (!o) return null;
+                  return (
+                    <span key={id} style={{ display:"inline-flex", alignItems:"center", gap:6, fontSize:11,
+                      background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:14, padding:"3px 6px 3px 10px" }}>
+                      <strong>{o.refNumber}</strong>
+                      <span style={{ color:"var(--text-secondary)" }}>{[o.year,o.make,o.model].filter(Boolean).join(" ")}</span>
+                      <button type="button" onClick={()=>togglePick(id)} title="Remove from load"
+                        style={{ border:"none", background:"none", cursor:"pointer", color:"var(--text-muted)",
+                          fontSize:13, lineHeight:1, padding:"0 2px" }}>✕</button>
+                    </span>
+                  );
+                })}
+              </div>
+            )}
+
             <input placeholder="Search by ref #, VIN, customer, make…"
               value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}
               style={{ ...inp, marginBottom:8 }} />
@@ -1031,9 +1146,20 @@ export default function Containers() {
                     </select>
                   </div>
                   <F label="VESSEL" value={editForm.vessel} onChange={setEF("vessel")} />
-                  <F label="PORT OF LOADING" value={editForm.pol} onChange={setEF("pol")} />
-                  <F label="PORT OF DISCHARGE" value={editForm.pod} onChange={setEF("pod")} full />
-                  <F label="LOADER EMAIL" value={editForm.loaderEmail} onChange={setEF("loaderEmail")} type="email" full />
+                  <div>
+                    <label style={lbl}>PORT OF LOADING (WAREHOUSE)</label>
+                    <select value={editForm.pol || ""} onChange={e=>setEditPol(e.target.value)} style={inp}>
+                      {!(config.warehouses||[]).some(w=>w.key===editForm.pol) && editForm.pol && <option value={editForm.pol}>{editForm.pol}</option>}
+                      {(config.warehouses||[]).map(w => <option key={w.key} value={w.key}>{w.name} — {w.city}, {w.state}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label style={lbl}>PORT OF DISCHARGE</label>
+                    <input list="pod-options-edit" value={editForm.pod || ""} onChange={e=>setEF("pod")(e.target.value.toUpperCase())} style={inp} />
+                    <datalist id="pod-options-edit">{(config.pods||[]).map(p => <option key={p} value={p} />)}</datalist>
+                  </div>
+                  <F label="LOADER EMAIL — TO" value={editForm.loaderEmail} onChange={setEF("loaderEmail")} />
+                  <F label="LOADER EMAIL — CC" value={editForm.loaderCc} onChange={setEF("loaderCc")} />
                   <div style={{ gridColumn:"1/-1" }}>
                     <label style={lbl}>NOTES</label>
                     <textarea value={editForm.notes||""} onChange={e=>setEF("notes")(e.target.value)} rows={3}
@@ -1048,7 +1174,8 @@ export default function Containers() {
 
               {/* ─ Consignee tab ─ */}
               {editTab === "consignee" && (
-                <ConsigneeSection vals={editForm} set={setEF} setAll={setEditForm} />
+                <ConsigneeSection vals={editForm} set={setEF} setAll={setEditForm}
+                  book={consigneeBook} onPick={(b)=>applyConsignee(b, setEditForm)} />
               )}
 
               {/* ─ Orders tab ─ */}

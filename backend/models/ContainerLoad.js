@@ -7,6 +7,7 @@ const containerLoadSchema = new mongoose.Schema({
   pol:           { type: String, default: "" },
   pod:           { type: String, default: "" },
   loaderEmail:   { type: String, default: "" },
+  loaderCc:      { type: String, default: "" },
   bookingNumber: { type: String, default: "" },
   containerNumber: { type: String, default: "" },
   sealNumber:    { type: String, default: "" },
