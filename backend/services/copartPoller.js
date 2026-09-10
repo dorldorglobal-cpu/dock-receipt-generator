@@ -74,9 +74,13 @@ async function autoCleanup() {
 }
 
 // ── Main poll function ────────────────────────────────────────────────────────
+let _legacyIndexChecked = false;
 async function pollCopart() {
   try {
+    if (!_legacyIndexChecked) { await dropLegacyUniqueIndex(); _legacyIndexChecked = true; }
     await autoCleanup();
+    // Each message is handled once — all of its PDF attachments in that single
+    // pass (a customer often forwards several buyer receipts in one email).
     const processed = await EmailOrder.distinct("gmailMessageId");
     // Scan all emails with PDF attachments in the last 90 days — detect by content, not sender/subject
     const q = `has:attachment filename:pdf newer_than:90d`;
@@ -96,13 +100,12 @@ async function pollCopart() {
       const pin = parsePIN(bodyText) || parsePIN((headers.find(h => h.name.toLowerCase() === "subject") || {}).value || "");
       const { requestType: subjRequestType, customerName: subjCustomerName } = parseSubject(headers);
 
-      // Find PDF attachment
-      let pdfData = null;
-      let pdfFilename = "";
+      // Collect EVERY PDF attachment — a customer often forwards several buyer
+      // receipts in one email, and each is its own order.
+      const attachments = [];
       const findAttachments = async (parts = []) => {
         for (const p of parts) {
-          if (p.mimeType === "application/pdf" || (p.filename && p.filename.endsWith(".pdf"))) {
-            pdfFilename = p.filename || "receipt.pdf";
+          if (p.mimeType === "application/pdf" || (p.filename && p.filename.toLowerCase().endsWith(".pdf"))) {
             let data;
             if (p.body?.data) {
               data = b64(p.body.data);
@@ -112,95 +115,98 @@ async function pollCopart() {
               });
               data = b64(att.data.data);
             }
-            if (data) pdfData = data;
+            if (data) attachments.push({ filename: p.filename || "receipt.pdf", data });
           }
           if (p.parts) await findAttachments(p.parts);
         }
       };
       await findAttachments(payload.parts || [payload]);
 
-      if (!pdfData) {
-        // Mark as seen so we don't recheck this email
+      if (!attachments.length) {
         await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
         continue;
       }
 
-      // Use same parser as the buyer receipt upload flow
-      const tmpPath = path.join(os.tmpdir(), `copart_${msg.id}.pdf`);
-      fs.writeFileSync(tmpPath, pdfData);
-      let extracted = {};
-      try {
-        extracted = await parseBuyerReceipt(tmpPath);
-      } catch (parseErr) {
-        console.log(`[Copart Poller] PDF parse failed for msg ${msg.id}: ${parseErr.message}`);
+      let createdForThisMsg = 0;
+
+      for (const { filename: pdfFilename, data: pdfData } of attachments) {
+        // Use same parser as the buyer receipt upload flow
+        const tmpPath = path.join(os.tmpdir(), `copart_${msg.id}_${Math.random().toString(36).slice(2)}.pdf`);
+        fs.writeFileSync(tmpPath, pdfData);
+        let extracted = {};
+        try {
+          extracted = await parseBuyerReceipt(tmpPath);
+        } catch (parseErr) {
+          console.log(`[Copart Poller] PDF parse failed for msg ${msg.id} (${pdfFilename}): ${parseErr.message}`);
+          continue;
+        } finally {
+          try { fs.unlinkSync(tmpPath); } catch {}
+        }
+
+        // Skip PDFs that don't look like buyer receipts — need a real VIN + lot
+        const isRealVin = extracted.vin && /^[A-HJ-NPR-Z0-9]{17}$/.test(extracted.vin);
+        const hasLot = !!(extracted.lotNumber);
+        if (!isRealVin || !hasLot) {
+          console.log(`[Copart Poller] ${pdfFilename} in msg ${msg.id} is not a buyer receipt — skipping attachment`);
+          continue;
+        }
+
+        const resolvedPin = extracted.pin || pin || "";
+        const lot = extracted.lotNumber || "";
+        const resolvedCustomer = extracted.customerName || subjCustomerName || "";
+        const resolvedRequestType = subjRequestType || "RORO";
+
+        // Skip if a real order already exists with this VIN
+        const existing = await Order.findOne({ vin: extracted.vin });
+        if (existing) {
+          await EmailOrder.create({ gmailMessageId: msg.id, status: "approved", vin: extracted.vin, orderId: existing._id, orderRef: existing.refNumber });
+          console.log(`[Copart Poller] Skipping VIN ${extracted.vin} — order ${existing.refNumber} already exists`);
+          createdForThisMsg++;
+          continue;
+        }
+
+        // Dedup by VIN: patch a pending row rather than duplicating it
+        const existingPending = await EmailOrder.findOne({ vin: extracted.vin, status: "pending" });
+        if (existingPending) {
+          let updated = false;
+          if (!existingPending.pin && resolvedPin) { existingPending.pin = resolvedPin; updated = true; }
+          if (!existingPending.customerName && resolvedCustomer) { existingPending.customerName = resolvedCustomer; updated = true; }
+          if (!existingPending.requestType && resolvedRequestType) { existingPending.requestType = resolvedRequestType; updated = true; }
+          if (updated) await existingPending.save();
+          console.log(`[Copart Poller] Merged duplicate receipt for VIN ${extracted.vin} into existing pending`);
+          createdForThisMsg++;
+          continue;
+        }
+
+        await EmailOrder.create({
+          gmailMessageId: msg.id,
+          status:        "pending",
+          customerName:  resolvedCustomer,
+          requestType:   resolvedRequestType,
+          lot,
+          vin:           extracted.vin           || "",
+          year:          extracted.year          || "",
+          make:          extracted.make          || "",
+          model:         extracted.model         || "",
+          color:         extracted.color         || "",
+          pickupAddress: extracted.pickupAddress || "",
+          pickupCity:    extracted.pickupCity    || "",
+          pickupState:   extracted.pickupState   || "",
+          pickupZip:     extracted.pickupZip     || "",
+          pin:           resolvedPin,
+          buyerNumber:   extracted.buyerNumber   || "",
+          pdfBuffer:     pdfData,
+          pdfFilename,
+          bodyText,
+        });
+        createdForThisMsg++;
+        console.log(`[Copart Poller] New pickup: LOT ${lot} — ${extracted.year} ${extracted.make} ${extracted.model} (${resolvedRequestType}) — ${resolvedCustomer}`);
+      }
+
+      // Nothing usable in any attachment — leave a marker so we don't rescan
+      if (createdForThisMsg === 0) {
         await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
-        continue;
-      } finally {
-        try { fs.unlinkSync(tmpPath); } catch {}
       }
-
-      // Skip PDFs that don't look like buyer receipts
-      // Must have a real VIN (17 chars, not containing "NUMBER") AND a lot number
-      const isRealVin = extracted.vin && /^[A-HJ-NPR-Z0-9]{17}$/.test(extracted.vin);
-      const hasLot = !!(extracted.lotNumber);
-      if (!isRealVin || !hasLot) {
-        await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
-        continue;
-      }
-
-      const resolvedPin = extracted.pin || pin || "";
-      const lot = extracted.lotNumber || "";
-      // Customer name: prefer PDF extraction, fall back to email subject
-      const resolvedCustomer = extracted.customerName || subjCustomerName || "";
-      // Request type: prefer email subject (explicit CONTAINER/RORO), PDF rarely has this
-      const resolvedRequestType = subjRequestType || "RORO";
-
-      // Skip if a real order already exists with this VIN
-      const existing = await Order.findOne({ vin: extracted.vin });
-      if (existing) {
-        await EmailOrder.create({ gmailMessageId: msg.id, status: "approved", vin: extracted.vin, orderId: existing._id, orderRef: existing.refNumber });
-        console.log(`[Copart Poller] Skipping VIN ${extracted.vin} — order ${existing.refNumber} already exists`);
-        continue;
-      }
-
-      // Dedup by VIN: if a pending EmailOrder already exists for this VIN,
-      // just patch in the PIN (second email) rather than creating a duplicate
-      const existingPending = await EmailOrder.findOne({ vin: extracted.vin, status: "pending" });
-      if (existingPending) {
-        let updated = false;
-        if (!existingPending.pin && resolvedPin) { existingPending.pin = resolvedPin; updated = true; }
-        if (!existingPending.customerName && resolvedCustomer) { existingPending.customerName = resolvedCustomer; updated = true; }
-        if (!existingPending.requestType && resolvedRequestType) { existingPending.requestType = resolvedRequestType; updated = true; }
-        if (updated) await existingPending.save();
-        // Mark this message as seen
-        await EmailOrder.create({ gmailMessageId: msg.id, status: "no-pdf", bodyText });
-        console.log(`[Copart Poller] Merged duplicate email for VIN ${extracted.vin} into existing pending`);
-        continue;
-      }
-
-      await EmailOrder.create({
-        gmailMessageId: msg.id,
-        status:        "pending",
-        customerName:  resolvedCustomer,
-        requestType:   resolvedRequestType,
-        lot,
-        vin:           extracted.vin           || "",
-        year:          extracted.year          || "",
-        make:          extracted.make          || "",
-        model:         extracted.model         || "",
-        color:         extracted.color         || "",
-        pickupAddress: extracted.pickupAddress || "",
-        pickupCity:    extracted.pickupCity    || "",
-        pickupState:   extracted.pickupState   || "",
-        pickupZip:     extracted.pickupZip     || "",
-        pin:           resolvedPin,
-        buyerNumber:   extracted.buyerNumber   || "",
-        pdfBuffer:     pdfData,
-        pdfFilename,
-        bodyText,
-      });
-
-      console.log(`[Copart Poller] New pickup email: LOT ${lot} — ${extracted.year} ${extracted.make} ${extracted.model} (${resolvedRequestType}) — ${resolvedCustomer}`);
     }
   } catch (err) {
     if (err.code === 401 || (err.message || "").includes("invalid_grant")) {
@@ -211,10 +217,25 @@ async function pollCopart() {
   }
 }
 
+// One-time: drop the legacy unique index on gmailMessageId so a single email
+// can spawn one EmailOrder row per attachment.
+async function dropLegacyUniqueIndex() {
+  try {
+    const idx = await EmailOrder.collection.indexes();
+    const legacy = idx.find(i => i.name === "gmailMessageId_1" && i.unique);
+    if (legacy) {
+      await EmailOrder.collection.dropIndex("gmailMessageId_1");
+      console.log("[Copart Poller] Dropped legacy unique index gmailMessageId_1");
+    }
+  } catch (e) {
+    console.warn("[Copart Poller] Could not check/drop legacy index:", e.message);
+  }
+}
+
 // ── Start polling every 5 minutes ────────────────────────────────────────────
 function startPoller() {
   console.log("[Copart Poller] Started — checking Gmail every 5 minutes");
-  pollCopart(); // run immediately on start
+  pollCopart(); // run immediately on start (drops legacy index on first run)
   setInterval(pollCopart, 5 * 60 * 1000);
 }
 
