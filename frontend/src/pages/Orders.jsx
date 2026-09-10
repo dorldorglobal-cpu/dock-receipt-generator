@@ -223,6 +223,17 @@ export default function Orders() {
                       </span>
                     </div>
                   )}
+                  {o.dispatchMethod === "Self Dispatch" && (
+                    <div style={{ marginTop: 3 }}>
+                      <span style={{
+                        display: "inline-block", fontSize: 9, fontWeight: 800, padding: "2px 5px",
+                        borderRadius: 4, letterSpacing: "0.04em", textTransform: "uppercase",
+                        background: "#d97706", color: "#fff", border: "1px solid #b45309",
+                      }}>
+                        🚛 Self Dispatch
+                      </span>
+                    </div>
+                  )}
                 </td>
                 <td>
                   <div style={{ fontWeight: 600 }}>{o.customerName}</div>
