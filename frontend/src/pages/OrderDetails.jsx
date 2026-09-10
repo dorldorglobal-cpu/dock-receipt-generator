@@ -324,7 +324,7 @@ export default function OrderDetails() {
   }, []);
 
   // Core: hit the schedule API with any combo of voyageName / vessel params
-  const applyScheduleResult = async (params) => {
+  const applyScheduleResult = async (params, { silent = false } = {}) => {
     const qs = new URLSearchParams(params).toString();
     const res  = await fetch(`${API}/api/schedule/lookup?${qs}`);
     const data = await res.json();
@@ -342,11 +342,23 @@ export default function OrderDetails() {
       });
       fetchOrder();
       setMessage(`✅ Schedule: ${data.vessel} V:${data.voyage} — Sail ${data.sailDate}`);
-    } else {
+    } else if (!silent) {
       setMessage("⚠️ No schedule match found.");
     }
     return data.found;
   };
+
+  // Auto-fill schedule dates on load when we have vessel + POL + POD but the
+  // dates are still blank (e.g. AES was added before the schedule was up).
+  const autoSchedRef = useRef("");
+  useEffect(() => {
+    if (!order?._id) return;
+    if (autoSchedRef.current === order._id) return;
+    if (!order.vessel || !order.pol || !order.pod) return;
+    if (order.cutoffDate || order.sailDate || order.arrivalDate) return;
+    autoSchedRef.current = order._id;
+    applyScheduleResult({ vessel: order.vessel, pol: order.pol, pod: order.pod }, { silent: true }).catch(() => {});
+  }, [order?._id, order?.vessel, order?.pol, order?.pod, order?.sailDate]); // eslint-disable-line
 
   // Called from the manual Lookup button — uses AES vessel
   const lookupAndApplySchedule = async (vessel, pol, pod) => {

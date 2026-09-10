@@ -709,6 +709,28 @@ router.post(
             }
           }
 
+          // Fill voyage / cutoff / sail / arrival straight from the master
+          // schedule now, so they don't have to be looked up by hand later.
+          if (order.vessel && order.pol && order.pod &&
+              (!order.cutoffDate || !order.sailDate || !order.arrivalDate)) {
+            try {
+              const { lookupSchedule } = require("./scheduleRoutes");
+              const s = await lookupSchedule({
+                voyageName: order.voyageFolderName || "",
+                vessel: order.vessel, pol: order.pol, pod: order.pod,
+              });
+              if (s.found) {
+                if (!order.voyage)      order.voyage      = s.voyage;
+                if (!order.cutoffDate)  order.cutoffDate  = s.cutoffDate;
+                if (!order.sailDate)    order.sailDate    = s.sailDate;
+                if (!order.arrivalDate) order.arrivalDate = s.arrivalDate;
+                updates.push("schedule");
+              }
+            } catch (schErr) {
+              console.warn("[AES upload] schedule lookup failed:", schErr.message);
+            }
+          }
+
           addTimeline(
             order,
             "AES Parsed",
