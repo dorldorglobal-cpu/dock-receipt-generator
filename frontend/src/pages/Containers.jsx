@@ -177,7 +177,7 @@ export default function Containers() {
   const [orderSearch, setOrderSearch] = useState("");
   const [picked,      setPicked]      = useState([]);
   const [creating,    setCreating]    = useState(false);
-  const [config,      setConfig]      = useState({ warehouses: [], pods: ["TEMA","LAGOS","LOME"] });
+  const [config,      setConfig]      = useState({ warehouses: [], pods: ["TEMA","LAGOS","LOME","COTONOU"] });
   const [consigneeBook, setConsigneeBook] = useState([]);
   const loadConsigneeBook = () =>
     fetch(`${API}/api/address-book?type=consignee`).then(r=>r.json())

@@ -75,7 +75,7 @@ async function upsertConsignee(load) {
 router.get("/config", (_req, res) => {
   res.json({
     warehouses: WAREHOUSES.map(w => ({ key: w.key, name: w.name, city: w.city, state: w.state, loaderTo: w.loaderTo, loaderCc: w.loaderCc })),
-    pods: ["TEMA", "LAGOS", "LOME"],
+    pods: ["TEMA", "LAGOS", "LOME", "COTONOU"],
   });
 });
 
