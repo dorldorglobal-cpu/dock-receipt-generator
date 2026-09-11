@@ -170,29 +170,46 @@ export default function Invoices() {
   const bulkMarkPaid = async () => {
     if (!selectedIds.size) return;
     setBulkSaving(true);
-    const ids = [...selectedIds];
+    // Only act on selections still present in the currently loaded list — a
+    // stale id (e.g. filtered out by a search after it was selected) would
+    // otherwise inflate the displayed count without anything actually happening.
+    const ids = selectedInvoices.map(i => i._id);
     const count = ids.length;
-    await Promise.all(ids.map(async id => {
-      const inv = invoices.find(i => i._id === id);
-      if (!inv) return;
-      const remaining = Math.max(0, (inv.total || 0) - (inv.payments || []).reduce((s, p) => s + p.amount, 0));
-      // Record payment entry
-      if (remaining > 0) {
-        await fetch(`${API}/api/invoices/${id}/payments`, {
-          method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ amount: remaining, method: bulkMethod, date: bulkDate, notes: bulkNotes }),
-        });
-      }
-      // Mark as paid
-      await fetch(`${API}/api/invoices/${id}/status`, {
-        method: "PATCH", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ status: "paid" }),
-      });
-    }));
+    const failed = [];
+    try {
+      await Promise.all(ids.map(async id => {
+        const inv = invoices.find(i => i._id === id);
+        try {
+          if (!inv) return;
+          const remaining = Math.max(0, (inv.total || 0) - (inv.payments || []).reduce((s, p) => s + p.amount, 0));
+          // Record payment entry
+          if (remaining > 0) {
+            const payRes = await fetch(`${API}/api/invoices/${id}/payments`, {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ amount: remaining, method: bulkMethod, date: bulkDate, notes: bulkNotes }),
+            });
+            if (!payRes.ok) throw new Error((await payRes.json().catch(() => ({}))).error || "Payment failed");
+          }
+          // Mark as paid
+          const statusRes = await fetch(`${API}/api/invoices/${id}/status`, {
+            method: "PATCH", headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ status: "paid" }),
+          });
+          if (!statusRes.ok) throw new Error((await statusRes.json().catch(() => ({}))).error || "Status update failed");
+        } catch (e) {
+          failed.push(`${inv?.invoiceNumber || id}: ${e.message}`);
+        }
+      }));
+    } finally {
+      setBulkSaving(false);
+    }
     setSelectedIds(new Set());
     setBulkModal(false);
-    setBulkSaving(false);
-    setMessage(`${count} invoice(s) marked as Paid`);
+    if (failed.length) {
+      setMessage(`${count - failed.length}/${count} marked as Paid — failed: ${failed.join("; ")}`);
+    } else {
+      setMessage(`${count} invoice(s) marked as Paid`);
+    }
     load();
   };
 
@@ -828,9 +845,14 @@ export default function Invoices() {
               ✅ Mark as Paid
             </h3>
             <p style={{ margin:"0 0 20px", fontSize:13, color:"var(--text-secondary)" }}>
-              {selectedIds.size} invoice{selectedIds.size !== 1 ? "s" : ""} — remaining balance of{" "}
+              {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} — remaining balance of{" "}
               <strong style={{ color:"#34d399" }}>{f$(selectedRemaining)}</strong> will be recorded as a payment.
             </p>
+            {selectedIds.size !== selectedInvoices.length && (
+              <p style={{ margin:"-14px 0 20px", fontSize:11, color:"#fbbf24" }}>
+                ⚠️ {selectedIds.size - selectedInvoices.length} previously selected invoice(s) are no longer in view (filtered out by search) and won't be included — reselect them if needed.
+              </p>
+            )}
             <div style={{ display:"grid", gap:14 }}>
               <label style={{ display:"block", fontSize:12, color:"var(--text-secondary)" }}>
                 Payment Method
@@ -866,7 +888,7 @@ export default function Invoices() {
               <button onClick={bulkMarkPaid} disabled={bulkSaving}
                 style={{ padding:"9px 22px", background:"#059669", color:"#fff", border:"none",
                   borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14, opacity: bulkSaving ? 0.6 : 1 }}>
-                {bulkSaving ? "Saving…" : `Mark ${selectedIds.size} as Paid`}
+                {bulkSaving ? "Saving…" : `Mark ${selectedInvoices.length} as Paid`}
               </button>
             </div>
           </div>
