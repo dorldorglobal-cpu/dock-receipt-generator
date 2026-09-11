@@ -1,10 +1,11 @@
 /**
  * One-time backfill: patch the AesConfig singleton with the real values
- * confirmed from accepted CBP filings — order 14217 (2026-09-10), then a bulk
- * scan of 307 real accepted EEI printouts. Schema defaults only apply to a NEW
- * document — this fixes up the one already created in production. Only
- * touches fields that are still blank or still at their old default, never
- * overwrites something you've already entered.
+ * confirmed from accepted CBP filings — order 14217's EEI printout
+ * (2026-09-10), a live ACE filing-edit screenshot for the same order
+ * (2026-09-10), then a bulk scan of 307 real accepted EEI printouts. Schema
+ * defaults only apply to a NEW document — this fixes up the one already
+ * created in production. Only touches fields that are still blank or still
+ * at their old default, never overwrites something you've already entered.
  *
  *   node backend/scripts/aes-seed-real-values.js          # dry run
  *   node backend/scripts/aes-seed-real-values.js --apply  # write
@@ -20,6 +21,11 @@ const PATCH = {
   "forwardingAgent.postal":   "07726",
   "forwardingAgent.country":  "US",
   "forwardingAgent.idType":   "E",
+  "forwardingAgent.partyId":  "824159146",  // DDG's EIN — from the live ACE screen, same as the Filer ID
+  "forwardingAgent.contact":  "ELI LEVY",   // from the live ACE screen (Authorized Agent contact)
+  "forwardingAgent.phone":    "9172004999", // read off the screenshot — CONFIRM this is right, easy to misread digits
+  filerId:                    "824159146",  // CBP Filer ID — shown in the ACE page header for order 14217
+  responseEmail:              "dorldorglobal@gmail.com", // "Email Response Address(es)" on the live ACE screen
   ultConsigneeType:           "O",           // confirmed 306/307
   defaultInBondCode:          "70",          // confirmed 307/307
   defaultFilingOption:        "2",           // confirmed 307/307 — PREDEPARTURE

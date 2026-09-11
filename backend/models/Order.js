@@ -79,6 +79,15 @@ const orderSchema = new mongoose.Schema(
     originIndicator: { type: String, default: "" },  // IT1_21 override ("D" domestic / "F" foreign)
     aesScac:         { type: String, default: "" },  // SCAC override (else port-based default — varies per sailing)
 
+    // USPPI's own contact (AD0_9/AD0_11/AD0_12) — confirmed from a live ACE
+    // filing screen (order 14217) that this is a person AT the USPPI (e.g.
+    // "Pablo Ceas" at State Farm Mutual), not DDG's own contact — it varies
+    // per order same as the USPPI itself. Falls back to AesConfig's
+    // usppiContact* (DDG's own contact) when an order doesn't have one.
+    usppiContactFirst: { type: String, default: "" },
+    usppiContactLast:  { type: String, default: "" },
+    usppiContactPhone: { type: String, default: "" },
+
     // Full title assignment chain, as read off the uploaded title photo(s) by
     // the Title OCR feature — one entry for the registered owner ("seller")
     // and one per reassignment block filled in on the back ("buyer1",

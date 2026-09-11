@@ -44,6 +44,7 @@ const EDIT_MAP = {
   // USPPI = the vehicle's seller of record (order.exporter*), not DDG — see aesWeblink.js
   AD0_1: "exporterName", AD0_2: "usppiEin", AD0_4: "exporterAddress",
   AD0_6: "exporterCity", AD0_7: "exporterState", AD0_8: "exporterZip",
+  AD0_9: "usppiContactFirst", AD0_11: "usppiContactLast", AD0_12: "usppiContactPhone",
   AD1_3: "consigneeName", AD1_8: "consigneeAddress", AD1_10: "consigneeCity",
   AD1_11: "consigneeState", AD1_13: "consigneeZip",
   EQ1: "containerNumber", SN1: "sealNumber",

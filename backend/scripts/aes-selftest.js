@@ -123,6 +123,13 @@ const real14217 = buildWeblinkFiling(REAL_ORDER, REAL_CONFIG, { srn: "14217", re
 ok("SRN is the bare order number", () => assert.equal(real14217.fields.SRN, "14217"));
 ok("USPPI comes from the order, not config", () => assert.equal(real14217.fields.AD0_1, "STATE FARM MUTUAL"));
 ok("USPPI EIN comes from the order", () => assert.equal(real14217.fields.AD0_2, "37053310000"));
+ok("USPPI contact falls back to config (DDG) when the order has none", () => assert.equal(real14217.fields.AD0_9, "ELI"));
+ok("USPPI contact: order-level value wins over config", () => {
+  const b = buildWeblinkFiling({ ...REAL_ORDER, usppiContactFirst: "PABLO", usppiContactLast: "CEAS", usppiContactPhone: "8007828332" }, REAL_CONFIG, { srn: "14217", returnToken: "tok" });
+  assert.equal(b.fields.AD0_9, "PABLO");
+  assert.equal(b.fields.AD0_11, "CEAS");
+  assert.equal(b.fields.AD0_12, "8007828332");
+});
 ok("ST derived from exporterState (clean), not messy pickupState", () => assert.equal(real14217.fields.ST, "OH"));
 ok("ST and USPPI state (AD0_7) always match — same source, computed once", () => assert.equal(real14217.fields.ST, real14217.fields.AD0_7));
 

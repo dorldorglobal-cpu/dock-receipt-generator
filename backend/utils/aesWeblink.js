@@ -155,9 +155,12 @@ function buildWeblinkFiling(order, config, opts = {}) {
   req("AD0_6", order.exporterCity || config.usppiCity, "USPPI city", "add it on the filing screen, or set a fallback in AES Settings");
   req("AD0_7", originState, "USPPI state", "same as ST — add it on the filing screen, or set the AES Settings fallback state of origin");
   req("AD0_8", order.exporterZip || config.usppiZip, "USPPI ZIP", "add it on the filing screen, or set a fallback in AES Settings");
-  req("AD0_9", config.usppiContactFirst, "USPPI contact first name", "AES Settings — DDG's own filer contact");
-  req("AD0_11", config.usppiContactLast, "USPPI contact last name", "AES Settings — DDG's own filer contact");
-  req("AD0_12", digits(config.usppiPhone), "USPPI contact phone", "AES Settings — DDG's own filer contact");
+  // A person AT the USPPI, not DDG — confirmed from a live ACE filing screen
+  // (order 14217: "Pablo Ceas" at State Farm Mutual, not DDG's own contact).
+  // Falls back to AesConfig's usppiContact* (DDG's own contact) when unknown.
+  req("AD0_9", order.usppiContactFirst || config.usppiContactFirst, "USPPI contact first name", "add it on the filing screen, or set a fallback in AES Settings");
+  req("AD0_11", order.usppiContactLast || config.usppiContactLast, "USPPI contact last name", "add it on the filing screen, or set a fallback in AES Settings");
+  req("AD0_12", digits(order.usppiContactPhone) || digits(config.usppiPhone), "USPPI contact phone", "add it on the filing screen, or set a fallback in AES Settings");
 
   // ── Ultimate consignee (party type C) ────────────────────────────────────
   req("AD1_3", order.consigneeName, "Ultimate consignee name");

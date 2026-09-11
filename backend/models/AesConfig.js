@@ -35,6 +35,10 @@ const aesConfigSchema = new mongoose.Schema(
     // below. Kept in the schema only so an old value here isn't silently lost.
     usppiState:        { type: String, default: "" },
     usppiZip:          { type: String, default: "" },
+    // Fallback only — the real USPPI contact (a person AT the USPPI, e.g. an
+    // insurer's claims handler) is per-order (Order.usppiContactFirst/Last/
+    // Phone) and always wins when set. These are used when an order doesn't
+    // have its own — filling in DDG's own contact is a reasonable default.
     usppiContactFirst: { type: String, default: "" },
     usppiContactLast:  { type: String, default: "" },
     usppiPhone:        { type: String, default: "" },
