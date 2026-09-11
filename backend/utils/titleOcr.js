@@ -153,9 +153,24 @@ function isUsParty(p) {
   return p.country === "UNITED STATES" || p.country === "USA" || p.country === "US";
 }
 
+// Loose "same company" check — uppercase, strip punctuation, see if one
+// contains the other. Good enough for a UI hint, not meant to be exact.
+function looksLikeSameName(a, b) {
+  const norm = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const na = norm(a), nb = norm(b);
+  if (!na || !nb) return false;
+  return na === nb || na.includes(nb) || nb.includes(na);
+}
+
 // Business rule described above. `ddgAgent` = AesConfig.forwardingAgent
-// ({ name, address1, address2, city, state, country, postal }).
-function pickUsppi({ registeredOwner, buyers }, { isFreeport, ddgAgent }) {
+// ({ name, address1, address2, city, state, country, postal }). `orderCustomerName`
+// = the order's own customerName, already captured cleanly (typed, not
+// handwritten) off the buyer receipt when the order was created — in the
+// Freeport/POA case the foreign buyer on the title IS almost always this
+// same customer, so prefer that known-good spelling over OCR'ing their name
+// off a handwritten reassignment block. The title's own name is still
+// returned as titleName so a mismatch is visible in review.
+function pickUsppi({ registeredOwner, buyers }, { isFreeport, ddgAgent, orderCustomerName }) {
   const chain = buyers || [];
 
   for (let i = chain.length - 1; i >= 0; i--) {
@@ -172,13 +187,27 @@ function pickUsppi({ registeredOwner, buyers }, { isFreeport, ddgAgent }) {
     }
 
     if (isLast && isFreeport) {
+      const nameMatches = looksLikeSameName(b.name, orderCustomerName);
+      // Prefer the order's own (typed, already-verified) customerName over the
+      // OCR'd handwritten name — UNLESS they clearly don't match, in which case
+      // trust the title itself and just flag it for a human to double-check
+      // (could be a broker/different entity, or the wrong title uploaded).
+      const preferCustomer = !!orderCustomerName && (nameMatches || !b.name);
+      const usedName = preferCustomer ? orderCustomerName : (b.name || orderCustomerName || "");
+      const mismatch = !!(orderCustomerName && b.name && !nameMatches);
       return {
-        name: b.name,
+        name: usedName,
+        titleName: b.name || "",
+        nameMismatch: mismatch,
         address: [ddgAgent?.address1, ddgAgent?.address2].filter(Boolean).join(" "),
         city: ddgAgent?.city || "", state: ddgAgent?.state || "", zip: ddgAgent?.postal || "",
         country: "UNITED STATES",
         source: "poa-freeport",
-        reason: `Buyer (${b.name || "unnamed"}) is foreign and POL is Freeport — using buyer's name with our own address (POA).`,
+        reason: mismatch
+          ? `Buyer is foreign and POL is Freeport — using our own address (POA), but the title's buyer name ("${b.name}") doesn't look like this order's customer ("${orderCustomerName}") — double-check which is right.`
+          : preferCustomer
+          ? `Buyer is foreign and POL is Freeport — using the order's customer name (${orderCustomerName}) with our own address (POA), since that's already clean typed data rather than OCR off handwriting.`
+          : `Buyer (${b.name || "unnamed"}) is foreign and POL is Freeport — using buyer's name with our own address (POA).`,
       };
     }
     // foreign and not the Freeport case: keep walking backward

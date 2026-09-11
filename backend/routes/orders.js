@@ -284,7 +284,7 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
 // Nothing is saved here — the frontend shows a review modal first. ───────────
 router.post("/:id/parse-title", titleUpload.array("files", 6), async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id).select("pol vin").lean();
+    const order = await Order.findById(req.params.id).select("pol vin customerName").lean();
     if (!order) return res.status(404).json({ error: "Order not found" });
     if (!req.files?.length) return res.status(400).json({ error: "No title image(s) uploaded" });
 
@@ -297,7 +297,9 @@ router.post("/:id/parse-title", titleUpload.array("files", 6), async (req, res) 
 
     const isFreeport = (order.pol || "").toUpperCase().includes("FREEPORT");
     const cfg = await AesConfig.getSingleton();
-    const usppiSuggestion = pickUsppi(extracted, { isFreeport, ddgAgent: cfg.forwardingAgent });
+    const usppiSuggestion = pickUsppi(extracted, {
+      isFreeport, ddgAgent: cfg.forwardingAgent, orderCustomerName: order.customerName || "",
+    });
 
     const vinMismatch = !!(extracted.vin && order.vin && extracted.vin !== order.vin.toUpperCase());
 

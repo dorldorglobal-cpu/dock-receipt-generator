@@ -5418,8 +5418,13 @@ export default function OrderDetails() {
               {!titleOcrResult?.buyers?.length && <div style={{ color:"var(--text-muted)" }}>No reassignment found — title still in the seller's name.</div>}
             </div>
 
-            <div style={{ padding:"8px 12px", background:"rgba(124,58,237,0.08)", border:"1px solid rgba(124,58,237,0.3)", borderRadius:8, fontSize:12, color:"#a78bfa", marginBottom:10 }}>
-              💡 {titleOcrResult?.usppiSuggestion?.reason}
+            <div style={{
+              padding:"8px 12px", borderRadius:8, fontSize:12, marginBottom:10,
+              background: titleOcrResult?.usppiSuggestion?.nameMismatch ? "rgba(239,68,68,0.1)" : "rgba(124,58,237,0.08)",
+              border: `1px solid ${titleOcrResult?.usppiSuggestion?.nameMismatch ? "rgba(239,68,68,0.4)" : "rgba(124,58,237,0.3)"}`,
+              color: titleOcrResult?.usppiSuggestion?.nameMismatch ? "#f87171" : "#a78bfa",
+            }}>
+              {titleOcrResult?.usppiSuggestion?.nameMismatch ? "⚠" : "💡"} {titleOcrResult?.usppiSuggestion?.reason}
             </div>
 
             <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>AES Exporter (USPPI) — edit if needed</div>
