@@ -1,7 +1,7 @@
 // Vehicle title OCR — reads a photo (or photos) of a US vehicle title /
-// salvage certificate via OpenAI's gpt-4o vision, and picks the correct
-// AES USPPI (exporterName/exporterAddress on Order) from the title's
-// assignment chain per Eli's filing rule:
+// salvage certificate via Claude's vision (Anthropic API), and picks the
+// correct AES USPPI (exporterName/exporterAddress on Order) from the
+// title's assignment chain per Eli's filing rule:
 //
 //   1. Walk the title's chain of custody backward from the most recent
 //      party: registered owner ("seller"), then buyer #1, buyer #2, ... as
@@ -23,9 +23,15 @@
 // a Jacksonville order with two domestic reassignments (Peddle LLC ->
 // Boacon Autos) used the LAST domestic buyer (Boacon Autos).
 
+const Anthropic = require("@anthropic-ai/sdk");
 const heicConvert = require("heic-convert");
 
-const MODEL = "gpt-4o";
+const MODEL = "claude-sonnet-5";
+let _client = null;
+function getClient() {
+  if (!_client) _client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+  return _client;
+}
 
 const US_STATES = new Set([
   "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
@@ -35,7 +41,7 @@ const US_STATES = new Set([
 ]);
 
 // ── Image prep ────────────────────────────────────────────────────────────
-// gpt-4o vision accepts jpeg/png/gif/webp — not HEIC/HEIF, which is what
+// Claude's vision accepts jpeg/png/gif/webp — not HEIC/HEIF, which is what
 // iPhones save title photos as by default. Convert those; pass everything
 // else through as-is.
 async function toVisionImage(buffer, mimetype, filename) {
@@ -72,54 +78,63 @@ Rules:
 - Use "" for any field you cannot read or that is not present. Never fabricate a value.
 - If multiple photos are provided, treat them as pages of the SAME title (e.g. front + back) and combine everything into one answer.`;
 
+// Claude doesn't force JSON-only output the way OpenAI's response_format
+// does — it reliably returns bare JSON when instructed to, but defensively
+// strip a markdown code fence or leading/trailing prose if it ever adds one.
+function extractJson(text) {
+  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const candidate = fenced ? fenced[1] : text;
+  try { return JSON.parse(candidate); } catch { /* fall through */ }
+  const braceMatch = candidate.match(/\{[\s\S]*\}/);
+  if (braceMatch) {
+    try { return JSON.parse(braceMatch[0]); } catch { /* fall through */ }
+  }
+  throw new Error("Claude returned invalid JSON");
+}
+
 async function extractTitleFields(files) {
-  if (!process.env.OPENAI_API_KEY) {
-    throw new Error("OPENAI_API_KEY is not set — title OCR is unavailable.");
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY is not set — title OCR is unavailable.");
   }
   if (!files?.length) throw new Error("No title images provided");
 
   const images = [];
   for (const f of files) {
     const { base64, mime } = await toVisionImage(f.buffer, f.mimetype, f.filename);
-    images.push({
-      type: "image_url",
-      image_url: { url: `data:${mime};base64,${base64}`, detail: "high" },
-    });
+    images.push({ type: "image", source: { type: "base64", media_type: mime, data: base64 } });
   }
 
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
+  let response;
+  try {
+    response = await getClient().messages.create({
       model: MODEL,
-      temperature: 0.1,
-      response_format: { type: "json_object" },
+      max_tokens: 16000,
+      system: SYSTEM_PROMPT,
       messages: [
-        { role: "system", content: SYSTEM_PROMPT },
         {
           role: "user",
           content: [
-            { type: "text", text: `Extract this title. ${images.length > 1 ? `${images.length} photos provided — they are pages of the same title.` : ""}` },
             ...images,
+            { type: "text", text: `Extract this title. ${images.length > 1 ? `${images.length} photos provided — they are pages of the same title.` : ""}` },
           ],
         },
       ],
-    }),
-  });
-
-  if (!res.ok) {
-    const errBody = await res.text().catch(() => "");
-    throw new Error(`OpenAI vision request failed (${res.status}): ${errBody.slice(0, 300)}`);
+    });
+  } catch (err) {
+    if (err instanceof Anthropic.AuthenticationError) throw new Error("Claude API key is invalid — check ANTHROPIC_API_KEY.");
+    if (err instanceof Anthropic.RateLimitError) throw new Error("Claude rate-limited the request — try again shortly.");
+    if (err instanceof Anthropic.APIError) throw new Error(`Claude vision request failed (${err.status}): ${err.message}`);
+    throw err;
   }
-  const data = await res.json();
-  const raw = data.choices?.[0]?.message?.content;
-  if (!raw) throw new Error("OpenAI returned no content");
 
-  let parsed;
-  try { parsed = JSON.parse(raw); } catch { throw new Error("OpenAI returned invalid JSON"); }
+  if (response.stop_reason === "refusal") {
+    throw new Error("Claude declined to read this image — try a clearer photo.");
+  }
+
+  const raw = response.content.filter(b => b.type === "text").map(b => b.text).join("\n").trim();
+  if (!raw) throw new Error("Claude returned no content");
+
+  const parsed = extractJson(raw);
 
   return {
     titleNumber: String(parsed.titleNumber || "").trim(),
