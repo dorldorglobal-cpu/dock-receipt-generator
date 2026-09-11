@@ -1757,7 +1757,17 @@ export default function Containers() {
                                   padding:"3px 7px", fontSize:12, color:"var(--text-primary)", width:"100%" }}
                               />
                             </td>
-                            <td style={{ padding:"7px 8px", textAlign:"right", color:"var(--text-muted)", fontSize:12 }}>—</td>
+                            <td style={{ padding:"7px 8px", textAlign:"right" }}>
+                              <select
+                                value={line.mode || "split"}
+                                onChange={e => setExtraLines(p => p.map((l,j) => j===i ? {...l, mode:e.target.value} : l))}
+                                title="Split: divided evenly across each vehicle's own invoice. New Line: not tied to any vehicle — shown as its own line only on the Combined invoice, and left off individual invoices."
+                                style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4,
+                                  padding:"3px 5px", fontSize:11, color:"var(--text-primary)" }}>
+                                <option value="split">Split / unit</option>
+                                <option value="newLine">New Line</option>
+                              </select>
+                            </td>
                             <td style={{ padding:"7px 8px", textAlign:"right" }}>
                               <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
                                 <span style={{ color:"var(--text-muted)", fontSize:12 }}>$</span>
@@ -1778,7 +1788,14 @@ export default function Containers() {
                         ))}
                         <tr>
                           <td colSpan={7} style={{ padding:"6px 8px" }}>
-                            <button onClick={() => setExtraLines(p => [...p, { label:"Amendment Fee", amount:0 }])}
+                            <button onClick={() => {
+                                const mode = window.confirm(
+                                  "Is this charge tied to one unit/vehicle, or a shared cost?\n\n" +
+                                  "OK = Split evenly across each vehicle's invoice (e.g. a container-wide BAF).\n" +
+                                  "Cancel = New Line — not tied to any vehicle, shown as its own line only on the Combined invoice (left off individual invoices)."
+                                ) ? "split" : "newLine";
+                                setExtraLines(p => [...p, { label:"Amendment Fee", amount:0, mode }]);
+                              }}
                               style={{ background:"none", border:"1px dashed var(--border)", borderRadius:6,
                                 color:"var(--text-muted)", fontSize:12, cursor:"pointer", padding:"4px 12px" }}>
                               + Add line

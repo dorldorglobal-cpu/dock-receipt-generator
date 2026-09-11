@@ -406,10 +406,12 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     const orderMap = {};
     for (const o of orders) orderMap[String(o._id)] = o;
 
-    // Split each extra line (e.g. a container-wide BAF) evenly across every
-    // invoice being sent, and persist it so the invoice's own total (used
+    // Split each "split"-mode extra line (e.g. a container-wide BAF) evenly across
+    // every invoice being sent, and persist it so the invoice's own total (used
     // elsewhere for profit tracking) matches what the customer was actually billed.
-    const validExtraLines = (extraLines || []).filter(l => l.label && l.amount);
+    // "newLine"-mode lines aren't tied to any one vehicle — those stay combined-only
+    // (see generateCombinedInvoicePdf) and are intentionally skipped here.
+    const validExtraLines = (extraLines || []).filter(l => l.label && l.amount && l.mode !== "newLine");
     if (validExtraLines.length && invoices.length) {
       const shares = validExtraLines.map(l => Math.round((Number(l.amount) / invoices.length) * 100) / 100);
       invoices = await Promise.all(invoices.map(async (inv) => {
