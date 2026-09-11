@@ -105,7 +105,10 @@ const orderSchema = new mongoose.Schema(
     }],
 
     aesFiling: {
-      srn:           { type: String, default: "" },
+      // No default: the sparse unique index below only excludes documents
+      // where this field is genuinely missing, not "". A default of ""
+      // made every order collide on that empty string (E11000).
+      srn:           String,
       returnToken:   { type: String, default: "" },  // guards the public wl_success_url callback
       status: {
         type: String,
