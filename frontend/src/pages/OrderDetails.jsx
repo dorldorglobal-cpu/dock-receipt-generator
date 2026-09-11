@@ -1127,6 +1127,63 @@ export default function OrderDetails() {
     }
   };
 
+  // Handles a batch of files dropped/picked onto one labeled zone: uploads
+  // each individually (existing behavior), and — for "Title" — also sends the
+  // whole batch to the title-OCR endpoint in one call, so a front+back pair
+  // gets read together (reassignments are usually on the back).
+  const [titleOcrLoading, setTitleOcrLoading] = useState(false);
+  const [titleOcrResult,  setTitleOcrResult]  = useState(null); // { ...extracted, usppiSuggestion, vinMismatch }
+  const [titleOcrForm,    setTitleOcrForm]    = useState(null); // editable USPPI fields the user confirms
+
+  const runTitleOcr = async (files) => {
+    setTitleOcrLoading(true);
+    try {
+      const fd = new FormData();
+      files.forEach(f => fd.append("files", f));
+      const res = await fetch(`${API}/api/orders/${id}/parse-title`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Title OCR failed");
+      setTitleOcrResult(data);
+      const u = data.usppiSuggestion || {};
+      setTitleOcrForm({
+        titleNumber: data.titleNumber || order?.titleNumber || "",
+        titleState:  data.titleState  || order?.titleState  || "",
+        exporterName:    u.name    || "",
+        exporterAddress: u.address || "",
+        exporterCity:    u.city    || "",
+        exporterState:   u.state   || "",
+        exporterZip:     u.zip     || "",
+        exporterCountry: u.country || "UNITED STATES",
+      });
+    } catch (e) {
+      setMessage("❌ Title OCR failed: " + e.message);
+    } finally {
+      setTitleOcrLoading(false);
+    }
+  };
+
+  const handleLabelFiles = (fileList, label) => {
+    const files = Array.from(fileList);
+    files.forEach(f => uploadFile(f, label));
+    if (label === "Title" && files.length) runTitleOcr(files);
+  };
+
+  const saveTitleOcr = async () => {
+    if (!titleOcrForm) return;
+    const chain = [];
+    if (titleOcrResult?.registeredOwner?.name) chain.push({ role: "seller", ...titleOcrResult.registeredOwner });
+    (titleOcrResult?.buyers || []).forEach((b, i) => chain.push({ role: `buyer${i + 1}`, ...b }));
+    await fetch(`${API}/api/orders/${id}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...titleOcrForm, titleChain: chain }),
+    });
+    await fetchOrder();
+    setMessage("✅ Title info saved — Exporter (USPPI) updated");
+    setTitleOcrResult(null);
+    setTitleOcrForm(null);
+  };
+
   // Delete a file from Drive and the order. Pass silent=true to skip confirm + toast.
   const deleteFile = async (driveFileId, fileName, silent = false) => {
     if (!silent && !window.confirm(`Delete "${fileName}"?`)) return;
@@ -2265,7 +2322,7 @@ export default function OrderDetails() {
           <span>Request Date</span>
           <strong className="small">{order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</strong>
         </div>
-        <div className="dashboard-card" onClick={() => setCardPopup({ card: "vin", form: { vin: order.vin || "", lotNumber: order.lotNumber || "", pin: order.pin || "", buyerNumber: order.buyerNumber || "", buyerName: order.buyerName || "" } })}
+        <div className="dashboard-card" onClick={() => setCardPopup({ card: "vin", form: { vin: order.vin || "", lotNumber: order.lotNumber || "", pin: order.pin || "", buyerNumber: order.buyerNumber || "", buyerName: order.buyerName || "", titleNumber: order.titleNumber || "", titleState: order.titleState || "" } })}
           style={{ cursor: "pointer" }} title="Click to edit">
           <span>VIN / Chassis</span>
           <strong className="small" style={{ fontFamily: "monospace", letterSpacing: "0.04em" }}>
@@ -2281,6 +2338,11 @@ export default function OrderDetails() {
             {order.buyerNumber && (
               <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
                 Buyer# <strong style={{ color: "var(--text-secondary)" }}>{order.buyerNumber}</strong>
+              </span>
+            )}
+            {order.titleNumber && (
+              <span style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                Title# <strong style={{ color: "var(--text-secondary)" }}>{order.titleNumber}{order.titleState ? ` (${order.titleState})` : ""}</strong>
               </span>
             )}
           </div>
@@ -2670,7 +2732,7 @@ export default function OrderDetails() {
                 onDragLeave={e => { if (!e.currentTarget.contains(e.relatedTarget)) setDraggingLabel(null); }}
                 onDrop={e => {
                   e.preventDefault(); setDraggingLabel(null);
-                  Array.from(e.dataTransfer.files).forEach(f => uploadFile(f, label));
+                  handleLabelFiles(e.dataTransfer.files, label);
                 }}
                 onClick={() => document.getElementById(`zone-${label}`).click()}
                 style={{
@@ -2682,12 +2744,12 @@ export default function OrderDetails() {
                 }}>
                 <input id={`zone-${label}`} type="file" multiple hidden
                   onChange={e => {
-                    Array.from(e.target.files).forEach(f => uploadFile(f, label));
+                    handleLabelFiles(e.target.files, label);
                     e.target.value = "";
                   }} />
-                <span style={{ fontSize:20 }}>{busy ? "⏳" : icon}</span>
+                <span style={{ fontSize:20 }}>{busy ? "⏳" : (label === "Title" && titleOcrLoading) ? "🔎" : icon}</span>
                 <span style={{ fontSize:11, fontWeight:600, color:"var(--text-secondary)", lineHeight:1.2 }}>
-                  {busy ? "Uploading…" : label}
+                  {busy ? "Uploading…" : (label === "Title" && titleOcrLoading) ? "Reading title…" : label}
                 </span>
                 {!busy && (() => {
                   const autoMap = { "Dispatch":"→ Awaiting Pickup", "Dock Receipt":"→ Picked Up", "Stamped DR":"→ Waiting to Sail", "Draft":"→ Sailed" };
@@ -3866,6 +3928,20 @@ export default function OrderDetails() {
                     placeholder="e.g. 690717"
                     style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
                 </label>
+                <div style={{ display:"flex", gap:10 }}>
+                  <label style={{ fontSize:12, color:"var(--text-muted)", flex:2 }}>
+                    Title # <span style={{ color:"var(--text-muted)", fontWeight:400 }}>(or use the 📜 Title upload for auto-read)</span>
+                    <input value={cardPopup.form.titleNumber || ""}
+                      onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, titleNumber: e.target.value } }))}
+                      style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                  </label>
+                  <label style={{ fontSize:12, color:"var(--text-muted)", flex:1 }}>
+                    State
+                    <input value={cardPopup.form.titleState || ""}
+                      onChange={e => setCardPopup(p => ({ ...p, form: { ...p.form, titleState: e.target.value.toUpperCase().slice(0,2) } }))}
+                      style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-input)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                  </label>
+                </div>
               </div>
             )}
 
@@ -5298,6 +5374,96 @@ export default function OrderDetails() {
         </div>
       )}
 
+      {/* ── Title OCR Review Modal ── */}
+      {titleOcrForm && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #7c3aed", borderRadius:12, padding:28, width:600, maxWidth:"95vw", maxHeight:"90vh", overflowY:"auto" }}>
+            <h3 style={{ margin:"0 0 4px", color:"#a78bfa" }}>📜 Title Read — Review Before Saving</h3>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
+              Extracted from the photo(s) you just uploaded. Check everything below before saving — this fills the AES Exporter (USPPI).
+            </p>
+
+            {titleOcrResult?.vinMismatch && (
+              <div style={{ padding:"8px 12px", background:"rgba(239,68,68,0.1)", border:"1px solid rgba(239,68,68,0.4)", borderRadius:8, fontSize:12, color:"#f87171", marginBottom:14 }}>
+                ⚠ VIN on the title (<strong>{titleOcrResult.vin || "—"}</strong>) doesn't match this order's VIN (<strong>{titleOcrResult.orderVin}</strong>) — make sure this is the right title before saving.
+              </div>
+            )}
+
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:16 }}>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Title Number
+                <input value={titleOcrForm.titleNumber} onChange={e=>setTitleOcrForm(f=>({...f, titleNumber:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Title State
+                <input value={titleOcrForm.titleState} onChange={e=>setTitleOcrForm(f=>({...f, titleState:e.target.value.toUpperCase().slice(0,2)}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+            </div>
+
+            {/* Read-only reference: what was actually on the title */}
+            <div style={{ background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 12px", marginBottom:16, fontSize:12 }}>
+              <div style={{ fontWeight:700, color:"var(--text-secondary)", marginBottom:6 }}>Title chain (reference only)</div>
+              <div style={{ marginBottom: (titleOcrResult?.buyers||[]).length ? 4 : 0 }}>
+                <span style={{ color:"var(--text-muted)" }}>Seller (registered owner):</span>{" "}
+                <strong>{titleOcrResult?.registeredOwner?.name || "—"}</strong>
+                {titleOcrResult?.registeredOwner?.address && <span style={{ color:"var(--text-muted)" }}> — {titleOcrResult.registeredOwner.address}, {titleOcrResult.registeredOwner.city} {titleOcrResult.registeredOwner.state} {titleOcrResult.registeredOwner.zip}</span>}
+              </div>
+              {(titleOcrResult?.buyers || []).map((b, i) => (
+                <div key={i}>
+                  <span style={{ color:"var(--text-muted)" }}>Buyer #{i+1}{b.country && b.country !== "UNITED STATES" ? ` (${b.country})` : ""}:</span>{" "}
+                  <strong>{b.name || "—"}</strong>
+                  {b.address && <span style={{ color:"var(--text-muted)" }}> — {b.address}, {b.city} {b.state} {b.zip}</span>}
+                </div>
+              ))}
+              {!titleOcrResult?.buyers?.length && <div style={{ color:"var(--text-muted)" }}>No reassignment found — title still in the seller's name.</div>}
+            </div>
+
+            <div style={{ padding:"8px 12px", background:"rgba(124,58,237,0.08)", border:"1px solid rgba(124,58,237,0.3)", borderRadius:8, fontSize:12, color:"#a78bfa", marginBottom:10 }}>
+              💡 {titleOcrResult?.usppiSuggestion?.reason}
+            </div>
+
+            <div style={{ fontWeight:700, fontSize:13, marginBottom:8 }}>AES Exporter (USPPI) — edit if needed</div>
+            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:20 }}>
+              <label style={{ fontSize:12, color:"var(--text-secondary)", gridColumn:"1 / -1" }}>Name
+                <input value={titleOcrForm.exporterName} onChange={e=>setTitleOcrForm(f=>({...f, exporterName:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)", gridColumn:"1 / -1" }}>Address
+                <input value={titleOcrForm.exporterAddress} onChange={e=>setTitleOcrForm(f=>({...f, exporterAddress:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>City
+                <input value={titleOcrForm.exporterCity} onChange={e=>setTitleOcrForm(f=>({...f, exporterCity:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>State
+                <input value={titleOcrForm.exporterState} onChange={e=>setTitleOcrForm(f=>({...f, exporterState:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Zip
+                <input value={titleOcrForm.exporterZip} onChange={e=>setTitleOcrForm(f=>({...f, exporterZip:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+              <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Country
+                <input value={titleOcrForm.exporterCountry} onChange={e=>setTitleOcrForm(f=>({...f, exporterCountry:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+            </div>
+
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => { setTitleOcrResult(null); setTitleOcrForm(null); }}
+                style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>
+                Skip
+              </button>
+              <button onClick={saveTitleOcr}
+                style={{ padding:"8px 20px", background:"#7c3aed", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                💾 Save Title Info
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── Text Office Modal ── */}
       {textOfficeModal && (
         <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
@@ -5855,6 +6021,8 @@ function DrEditModal({ form, onFormChange, onApply, onClose, vessels = [], portE
           <DrField label="VIN">{inp("vin", "17-digit VIN")}</DrField>
           <DrField label="Condition">{sel("condition", ["Runner","Nonrunner","Forklift"])}</DrField>
           <DrField label="Title Status">{sel("titleStatus", ["Title","Pending","No Title"])}</DrField>
+          <DrField label="Title Number">{inp("titleNumber", "e.g. 62541874")}</DrField>
+          <DrField label="Title State">{inp("titleState", "2-letter, e.g. MD")}</DrField>
 
           <DrSection title="Exporter / USPPI" />
           <DrField label="Name">{inp("exporterName", "Exporter name")}</DrField>

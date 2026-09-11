@@ -50,6 +50,7 @@ async function autoLinkExpenses(order) {
   }
 }
 const upload = multer({ dest: "temp/" });
+const titleUpload = multer({ storage: multer.memoryStorage(), limits: { fileSize: 20 * 1024 * 1024 } });
 
 // ── Local file storage helpers ────────────────────────────────────────────────
 const UPLOADS_BASE = path.join(__dirname, "..", "uploads");
@@ -275,6 +276,35 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
   } catch (err) {
     console.error("Parse buyer receipt error:", err);
     res.status(500).json({ error: "Failed to parse buyer receipt" });
+  }
+});
+
+// ── POST /api/orders/:id/parse-title — OCR a vehicle title photo (or photos:
+// front + back) via OpenAI vision, and suggest the AES USPPI per Eli's rule.
+// Nothing is saved here — the frontend shows a review modal first. ───────────
+router.post("/:id/parse-title", titleUpload.array("files", 6), async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).select("pol vin").lean();
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    if (!req.files?.length) return res.status(400).json({ error: "No title image(s) uploaded" });
+
+    const { extractTitleFields, pickUsppi } = require("../utils/titleOcr");
+    const AesConfig = require("../models/AesConfig");
+
+    const extracted = await extractTitleFields(
+      req.files.map(f => ({ buffer: f.buffer, mimetype: f.mimetype, filename: f.originalname }))
+    );
+
+    const isFreeport = (order.pol || "").toUpperCase().includes("FREEPORT");
+    const cfg = await AesConfig.getSingleton();
+    const usppiSuggestion = pickUsppi(extracted, { isFreeport, ddgAgent: cfg.forwardingAgent });
+
+    const vinMismatch = !!(extracted.vin && order.vin && extracted.vin !== order.vin.toUpperCase());
+
+    res.json({ ...extracted, usppiSuggestion, vinMismatch, orderVin: order.vin || "" });
+  } catch (err) {
+    console.error("Parse title error:", err.message);
+    res.status(500).json({ error: err.message });
   }
 });
 

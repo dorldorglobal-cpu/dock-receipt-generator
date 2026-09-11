@@ -78,6 +78,22 @@ const orderSchema = new mongoose.Schema(
     exportInfoCode:  { type: String, default: "" },  // IT1_1 override (else "OS")
     originIndicator: { type: String, default: "" },  // IT1_21 override ("D" domestic / "F" foreign)
 
+    // Full title assignment chain, as read off the uploaded title photo(s) by
+    // the Title OCR feature — one entry for the registered owner ("seller")
+    // and one per reassignment block filled in on the back ("buyer1",
+    // "buyer2", ...), in chronological order. Kept as an audit trail for how
+    // the USPPI (exporterName/exporterAddress) suggestion was derived — see
+    // utils/titleOcr.js#pickUsppi for the selection rule.
+    titleChain: [{
+      role:    { type: String, default: "" }, // "seller" | "buyer1" | "buyer2" | ...
+      name:    { type: String, default: "" },
+      address: { type: String, default: "" },
+      city:    { type: String, default: "" },
+      state:   { type: String, default: "" },
+      zip:     { type: String, default: "" },
+      country: { type: String, default: "" },
+    }],
+
     aesFiling: {
       srn:           { type: String, default: "" },
       returnToken:   { type: String, default: "" },  // guards the public wl_success_url callback

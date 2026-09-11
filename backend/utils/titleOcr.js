@@ -1,0 +1,198 @@
+// Vehicle title OCR — reads a photo (or photos) of a US vehicle title /
+// salvage certificate via OpenAI's gpt-4o vision, and picks the correct
+// AES USPPI (exporterName/exporterAddress on Order) from the title's
+// assignment chain per Eli's filing rule:
+//
+//   1. Walk the title's chain of custody backward from the most recent
+//      party: registered owner ("seller"), then buyer #1, buyer #2, ... as
+//      filled in on any reassignment block (front or back of the title).
+//   2. Use the LAST (most recent) party in that chain who has a genuine
+//      USA address as the USPPI.
+//   3. If there is no buyer at all (title never reassigned), USPPI = the
+//      registered owner (seller).
+//   4. Exception — if the very last party in the chain is FOREIGN:
+//        - At FREEPORT: USPPI name = that foreign buyer's name, but the
+//          ADDRESS used is DDG's own agent address (power of attorney).
+//        - At every other port: fall back and keep walking backward to the
+//          previous party with a USA address (seller, or an earlier buyer).
+//
+// Confirmed empirically against real filed orders (2026-09): 43 of 49
+// Freeport orders used DDG's own agent address (23 Galahad Dr, Manalapan,
+// NJ) paired with a foreign buyer's name; a Baltimore order with a foreign
+// buyer (BAFSA GLOBAL VENTURES, Nigeria) fell back to the seller (GEICO);
+// a Jacksonville order with two domestic reassignments (Peddle LLC ->
+// Boacon Autos) used the LAST domestic buyer (Boacon Autos).
+
+const heicConvert = require("heic-convert");
+
+const MODEL = "gpt-4o";
+
+const US_STATES = new Set([
+  "AL","AK","AZ","AR","CA","CO","CT","DE","FL","GA","HI","ID","IL","IN","IA",
+  "KS","KY","LA","ME","MD","MA","MI","MN","MS","MO","MT","NE","NV","NH","NJ",
+  "NM","NY","NC","ND","OH","OK","OR","PA","RI","SC","SD","TN","TX","UT","VT",
+  "VA","WA","WV","WI","WY","DC","PR",
+]);
+
+// ── Image prep ────────────────────────────────────────────────────────────
+// gpt-4o vision accepts jpeg/png/gif/webp — not HEIC/HEIF, which is what
+// iPhones save title photos as by default. Convert those; pass everything
+// else through as-is.
+async function toVisionImage(buffer, mimetype, filename) {
+  const name = (filename || "").toLowerCase();
+  const isHeic = /image\/hei[cf]/i.test(mimetype || "") || /\.hei[cf]$/i.test(name);
+  if (isHeic) {
+    const out = await heicConvert({ buffer, format: "JPEG", quality: 0.85 });
+    return { base64: Buffer.from(out).toString("base64"), mime: "image/jpeg" };
+  }
+  const mime = /^image\//.test(mimetype || "") ? mimetype : "image/jpeg";
+  return { base64: buffer.toString("base64"), mime };
+}
+
+const SYSTEM_PROMPT = `You are reading a photo of a US vehicle Certificate of Title or Certificate of Salvage. Return ONLY a JSON object, no prose, with this exact shape:
+
+{
+  "titleNumber": "",
+  "titleState": "",
+  "vin": "",
+  "registeredOwner": { "name": "", "address": "", "city": "", "state": "", "zip": "" },
+  "buyers": [
+    { "name": "", "address": "", "city": "", "state": "", "zip": "", "country": "" }
+  ]
+}
+
+Rules:
+- titleState: the 2-letter US state that ISSUED the title (top of the document), not a party's state.
+- registeredOwner: the "Name(s) and Address of Registered Owner(s)" (or "Owner" on a salvage certificate) printed at the top of the front of the title. This is the SELLER.
+- buyers: one entry per filled-in "Transfer of Title", "Assignment of Ownership", or "Dealer Reassignment" block — there may be one on the front and one or more stacked on the back. List them in the order they appear top-to-bottom, i.e. chronological order. Look for labels like "Purchaser's Name", "Name(s) of Buyer(s)", "Purchaser Print Name". Skip any reassignment block that is blank/unused. If NO reassignment block is filled in at all, return an empty buyers array.
+- Buyer addresses are sometimes handwritten and don't fit neatly into address/city/state/zip boxes (e.g. a foreign address crammed across several boxes, like a Nigerian or Ghanaian city and country written where "City/State" is printed). Do your best to split it into address/city/state/zip as written, but ALSO set "country" for that buyer:
+  - If the address is clearly a normal US address (a real 2-letter state + 5-digit zip), set country to "UNITED STATES" and leave state as the 2-letter code.
+  - If the address is clearly foreign (mentions a country name, or a city/region that isn't a US state, or has no recognizable US zip), set country to that country's name in English (e.g. "NIGERIA", "GHANA", "TOGO", "BENIN"), and leave "state" empty or as whatever was actually written (do not force it into a fake 2-letter code).
+- vin: the Vehicle Identification Number printed on the title (for cross-checking against our records) — exactly as printed, do not guess characters you can't read.
+- Use "" for any field you cannot read or that is not present. Never fabricate a value.
+- If multiple photos are provided, treat them as pages of the SAME title (e.g. front + back) and combine everything into one answer.`;
+
+async function extractTitleFields(files) {
+  if (!process.env.OPENAI_API_KEY) {
+    throw new Error("OPENAI_API_KEY is not set — title OCR is unavailable.");
+  }
+  if (!files?.length) throw new Error("No title images provided");
+
+  const images = [];
+  for (const f of files) {
+    const { base64, mime } = await toVisionImage(f.buffer, f.mimetype, f.filename);
+    images.push({
+      type: "image_url",
+      image_url: { url: `data:${mime};base64,${base64}`, detail: "high" },
+    });
+  }
+
+  const res = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Authorization": `Bearer ${process.env.OPENAI_API_KEY}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({
+      model: MODEL,
+      temperature: 0.1,
+      response_format: { type: "json_object" },
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        {
+          role: "user",
+          content: [
+            { type: "text", text: `Extract this title. ${images.length > 1 ? `${images.length} photos provided — they are pages of the same title.` : ""}` },
+            ...images,
+          ],
+        },
+      ],
+    }),
+  });
+
+  if (!res.ok) {
+    const errBody = await res.text().catch(() => "");
+    throw new Error(`OpenAI vision request failed (${res.status}): ${errBody.slice(0, 300)}`);
+  }
+  const data = await res.json();
+  const raw = data.choices?.[0]?.message?.content;
+  if (!raw) throw new Error("OpenAI returned no content");
+
+  let parsed;
+  try { parsed = JSON.parse(raw); } catch { throw new Error("OpenAI returned invalid JSON"); }
+
+  return {
+    titleNumber: String(parsed.titleNumber || "").trim(),
+    titleState: String(parsed.titleState || "").trim().toUpperCase().slice(0, 2),
+    vin: String(parsed.vin || "").trim().toUpperCase(),
+    registeredOwner: normalizeParty(parsed.registeredOwner),
+    buyers: (Array.isArray(parsed.buyers) ? parsed.buyers : []).map(normalizeParty).filter(p => p.name || p.address),
+  };
+}
+
+function normalizeParty(p) {
+  p = p || {};
+  return {
+    name:    String(p.name || "").trim().toUpperCase(),
+    address: String(p.address || "").trim().toUpperCase(),
+    city:    String(p.city || "").trim().toUpperCase(),
+    state:   String(p.state || "").trim().toUpperCase().slice(0, 20),
+    zip:     String(p.zip || "").trim(),
+    country: String(p.country || "").trim().toUpperCase(),
+  };
+}
+
+function isUsParty(p) {
+  if (!p) return false;
+  if (p.country && p.country !== "UNITED STATES" && p.country !== "USA" && p.country !== "US") return false;
+  if (p.state && p.state.length === 2 && US_STATES.has(p.state)) return true;
+  // No usable state code and no explicit non-US country — treat as unknown/US
+  // only if a country was explicitly confirmed US; otherwise be conservative
+  // and call it non-US so a human reviews it rather than silently filing a
+  // bad address.
+  return p.country === "UNITED STATES" || p.country === "USA" || p.country === "US";
+}
+
+// Business rule described above. `ddgAgent` = AesConfig.forwardingAgent
+// ({ name, address1, address2, city, state, country, postal }).
+function pickUsppi({ registeredOwner, buyers }, { isFreeport, ddgAgent }) {
+  const chain = buyers || [];
+
+  for (let i = chain.length - 1; i >= 0; i--) {
+    const b = chain[i];
+    const isLast = i === chain.length - 1;
+
+    if (isUsParty(b)) {
+      return {
+        name: b.name, address: b.address, city: b.city, state: b.state, zip: b.zip,
+        country: "UNITED STATES",
+        source: `buyer${i + 1}`,
+        reason: `Using buyer #${i + 1} (${b.name || "unnamed"}) — last domestic-US party on the title.`,
+      };
+    }
+
+    if (isLast && isFreeport) {
+      return {
+        name: b.name,
+        address: [ddgAgent?.address1, ddgAgent?.address2].filter(Boolean).join(" "),
+        city: ddgAgent?.city || "", state: ddgAgent?.state || "", zip: ddgAgent?.postal || "",
+        country: "UNITED STATES",
+        source: "poa-freeport",
+        reason: `Buyer (${b.name || "unnamed"}) is foreign and POL is Freeport — using buyer's name with our own address (POA).`,
+      };
+    }
+    // foreign and not the Freeport case: keep walking backward
+  }
+
+  const o = registeredOwner || {};
+  return {
+    name: o.name, address: o.address, city: o.city, state: o.state, zip: o.zip,
+    country: "UNITED STATES",
+    source: "seller",
+    reason: chain.length
+      ? "Every buyer on the title is foreign and this isn't a Freeport shipment — falling back to the seller."
+      : "No buyer/reassignment found on the title — using the registered owner (seller).",
+  };
+}
+
+module.exports = { extractTitleFields, pickUsppi, isUsParty };
