@@ -1864,6 +1864,89 @@ router.post("/auto-advance-arrived", async (req, res) => {
   }
 });
 
+// ═══════════════════════════════════════════════════════════════════════════
+//  AES / EEI filing (CBP AES WebLink)
+// ═══════════════════════════════════════════════════════════════════════════
+const crypto = require("crypto");
+const AesConfig = require("../models/AesConfig");
+const { buildWeblinkFiling } = require("../utils/aesWeblink");
+
+// Ensure the order has a stable SRN + return token before hand-off.
+async function ensureAesFiling(order, config) {
+  order.aesFiling = order.aesFiling || {};
+  if (order.aesFiling.srn && order.aesFiling.returnToken) return;
+
+  if (!order.aesFiling.returnToken) order.aesFiling.returnToken = crypto.randomBytes(16).toString("hex");
+
+  if (!order.aesFiling.srn) {
+    const prefix = (config.srnPrefix || "DDG").trim();
+    let base = `${prefix}${(order.refNumber || "").trim()}`.slice(0, 17);
+    let srn = base;
+    for (let n = 2; n <= 20; n++) {
+      const clash = await Order.exists({ "aesFiling.srn": srn, _id: { $ne: order._id } });
+      if (!clash) break;
+      const suffix = `-${n}`;
+      srn = base.slice(0, 17 - suffix.length) + suffix;
+    }
+    order.aesFiling.srn = srn;
+  }
+  if (!order.aesFiling.status) order.aesFiling.status = "built";
+  order.aesFiling.env = process.env.AES_ENV || config.aesEnv || "test";
+  await order.save();
+}
+
+// GET /api/orders/:id/aes-weblink — the built filing for the review screen
+router.get("/:id/aes-weblink", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    const config = await AesConfig.getSingleton();
+    await ensureAesFiling(order, config);
+
+    const built = buildWeblinkFiling(order, config, {
+      srn: order.aesFiling.srn,
+      returnToken: order.aesFiling.returnToken,
+    });
+
+    if (req.query.dryRun) {
+      console.log(`[aes-weblink] ${order.refNumber} SRN=${built.meta.srn} env=${built.meta.env}`);
+      console.log("  fields:", JSON.stringify(built.fields, null, 2));
+      console.log("  missing:", built.missing.map((m) => m.field).join(", ") || "(none)");
+    }
+
+    res.json({
+      ...built,
+      filingStatus: order.aesFiling.status,
+      aesItn: order.aesItn || "",
+      order: {
+        _id: order._id, refNumber: order.refNumber, vin: order.vin,
+        vehicleYearMakeModel: order.vehicleYearMakeModel, requestType: order.requestType,
+        pol: order.pol, pod: order.pod, consigneeCountry: order.consigneeCountry,
+      },
+    });
+  } catch (err) {
+    console.error("aes-weblink error:", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/orders/:id/aes-mark-handoff — called right before the browser POSTs to CBP
+router.post("/:id/aes-mark-handoff", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    order.aesFiling = order.aesFiling || {};
+    order.aesFiling.status = "handed_off";
+    order.aesFiling.handedOffAt = new Date();
+    order.aesFiling.lastError = "";
+    addTimeline(order, "AES Handed Off", `Filing ${order.aesFiling.srn} sent to ACE AESDirect (${order.aesFiling.env || "test"}).`);
+    await order.save();
+    res.json(order);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/orders/set-counter — one-time counter reset ────────────────────
 router.post("/set-counter", async (req, res) => {
   try {
