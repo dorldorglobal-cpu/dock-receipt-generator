@@ -44,12 +44,16 @@ const orderSchema = new mongoose.Schema(
     consigneeZip: String,
     consigneeCountry: String,
 
+    // The USPPI on the AES filing — confirmed from a real accepted filing that
+    // this is the vehicle's seller of record (insurance co., bank, individual…),
+    // NOT DDG. DDG files as the authorized/forwarding agent — see AesConfig.
     exporterName: String,
     exporterAddress: String,
     exporterCity: String,
     exporterState: String,
     exporterZip: String,
     exporterCountry: String,
+    usppiEin: { type: String, default: "" }, // IT1/AD0_2 — not on older parsed AES PDFs (was skipped)
 
     color: String,
     processedBy: String,

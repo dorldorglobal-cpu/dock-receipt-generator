@@ -13,6 +13,17 @@
  *
  * This module never submits anything. The POST to CBP is made by the user's
  * browser (a real <form> submit) while they are logged into ACE AESDirect.
+ *
+ * Cross-checked against a real accepted filing (order 14217, 2026-09-10):
+ *   - DDG files as the AUTHORIZED/FORWARDING AGENT (AD3_*), not the USPPI.
+ *     The USPPI (AD0_*) is the vehicle's seller of record and comes from the
+ *     order (exporterName/exporterAddress/... + usppiEin), not AesConfig.
+ *   - IT1_21 (foreign/domestic origin) defaults to "D" for every used vehicle
+ *     — it describes the export, not the country of manufacture.
+ *   - IT1_12 (commodity description) is just "YEAR MAKE MODEL", no filler text.
+ *   - IBT (in-bond code) "70" is sent on every filing.
+ *   - Real confirmed codes: POE BALTIMORE=1303, POU LAGOS(Tin Can Is.)=75367,
+ *     SCAC SALLAUM=SBLF.
  */
 
 const aesCodes = require("./aesCodes");
@@ -94,7 +105,8 @@ function buildWeblinkFiling(order, config, opts = {}) {
   put("FAC", (order.aesFiling && order.aesFiling.status === "accepted") ? "R" : (config.defaultFilingAction || "A"));
   req("FO", config.defaultFilingOption, "Filing option", "set it on the AES Settings page");
   req("FT", config.defaultFilingType, "AEI filing type", "set it on the AES Settings page");
-  req("ST", order.pickupState, "U.S. state of origin", "pickup / warehouse state");
+  req("ST", aesCodes.stateAbbr(order.exporterState) || aesCodes.stateAbbr(order.pickupState),
+    "U.S. state of origin", "USPPI (exporter) state, or pickup/warehouse state");
   req("POE", aesCodes.scheduleD(order.pol), "Port of export (Schedule D)",
     `no code for POL "${s(order.pol) || "—"}" in aesCodes.js`);
   const dest = s(order.consigneeCountry) || "";
@@ -110,20 +122,25 @@ function buildWeblinkFiling(order, config, opts = {}) {
   put("RCC", config.relatedParty || "N");
   put("HAZ", config.hazmat || "N");
   put("RT", config.routedExport || "N");
+  put("IBT", config.defaultInBondCode || "70"); // 70 = merchandise not shipped in-bond
   if ((fields.FAC === "R") && order.aesFiling && order.aesFiling.itn) put("ORIG_ITN", order.aesFiling.itn);
 
-  // ── USPPI (party type E) — all from AesConfig ─────────────────────────────
-  req("AD0_1", config.usppiName, "USPPI name", "AES Settings");
-  req("AD0_2", digits(config.usppiEin), "USPPI EIN", "AES Settings");
+  // ── USPPI (party type E) — the vehicle's seller of record. Comes from the
+  // ORDER first (exporterName/exporterAddress/...usppiEin — usually captured
+  // off the buyer receipt / a past AES PDF), falling back to AesConfig's
+  // usppi* fields only for the rare case DDG itself is the USPPI. Contact
+  // name/phone stay DDG's own (config) — that's who's actually filing. ──────
+  req("AD0_1", order.exporterName || config.usppiName, "USPPI name", "add it on the filing screen, or set a fallback in AES Settings");
+  req("AD0_2", digits(order.usppiEin) || digits(config.usppiEin), "USPPI EIN", "add it on the filing screen, or set a fallback in AES Settings");
   put("AD0_3", config.usppiIdType || "E");
-  req("AD0_4", config.usppiAddress1, "USPPI address", "AES Settings");
+  req("AD0_4", order.exporterAddress || config.usppiAddress1, "USPPI address", "add it on the filing screen, or set a fallback in AES Settings");
   put("AD0_5", config.usppiAddress2);
-  req("AD0_6", config.usppiCity, "USPPI city", "AES Settings");
-  req("AD0_7", config.usppiState, "USPPI state", "AES Settings");
-  req("AD0_8", config.usppiZip, "USPPI ZIP", "AES Settings");
-  req("AD0_9", config.usppiContactFirst, "USPPI contact first name", "AES Settings");
-  req("AD0_11", config.usppiContactLast, "USPPI contact last name", "AES Settings");
-  req("AD0_12", digits(config.usppiPhone), "USPPI contact phone", "AES Settings");
+  req("AD0_6", order.exporterCity || config.usppiCity, "USPPI city", "add it on the filing screen, or set a fallback in AES Settings");
+  req("AD0_7", aesCodes.stateAbbr(order.exporterState) || aesCodes.stateAbbr(config.usppiState), "USPPI state", "add it on the filing screen, or set a fallback in AES Settings");
+  req("AD0_8", order.exporterZip || config.usppiZip, "USPPI ZIP", "add it on the filing screen, or set a fallback in AES Settings");
+  req("AD0_9", config.usppiContactFirst, "USPPI contact first name", "AES Settings — DDG's own filer contact");
+  req("AD0_11", config.usppiContactLast, "USPPI contact last name", "AES Settings — DDG's own filer contact");
+  req("AD0_12", digits(config.usppiPhone), "USPPI contact phone", "AES Settings — DDG's own filer contact");
 
   // ── Ultimate consignee (party type C) ────────────────────────────────────
   req("AD1_3", order.consigneeName, "Ultimate consignee name");
@@ -166,7 +183,7 @@ function buildWeblinkFiling(order, config, opts = {}) {
   put("IT1_9", config.defaultLicenseNumber || "NLR");
   const ymm = s(order.vehicleYearMakeModel) ||
     [order.year, order.make, order.model].map(s).filter(Boolean).join(" ");
-  req("IT1_12", ymm ? `USED ${ymm} PASSENGER VEHICLE` : "", "Commodity description", "vehicle year/make/model");
+  req("IT1_12", ymm.toUpperCase(), "Commodity description", "vehicle year/make/model"); // "2015 HYUNDAI TUCSON" — confirmed format, order 14217
   req("IT1_13", aesCodes.scheduleB(order, config), "Schedule B number",
     "set a default Schedule B on the AES Settings page, or a per-order override");
   put("IT1_15", "Y");  // commodity is a used self-propelled vehicle
@@ -176,7 +193,6 @@ function buildWeblinkFiling(order, config, opts = {}) {
   req("IT1_19", s(order.titleState).toUpperCase(), "Vehicle title state", "add it on the filing screen");
   put("IT1_20", config.defaultEccn);
   put("IT1_21", aesCodes.originIndicator(order, config));
-  warn("IT1_21", "Origin indicator", "auto-guessed from the VIN — confirm F (foreign-built) vs D");
   warn("IT1_1", "Export information code", `defaulted to "${fields.IT1_1}" — confirm for this shipment`);
 
   // ── Equipment — container shipments only ────────────────────────────────

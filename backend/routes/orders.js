@@ -698,9 +698,9 @@ router.post(
           // Always save the full DR fields from AES (overwrite blanks, keep existing)
           const aesFields = [
             "bookingNumber","vin","year","make","model","pol","pod",
-            "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry",
+            "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
             "consigneeName","consigneeAddress","consigneeCity","consigneeCountry",
-            "vessel","weightKgs","value","vehicleYearMakeModel",
+            "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
           ];
           for (const field of aesFields) {
             if (parsed[field] && !order[field]) {
@@ -895,9 +895,9 @@ router.post("/:id/parse-drive-files", async (req, res) => {
         const updates = [];
         const aesFields = [
           "bookingNumber","vin","year","make","model","pol","pod",
-          "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry",
+          "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
           "consigneeName","consigneeAddress","consigneeCity","consigneeCountry",
-          "vessel","weightKgs","value","vehicleYearMakeModel",
+          "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
         ];
         for (const field of aesFields) {
           if (parsed[field] && !order[field]) { order[field] = parsed[field]; updates.push(field); }

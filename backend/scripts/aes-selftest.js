@@ -37,8 +37,21 @@ ok("motFor Container = 11", () => assert.equal(aesCodes.motFor("Container"), "11
 ok("countryIso GHANA = GH", () => assert.equal(aesCodes.countryIso("GHANA"), "GH"));
 ok("countryIso via POD TEMA = GH", () => assert.equal(aesCodes.countryIso("TEMA"), "GH"));
 ok("scheduleD BALTIMORE set", () => assert.ok(aesCodes.scheduleD("BALTIMORE")));
-ok("originIndicator US VIN (4...) = D", () => assert.equal(aesCodes.originIndicator({ vin: "4T1B11HK7JU678515" }), "D"));
-ok("originIndicator JP VIN (J...) = F", () => assert.equal(aesCodes.originIndicator({ vin: "JT1B11HK7JU678515" }), "F"));
+ok("originIndicator defaults D regardless of VIN origin", () => {
+  // Confirmed from a real accepted filing (order 14217, Korean-built VIN) — a
+  // used vehicle re-exported from US domestic commerce is "Domestic".
+  assert.equal(aesCodes.originIndicator({ vin: "4T1B11HK7JU678515" }, {}), "D");
+  assert.equal(aesCodes.originIndicator({ vin: "KM8JUCAG8FU961609" }, {}), "D");
+});
+ok("originIndicator: order override wins", () => assert.equal(aesCodes.originIndicator({ vin: "KM8...", originIndicator: "F" }, {}), "F"));
+
+console.log("stateAbbr");
+ok("plain abbreviation", () => assert.equal(aesCodes.stateAbbr("OH"), "OH"));
+ok("full name", () => assert.equal(aesCodes.stateAbbr("OHIO"), "OH"));
+ok("city+state run together (real data)", () => assert.equal(aesCodes.stateAbbr("PHILADELPHIA OHIO"), "OH"));
+ok("city+state with extra prefix word", () => assert.equal(aesCodes.stateAbbr("NEW PHILADELPHIA OHIO"), "OH"));
+ok("two-word state name", () => assert.equal(aesCodes.stateAbbr("NEW JERSEY"), "NJ"));
+ok("unrecognized = ''", () => assert.equal(aesCodes.stateAbbr("NOWHERESVILLE"), ""));
 
 console.log("yymmdd");
 ok("ISO", () => assert.equal(yymmdd("2026-09-20"), "260920"));
@@ -61,7 +74,9 @@ ok("IT1_7 weight", () => assert.equal(built.fields.IT1_7, "1802"));
 ok("IT1_13 schedule B", () => assert.equal(built.fields.IT1_13, "8703230190"));
 ok("IT1_15 = Y", () => assert.equal(built.fields.IT1_15, "Y"));
 ok("IT1_17 VIN", () => assert.equal(built.fields.IT1_17, "4T1B11HK7JU678515"));
-ok("IT1_12 description", () => assert.ok(/USED 2018 TOYOTA CAMRY/.test(built.fields.IT1_12)));
+ok("IT1_12 description — bare YEAR MAKE MODEL, no filler (confirmed: order 14217)", () => assert.equal(built.fields.IT1_12, "2018 TOYOTA CAMRY"));
+ok("IT1_21 origin indicator defaults D", () => assert.equal(built.fields.IT1_21, "D"));
+ok("IBT in-bond code defaults 70", () => assert.equal(built.fields.IBT, "70"));
 ok("no EQ1 for RORO", () => assert.ok(!("EQ1" in built.fields)));
 ok("no forwarding agent when unconfigured", () => assert.ok(!("AD3_3" in built.fields)));
 ok("wl_success_url present", () => assert.ok(!built.fields.wl_success_url || built.fields.wl_success_url.includes("weblink-return")));
@@ -78,6 +93,49 @@ const cont = buildWeblinkFiling({ ...ORDER, requestType: "Container", containerN
 ok("MOT = 11", () => assert.equal(cont.fields.MOT, "11"));
 ok("EQ1 set", () => assert.equal(cont.fields.EQ1, "MSCU1234567"));
 ok("SN1 set", () => assert.equal(cont.fields.SN1, "SEAL99"));
+
+console.log("buildWeblinkFiling — order 14217 (real accepted filing, USPPI on the order)");
+const REAL_ORDER = {
+  _id: "real14217", refNumber: "14217", bookingNumber: "SLSE-407098",
+  requestType: "RORO", year: "2015", make: "HYUNDAI", model: "TUCSON",
+  vehicleYearMakeModel: "2015 HYUNDAI TUCSON", vin: "KM8JUCAG8FU961609",
+  value: "800", weightKgs: "1652",
+  pol: "BALTIMORE", pod: "LAGOS", consigneeCountry: "NIGERIA", shippingLine: "SALLAUM",
+  vessel: "LIBERTY PROMISE", sailDate: "2026-10-03", pickupState: "PHILADELPHIA OHIO",
+  exporterName: "STATE FARM MUTUAL", exporterAddress: "2532 STATE ROUTE 259 SE",
+  exporterCity: "NEW PHILADELPHIA", exporterState: "OH", exporterZip: "44663",
+  usppiEin: "37053310000",
+  consigneeName: "ADAMS AUTO SOLUTION LIMITED", consigneeAddress: "DD 10 UNGUWAR KANAWA BY, NDA BUS STOP",
+  consigneeCity: "KADUNA",
+  titleNumber: "4503799492", titleState: "OH",
+  aesFiling: { srn: "14217", returnToken: "tok" },
+};
+const REAL_CONFIG = { ...CONFIG, ultConsigneeType: "O", defaultInBondCode: "70" };
+const real14217 = buildWeblinkFiling(REAL_ORDER, REAL_CONFIG, { srn: "14217", returnToken: "tok" });
+ok("SRN is the bare order number", () => assert.equal(real14217.fields.SRN, "14217"));
+ok("USPPI comes from the order, not config", () => assert.equal(real14217.fields.AD0_1, "STATE FARM MUTUAL"));
+ok("USPPI EIN comes from the order", () => assert.equal(real14217.fields.AD0_2, "37053310000"));
+ok("ST derived from exporterState (clean), not messy pickupState", () => assert.equal(real14217.fields.ST, "OH"));
+ok("POE Baltimore = 1303 (confirmed)", () => assert.equal(real14217.fields.POE, "1303"));
+ok("POU Lagos = 75367 (confirmed)", () => assert.equal(real14217.fields.POU, "75367"));
+ok("SCAC Sallaum = SBLF (confirmed)", () => assert.equal(real14217.fields.SCAC, "SBLF"));
+ok("commodity description matches real filing", () => assert.equal(real14217.fields.IT1_12, "2015 HYUNDAI TUCSON"));
+ok("title number/state from the order", () => { assert.equal(real14217.fields.IT1_18, "4503799492"); assert.equal(real14217.fields.IT1_19, "OH"); });
+ok("no USPPI fields flagged missing", () => assert.ok(!real14217.missing.some((m) => m.field.startsWith("AD0_"))));
+
+console.log("parseOrderDocs — EIN + title extraction (order 14217 EEI text)");
+const { findUsppiEin, findVehicleTitle } = require("../utils/parseOrderDocs");
+const EEI_TEXT = `1a. U.S. PRINCIPAL PARTY (USPPI)
+STATE FARM MUTUAL
+b. USPPI EIN (IRS) or ID Number
+37053310000
+c. RELATED PARTIES TO TRANSACTION
+1 D 2015 HYUNDAI TUCSON
+1 NO 1652 KM8JUCAG8FU961609 / 4503799492 / OH
+800`;
+ok("findUsppiEin", () => assert.equal(findUsppiEin(EEI_TEXT), "37053310000"));
+ok("findVehicleTitle", () => assert.deepEqual(findVehicleTitle(EEI_TEXT, "KM8JUCAG8FU961609"), { titleNumber: "4503799492", titleState: "OH" }));
+ok("findVehicleTitle: no VIN match = blank", () => assert.deepEqual(findVehicleTitle(EEI_TEXT, "NOTFOUNDVIN0000000"), { titleNumber: "", titleState: "" }));
 
 console.log("applyItn");
 ok("sets when empty", () => { const o = { timeline: [] }; assert.equal(applyItn(o, "X20260101234567", "test"), "set"); assert.equal(o.aesItn, "X20260101234567"); });

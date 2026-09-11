@@ -13,7 +13,7 @@ const WRITABLE = [
   "defaultFilingAction", "defaultFilingOption", "defaultFilingType",
   "defaultExportInfoCode", "defaultLicenseCode", "defaultLicenseNumber", "defaultEccn",
   "ultConsigneeType", "relatedParty", "hazmat", "routedExport",
-  "defaultScheduleB", "scheduleBOverrides", "defaultOriginIndicator",
+  "defaultScheduleB", "scheduleBOverrides", "defaultOriginIndicator", "defaultInBondCode",
   "aesEnv",
 ];
 

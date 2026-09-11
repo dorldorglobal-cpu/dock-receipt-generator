@@ -158,6 +158,22 @@ function findITN(text) {
   return match ? match[0].toUpperCase() : "";
 }
 
+// USPPI EIN — deterministic, unambiguous label ("b. USPPI EIN (IRS) or ID Number"),
+// so extract it the same way regardless of LLM vs regex path (like findITN above).
+function findUsppiEin(text) {
+  const m = text.match(/USPPI EIN[^\n]*\n\s*(\d{7,})/i) || text.match(/b\.\s*USPPI EIN[\s\S]{0,40}?(\d{7,})/i);
+  return m ? m[1] : "";
+}
+
+// Vehicle title number + state — the EEI prints them right after the VIN as
+// "VIN / TITLE NUMBER / STATE" (field 20f). Deterministic given the VIN.
+function findVehicleTitle(text, vin) {
+  if (!vin) return { titleNumber: "", titleState: "" };
+  const esc = vin.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const m = text.match(new RegExp(`${esc}\\s*/\\s*([A-Za-z0-9-]{3,})\\s*/\\s*([A-Za-z]{2})\\b`, "i"));
+  return m ? { titleNumber: m[1], titleState: m[2].toUpperCase() } : { titleNumber: "", titleState: "" };
+}
+
 // ── Port reference data (single source of truth for port matching/normalizing) ──
 const PORT_DEFS = [
   { name: "JACKSONVILLE", aliases: ["JACKSONVILLE"],             group: "POL" },
@@ -318,16 +334,17 @@ async function parseAESRegex(filePath) {
 
   const referenceNumber = valueAfterLabel("14. SHIPMENT REFERENCE NO.");
 
-  // Exporter
+  // Exporter (USPPI — the vehicle's seller of record, NOT DDG; see aesWeblink.js)
   const exporterName = valueAfterLabel("1a. U.S. PRINCIPAL PARTY");
-  // After exporter name comes EIN (all digits) then the street address — skip the EIN
+  // After exporter name comes the EIN (all digits) then the street address.
+  let usppiEin = "";
   const exporterAddressLine = (() => {
     const ni = lines.findIndex(l => cleanUpper(l) === cleanUpper(exporterName));
     if (ni === -1) return "";
     for (let j = ni + 1; j <= Math.min(ni + 5, lines.length - 1); j++) {
       const l = lines[j];
       if (/^(\d{1,2}[a-z]?|[a-z])\.\s/i.test(l)) break; // hit next AES field, stop
-      if (/^\d{7,}$/.test(clean(l))) continue;           // skip EIN (≥7 pure digits)
+      if (/^\d{7,}$/.test(clean(l))) { usppiEin = clean(l); continue; } // capture EIN, keep scanning for the address
       if (l.length >= 6 && /[A-Z]/i.test(l)) return clean(l);
     }
     return "";
@@ -488,6 +505,7 @@ async function parseAESRegex(filePath) {
     exporterState: exporter.state,
     exporterZip: exporter.zip,
     exporterCountry: "UNITED STATES",
+    usppiEin: findUsppiEin(text) || clean(usppiEin),
 
     consigneeName: cleanUpper(consigneeName),
     consigneeAddress: cleanUpper(consigneeAddress),
@@ -509,6 +527,7 @@ async function parseAESRegex(filePath) {
     value: vehicleData.value ||
       clean(text.match(/\/\s*[A-Z]{2}\s+(\d{3,8})\s*(?:Sensitive Information|Do not submit|$)/i)?.[1] || ""),
     aesItn: findITN(text),
+    ...findVehicleTitle(text, vehicleData.vin),
   };
 }
 
@@ -542,6 +561,7 @@ async function parseAESWithLLM(filePath) {
   // ITN is a fixed, unambiguous pattern (X + 14+ digits) — deterministic regex is
   // strictly more reliable here than asking the LLM, same as the regex parser does.
   const aesItn = findITN(text);
+  const usppiEin = findUsppiEin(text);
 
   return {
     bookingNumber: clean(r.bookingNumber || ""),
@@ -553,6 +573,7 @@ async function parseAESWithLLM(filePath) {
     exporterState: (r.exporterState || "").toUpperCase(),
     exporterZip: r.exporterZip || "",
     exporterCountry: "UNITED STATES",
+    usppiEin,
 
     consigneeName: cleanUpper(r.consigneeName || ""),
     consigneeAddress: cleanUpper(r.consigneeAddress || ""),
@@ -573,6 +594,7 @@ async function parseAESWithLLM(filePath) {
     weightKgs: (r.weightKgs || "").toString().replace(/,/g, ""),
     value: (r.value || "").toString().replace(/,/g, ""),
     aesItn,
+    ...findVehicleTitle(text, (r.vin || "").toUpperCase()),
   };
 }
 
@@ -1513,4 +1535,6 @@ module.exports = {
   normalizePort,
   countryFromPod,
   PORT_DEFS,
+  findUsppiEin,
+  findVehicleTitle,
 };

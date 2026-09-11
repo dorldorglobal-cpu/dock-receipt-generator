@@ -23,7 +23,7 @@ const up = (s) => String(s || "").trim().toUpperCase();
 // ── Schedule D: U.S. port name → 4-digit port-of-export code ────────────────
 // Keyed by the normalized POL name the app uses.
 const SCHEDULE_D = {
-  BALTIMORE:    "1303", // VERIFY
+  BALTIMORE:    "1303", // confirmed — order 14217, accepted EEI
   JACKSONVILLE: "1803", // VERIFY
   BRUNSWICK:    "1701", // VERIFY
   SAVANNAH:     "1703", // VERIFY
@@ -44,8 +44,8 @@ const SCHEDULE_K = {
   TEMA:      "", // VERIFY — Tema, Ghana
   ACCRA:     "", // VERIFY (usually filed as Tema)
   TAKORADI:  "", // VERIFY
-  LAGOS:     "", // VERIFY — Apapa/Lagos, Nigeria
-  APAPA:     "", // VERIFY
+  LAGOS:     "75367", // confirmed — order 14217: "75367 - LAGOS; TIN CAN ISLAND, NIGERIA"
+  APAPA:     "", // VERIFY — Apapa is a separate Lagos-area terminal from Tin Can Island, may have its own code
   COTONOU:   "", // VERIFY — Benin
   LOME:      "", // VERIFY — Togo
   DAKAR:     "", // VERIFY — Senegal
@@ -82,14 +82,52 @@ const COUNTRY_ISO = {
 
 // ── SCAC: shipping line → Standard Carrier Alpha Code ──────────────────────
 const SCAC = {
-  SALLAUM:        "",     // VERIFY — Sallaum Lines
-  "SALLAUM LINES":"",     // VERIFY
+  SALLAUM:        "SBLF", // confirmed — order 14217 (booking prefix SLSE)
+  "SALLAUM LINES":"SBLF", // confirmed
   ACL:            "ACLU", // VERIFY — Atlantic Container Line
   "ATLANTIC CONTAINER LINE": "ACLU", // VERIFY
   GRIMALDI:       "GRIU", // VERIFY
   HOEGH:          "HEGH", // VERIFY — Höegh Autoliners
   "HOEGH AUTOLINERS": "HEGH", // VERIFY
 };
+
+// ── US states: full name → 2-letter abbreviation ─────────────────────────────
+const US_STATES = {
+  ALABAMA: "AL", ALASKA: "AK", ARIZONA: "AZ", ARKANSAS: "AR", CALIFORNIA: "CA",
+  COLORADO: "CO", CONNECTICUT: "CT", DELAWARE: "DE", FLORIDA: "FL", GEORGIA: "GA",
+  HAWAII: "HI", IDAHO: "ID", ILLINOIS: "IL", INDIANA: "IN", IOWA: "IA",
+  KANSAS: "KS", KENTUCKY: "KY", LOUISIANA: "LA", MAINE: "ME", MARYLAND: "MD",
+  MASSACHUSETTS: "MA", MICHIGAN: "MI", MINNESOTA: "MN", MISSISSIPPI: "MS", MISSOURI: "MO",
+  MONTANA: "MT", NEBRASKA: "NE", NEVADA: "NV", "NEW HAMPSHIRE": "NH", "NEW JERSEY": "NJ",
+  "NEW MEXICO": "NM", "NEW YORK": "NY", "NORTH CAROLINA": "NC", "NORTH DAKOTA": "ND", OHIO: "OH",
+  OKLAHOMA: "OK", OREGON: "OR", PENNSYLVANIA: "PA", "RHODE ISLAND": "RI", "SOUTH CAROLINA": "SC",
+  "SOUTH DAKOTA": "SD", TENNESSEE: "TN", TEXAS: "TX", UTAH: "UT", VERMONT: "VT",
+  VIRGINIA: "VA", WASHINGTON: "WA", "WEST VIRGINIA": "WV", WISCONSIN: "WI", WYOMING: "WY",
+  "DISTRICT OF COLUMBIA": "DC",
+};
+const STATE_ABBRS = new Set(Object.values(US_STATES));
+
+/**
+ * Pull a clean 2-letter state code out of whatever's on hand — a plain
+ * abbreviation, a full name, or a messier string like "NEW PHILADELPHIA OHIO"
+ * (city + state run together, seen in real pickup-location data). Returns ""
+ * if nothing recognizable is found.
+ */
+function stateAbbr(raw) {
+  const u = up(raw);
+  if (!u) return "";
+  if (STATE_ABBRS.has(u)) return u;
+  if (US_STATES[u]) return US_STATES[u];
+  // scan word-by-word (and 2-word combos, for "NEW YORK" etc.) from the end —
+  // state names/codes are usually the last token(s) of a "CITY STATE" string
+  const words = u.split(/[\s,]+/).filter(Boolean);
+  for (let n = Math.min(2, words.length); n >= 1; n--) {
+    const tail = words.slice(-n).join(" ");
+    if (US_STATES[tail]) return US_STATES[tail];
+  }
+  for (const w of words) if (STATE_ABBRS.has(w)) return w;
+  return "";
+}
 
 // ── Mode of transport (vessel) ───────────────────────────────────────────────
 //   10 = Vessel, non-containerized (RORO)   11 = Vessel, containerized
@@ -139,16 +177,17 @@ function scheduleB(order, config) {
 }
 
 /**
- * Foreign/Domestic origin indicator (IT1_21). US-built vehicles (VIN world
- * manufacturer identifier starting 1, 4 or 5) → "D"; otherwise "F". An Order
- * override wins. Always flagged as a warning for a human to confirm.
+ * Foreign/Domestic origin indicator (IT1_21) — is this a "domestic" or
+ * "foreign" export? For a USED vehicle this is about the export, not where it
+ * was manufactured: a used car that was in US domestic commerce (registered,
+ * driven, sold used) is a DOMESTIC export even if it's a Hyundai or a Toyota.
+ * Confirmed from a real accepted filing (order 14217, Korean-built VIN,
+ * IT1_21 = "D"). Default "D" for every used vehicle; an Order-level override
+ * (for the rare foreign-origin re-export) or the AesConfig default both win.
  */
 function originIndicator(order, config) {
   if (order && order.originIndicator) return up(order.originIndicator);
-  const vin = up(order && order.vin);
-  if (/^[145]/.test(vin)) return "D";
-  if (vin) return "F";
-  return config && config.defaultOriginIndicator ? up(config.defaultOriginIndicator) : "F";
+  return config && config.defaultOriginIndicator ? up(config.defaultOriginIndicator) : "D";
 }
 
 module.exports = {
@@ -156,6 +195,7 @@ module.exports = {
   SCHEDULE_K,
   COUNTRY_ISO,
   SCAC,
+  US_STATES,
   motFor,
   scheduleD,
   scheduleK,
@@ -163,4 +203,5 @@ module.exports = {
   scac,
   scheduleB,
   originIndicator,
+  stateAbbr,
 };

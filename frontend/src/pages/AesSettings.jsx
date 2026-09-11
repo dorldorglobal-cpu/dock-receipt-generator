@@ -106,9 +106,23 @@ export default function AesSettings() {
 
       {msg && <div style={{ marginBottom:14,fontSize:13 }}>{msg}</div>}
 
-      <Section title="USPPI — U.S. Principal Party in Interest" sub="The exporter of record on the filing (party type E).">
+      <Section title="Forwarding Agent — DDG's own identity" sub="Confirmed from a real accepted filing: DDG files AS THE AGENT, not the USPPI. Sent on every filing.">
+        <FAField label="Name" k="name" fa={fa} setFa={setFa} full />
+        <FAField label="ID type" k="idType" fa={fa} setFa={setFa} placeholder="E" />
+        <FAField label="Party ID (DDG's EIN)" k="partyId" fa={fa} setFa={setFa} placeholder="not on the EEI printout — enter it here" />
+        <FAField label="Contact name" k="contact" fa={fa} setFa={setFa} />
+        <FAField label="Phone" k="phone" fa={fa} setFa={setFa} />
+        <FAField label="Address line 1" k="address1" fa={fa} setFa={setFa} full />
+        <FAField label="Address line 2" k="address2" fa={fa} setFa={setFa} full />
+        <FAField label="City" k="city" fa={fa} setFa={setFa} />
+        <FAField label="State" k="state" fa={fa} setFa={setFa} />
+        <FAField label="Country" k="country" fa={fa} setFa={setFa} />
+        <FAField label="Postal code" k="postal" fa={fa} setFa={setFa} />
+      </Section>
+
+      <Section title="USPPI fallback" sub="The USPPI (exporter of record) is the vehicle's seller — it usually differs per order and is entered on the filing screen itself. These fields are only used when an order has no exporterName of its own (e.g. a vehicle DDG owns outright).">
         <Field label="Legal name" k="usppiName" form={form} set={set} full />
-        <Field label="EIN (9 digits, no dashes)" k="usppiEin" form={form} set={set} placeholder="123456789" />
+        <Field label="EIN (digits only)" k="usppiEin" form={form} set={set} placeholder="e.g. 37053310000" />
         <Field label="ID type" k="usppiIdType" form={form} set={set} placeholder="E" />
         <Field label="Address line 1" k="usppiAddress1" form={form} set={set} full />
         <Field label="Address line 2" k="usppiAddress2" form={form} set={set} full />
@@ -120,40 +134,27 @@ export default function AesSettings() {
         <Field label="Contact phone" k="usppiPhone" form={form} set={set} />
       </Section>
 
-      <Section title="Forwarding Agent (optional)" sub="Only sent when a name is filled in (party type F).">
-        <FAField label="Name" k="name" fa={fa} setFa={setFa} full />
-        <FAField label="ID type" k="idType" fa={fa} setFa={setFa} placeholder="E" />
-        <FAField label="Party ID (EIN)" k="partyId" fa={fa} setFa={setFa} />
-        <FAField label="Contact name" k="contact" fa={fa} setFa={setFa} />
-        <FAField label="Phone" k="phone" fa={fa} setFa={setFa} />
-        <FAField label="Address line 1" k="address1" fa={fa} setFa={setFa} full />
-        <FAField label="Address line 2" k="address2" fa={fa} setFa={setFa} full />
-        <FAField label="City" k="city" fa={fa} setFa={setFa} />
-        <FAField label="State" k="state" fa={fa} setFa={setFa} />
-        <FAField label="Country" k="country" fa={fa} setFa={setFa} />
-        <FAField label="Postal code" k="postal" fa={fa} setFa={setFa} />
-      </Section>
-
       <Section title="Filer & Filing Defaults">
         <Field label="CBP Filer ID (FID)" k="filerId" form={form} set={set} placeholder="≤ 11 chars" />
-        <Field label="SRN prefix" k="srnPrefix" form={form} set={set} placeholder="DDG" />
+        <Field label="SRN prefix" k="srnPrefix" form={form} set={set} placeholder="blank = bare order number (confirmed convention)" />
         <Field label="AES response email" k="responseEmail" form={form} set={set} full />
         <Field label="Filing action" k="defaultFilingAction" form={form} set={set} placeholder="A" />
-        <Field label="Filing option" k="defaultFilingOption" form={form} set={set} placeholder="from CBP profile" />
+        <Field label="Filing option" k="defaultFilingOption" form={form} set={set} placeholder="e.g. 2 — PREDEPARTURE" />
         <Field label="AEI filing type" k="defaultFilingType" form={form} set={set} placeholder="from CBP profile" />
+        <Field label="In-bond code" k="defaultInBondCode" form={form} set={set} placeholder="70" />
         <Field label="Export information code" k="defaultExportInfoCode" form={form} set={set} placeholder="OS" />
         <Field label="License code" k="defaultLicenseCode" form={form} set={set} placeholder="C33" />
         <Field label="License number" k="defaultLicenseNumber" form={form} set={set} placeholder="NLR" />
         <Field label="ECCN (blank = EAR99)" k="defaultEccn" form={form} set={set} />
-        <Field label="Ultimate consignee type" k="ultConsigneeType" form={form} set={set} placeholder="D / R / G / O" />
-        <Field label="Origin indicator default" k="defaultOriginIndicator" form={form} set={set} placeholder="F" />
+        <Field label="Ultimate consignee type" k="ultConsigneeType" form={form} set={set} placeholder="O (Other/Unknown) — confirmed default" />
+        <Field label="Origin indicator default" k="defaultOriginIndicator" form={form} set={set} placeholder="D (Domestic) — confirmed default for used vehicles" />
         <Field label="Related party (Y/N)" k="relatedParty" form={form} set={set} placeholder="N" />
         <Field label="Hazmat (Y/N)" k="hazmat" form={form} set={set} placeholder="N" />
         <Field label="Routed export (Y/N)" k="routedExport" form={form} set={set} placeholder="N" />
       </Section>
 
-      <Section title="Schedule B — used vehicles" sub="Default 10-digit code. Per-order override on the filing screen still wins.">
-        <Field label="Default Schedule B" k="defaultScheduleB" form={form} set={set} full placeholder="e.g. 8703230190" />
+      <Section title="Schedule B — used vehicles" sub="Default 10-digit code, used when an order doesn't override it. Varies by engine/body type — verify per shipment.">
+        <Field label="Default Schedule B" k="defaultScheduleB" form={form} set={set} full placeholder="e.g. 8703600045" />
       </Section>
 
       {!envLocked && (

@@ -2,9 +2,17 @@ const mongoose = require("mongoose");
 
 /**
  * Singleton document holding the company-wide constants an AES / EEI filing
- * needs that are NOT derivable from an Order: the USPPI (exporter of record)
- * identity, the CBP Filer ID, and the handful of "always the same" filing
- * defaults for a used-vehicle export.
+ * needs that are NOT derivable from an Order: DDG's own identity as the
+ * authorized/forwarding agent, the CBP Filer ID, and the handful of
+ * "always the same" filing defaults for a used-vehicle export.
+ *
+ * IMPORTANT — confirmed from a real accepted filing (order 14217): DDG files
+ * as the AUTHORIZED AGENT (forwardingAgent below), NOT the USPPI. The USPPI
+ * varies per vehicle (it's the seller of record — an insurance company, a
+ * bank, an individual, etc.) and is captured per-Order (exporterName/
+ * exporterAddress/... + usppiEin — see Order.js), not here. The usppi*
+ * fields below exist only as a fallback for the rare order where DDG really
+ * is the USPPI (e.g. vehicles DDG owns outright).
  *
  * There is exactly one of these — load it with AesConfig.getSingleton().
  * Port / country / carrier / Schedule B code tables do NOT live here; they are
@@ -14,9 +22,10 @@ const aesConfigSchema = new mongoose.Schema(
   {
     key: { type: String, default: "singleton", unique: true },
 
-    // ── USPPI (U.S. Principal Party in Interest) — party type "E" ──────────────
+    // ── USPPI fallback (party type "E") — used only when the order has no
+    // exporterName of its own. See the note above: normally per-order. ───────
     usppiName:         { type: String, default: "" },
-    usppiEin:          { type: String, default: "" },   // 9 digits, no dashes
+    usppiEin:          { type: String, default: "" },   // digits only (EIN + 2-digit suffix, e.g. 11 digits)
     usppiIdType:       { type: String, default: "E" },  // "E" = EIN (per WebLink sample)
     usppiAddress1:     { type: String, default: "" },
     usppiAddress2:     { type: String, default: "" },
@@ -27,19 +36,22 @@ const aesConfigSchema = new mongoose.Schema(
     usppiContactLast:  { type: String, default: "" },
     usppiPhone:        { type: String, default: "" },
 
-    // ── Forwarding agent — party type "F". Only sent when name is filled in. ───
+    // ── Forwarding agent — party type "F". This is DDG's own identity and is
+    // sent on every filing (it's how DDG actually files — see note above).
+    // Defaults below are DDG's real agent info as printed on a CBP-accepted
+    // EEI (order 14217) — override on the AES Settings page if anything changed. ─
     forwardingAgent: {
       idType:   { type: String, default: "E" },
-      name:     { type: String, default: "" },
-      partyId:  { type: String, default: "" },
+      name:     { type: String, default: "DOR LDOR GLOBAL" },
+      partyId:  { type: String, default: "" },   // DDG's EIN — not shown on the EEI printout, add it here
       contact:  { type: String, default: "" },
       phone:    { type: String, default: "" },
-      address1: { type: String, default: "" },
+      address1: { type: String, default: "23 GALAHAD DR" },
       address2: { type: String, default: "" },
-      city:     { type: String, default: "" },
-      state:    { type: String, default: "" },
-      country:  { type: String, default: "" },
-      postal:   { type: String, default: "" },
+      city:     { type: String, default: "MANALAPAN" },
+      state:    { type: String, default: "NJ" },
+      country:  { type: String, default: "US" },
+      postal:   { type: String, default: "07726" },
     },
 
     // ── Filer + filing defaults ───────────────────────────────────────────────
@@ -58,8 +70,16 @@ const aesConfigSchema = new mongoose.Schema(
     defaultLicenseCode:   { type: String, default: "C33" },  // C33 = No License Required
     defaultLicenseNumber: { type: String, default: "NLR" },
     defaultEccn:          { type: String, default: "" },     // "" ⇒ EAR99
-    ultConsigneeType:     { type: String, default: "" },     // D=Direct consumer, R=Reseller, G=Gov, O=Other
-    defaultOriginIndicator:{ type: String, default: "F" },   // IT1_21 fallback when VIN is ambiguous
+    // D=Direct consumer, R=Reseller, G=Gov, O=Other/Unknown. Default "O" — confirmed
+    // from order 14217 (buyer type is usually unknown/unverified at filing time).
+    ultConsigneeType:     { type: String, default: "O" },
+    // Foreign/Domestic origin indicator (IT1_21). Default "D" — confirmed from
+    // order 14217: a USED vehicle being re-exported from US domestic commerce is
+    // "Domestic" regardless of where it was originally manufactured.
+    defaultOriginIndicator:{ type: String, default: "D" },
+    // In-bond code (IBT). "70" = merchandise not shipped in-bond — the standard
+    // case for these exports, confirmed from order 14217.
+    defaultInBondCode:    { type: String, default: "70" },
 
     relatedParty:         { type: String, default: "N" },
     hazmat:               { type: String, default: "N" },
