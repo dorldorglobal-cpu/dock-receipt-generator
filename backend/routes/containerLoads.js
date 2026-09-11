@@ -533,7 +533,13 @@ router.get("/:id/combined-invoice-pdf", async (req, res) => {
     const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
     if (!invoices.length) return res.status(400).json({ error: "No invoices found" });
 
-    const buf = await generateCombinedInvoicePdf(invoices, orders, load);
+    // Optional ?extraLines=<JSON> so a preview download reflects lines not yet sent
+    let extraLines = [];
+    if (req.query.extraLines) {
+      try { extraLines = JSON.parse(req.query.extraLines); } catch { /* ignore malformed param */ }
+    }
+
+    const buf = await generateCombinedInvoicePdf(invoices, orders, load, { extraLines });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Combined-Invoice-${load.name}.pdf"`);
     res.send(buf);

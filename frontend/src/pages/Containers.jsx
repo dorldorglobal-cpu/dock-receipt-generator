@@ -1857,6 +1857,20 @@ export default function Containers() {
                       </div>
                     );
                   })()}
+                  {sendPreview.combined && (
+                    <button type="button" onClick={()=>{
+                        const validLines = extraLines.filter(l => l.label && l.amount);
+                        const qs = validLines.length ? `?extraLines=${encodeURIComponent(JSON.stringify(validLines))}` : "";
+                        const a = document.createElement("a");
+                        a.href = authUrl(`/api/container-loads/${billingLoad._id}/combined-invoice-pdf${qs}`);
+                        a.download = `Combined-Invoice-${billingLoad.name}.pdf`;
+                        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+                      }}
+                      style={{ alignSelf:"flex-start", padding:"5px 12px", background:"none", border:"1px solid var(--border)",
+                        borderRadius:6, color:"var(--text-secondary)", fontSize:11, cursor:"pointer" }}>
+                      ⬇ Download preview PDF (includes lines below)
+                    </button>
+                  )}
                 </div>
               </div>
             )}
@@ -1888,13 +1902,7 @@ export default function Containers() {
                           style={{ padding:"8px 16px", background:"rgba(124,58,237,0.85)", border:"none", borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:disabled?0.4:1 }}>
                           📧 Send All Invoices
                         </button>
-                        <button disabled={disabled} onClick={async()=>{
-                            const a = document.createElement("a");
-                            a.href = authUrl(`/api/container-loads/${billingLoad._id}/combined-invoice-pdf`);
-                            a.download = `Combined-Invoice-${billingLoad.name}.pdf`;
-                            document.body.appendChild(a); a.click(); document.body.removeChild(a);
-                            buildPreview(true);
-                          }}
+                        <button disabled={disabled} onClick={()=>buildPreview(true)}
                           style={{ padding:"8px 16px", background:"rgba(236,72,153,0.85)", border:"none", borderRadius:8, color:"#fff", fontWeight:600, cursor:"pointer", opacity:disabled?0.4:1 }}>
                           📄 Send Combined
                         </button>
