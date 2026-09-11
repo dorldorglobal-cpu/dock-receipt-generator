@@ -68,8 +68,27 @@ const CONTAINER_SYSTEM_PROMPT =
   "You are a logistics document parser reading a container-loading or freight-forwarder " +
   "invoice (e.g. Savannah Auto Export, E-Z Cargo, iShip, Cedars). Return ONLY a JSON object " +
   "with keys: vendor, invoiceNumber, billDate, container, booking, total (number), and " +
-  "rows (array of { vin, year, make, model, lineTotal (number, 0 if not itemized separately) } " +
-  "— one per vehicle on the invoice).";
+  "rows (array of { vin, year, make, model, lineTotal, extraCharge } — one per vehicle on " +
+  "the invoice).\n" +
+  "- lineTotal (number, 0 if not itemized separately): only set this when the invoice prices " +
+  "EACH vehicle on its own line (e.g. iShip-style). Most container invoices instead pool " +
+  "freight/loading costs for the whole container with no per-vehicle price — leave lineTotal " +
+  "0 for those.\n" +
+  "- extraCharge (number, 0 if none): a charge that applies to only THIS ONE vehicle, on top " +
+  "of the shared/pooled charges — storage, detention, demurrage, or a late fee tied to a " +
+  "specific VIN. These often appear as their own line or section (e.g. \"Storage Fee\") that " +
+  "names or partially matches one VIN, sometimes on a later page of the same document, not " +
+  "necessarily right next to that vehicle's other data. Match it to the row for that VIN.\n" +
+  "\n" +
+  "IMPORTANT — the extraction sometimes jams the quantity, unit price, and amount of a " +
+  "per-vehicle charge together with no spaces or newlines. The amount is the LAST 2-decimal " +
+  "number in the jammed run; whatever comes before it splits into quantity then unit price, " +
+  "also each ending in 2 decimals. Worked example:\n" +
+  "  \"2022 Tucson VIN: 099257 received 03/27/26 shipped 07/29/26 - 12565.005.00325.00\\n" +
+  "days / 60 days free\"\n" +
+  "    -> this is a storage charge of 125 days minus 60 free = 65.00 billable days at 5.00/day " +
+  "= 325.00 amount, for the vehicle whose VIN ends in 099257 -> extraCharge=325.00 on that " +
+  "row (do not also add it to that vehicle's lineTotal or to any other vehicle).";
 
 async function extractContainerInvoiceFields(text) {
   return aiJSON(CONTAINER_SYSTEM_PROMPT, `Extract from this document:\n\n${text.slice(0, 8000)}`);

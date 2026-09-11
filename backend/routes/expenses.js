@@ -1555,7 +1555,7 @@ async function parseContainerInvoiceLLM(text) {
   for (const row of (r.rows || [])) {
     if (!row.vin) continue;
     const ymm = [row.year, row.make, row.model].filter(Boolean).join(" ").trim();
-    vinData[row.vin.toUpperCase()] = { ymm, lineTotal: row.lineTotal || null };
+    vinData[row.vin.toUpperCase()] = { ymm, lineTotal: row.lineTotal || null, extra: Number(row.extraCharge) || 0 };
   }
   return {
     invoiceNumber: r.invoiceNumber || "",
@@ -1594,10 +1594,17 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         const vins  = Object.keys(vinData);
 
         // ── Per-VIN storage/extra charges ────────────────────────────────────────
+        // Prefer whatever the parser (LLM, or regex as fallback) already attributed
+        // per VIN — it isn't fooled by a "Storage Fee" heading and its per-vehicle
+        // detail line landing on different pages of the extracted text. The line-
+        // adjacency scan below only fills in VINs the parser didn't already cover.
+        const vinExtras = {};
+        for (const vin of vins) {
+          if (vinData[vin]?.extra) vinExtras[vin] = vinData[vin].extra;
+        }
+
         // "Storage Fee" heading appears on its own line; the detail (with partial VIN + amount)
         // is on the NEXT line. Also handle inline storage/extra charge lines.
-        const vinExtras = {};
-        let storageTotal = 0;
         const seenPartials = new Set(); // dedupe duplicate pages
 
         for (let li = 0; li < lines.length; li++) {
@@ -1626,15 +1633,17 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
               const key = partial + lineAmt;
               if (seenPartials.has(key)) continue; // skip duplicate page
               const matchedVin = vins.find(v => v.toUpperCase().endsWith(partial) || v.toUpperCase().includes(partial));
-              if (matchedVin) {
+              // Skip VINs the parser already attributed an extra charge to, so this
+              // backstop scan can't double-count on top of the LLM's own answer.
+              if (matchedVin && !vinData[matchedVin]?.extra) {
                 seenPartials.add(key);
                 vinExtras[matchedVin] = (vinExtras[matchedVin] || 0) + lineAmt;
-                storageTotal += lineAmt;
               }
             }
           }
         }
 
+        const storageTotal = Object.values(vinExtras).reduce((sum, n) => sum + n, 0);
         const hasPerVinPricing = vins.some(v => vinData[v].lineTotal && vinData[v].lineTotal > 0);
         const baseTotal  = total - storageTotal;
         const equalSplit = vins.length > 0 ? Math.round((baseTotal / vins.length) * 100) / 100 : total;
