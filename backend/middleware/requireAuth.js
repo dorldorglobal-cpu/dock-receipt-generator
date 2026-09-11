@@ -12,7 +12,9 @@
 const { verifyToken, authConfigured } = require("../lib/auth");
 
 // Exact paths or path prefixes ("/x/" matches "/x/anything") that skip the guard
-const OPEN_EXACT = new Set(["/", "/api/health", "/oauth2callback"]);
+// "/api/aes/weblink-return" is CBP's redirect target after a WebLink filing —
+// it can't carry our bearer token, so it's guarded by a per-filing returnToken.
+const OPEN_EXACT = new Set(["/", "/api/health", "/oauth2callback", "/api/aes/weblink-return"]);
 const OPEN_PREFIX = ["/api/auth/"];
 
 function isOpen(p) {

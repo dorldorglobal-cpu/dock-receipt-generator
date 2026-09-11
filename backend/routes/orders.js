@@ -700,13 +700,18 @@ router.post(
             "bookingNumber","vin","year","make","model","pol","pod",
             "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry",
             "consigneeName","consigneeAddress","consigneeCity","consigneeCountry",
-            "vessel","aesItn","weightKgs","value","vehicleYearMakeModel",
+            "vessel","weightKgs","value","vehicleYearMakeModel",
           ];
           for (const field of aesFields) {
             if (parsed[field] && !order[field]) {
               order[field] = parsed[field];
               updates.push(field);
             }
+          }
+          // ITN: never silently clobber a WebLink-captured ITN; warn on mismatch.
+          if (parsed.aesItn) {
+            const r = applyItn(order, parsed.aesItn, "AES PDF upload");
+            if (r === "set") updates.push("aesItn");
           }
 
           // Fill voyage / cutoff / sail / arrival straight from the master
@@ -892,11 +897,12 @@ router.post("/:id/parse-drive-files", async (req, res) => {
           "bookingNumber","vin","year","make","model","pol","pod",
           "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry",
           "consigneeName","consigneeAddress","consigneeCity","consigneeCountry",
-          "vessel","aesItn","weightKgs","value","vehicleYearMakeModel",
+          "vessel","weightKgs","value","vehicleYearMakeModel",
         ];
         for (const field of aesFields) {
           if (parsed[field] && !order[field]) { order[field] = parsed[field]; updates.push(field); }
         }
+        if (parsed.aesItn && applyItn(order, parsed.aesItn, "AES PDF (Drive)") === "set") updates.push("aesItn");
         addTimeline(order, "AES Parsed",
           updates.length
             ? `Drive AES parsed and updated: ${updates.join(", ")}.`
@@ -1869,7 +1875,8 @@ router.post("/auto-advance-arrived", async (req, res) => {
 // ═══════════════════════════════════════════════════════════════════════════
 const crypto = require("crypto");
 const AesConfig = require("../models/AesConfig");
-const { buildWeblinkFiling } = require("../utils/aesWeblink");
+const { buildWeblinkFiling, applyItn, effectiveEnv } = require("../utils/aesWeblink");
+const { inquireWeblink } = require("../utils/aesInquiry");
 
 // Ensure the order has a stable SRN + return token before hand-off.
 async function ensureAesFiling(order, config) {
@@ -1944,6 +1951,37 @@ router.post("/:id/aes-mark-handoff", async (req, res) => {
     res.json(order);
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/orders/:id/aes-inquiry — manual ITN re-check via the WebLink Inquiry API
+router.post("/:id/aes-inquiry", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+    const config = await AesConfig.getSingleton();
+    if (!config.filerId) return res.status(400).json({ error: "Set the CBP Filer ID on the AES Settings page first." });
+    if (!order.aesFiling || !order.aesFiling.srn) return res.status(400).json({ error: "This order has no AES filing yet." });
+
+    const { status, itn } = await inquireWeblink({
+      fid: config.filerId,
+      srn: order.aesFiling.srn,
+      env: effectiveEnv(config),
+    });
+
+    order.aesFiling.lastPolledAt = new Date();
+    order.aesFiling.pollAttempts = (order.aesFiling.pollAttempts || 0) + 1;
+    if (itn) {
+      applyItn(order, itn, "manual-inquiry");
+    } else if (/reject/i.test(status)) {
+      order.aesFiling.status = "rejected";
+      order.aesFiling.lastError = status;
+      addTimeline(order, "AES Rejected", `Inquiry: ${status} (SRN ${order.aesFiling.srn})`);
+    }
+    await order.save();
+    res.json({ status, itn: itn || order.aesItn || "", order });
+  } catch (err) {
+    res.status(err.message && /not configured/i.test(err.message) ? 501 : 500).json({ error: err.message });
   }
 });
 

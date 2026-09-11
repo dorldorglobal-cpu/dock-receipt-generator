@@ -4401,6 +4401,28 @@ export default function OrderDetails() {
                         <strong>Cutoff:</strong> {d.cutoffDate || "—"}&nbsp;&nbsp;
                         <strong>Sail:</strong> {d.sailDate || "—"}<br />
                         <strong>AES ITN:</strong> {d.aesItn || "—"}
+                        {order.aesFiling && order.aesFiling.status && !d.aesItn && (
+                          <>
+                            <br />
+                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                              Filing: {order.aesFiling.status.replace(/_/g, " ")}
+                              {order.aesFiling.lastError ? ` — ${order.aesFiling.lastError}` : ""}
+                            </span>{" "}
+                            <button
+                              onClick={async () => {
+                                setMessage("Checking AES for an ITN…");
+                                try {
+                                  const r = await fetch(`${API}/api/orders/${id}/aes-inquiry`, { method: "POST" });
+                                  const j = await r.json();
+                                  if (!r.ok) { setMessage("❌ " + (j.error || "inquiry failed")); return; }
+                                  setMessage(j.itn ? `✅ ITN ${j.itn}` : `No ITN yet (status: ${j.status || "unknown"})`);
+                                  fetchOrder();
+                                } catch { setMessage("❌ inquiry failed"); }
+                              }}
+                              style={{ fontSize: 11, padding: "2px 8px", cursor: "pointer" }}
+                            >Check now</button>
+                          </>
+                        )}
                       </div>
                     </div>
 

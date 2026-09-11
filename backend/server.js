@@ -128,6 +128,7 @@ app.use("/api/schedule", scheduleRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/address-book", addressBookRoutes);
 app.use("/api/aes-config", require("./routes/aesConfig"));
+app.use("/api/aes", require("./routes/aesReturn"));
 app.use("/api/customers", require("./routes/customers"));
 app.use("/api/reports",   require("./routes/reports"));
 // ── Parse dispatch PDF from order docs (must be before the expenses router) ──
@@ -260,6 +261,12 @@ app.get("/oauth2callback", async (req, res) => {
 if (process.env.GMAIL_OAUTH_REFRESH_TOKEN) {
   const { startPoller } = require("./services/copartPoller");
   startPoller();
+}
+
+// ── Start AES ITN poller (pulls ITNs back via the WebLink Inquiry API) ─────────
+if (process.env.AES_ITN_POLLER === "on") {
+  const { startAesItnPoller } = require("./services/aesItnPoller");
+  startAesItnPoller();
 }
 
 // ── POST /api/customer-statement  — generate a customer statement PDF ─────────

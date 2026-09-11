@@ -6,7 +6,7 @@
  *   node backend/scripts/aes-dry-run.js 14204
  *   node backend/scripts/aes-dry-run.js --recent 5     # last 5 orders
  */
-require("dotenv").config();
+require("dotenv").config({ path: require("path").join(__dirname, "..", ".env") });
 const mongoose = require("mongoose");
 const { buildWeblinkFiling } = require("../utils/aesWeblink");
 
