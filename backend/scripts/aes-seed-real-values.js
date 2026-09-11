@@ -1,9 +1,10 @@
 /**
  * One-time backfill: patch the AesConfig singleton with the real values
- * confirmed from an accepted CBP filing (order 14217, 2026-09-10). Schema
- * defaults only apply to a NEW document — this fixes up the one already
- * created in production. Only touches fields that are still blank or still
- * at their old default, never overwrites something you've already entered.
+ * confirmed from accepted CBP filings — order 14217 (2026-09-10), then a bulk
+ * scan of 307 real accepted EEI printouts. Schema defaults only apply to a NEW
+ * document — this fixes up the one already created in production. Only
+ * touches fields that are still blank or still at their old default, never
+ * overwrites something you've already entered.
  *
  *   node backend/scripts/aes-seed-real-values.js          # dry run
  *   node backend/scripts/aes-seed-real-values.js --apply  # write
@@ -19,8 +20,11 @@ const PATCH = {
   "forwardingAgent.postal":   "07726",
   "forwardingAgent.country":  "US",
   "forwardingAgent.idType":   "E",
-  ultConsigneeType:           "O",
-  defaultInBondCode:          "70",
+  ultConsigneeType:           "O",           // confirmed 306/307
+  defaultInBondCode:          "70",          // confirmed 307/307
+  defaultFilingOption:        "2",           // confirmed 307/307 — PREDEPARTURE
+  defaultScheduleB:           "8703600045",  // confirmed 303/307
+  defaultStateOfOrigin:       "NJ",          // plurality 177/307 — last-resort fallback only
 };
 // Only overwritten if the field is currently exactly this old value (i.e. untouched)
 const REPLACE_IF_OLD = {

@@ -12,7 +12,7 @@ const WRITABLE = [
   "filerId", "srnPrefix", "responseEmail",
   "defaultFilingAction", "defaultFilingOption", "defaultFilingType",
   "defaultExportInfoCode", "defaultLicenseCode", "defaultLicenseNumber", "defaultEccn",
-  "ultConsigneeType", "relatedParty", "hazmat", "routedExport",
+  "ultConsigneeType", "relatedParty", "hazmat", "routedExport", "defaultStateOfOrigin",
   "defaultScheduleB", "scheduleBOverrides", "defaultOriginIndicator", "defaultInBondCode",
   "aesEnv",
 ];
@@ -58,6 +58,7 @@ router.get("/code-tables", (req, res) => {
     scheduleK: aesCodes.SCHEDULE_K,
     countryIso: aesCodes.COUNTRY_ISO,
     scac: aesCodes.SCAC,
+    scacByPod: aesCodes.SCAC_BY_POD,
   });
 });
 

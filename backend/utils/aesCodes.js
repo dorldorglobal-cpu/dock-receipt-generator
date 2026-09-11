@@ -5,11 +5,13 @@
  * parseOrderDocs.js and POL_OPTIONS / POD_OPTIONS on the frontend). AES wants
  * numeric codes. This module is the single place that translates.
  *
- * ⚠️  Every code below is marked `// VERIFY` until it has been checked against
- *     the current CBP publication. The AES Settings page renders this table so
- *     staff can see which entries are still blank, and ACE AESDirect re-validates
- *     every code on submit — a wrong/blank code shows up as a `missing[]` row on
- *     the review screen, never as a silent bad filing.
+ * Codes marked "confirmed" were cross-checked against a bulk scan of 307 real
+ * accepted EEI printouts (saved AES PDFs, 2025–2026) — see the (n) counts.
+ * Everything else is still `// VERIFY` until checked against the current CBP
+ * publication. The AES Settings page renders this table so staff can see
+ * which entries are still blank, and ACE AESDirect re-validates every code on
+ * submit — a wrong/blank code shows up as a `missing[]` row on the review
+ * screen, never as a silent bad filing.
  *
  *   - Schedule D  — U.S. port of export .......... https://www.census.gov/foreign-trade/schedules/d/
  *   - Schedule K  — foreign port of unlading ..... https://www.cbp.gov/document/guidance/schedule-k-classification-foreign-ports-vessels
@@ -23,30 +25,30 @@ const up = (s) => String(s || "").trim().toUpperCase();
 // ── Schedule D: U.S. port name → 4-digit port-of-export code ────────────────
 // Keyed by the normalized POL name the app uses.
 const SCHEDULE_D = {
-  BALTIMORE:    "1303", // confirmed — order 14217, accepted EEI
-  JACKSONVILLE: "1803", // VERIFY
-  BRUNSWICK:    "1701", // VERIFY
-  SAVANNAH:     "1703", // VERIFY
-  "WILMINGTON": "1501", // VERIFY (Wilmington, NC)
-  "NEW YORK":   "1001", // VERIFY
-  NEWARK:       "4601", // VERIFY
-  PROVIDENCE:   "0502", // VERIFY (Davisville falls under Providence, RI)
-  HOUSTON:      "5301", // VERIFY
-  "LONG BEACH": "2709", // VERIFY
-  FREEPORT:     "",     // VERIFY — Freeport, TX?  confirm which Freeport
-  NORFOLK:      "1401", // VERIFY
-  CHARLESTON:   "1601", // VERIFY
+  SAVANNAH:     "1703", // confirmed (n=213) — dominant POE
+  BALTIMORE:    "1303", // confirmed (n=31)
+  JACKSONVILLE: "1803", // confirmed (n=24)
+  FREEPORT:     "5311", // confirmed (n=17) — Freeport, TX
+  PROVIDENCE:   "0502", // confirmed (n=12) — Davisville falls under Providence, RI
+  "WILMINGTON": "1103", // confirmed (n=8) — Wilmington, DE (NOT Wilmington, NC)
+  BRUNSWICK:    "1701", // confirmed (n=1)
+  "LONG BEACH": "2709", // confirmed (n=1)
+  "NEW YORK":   "1001", // VERIFY — not seen in the sample
+  NEWARK:       "4601", // VERIFY — not seen in the sample
+  HOUSTON:      "5301", // VERIFY — not seen in the sample
+  NORFOLK:      "1401", // VERIFY — not seen in the sample
+  CHARLESTON:   "1601", // VERIFY — not seen in the sample
 };
 
 // ── Schedule K: foreign port name → 5-digit port-of-unlading code ───────────
 // Left blank where not yet confirmed — blanks surface on the review screen.
 const SCHEDULE_K = {
-  TEMA:      "", // VERIFY — Tema, Ghana
-  ACCRA:     "", // VERIFY (usually filed as Tema)
+  TEMA:      "74990", // confirmed (n=203) — "74990 - TEMA (TEMO), GHANA"
+  ACCRA:     "74990", // usually filed as Tema
   TAKORADI:  "", // VERIFY
-  LAGOS:     "75367", // confirmed — order 14217: "75367 - LAGOS; TIN CAN ISLAND, NIGERIA"
-  APAPA:     "", // VERIFY — Apapa is a separate Lagos-area terminal from Tin Can Island, may have its own code
-  COTONOU:   "", // VERIFY — Benin
+  LAGOS:     "75367", // confirmed (n=99) — "75367 - LAGOS; TIN CAN ISLAND, NIGERIA"
+  APAPA:     "47110", // seen twice in the sample as an older/alternate Lagos code — VERIFY which applies
+  COTONOU:   "76101", // confirmed (n=5) — "76101 - COTONOU, BENIN"
   LOME:      "", // VERIFY — Togo
   DAKAR:     "", // VERIFY — Senegal
   ABIDJAN:   "", // VERIFY — Côte d'Ivoire
@@ -81,14 +83,30 @@ const COUNTRY_ISO = {
 };
 
 // ── SCAC: shipping line → Standard Carrier Alpha Code ──────────────────────
+// TURNS OUT the SCAC on the actual filing tracks the DESTINATION PORT much
+// more reliably than the nominal "shipping line" name — see SCAC_BY_POD
+// below, built from the same 307-filing sample, and preferred by
+// aesWeblink.js. This map is the fallback when the POD isn't recognized.
 const SCAC = {
-  SALLAUM:        "SBLF", // confirmed — order 14217 (booking prefix SLSE)
-  "SALLAUM LINES":"SBLF", // confirmed
-  ACL:            "ACLU", // VERIFY — Atlantic Container Line
-  "ATLANTIC CONTAINER LINE": "ACLU", // VERIFY
-  GRIMALDI:       "GRIU", // VERIFY
-  HOEGH:          "HEGH", // VERIFY — Höegh Autoliners
-  "HOEGH AUTOLINERS": "HEGH", // VERIFY
+  SALLAUM:        "SBLF", // confirmed (n=59, Lagos-bound) — booking prefix SLSE
+  "SALLAUM LINES":"SBLF",
+  ACL:            "OOLU", // confirmed (n=155/203 of Tema-bound filings) — NOT the "ACLU" industry code
+  "ATLANTIC CONTAINER LINE": "OOLU",
+  GRIMALDI:       "", // VERIFY — not seen in the sample; don't guess
+  HOEGH:          "", // VERIFY — Höegh Autoliners; not seen in the sample
+  "HOEGH AUTOLINERS": "",
+};
+
+// Port of unlading → the most common SCAC actually filed for that route
+// (majority vote across 307 real accepted filings). Multiple ocean carriers
+// service these RORO-consolidator routes on any given sailing (OOLU/HLCU/ACLU
+// for Tema; SBLF/HLCU/ACLU/SLSD/MAEU for Lagos), so this is a strong default,
+// not a certainty — aesWeblink.js flags it as a warning to confirm per booking.
+const SCAC_BY_POD = {
+  TEMA:    "OOLU", // 155/203 (76%) — runner-up HLCU (24), ACLU (21)
+  ACCRA:   "OOLU",
+  LAGOS:   "SBLF", // 59/99 (60%) — runner-up HLCU (26), ACLU (7), SLSD (5)
+  COTONOU: "MSCU", // 3/5 — small sample, runner-up HLCU (2)
 };
 
 // ── US states: full name → 2-letter abbreviation ─────────────────────────────
@@ -158,6 +176,13 @@ function scac(line) {
   return SCAC[up(line)] || "";
 }
 
+// Preferred SCAC lookup — by destination port (the reliable signal), not the
+// nominal shipping line. See SCAC_BY_POD above.
+function scacForPod(pod) {
+  const name = up(normalizePort ? normalizePort(pod) : pod) || up(pod);
+  return SCAC_BY_POD[name] || "";
+}
+
 /**
  * Schedule B for the vehicle. Order override → AesConfig keyword map →
  * AesConfig default. Returns "" if nothing is configured (⇒ missing[]).
@@ -195,12 +220,14 @@ module.exports = {
   SCHEDULE_K,
   COUNTRY_ISO,
   SCAC,
+  SCAC_BY_POD,
   US_STATES,
   motFor,
   scheduleD,
   scheduleK,
   countryIso,
   scac,
+  scacForPod,
   scheduleB,
   originIndicator,
   stateAbbr,

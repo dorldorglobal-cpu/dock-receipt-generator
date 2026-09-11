@@ -14,16 +14,22 @@
  * This module never submits anything. The POST to CBP is made by the user's
  * browser (a real <form> submit) while they are logged into ACE AESDirect.
  *
- * Cross-checked against a real accepted filing (order 14217, 2026-09-10):
+ * Cross-checked against order 14217's accepted filing, then against a bulk
+ * scan of 307 real accepted EEIs (saved AES PDFs, 2025–2026):
  *   - DDG files as the AUTHORIZED/FORWARDING AGENT (AD3_*), not the USPPI.
  *     The USPPI (AD0_*) is the vehicle's seller of record and comes from the
  *     order (exporterName/exporterAddress/... + usppiEin), not AesConfig.
- *   - IT1_21 (foreign/domestic origin) defaults to "D" for every used vehicle
- *     — it describes the export, not the country of manufacture.
+ *   - IT1_21 (foreign/domestic origin) = "D" in all 307 filings — it describes
+ *     the export, not the country of manufacture.
+ *   - IT1_1 (export info code) = "OS" in all 307. IBT (in-bond) = "70" in all
+ *     307. FO (filing option) = "2 - PREDEPARTURE" in all 307.
+ *   - IT1_13 (Schedule B) = "8703.60.0045" in 303/307 — the near-universal
+ *     default for a used passenger vehicle, regardless of engine type.
+ *   - AD1_14 (ultimate consignee type) = "O" in 306/307.
+ *   - SCAC tracks the destination PORT far more reliably than the nominal
+ *     "shipping line" name (multiple ocean carriers service the same RORO
+ *     consolidator route) — see SCAC_BY_POD in aesCodes.js.
  *   - IT1_12 (commodity description) is just "YEAR MAKE MODEL", no filler text.
- *   - IBT (in-bond code) "70" is sent on every filing.
- *   - Real confirmed codes: POE BALTIMORE=1303, POU LAGOS(Tin Can Is.)=75367,
- *     SCAC SALLAUM=SBLF.
  */
 
 const aesCodes = require("./aesCodes");
@@ -105,7 +111,8 @@ function buildWeblinkFiling(order, config, opts = {}) {
   put("FAC", (order.aesFiling && order.aesFiling.status === "accepted") ? "R" : (config.defaultFilingAction || "A"));
   req("FO", config.defaultFilingOption, "Filing option", "set it on the AES Settings page");
   req("FT", config.defaultFilingType, "AEI filing type", "set it on the AES Settings page");
-  req("ST", aesCodes.stateAbbr(order.exporterState) || aesCodes.stateAbbr(order.pickupState),
+  req("ST",
+    aesCodes.stateAbbr(order.exporterState) || aesCodes.stateAbbr(order.pickupState) || aesCodes.stateAbbr(config.defaultStateOfOrigin),
     "U.S. state of origin", "USPPI (exporter) state, or pickup/warehouse state");
   req("POE", aesCodes.scheduleD(order.pol), "Port of export (Schedule D)",
     `no code for POL "${s(order.pol) || "—"}" in aesCodes.js`);
@@ -116,8 +123,11 @@ function buildWeblinkFiling(order, config, opts = {}) {
     `no code for POD "${s(order.pod) || "—"}" in aesCodes.js`);
   req("EDA", yymmdd(order.sailDate || order.cutoffDate), "Estimated date of export", "order sail / cutoff date");
   put("MOT", aesCodes.motFor(order.requestType));
-  req("SCAC", aesCodes.scac(order.shippingLine), "Carrier SCAC",
-    `no SCAC for line "${s(order.shippingLine) || "—"}" in aesCodes.js`);
+  const scacByPod = aesCodes.scacForPod(order.pod);
+  const scacDefault = scacByPod || aesCodes.scac(order.shippingLine);
+  req("SCAC", s(order.aesScac) || scacDefault, "Carrier SCAC",
+    `no SCAC for POD "${s(order.pod) || "—"}" or line "${s(order.shippingLine) || "—"}" in aesCodes.js`);
+  if (!order.aesScac && scacByPod) warn("SCAC", "Carrier SCAC", `defaulted to "${scacByPod}" — the most common carrier for this port historically, but varies by sailing; confirm against this booking's carrier`);
   req("VN", order.vessel, "Conveyance / vessel name");
   put("RCC", config.relatedParty || "N");
   put("HAZ", config.hazmat || "N");

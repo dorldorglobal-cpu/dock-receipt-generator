@@ -148,6 +148,7 @@ export default function AesSettings() {
         <Field label="ECCN (blank = EAR99)" k="defaultEccn" form={form} set={set} />
         <Field label="Ultimate consignee type" k="ultConsigneeType" form={form} set={set} placeholder="O (Other/Unknown) — confirmed default" />
         <Field label="Origin indicator default" k="defaultOriginIndicator" form={form} set={set} placeholder="D (Domestic) — confirmed default for used vehicles" />
+        <Field label="State of origin (last resort)" k="defaultStateOfOrigin" form={form} set={set} placeholder="NJ — only used when an order has no exporter/pickup state" />
         <Field label="Related party (Y/N)" k="relatedParty" form={form} set={set} placeholder="N" />
         <Field label="Hazmat (Y/N)" k="hazmat" form={form} set={set} placeholder="N" />
         <Field label="Routed export (Y/N)" k="routedExport" form={form} set={set} placeholder="N" />
@@ -191,7 +192,8 @@ export default function AesSettings() {
             ["Schedule D — U.S. port of export", tables.scheduleD],
             ["Schedule K — foreign port of unlading", tables.scheduleK],
             ["Country (ISO alpha-2)", tables.countryIso],
-            ["SCAC — carrier codes", tables.scac],
+            ["SCAC by port (preferred — most common carrier per destination)", tables.scacByPod],
+            ["SCAC by shipping line (fallback)", tables.scac],
           ].map(([title, obj]) => (
             <div key={title} style={{ marginBottom:14 }}>
               <div style={{ fontSize:12,fontWeight:700,color:"var(--text-secondary)",marginBottom:4 }}>{title}</div>

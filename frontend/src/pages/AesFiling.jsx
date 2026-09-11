@@ -38,7 +38,7 @@ const GROUPS = [
 
 // WebLink field code → editable Order field (inline fix on this screen)
 const EDIT_MAP = {
-  BN: "bookingNumber", VN: "vessel",
+  BN: "bookingNumber", VN: "vessel", SCAC: "aesScac",
   IT1_1: "exportInfoCode", IT1_2: "value", IT1_7: "weightKgs", IT1_13: "scheduleB",
   IT1_17: "vin", IT1_18: "titleNumber", IT1_19: "titleState",
   // USPPI = the vehicle's seller of record (order.exporter*), not DDG — see aesWeblink.js

@@ -63,16 +63,22 @@ const aesConfigSchema = new mongoose.Schema(
     responseEmail:        { type: String, default: "" },     // AES response notifications go here
 
     defaultFilingAction:  { type: String, default: "A" },    // A = Add
-    defaultFilingOption:  { type: String, default: "" },     // e.g. "2" (standard) — set from CBP profile
-    defaultFilingType:    { type: String, default: "" },     // AEI filing type — set from CBP profile
+    // Filing option. Default "2" (PREDEPARTURE) — confirmed in all 307 sampled filings.
+    defaultFilingOption:  { type: String, default: "2" },
+    defaultFilingType:    { type: String, default: "" },     // AEI filing type — not visible on the EEI printout; set from CBP profile
 
-    defaultExportInfoCode:{ type: String, default: "OS" },   // OS = all other exports
+    defaultExportInfoCode:{ type: String, default: "OS" },   // OS — confirmed in all 307 sampled filings
     defaultLicenseCode:   { type: String, default: "C33" },  // C33 = No License Required
     defaultLicenseNumber: { type: String, default: "NLR" },
     defaultEccn:          { type: String, default: "" },     // "" ⇒ EAR99
     // D=Direct consumer, R=Reseller, G=Gov, O=Other/Unknown. Default "O" — confirmed
-    // from order 14217 (buyer type is usually unknown/unverified at filing time).
+    // in 306/307 sampled filings (buyer type is usually unknown/unverified at filing time).
     ultConsigneeType:     { type: String, default: "O" },
+    // Last-resort U.S. state of origin (ST), used only when an order has
+    // neither exporterState nor pickupState. "NJ" was the plurality value
+    // (177/307) in the sampled filings — likely the default when the USPPI's
+    // actual state wasn't captured. A real per-order value always wins.
+    defaultStateOfOrigin: { type: String, default: "NJ" },
     // Foreign/Domestic origin indicator (IT1_21). Default "D" — confirmed from
     // order 14217: a USED vehicle being re-exported from US domestic commerce is
     // "Domestic" regardless of where it was originally manufactured.
@@ -86,7 +92,10 @@ const aesConfigSchema = new mongoose.Schema(
     routedExport:         { type: String, default: "N" },
 
     // ── Schedule B for used vehicles ─────────────────────────────────────────
-    defaultScheduleB:     { type: String, default: "" },      // 10 digits, used passenger vehicle
+    // 10 digits, used passenger vehicle. Default "8703600045" — confirmed in
+    // 303/307 sampled filings; used for essentially every vehicle regardless
+    // of engine type. scheduleBOverrides below still wins for the exceptions.
+    defaultScheduleB:     { type: String, default: "8703600045" },
     scheduleBOverrides:   { type: mongoose.Schema.Types.Mixed, default: {} }, // { keyword: "code" }
 
     // ── Environment ─────────────────────────────────────────────────────────

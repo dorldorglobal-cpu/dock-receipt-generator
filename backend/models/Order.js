@@ -77,6 +77,7 @@ const orderSchema = new mongoose.Schema(
     scheduleB:       { type: String, default: "" },  // IT1_13 override (else AesConfig default)
     exportInfoCode:  { type: String, default: "" },  // IT1_1 override (else "OS")
     originIndicator: { type: String, default: "" },  // IT1_21 override ("D" domestic / "F" foreign)
+    aesScac:         { type: String, default: "" },  // SCAC override (else port-based default — varies per sailing)
 
     // Full title assignment chain, as read off the uploaded title photo(s) by
     // the Title OCR feature — one entry for the registered owner ("seller")

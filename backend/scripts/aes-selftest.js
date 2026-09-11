@@ -37,6 +37,14 @@ ok("motFor Container = 11", () => assert.equal(aesCodes.motFor("Container"), "11
 ok("countryIso GHANA = GH", () => assert.equal(aesCodes.countryIso("GHANA"), "GH"));
 ok("countryIso via POD TEMA = GH", () => assert.equal(aesCodes.countryIso("TEMA"), "GH"));
 ok("scheduleD BALTIMORE set", () => assert.ok(aesCodes.scheduleD("BALTIMORE")));
+ok("scheduleD WILMINGTON = 1103 (DE, not NC — corrected from real data)", () => assert.equal(aesCodes.scheduleD("WILMINGTON"), "1103"));
+ok("scheduleD FREEPORT = 5311 (TX — confirmed)", () => assert.equal(aesCodes.scheduleD("FREEPORT"), "5311"));
+ok("scheduleK TEMA = 74990 (confirmed, n=203)", () => assert.equal(aesCodes.scheduleK("TEMA"), "74990"));
+ok("scheduleK COTONOU = 76101 (confirmed, n=5)", () => assert.equal(aesCodes.scheduleK("COTONOU"), "76101"));
+ok("scacForPod TEMA = OOLU (confirmed, n=155/203)", () => assert.equal(aesCodes.scacForPod("TEMA"), "OOLU"));
+ok("scacForPod LAGOS = SBLF (confirmed, n=59/99)", () => assert.equal(aesCodes.scacForPod("LAGOS"), "SBLF"));
+ok("scacForPod COTONOU = MSCU (confirmed, n=3/5)", () => assert.equal(aesCodes.scacForPod("COTONOU"), "MSCU"));
+ok("scacForPod unknown port = ''", () => assert.equal(aesCodes.scacForPod("DAKAR"), ""));
 ok("originIndicator defaults D regardless of VIN origin", () => {
   // Confirmed from a real accepted filing (order 14217, Korean-built VIN) — a
   // used vehicle re-exported from US domestic commerce is "Domestic".
@@ -122,6 +130,22 @@ ok("SCAC Sallaum = SBLF (confirmed)", () => assert.equal(real14217.fields.SCAC, 
 ok("commodity description matches real filing", () => assert.equal(real14217.fields.IT1_12, "2015 HYUNDAI TUCSON"));
 ok("title number/state from the order", () => { assert.equal(real14217.fields.IT1_18, "4503799492"); assert.equal(real14217.fields.IT1_19, "OH"); });
 ok("no USPPI fields flagged missing", () => assert.ok(!real14217.missing.some((m) => m.field.startsWith("AD0_"))));
+ok("SCAC defaults by POD (LAGOS → SBLF)", () => assert.equal(real14217.fields.SCAC, "SBLF"));
+ok("aesScac order override wins over POD default", () => {
+  const withOverride = buildWeblinkFiling({ ...REAL_ORDER, aesScac: "HLCU" }, REAL_CONFIG, { srn: "14217", returnToken: "tok" });
+  assert.equal(withOverride.fields.SCAC, "HLCU");
+});
+
+console.log("AesConfig schema defaults (no DB — construct only)");
+const AesConfig = require("../models/AesConfig");
+const freshCfg = new AesConfig({});
+ok("defaultFilingOption default '2'", () => assert.equal(freshCfg.defaultFilingOption, "2"));
+ok("defaultScheduleB default '8703600045'", () => assert.equal(freshCfg.defaultScheduleB, "8703600045"));
+ok("ultConsigneeType default 'O'", () => assert.equal(freshCfg.ultConsigneeType, "O"));
+ok("defaultOriginIndicator default 'D'", () => assert.equal(freshCfg.defaultOriginIndicator, "D"));
+ok("defaultStateOfOrigin default 'NJ'", () => assert.equal(freshCfg.defaultStateOfOrigin, "NJ"));
+ok("srnPrefix default ''", () => assert.equal(freshCfg.srnPrefix, ""));
+ok("forwardingAgent.name defaults to DDG's real identity", () => assert.equal(freshCfg.forwardingAgent.name, "DOR LDOR GLOBAL"));
 
 console.log("parseOrderDocs — EIN + title extraction (order 14217 EEI text)");
 const { findUsppiEin, findVehicleTitle } = require("../utils/parseOrderDocs");
