@@ -127,7 +127,9 @@ export default function AesSettings() {
         <Field label="Address line 1" k="usppiAddress1" form={form} set={set} full />
         <Field label="Address line 2" k="usppiAddress2" form={form} set={set} full />
         <Field label="City" k="usppiCity" form={form} set={set} />
-        <Field label="State" k="usppiState" form={form} set={set} placeholder="NJ" />
+        {/* No separate USPPI-state fallback field — state of origin (ST) IS the
+            USPPI's state on every real filing, so there's one shared fallback:
+            "State of origin (last resort)" under Filer & Filing Defaults. */}
         <Field label="ZIP" k="usppiZip" form={form} set={set} />
         <Field label="Contact first name" k="usppiContactFirst" form={form} set={set} />
         <Field label="Contact last name" k="usppiContactLast" form={form} set={set} />

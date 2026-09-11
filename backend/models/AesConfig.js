@@ -30,6 +30,9 @@ const aesConfigSchema = new mongoose.Schema(
     usppiAddress1:     { type: String, default: "" },
     usppiAddress2:     { type: String, default: "" },
     usppiCity:         { type: String, default: "" },
+    // Not read by the builder — state of origin (ST) IS the USPPI's state on
+    // every real filing, so there's one shared fallback: defaultStateOfOrigin
+    // below. Kept in the schema only so an old value here isn't silently lost.
     usppiState:        { type: String, default: "" },
     usppiZip:          { type: String, default: "" },
     usppiContactFirst: { type: String, default: "" },

@@ -106,14 +106,21 @@ function buildWeblinkFiling(order, config, opts = {}) {
   req("EMAIL", config.responseEmail, "AES response email", "set it on the AES Settings page");
 
   // ── General ───────────────────────────────────────────────────────────────
+  // State of origin (ST) IS the USPPI's state — confirmed from real filings
+  // (order 14217: both "6. STATE OF ORIGIN" and the USPPI address read "OH").
+  // Computed once and reused for both AD0_7 and ST below so they can never
+  // disagree, no matter which fallback tier ends up supplying it.
+  const originState =
+    aesCodes.stateAbbr(order.exporterState) ||
+    aesCodes.stateAbbr(order.pickupState) ||
+    aesCodes.stateAbbr(config.defaultStateOfOrigin);
+
   put("SRN", srn);
   req("BN", order.bookingNumber, "Booking number");
   put("FAC", (order.aesFiling && order.aesFiling.status === "accepted") ? "R" : (config.defaultFilingAction || "A"));
   req("FO", config.defaultFilingOption, "Filing option", "set it on the AES Settings page");
   req("FT", config.defaultFilingType, "AEI filing type", "set it on the AES Settings page");
-  req("ST",
-    aesCodes.stateAbbr(order.exporterState) || aesCodes.stateAbbr(order.pickupState) || aesCodes.stateAbbr(config.defaultStateOfOrigin),
-    "U.S. state of origin", "USPPI (exporter) state, or pickup/warehouse state");
+  req("ST", originState, "U.S. state of origin", "USPPI (exporter) state, or pickup/warehouse state");
   req("POE", aesCodes.scheduleD(order.pol), "Port of export (Schedule D)",
     `no code for POL "${s(order.pol) || "—"}" in aesCodes.js`);
   const dest = s(order.consigneeCountry) || "";
@@ -146,7 +153,7 @@ function buildWeblinkFiling(order, config, opts = {}) {
   req("AD0_4", order.exporterAddress || config.usppiAddress1, "USPPI address", "add it on the filing screen, or set a fallback in AES Settings");
   put("AD0_5", config.usppiAddress2);
   req("AD0_6", order.exporterCity || config.usppiCity, "USPPI city", "add it on the filing screen, or set a fallback in AES Settings");
-  req("AD0_7", aesCodes.stateAbbr(order.exporterState) || aesCodes.stateAbbr(config.usppiState), "USPPI state", "add it on the filing screen, or set a fallback in AES Settings");
+  req("AD0_7", originState, "USPPI state", "same as ST — add it on the filing screen, or set the AES Settings fallback state of origin");
   req("AD0_8", order.exporterZip || config.usppiZip, "USPPI ZIP", "add it on the filing screen, or set a fallback in AES Settings");
   req("AD0_9", config.usppiContactFirst, "USPPI contact first name", "AES Settings — DDG's own filer contact");
   req("AD0_11", config.usppiContactLast, "USPPI contact last name", "AES Settings — DDG's own filer contact");

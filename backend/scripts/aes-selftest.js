@@ -124,6 +124,25 @@ ok("SRN is the bare order number", () => assert.equal(real14217.fields.SRN, "142
 ok("USPPI comes from the order, not config", () => assert.equal(real14217.fields.AD0_1, "STATE FARM MUTUAL"));
 ok("USPPI EIN comes from the order", () => assert.equal(real14217.fields.AD0_2, "37053310000"));
 ok("ST derived from exporterState (clean), not messy pickupState", () => assert.equal(real14217.fields.ST, "OH"));
+ok("ST and USPPI state (AD0_7) always match — same source, computed once", () => assert.equal(real14217.fields.ST, real14217.fields.AD0_7));
+
+console.log("ST / AD0_7 stay in sync across every fallback tier");
+ok("no exporterState: both fall to pickupState", () => {
+  const b = buildWeblinkFiling({ ...REAL_ORDER, exporterState: "" }, REAL_CONFIG, { srn: "14217", returnToken: "tok" });
+  assert.equal(b.fields.ST, "OH"); // from pickupState "PHILADELPHIA OHIO"
+  assert.equal(b.fields.ST, b.fields.AD0_7);
+});
+ok("no exporterState/pickupState: both fall to AesConfig.defaultStateOfOrigin", () => {
+  const b = buildWeblinkFiling({ ...REAL_ORDER, exporterState: "", pickupState: "" }, { ...REAL_CONFIG, defaultStateOfOrigin: "NJ" }, { srn: "14217", returnToken: "tok" });
+  assert.equal(b.fields.ST, "NJ");
+  assert.equal(b.fields.ST, b.fields.AD0_7);
+});
+ok("nothing available: both missing together, never one without the other", () => {
+  const b = buildWeblinkFiling({ ...REAL_ORDER, exporterState: "", pickupState: "" }, { ...REAL_CONFIG, defaultStateOfOrigin: "" }, { srn: "14217", returnToken: "tok" });
+  const missingFields = b.missing.map((m) => m.field);
+  assert.ok(missingFields.includes("ST"));
+  assert.ok(missingFields.includes("AD0_7"));
+});
 ok("POE Baltimore = 1303 (confirmed)", () => assert.equal(real14217.fields.POE, "1303"));
 ok("POU Lagos = 75367 (confirmed)", () => assert.equal(real14217.fields.POU, "75367"));
 ok("SCAC Sallaum = SBLF (confirmed)", () => assert.equal(real14217.fields.SCAC, "SBLF"));
