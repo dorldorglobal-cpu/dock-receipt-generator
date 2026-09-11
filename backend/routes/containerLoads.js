@@ -395,16 +395,36 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     const { generateInvoicePdf } = require("./invoices");
     const { google } = require("googleapis");
 
-    const { to, subject, body } = req.body || {};
+    const { to, subject, body, extraLines } = req.body || {};
     if (!to) return res.status(400).json({ error: "to is required" });
 
     const load = await ContainerLoad.findById(req.params.id).lean();
     if (!load) return res.status(404).json({ error: "Not found" });
 
-    const invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
+    let invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
     const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
     const orderMap = {};
     for (const o of orders) orderMap[String(o._id)] = o;
+
+    // Split each extra line (e.g. a container-wide BAF) evenly across every
+    // invoice being sent, and persist it so the invoice's own total (used
+    // elsewhere for profit tracking) matches what the customer was actually billed.
+    const validExtraLines = (extraLines || []).filter(l => l.label && l.amount);
+    if (validExtraLines.length && invoices.length) {
+      const shares = validExtraLines.map(l => Math.round((Number(l.amount) / invoices.length) * 100) / 100);
+      invoices = await Promise.all(invoices.map(async (inv) => {
+        const newItems = [
+          ...(inv.items || []),
+          ...validExtraLines.map((l, i) => ({ description: l.label, amount: shares[i] })),
+        ];
+        const newTotal = newItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+        return Invoice.findByIdAndUpdate(
+          inv._id,
+          { items: newItems, subtotal: newTotal, total: newTotal },
+          { new: true }
+        ).lean();
+      }));
+    }
 
     // Generate all invoice PDFs
     const attachments = [];
