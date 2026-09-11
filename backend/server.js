@@ -269,6 +269,12 @@ if (process.env.AES_ITN_POLLER === "on") {
   startAesItnPoller();
 }
 
+// ── Start AES confirmation-email poller (reads the ITN out of CBP's email) ─────
+if (process.env.GMAIL_OAUTH_REFRESH_TOKEN && process.env.AES_EMAIL_POLLER !== "off") {
+  const { startAesEmailPoller } = require("./services/aesEmailPoller");
+  startAesEmailPoller();
+}
+
 // ── POST /api/customer-statement  — generate a customer statement PDF ─────────
 app.post("/api/customer-statement", async (req, res) => {
   try {

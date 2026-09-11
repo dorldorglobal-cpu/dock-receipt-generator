@@ -1877,6 +1877,7 @@ const crypto = require("crypto");
 const AesConfig = require("../models/AesConfig");
 const { buildWeblinkFiling, applyItn, effectiveEnv } = require("../utils/aesWeblink");
 const { inquireWeblink } = require("../utils/aesInquiry");
+const { pollAesEmails } = require("../services/aesEmailPoller");
 
 // Ensure the order has a stable SRN + return token before hand-off.
 async function ensureAesFiling(order, config) {
@@ -1954,34 +1955,50 @@ router.post("/:id/aes-mark-handoff", async (req, res) => {
   }
 });
 
-// POST /api/orders/:id/aes-inquiry — manual ITN re-check via the WebLink Inquiry API
+// POST /api/orders/:id/aes-inquiry — manual ITN re-check.
+// Scans the AES confirmation email (works today) and, if the Inquiry API cert is
+// configured, also queries the WebLink Inquiry API.
 router.post("/:id/aes-inquiry", async (req, res) => {
   try {
-    const order = await Order.findById(req.params.id);
+    let order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: "Order not found" });
-    const config = await AesConfig.getSingleton();
-    if (!config.filerId) return res.status(400).json({ error: "Set the CBP Filer ID on the AES Settings page first." });
     if (!order.aesFiling || !order.aesFiling.srn) return res.status(400).json({ error: "This order has no AES filing yet." });
+    const config = await AesConfig.getSingleton();
+    const srn = order.aesFiling.srn;
 
-    const { status, itn } = await inquireWeblink({
-      fid: config.filerId,
-      srn: order.aesFiling.srn,
-      env: effectiveEnv(config),
-    });
+    // 1) Email scan (no CBP credentials needed)
+    let emailResult = null;
+    try { emailResult = await pollAesEmails(); } catch (e) { emailResult = { error: e.message }; }
+    order = await Order.findById(req.params.id); // reload — the email poller may have written the ITN
 
-    order.aesFiling.lastPolledAt = new Date();
-    order.aesFiling.pollAttempts = (order.aesFiling.pollAttempts || 0) + 1;
-    if (itn) {
-      applyItn(order, itn, "manual-inquiry");
-    } else if (/reject/i.test(status)) {
-      order.aesFiling.status = "rejected";
-      order.aesFiling.lastError = status;
-      addTimeline(order, "AES Rejected", `Inquiry: ${status} (SRN ${order.aesFiling.srn})`);
+    // 2) WebLink Inquiry API (only if the client cert is configured)
+    let status = "", itn = order.aesItn || "";
+    if (config.filerId) {
+      try {
+        const r = await inquireWeblink({ fid: config.filerId, srn, env: effectiveEnv(config) });
+        status = r.status || "";
+        order.aesFiling.lastPolledAt = new Date();
+        order.aesFiling.pollAttempts = (order.aesFiling.pollAttempts || 0) + 1;
+        if (r.itn) { applyItn(order, r.itn, "manual-inquiry"); itn = r.itn; }
+        else if (/reject/i.test(status)) {
+          order.aesFiling.status = "rejected";
+          order.aesFiling.lastError = status;
+          addTimeline(order, "AES Rejected", `Inquiry: ${status} (SRN ${srn})`);
+        }
+        await order.save();
+      } catch (e) {
+        if (!/not configured/i.test(e.message)) status = `inquiry error: ${e.message}`;
+      }
     }
-    await order.save();
-    res.json({ status, itn: itn || order.aesItn || "", order });
+
+    res.json({
+      status: status || (order.aesItn ? "ITN on file" : "no ITN yet"),
+      itn: order.aesItn || itn || "",
+      emailScan: emailResult,
+      order,
+    });
   } catch (err) {
-    res.status(err.message && /not configured/i.test(err.message) ? 501 : 500).json({ error: err.message });
+    res.status(500).json({ error: err.message });
   }
 });
 

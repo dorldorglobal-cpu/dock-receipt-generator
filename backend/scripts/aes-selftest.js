@@ -85,4 +85,20 @@ ok("confirms when equal", () => { const o = { aesItn: "X20260101234567", aesFili
 ok("mismatch keeps existing", () => { const o = { aesItn: "X20260101234567", aesFiling: {}, timeline: [] }; assert.equal(applyItn(o, "X29990101234567", "test"), "mismatch"); assert.equal(o.aesItn, "X20260101234567"); assert.equal(o.timeline.length, 1); });
 ok("ignores non-ITN", () => { const o = { timeline: [] }; assert.equal(applyItn(o, "not-an-itn", "test"), "noop"); });
 
+console.log("parseAesEmail");
+const { parseAesEmail } = require("../services/aesEmailPoller");
+const ACCEPT_EMAIL = `We have received your created filing submitted at 01/26/2026 09:08:42.
+Your request to create the following filing has been ACCEPTED.
+Shipment Reference Number: DDG14204
+AES ITN: X20260126121298
+-------------------------------------------------------------------
+Attention
+(399-VERIFY) IS THE CLEARANCE YEAR CORRECT?
+(700-COMPLIANCE ALERT) SHIPMENT REPORTED LATE; OPT 2`;
+ok("email SRN", () => assert.equal(parseAesEmail(ACCEPT_EMAIL).srn, "DDG14204"));
+ok("email ITN", () => assert.equal(parseAesEmail(ACCEPT_EMAIL).itn, "X20260126121298"));
+ok("email status accepted", () => assert.equal(parseAesEmail(ACCEPT_EMAIL).status, "accepted"));
+ok("email notes captured", () => assert.ok(parseAesEmail(ACCEPT_EMAIL).notes.includes("399-VERIFY")));
+ok("rejected email", () => assert.equal(parseAesEmail("... has been REJECTED.\nShipment Reference Number: DDG99\n").status, "rejected"));
+
 console.log(`\n${pass} checks passed${process.exitCode ? " — SOME FAILED" : ""}`);
