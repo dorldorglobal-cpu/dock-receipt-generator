@@ -81,7 +81,7 @@ const orderSchema = new mongoose.Schema(
 
     // USPPI's own contact (AD0_9/AD0_11/AD0_12) — confirmed from a live ACE
     // filing screen (order 14217) that this is a person AT the USPPI (e.g.
-    // "Pablo Ceas" at State Farm Mutual), not DDG's own contact — it varies
+    // "Pablo Cejas" at State Farm Mutual), not DDG's own contact — it varies
     // per order same as the USPPI itself. Falls back to AesConfig's
     // usppiContact* (DDG's own contact) when an order doesn't have one.
     usppiContactFirst: { type: String, default: "" },

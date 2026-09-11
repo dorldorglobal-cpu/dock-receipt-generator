@@ -23,7 +23,7 @@ const PATCH = {
   "forwardingAgent.idType":   "E",
   "forwardingAgent.partyId":  "824159146",  // DDG's EIN — from the live ACE screen, same as the Filer ID
   "forwardingAgent.contact":  "ELI LEVY",   // from the live ACE screen (Authorized Agent contact)
-  "forwardingAgent.phone":    "9172004999", // read off the screenshot — CONFIRM this is right, easy to misread digits
+  "forwardingAgent.phone":    "9172003998", // confirmed by Eli — 917-200-3998
   filerId:                    "824159146",  // CBP Filer ID — shown in the ACE page header for order 14217
   responseEmail:              "dorldorglobal@gmail.com", // "Email Response Address(es)" on the live ACE screen
   ultConsigneeType:           "O",           // confirmed 306/307
