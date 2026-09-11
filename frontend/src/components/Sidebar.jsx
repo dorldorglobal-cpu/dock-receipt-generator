@@ -141,6 +141,7 @@ export default function Sidebar() {
       {!isMobile && <div className="sidebar-section-label">System</div>}
       <nav className="sidebar-nav">
         <NavItem to="/settings" iconKey="settings" label="Settings" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/settings/aes" iconKey="dockReceipt" label="AES Filing" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
       </nav>
     </>
   );

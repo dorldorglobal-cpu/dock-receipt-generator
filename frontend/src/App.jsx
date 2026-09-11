@@ -27,6 +27,7 @@ import AiAssistant from "./pages/AiAssistant";
 import BlSeparator from "./pages/BlSeparator";
 import EmailOrders from "./pages/EmailOrders";
 import SignDocuments from "./pages/SignDocuments";
+import AesSettings from "./pages/AesSettings";
 
 import "./App.css";
 
@@ -102,6 +103,8 @@ export default function App() {
               <ComingSoon title="Settings" />
             }
           />
+
+          <Route path="/settings/aes" element={<AesSettings />} />
 
           <Route path="/towing-charges"    element={<TowingCharges />} />
           <Route path="/ocean-freight"     element={<OceanFreight />} />

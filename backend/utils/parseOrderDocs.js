@@ -1510,4 +1510,7 @@ module.exports = {
   parseDispatch,
   parseBuyerReceipt,
   findVin,
+  normalizePort,
+  countryFromPod,
+  PORT_DEFS,
 };

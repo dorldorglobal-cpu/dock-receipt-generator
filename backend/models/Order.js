@@ -65,6 +65,32 @@ const orderSchema = new mongoose.Schema(
     value: String,
     vehicleYearMakeModel: String,
 
+    // ── AES / EEI filing ────────────────────────────────────────────────────
+    // aesItn (above) stays the canonical ITN consumed by the DR / BL pipeline.
+    // These support building + tracking the WebLink filing that produces it.
+    titleNumber:     { type: String, default: "" },  // IT1_18
+    titleState:      { type: String, default: "" },  // IT1_19 (2-letter)
+    scheduleB:       { type: String, default: "" },  // IT1_13 override (else AesConfig default)
+    exportInfoCode:  { type: String, default: "" },  // IT1_1 override (else "OS")
+    originIndicator: { type: String, default: "" },  // IT1_21 override ("D" domestic / "F" foreign)
+
+    aesFiling: {
+      srn:           { type: String, default: "" },
+      returnToken:   { type: String, default: "" },  // guards the public wl_success_url callback
+      status: {
+        type: String,
+        enum: ["", "built", "handed_off", "accepted", "rejected", "itn_received", "abandoned"],
+        default: "",
+      },
+      itn:           { type: String, default: "" },  // provenance copy of the captured ITN
+      handedOffAt:   Date,
+      itnReceivedAt: Date,
+      lastPolledAt:  Date,
+      pollAttempts:  { type: Number, default: 0 },
+      lastError:     { type: String, default: "" },
+      env:           { type: String, default: "" },  // "test" | "prod" the filing was built for
+    },
+
     lotNumber: { type: String, default: "" },
     pin:       { type: String, default: "" },
 
@@ -154,5 +180,8 @@ const orderSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// SRN must be unique per filer; sparse so orders without a filing don't collide.
+orderSchema.index({ "aesFiling.srn": 1 }, { unique: true, sparse: true });
 
 module.exports = mongoose.model("Order", orderSchema);

@@ -127,6 +127,7 @@ app.use("/api/schedule", scheduleRoutes);
 // API ROUTES
 app.use("/api/orders", orderRoutes);
 app.use("/api/address-book", addressBookRoutes);
+app.use("/api/aes-config", require("./routes/aesConfig"));
 app.use("/api/customers", require("./routes/customers"));
 app.use("/api/reports",   require("./routes/reports"));
 // ── Parse dispatch PDF from order docs (must be before the expenses router) ──
