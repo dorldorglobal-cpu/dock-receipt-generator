@@ -12,7 +12,9 @@
  */
 const express = require("express");
 const Order = require("../models/Order");
-const { applyItn } = require("../utils/aesWeblink");
+const AesConfig = require("../models/AesConfig");
+const { applyItn, effectiveEnv } = require("../utils/aesWeblink");
+const { inquireWeblink } = require("../utils/aesInquiry");
 
 const router = express.Router();
 
@@ -57,7 +59,20 @@ async function handle(req, res) {
       if (order.aesFiling.status !== "itn_received") order.aesFiling.status = "accepted";
       order.aesFiling.lastError = "";
       order.timeline.push({ action: "AES Submitted", details: `Filing ${order.aesFiling.srn} submitted in ACE AESDirect. Awaiting ITN.`, createdAt: new Date() });
-      outcome = "Filing submitted in ACE. The ITN will arrive by email and will be pulled onto the order automatically.";
+      outcome = "Filing submitted in ACE. The ITN will arrive by email and be pulled onto the order automatically.";
+
+      // CBP redirects the user here without the ITN — try one immediate inquiry
+      // so the order often has the ITN before the poller's next 15-min pass.
+      try {
+        const config = await AesConfig.getSingleton();
+        if (config.filerId) {
+          const { itn } = await inquireWeblink({ fid: config.filerId, srn: order.aesFiling.srn, env: effectiveEnv(config) });
+          if (itn) {
+            applyItn(order, itn, "weblink-return inquiry");
+            outcome = `ITN <strong>${itn}</strong> saved to order ${order.refNumber}.`;
+          }
+        }
+      } catch (e) { /* inquiry not configured / slow — the poller will get it */ }
     } else {
       order.aesFiling.status = "rejected";
       order.aesFiling.lastError = String(pick(q, ["error", "message", "reason"]) || "Rejected / not submitted in ACE.");
