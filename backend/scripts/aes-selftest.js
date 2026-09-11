@@ -101,4 +101,25 @@ ok("email status accepted", () => assert.equal(parseAesEmail(ACCEPT_EMAIL).statu
 ok("email notes captured", () => assert.ok(parseAesEmail(ACCEPT_EMAIL).notes.includes("399-VERIFY")));
 ok("rejected email", () => assert.equal(parseAesEmail("... has been REJECTED.\nShipment Reference Number: DDG99\n").status, "rejected"));
 
+// Real confirmation email from DoNotReply@cbp.dhs.gov, subject "AES Direct Filing - 14217"
+// — confirms CBP's SRN is the bare order number, no "DDG" prefix.
+const REAL_EMAIL = `We have received your created filing submitted at 09/10/2026 19:05:51.
+Your request to create the following filing has been ACCEPTED.
+
+Shipment Reference Number: 14217
+AES ITN: X20260910745817
+-------------------------------------------------------------------
+Attention
+(974-NOTIFICATION) SHIPMENT ADDED
+
+
+If you need further assistance, please contact the AES Help Desk at askaes@census.gov or 1-800-549-0595, option 1.
+
+PLEASE, DO NOT REPLY TO THIS MESSAGE`;
+const real = parseAesEmail(REAL_EMAIL);
+ok("real email: bare SRN (no prefix)", () => assert.equal(real.srn, "14217"));
+ok("real email: ITN", () => assert.equal(real.itn, "X20260910745817"));
+ok("real email: accepted", () => assert.equal(real.status, "accepted"));
+ok("real email: notification note", () => assert.ok(real.notes.includes("974-NOTIFICATION")));
+
 console.log(`\n${pass} checks passed${process.exitCode ? " — SOME FAILED" : ""}`);

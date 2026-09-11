@@ -1887,7 +1887,7 @@ async function ensureAesFiling(order, config) {
   if (!order.aesFiling.returnToken) order.aesFiling.returnToken = crypto.randomBytes(16).toString("hex");
 
   if (!order.aesFiling.srn) {
-    const prefix = (config.srnPrefix || "DDG").trim();
+    const prefix = (config.srnPrefix || "").trim(); // default "" — see AesConfig.srnPrefix comment
     let base = `${prefix}${(order.refNumber || "").trim()}`.slice(0, 17);
     let srn = base;
     for (let n = 2; n <= 20; n++) {
@@ -1962,18 +1962,18 @@ router.post("/:id/aes-inquiry", async (req, res) => {
   try {
     let order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: "Order not found" });
-    if (!order.aesFiling || !order.aesFiling.srn) return res.status(400).json({ error: "This order has no AES filing yet." });
     const config = await AesConfig.getSingleton();
-    const srn = order.aesFiling.srn;
 
-    // 1) Email scan (no CBP credentials needed)
+    // 1) Email scan (no CBP credentials needed — also matches filings that were
+    //    never built through this app, by falling back to the bare order number)
     let emailResult = null;
     try { emailResult = await pollAesEmails(); } catch (e) { emailResult = { error: e.message }; }
-    order = await Order.findById(req.params.id); // reload — the email poller may have written the ITN
+    order = await Order.findById(req.params.id); // reload — the email poller may have written the ITN / SRN
 
-    // 2) WebLink Inquiry API (only if the client cert is configured)
+    // 2) WebLink Inquiry API — only possible once we have an SRN, and only if the client cert is configured
     let status = "", itn = order.aesItn || "";
-    if (config.filerId) {
+    const srn = order.aesFiling && order.aesFiling.srn;
+    if (config.filerId && srn) {
       try {
         const r = await inquireWeblink({ fid: config.filerId, srn, env: effectiveEnv(config) });
         status = r.status || "";

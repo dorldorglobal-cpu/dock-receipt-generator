@@ -4401,13 +4401,15 @@ export default function OrderDetails() {
                         <strong>Cutoff:</strong> {d.cutoffDate || "—"}&nbsp;&nbsp;
                         <strong>Sail:</strong> {d.sailDate || "—"}<br />
                         <strong>AES ITN:</strong> {d.aesItn || "—"}
-                        {order.aesFiling && order.aesFiling.status && !d.aesItn && (
+                        {!d.aesItn && (
                           <>
                             <br />
-                            <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                              Filing: {order.aesFiling.status.replace(/_/g, " ")}
-                              {order.aesFiling.lastError ? ` — ${order.aesFiling.lastError}` : ""}
-                            </span>{" "}
+                            {order.aesFiling && order.aesFiling.status && (
+                              <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
+                                Filing: {order.aesFiling.status.replace(/_/g, " ")}
+                                {order.aesFiling.lastError ? ` — ${order.aesFiling.lastError}` : ""}
+                              </span>
+                            )}{" "}
                             <button
                               onClick={async () => {
                                 setMessage("Checking AES for an ITN…");

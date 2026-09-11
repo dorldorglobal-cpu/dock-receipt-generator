@@ -8,11 +8,18 @@
  *   Shipment Reference Number: DDG14204
  *   AES ITN: X20260126121298
  *
- * This job scans Gmail for those emails, matches the SRN to an order
- * (order.aesFiling.srn), and writes the ITN through applyItn() — the same
- * non-clobbering path the redirect-inquiry and the Inquiry poller use. Once
- * order.aesItn is set it flows onto the Dock Receipt automatically
- * (dr-payload / generate-pdf already read it).
+ * This job scans Gmail for those emails, matches the SRN to an order, and
+ * writes the ITN through applyItn() — the same non-clobbering path the
+ * redirect-inquiry and the Inquiry poller use. Once order.aesItn is set it
+ * flows onto the Dock Receipt automatically (dr-payload / generate-pdf
+ * already read it).
+ *
+ * SRN matching: tries order.aesFiling.srn first (filings built by this app),
+ * then falls back to a bare order refNumber (confirmed against a real DDG
+ * filing — CBP shows "Shipment Reference Number: 14217" with no prefix, i.e.
+ * the SRN staff have been typing by hand is just the order number). On a
+ * refNumber-fallback match, aesFiling.srn is backfilled so later lookups
+ * (Inquiry API, "Check now") hit it directly.
  *
  * Reuses the Gmail OAuth client from the Copart poller — runs whenever
  * GMAIL_OAUTH_REFRESH_TOKEN is set. Disable with AES_EMAIL_POLLER=off.
@@ -55,9 +62,24 @@ function parseAesEmail(text) {
   let status = "";
   if (/\bACCEPTED\b/i.test(text)) status = "accepted";
   else if (/\bREJECTED\b/i.test(text)) status = "rejected";
-  // error / warning lines look like "(399-VERIFY) ..." or "(700-COMPLIANCE ALERT) ..."
+  // error / warning lines look like "(399-VERIFY) ..." or "(974-NOTIFICATION) ..."
   const notes = (text.match(/\([0-9A-Z]{3}-[A-Z ]+\)[^\n]*/g) || []).join(" | ").slice(0, 500);
   return { srn: srn.toUpperCase(), itn: itn.toUpperCase(), status, notes };
+}
+
+// Find the order this SRN belongs to — by a filing this app built, or by the
+// bare order ref number (the convention already in use — see header note).
+async function findOrderForSrn(srn) {
+  const escaped = srn.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  let order = await Order.findOne({ "aesFiling.srn": new RegExp(`^${escaped}$`, "i") });
+  if (order) return order;
+
+  order = await Order.findOne({ refNumber: srn });
+  if (order) {
+    order.aesFiling = order.aesFiling || {};
+    if (!order.aesFiling.srn) order.aesFiling.srn = srn;
+  }
+  return order;
 }
 
 async function pollAesEmails() {
@@ -68,36 +90,38 @@ async function pollAesEmails() {
     let matched = 0, captured = 0;
 
     for (const msg of messages) {
-      const full = await gmail.users.messages.get({ userId: "me", id: msg.id, format: "full" });
-      const text = collectText(full.data.payload);
-      const { srn, itn, status, notes } = parseAesEmail(text);
-      if (!srn) continue;
+      try {
+        const full = await gmail.users.messages.get({ userId: "me", id: msg.id, format: "full" });
+        const text = collectText(full.data.payload);
+        const { srn, itn, status, notes } = parseAesEmail(text);
+        if (!srn) continue;
 
-      const order = await Order.findOne({ "aesFiling.srn": new RegExp(`^${srn}$`, "i") });
-      if (!order) continue;
-      matched++;
+        const order = await findOrderForSrn(srn);
+        if (!order) continue;
+        matched++;
 
-      let changed = false;
-      order.aesFiling = order.aesFiling || {};
+        order.aesFiling = order.aesFiling || {};
+        let changed = order.isModified("aesFiling.srn"); // findOrderForSrn may have just backfilled it
 
-      if (itn) {
-        const r = applyItn(order, itn, "AES email");
-        if (r === "set") captured++;
-        changed = true;
-      } else if (status === "rejected" && order.aesFiling.status !== "rejected" && !order.aesItn) {
-        order.aesFiling.status = "rejected";
-        order.aesFiling.lastError = notes || "Rejected — see the AES confirmation email.";
-        order.timeline.push({ action: "AES Rejected", details: `${order.aesFiling.srn}: ${order.aesFiling.lastError}`, createdAt: new Date() });
-        changed = true;
-      }
-      if (notes && order.aesFiling.lastError !== notes && (itn || status)) {
-        // keep the latest verify/compliance notes visible even on an accepted filing
+        if (itn) {
+          const r = applyItn(order, itn, "AES email");
+          if (r === "set") captured++;
+          changed = true;
+        } else if (status === "rejected" && order.aesFiling.status !== "rejected" && !order.aesItn) {
+          order.aesFiling.status = "rejected";
+          order.aesFiling.lastError = notes || "Rejected — see the AES confirmation email.";
+          order.timeline.push({ action: "AES Rejected", details: `${order.aesFiling.srn}: ${order.aesFiling.lastError}`, createdAt: new Date() });
+          changed = true;
+        }
         if (itn && notes) {
+          // keep the latest verify/compliance notes visible even on an accepted filing
           order.timeline.push({ action: "AES Notes", details: notes, createdAt: new Date() });
           changed = true;
         }
+        if (changed) await order.save();
+      } catch (msgErr) {
+        console.error("[aesEmailPoller] message", msg.id, msgErr.message);
       }
-      if (changed) await order.save();
     }
 
     console.log(`[aesEmailPoller] scanned ${messages.length} · matched ${matched} · ITNs captured ${captured}`);

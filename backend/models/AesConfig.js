@@ -44,7 +44,10 @@ const aesConfigSchema = new mongoose.Schema(
 
     // ── Filer + filing defaults ───────────────────────────────────────────────
     filerId:              { type: String, default: "" },    // CBP Filer ID (FID), <= 11 chars
-    srnPrefix:            { type: String, default: "DDG" },  // Shipment Reference Number prefix
+    // Shipment Reference Number prefix. Default "" — confirmed against a real DDG
+    // filing, CBP shows "Shipment Reference Number: 14217" with no prefix, i.e.
+    // the convention already in use is just the bare order number.
+    srnPrefix:            { type: String, default: "" },
     responseEmail:        { type: String, default: "" },     // AES response notifications go here
 
     defaultFilingAction:  { type: String, default: "A" },    // A = Add

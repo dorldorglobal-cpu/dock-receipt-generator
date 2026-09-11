@@ -63,7 +63,7 @@ function buildWeblinkFiling(order, config, opts = {}) {
   const baseUrl = s(opts.baseUrl || process.env.PUBLIC_BACKEND_URL || process.env.RENDER_EXTERNAL_URL).replace(/\/$/, "");
 
   const srn = s(opts.srn || (order.aesFiling && order.aesFiling.srn) ||
-    (s(config.srnPrefix || "DDG") + s(order.refNumber)));
+    (s(config.srnPrefix) + s(order.refNumber))); // default prefix "" — SRN = bare order number
   const returnToken = s(opts.returnToken || (order.aesFiling && order.aesFiling.returnToken));
 
   const fields = {};
