@@ -2053,6 +2053,10 @@ export default function OrderDetails() {
             border: "none", background: "#059669", color: "white", cursor: "pointer", fontSize: "13px" }}>
           Generate Dock Receipt
         </button>
+        <button onClick={() => navigate(`/orders/${id}/aes`)} style={{ padding: "10px 14px", borderRadius: "10px",
+            border: "none", background: "#0369a1", color: "white", cursor: "pointer", fontSize: "13px" }}>
+          {order.aesItn ? "AES ITN ✓" : (order.aesFiling && order.aesFiling.status === "handed_off") ? "AES — awaiting ITN" : "File AES"}
+        </button>
         <button onClick={async () => {
           const base = drPayload || order;
           const ymm = base.vehicleYearMakeModel || `${base.year||""} ${base.make||""} ${base.model||""}`.trim();

@@ -28,6 +28,7 @@ import BlSeparator from "./pages/BlSeparator";
 import EmailOrders from "./pages/EmailOrders";
 import SignDocuments from "./pages/SignDocuments";
 import AesSettings from "./pages/AesSettings";
+import AesFiling from "./pages/AesFiling";
 
 import "./App.css";
 
@@ -73,6 +74,8 @@ export default function App() {
             path="/orders/:id"
             element={<OrderDetails />}
           />
+
+          <Route path="/orders/:id/aes" element={<AesFiling />} />
 
           <Route path="/email-orders" element={<EmailOrders />} />
           <Route path="/containers" element={<Containers />} />
