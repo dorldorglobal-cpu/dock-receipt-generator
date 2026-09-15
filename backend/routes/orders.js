@@ -1034,10 +1034,9 @@ router.post("/:id/confirm-towing-cost", async (req, res) => {
     // Optionally update pricing table
     if (updatePricingTable && pickupCity) {
       const normCity = s => (s || "").replace(/[^A-Z0-9 ]/gi, "").trim().toUpperCase();
-      const rate = await Pricing.findOne({ type: "towing" }).then(async () => {
-        // Find best match: city+port, then city-only
-        const all = await Pricing.find({ type: "towing" });
-        return all.find(r =>
+      const all = await Pricing.find({ type: "towing" });
+      // Find best match: city+port, then city-only
+      const rate = all.find(r =>
           normCity(r.city) === normCity(pickupCity) &&
           (r.port || "").toUpperCase() === (pol || "").toUpperCase()
         ) || all.find(r =>
@@ -1045,10 +1044,18 @@ router.post("/:id/confirm-towing-cost", async (req, res) => {
         ) || all.find(r =>
           normCity(r.city) === normCity(pickupCity)
         );
-      });
 
       if (rate) {
-        rate.cost = towingCost;
+        // Same lane check used when pulling a rate INTO an order (see
+        // OrderDetails.jsx's pricing auto-fill): a delivery location that
+        // mentions "warehouse" (or matches this row's own warehouse name)
+        // means the dispatch cost belongs in the warehouse-route cost, not
+        // the RORO port-route cost — they're separate fields on the same row.
+        const deliv = (order.deliveryLocation || "").toUpperCase();
+        const isWarehouse = /WAREHOUSE/i.test(deliv) ||
+          (rate.warehouse && deliv.includes((rate.warehouse || "").toUpperCase()));
+        if (isWarehouse) rate.warehouseCost = towingCost;
+        else             rate.cost          = towingCost;
         await rate.save();
       }
     }

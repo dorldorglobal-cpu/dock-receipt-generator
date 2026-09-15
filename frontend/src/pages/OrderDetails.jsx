@@ -59,9 +59,29 @@ const defaultCharges = {
   extraTows: [], // [{ description, amount, cost }]
 };
 
-function TowingVerifyForm({ verify, orderId, onDone }) {
+function TowingVerifyForm({ verify, orderId, deliveryLocation, onDone }) {
   const [updateTable, setUpdateTable] = useState(false);
   const [saving, setSaving] = useState(false);
+  // Mirrors the server's own lane check (see confirm-towing-cost) so the
+  // checkbox label tells the truth about which field will actually change —
+  // a delivery like "EZ CARGO" only reads as a warehouse via the matched
+  // pricing row's own warehouse name, not the literal word "warehouse".
+  const [isWarehouse, setIsWarehouse] = useState(/WAREHOUSE/i.test(deliveryLocation || ""));
+  useEffect(() => {
+    if (!verify.pickupCity) return;
+    fetch(`${API}/api/pricing?type=towing`).then(r => r.json()).then(rates => {
+      if (!Array.isArray(rates)) return;
+      const normCity = s => (s || "").replace(/[^A-Z0-9 ]/gi, "").trim().toUpperCase();
+      const rate = rates.find(r =>
+          normCity(r.city) === normCity(verify.pickupCity) &&
+          (r.port || "").toUpperCase() === (verify.pol || "").toUpperCase()
+        ) || rates.find(r => normCity(r.city) === normCity(verify.pickupCity) && !r.port)
+          || rates.find(r => normCity(r.city) === normCity(verify.pickupCity));
+      if (!rate) return;
+      const deliv = (deliveryLocation || "").toUpperCase();
+      setIsWarehouse(/WAREHOUSE/i.test(deliv) || (rate.warehouse && deliv.includes((rate.warehouse || "").toUpperCase())));
+    }).catch(() => {});
+  }, [verify.pickupCity, verify.pol, deliveryLocation]);
 
   const confirm = async () => {
     setSaving(true);
@@ -96,6 +116,12 @@ function TowingVerifyForm({ verify, orderId, onDone }) {
           <span style={{ color:"var(--accent)" }}>{verify.pickupCity || "this city"}</span>
           {verify.pol ? <> → <span style={{ color:"var(--accent)" }}>{verify.pol}</span></> : ""}
           {" "}to <strong style={{ color:"#fbbf24" }}>${verify.dispatchCost.toLocaleString()}</strong>
+          {" "}
+          <span style={{ padding:"1px 7px", borderRadius:5, fontSize:11, fontWeight:700,
+            background: isWarehouse ? "rgba(251,146,60,0.15)" : "rgba(96,165,250,0.15)",
+            color: isWarehouse ? "#fb923c" : "#60a5fa" }}>
+            {isWarehouse ? "Warehouse rate" : "RORO / Port rate"}
+          </span>
         </span>
       </label>
       <div style={{ display:"flex", gap:10 }}>
@@ -4731,6 +4757,7 @@ export default function OrderDetails() {
             <TowingVerifyForm
               verify={towingVerify}
               orderId={id}
+              deliveryLocation={order?.deliveryLocation}
               onDone={(updated) => {
                 setTowingVerify(null);
                 if (updated) fetchOrder();
