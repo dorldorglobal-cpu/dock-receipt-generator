@@ -1763,6 +1763,11 @@ router.get("/:id/dr-payload", async (req, res) => {
       ...cleanDispatch,
       // Schedule
       ...cleanSpread(scheduleData),
+      // VIN is already validated on the order (checked for duplicates at
+      // creation, backed by the title). A fresh OCR/regex re-parse of the
+      // AES PDF on every DR generation must never be allowed to silently
+      // override it — only fall back to a parsed value if the order has none.
+      vin: o.vin || cleanAes.vin || cleanDispatch.vin || "",
       // Explicitly preserve condition + titleStatus from order if dispatch didn't supply them
       condition:   cleanDispatch.condition   || o.condition   || "Runner",
       titleStatus: cleanDispatch.titleStatus || o.titleStatus || "Pending",
