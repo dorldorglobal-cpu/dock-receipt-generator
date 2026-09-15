@@ -1893,7 +1893,14 @@ export default function Containers() {
                         const vessel = billingLoad.vessel || "";
                         const booking = billingLoad.bookingNumber || "";
                         const subject = `Invoice${combined?" (Combined)":"s"} — Load ${billingLoad.name}${booking?" / Booking "+booking:""}${vessel?" / "+vessel:""}`;
-                        const names = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").map(r=>`  • ${r.vehicle}${r.vin?` | VIN: ${r.vin}`:""} (Ref #${r.refNumber}) — $${r.invoiceTotal.toFixed(2)}`).join("\n");
+                        const vehicleNames = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").map(r=>`  • ${r.vehicle}${r.vin?` | VIN: ${r.vin}`:""} (Ref #${r.refNumber}) — $${r.invoiceTotal.toFixed(2)}`).join("\n");
+                        // "New Line" extras only ever land on the Combined PDF (see the
+                        // Split/New Line choice on "+ Add line"), so only list them here
+                        // too when sending combined — otherwise they'd reference a charge
+                        // that isn't actually on any of the individual invoices being sent.
+                        const extraNames = extraLines.filter(l => l.label && l.amount && (combined || l.mode !== "newLine"))
+                          .map(l => `  • ${l.label} — $${Number(l.amount).toFixed(2)}`).join("\n");
+                        const names = [vehicleNames, extraNames].filter(Boolean).join("\n");
                         const body = `Dear Customer,\n\nPlease find ${combined?"the combined invoice":"your invoices"} attached for the following vehicles:\n\n${names}\n\nVessel: ${vessel}\nBooking #: ${booking}\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
                         setSendPreview({ to, subject, body, combined });
                       };
