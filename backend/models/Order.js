@@ -161,6 +161,17 @@ const orderSchema = new mongoose.Schema(
 
     notes: String,
     holdNote: { type: String, default: "" },  // problem/hold issue description
+
+    // Problem/Hold overlay — independent of `status`, so a real pipeline stage
+    // (e.g. "Waiting to Sail") and an open issue (e.g. no title yet) can both be
+    // true and both visible at once. Resolved entries are kept, never deleted,
+    // as the record of what happened and when it got fixed.
+    holds: [{
+      holdType:   { type: String, enum: ["No Title", "Custom"], required: true },
+      note:       { type: String, default: "" },
+      createdAt:  { type: Date, default: Date.now },
+      resolvedAt: { type: Date, default: null },
+    }],
     emailNote: { type: String, default: "" }, // copy of buyer receipt email
     source: { type: String, default: "" }, // e.g. "GHANA OFFICE", "DIRECT"
 

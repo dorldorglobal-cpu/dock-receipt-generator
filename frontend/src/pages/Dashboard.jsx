@@ -108,6 +108,10 @@ export default function Dashboard() {
   };
 
   const countStatus = (status) => orders.filter(o => o.status === status).length;
+  // Problem/Hold is now an overlay independent of status (see order.holds),
+  // so real pipeline stage and an open issue can both show at once — count
+  // active holds here instead of the legacy status value.
+  const countActiveHolds = () => orders.filter(o => (o.holds || []).some(h => !h.resolvedAt)).length;
 
   // Revenue estimate from order charges
   const totalRevenue = orders.reduce((s, o) => {
@@ -122,7 +126,7 @@ export default function Dashboard() {
     { label: "Waiting to Sail", value: countStatus("Waiting to Sail"),   color: "var(--purple)",  status: "Waiting to Sail" },
     { label: "Sailed",          value: countStatus("Sailed"),            color: "var(--success)", status: "Sailed" },
     { label: "Completed",       value: countStatus("Completed"),         color: "#4ade80",         status: "Completed" },
-    { label: "Problem / Hold",  value: countStatus("Problem / Hold"),    color: "var(--danger)",  status: "Problem / Hold" },
+    { label: "Problem / Hold",  value: countActiveHolds(),               color: "var(--danger)",  status: "Problem / Hold" },
     { label: "Canceled",        value: countStatus("Canceled"),          color: "var(--text-secondary)",        status: "Canceled" },
   ];
 

@@ -632,13 +632,33 @@ router.put("/:id", async (req, res) => {
       return res.status(404).json({ error: "Order not found" });
     }
 
-    const oldStatus = order.status;
+    const oldStatus      = order.status;
+    const oldTitleStatus = order.titleStatus;
 
     Object.assign(order, req.body);
     if (req.body.charges) order.markModified("charges");
 
     // Dor L'Dor Global Ghana as the customer ⇒ always the Ghana office
     if (isGhanaCustomer(order.customerName)) order.source = "GHANA OFFICE";
+
+    // Title status flipping to/from "No Title" opens/resolves a Problem/Hold
+    // entry automatically — independent of `status`, so this never hides
+    // (or gets hidden by) whatever pipeline stage the order is actually at.
+    if (req.body.titleStatus && req.body.titleStatus !== oldTitleStatus) {
+      if (req.body.titleStatus === "No Title") {
+        const alreadyOpen = order.holds.some(h => h.holdType === "No Title" && !h.resolvedAt);
+        if (!alreadyOpen) {
+          order.holds.push({ holdType: "No Title", note: "No Title" });
+          addTimeline(order, "Hold Opened", "No Title — Problem/Hold opened automatically.");
+        }
+      } else if (oldTitleStatus === "No Title") {
+        const openHolds = order.holds.filter(h => h.holdType === "No Title" && !h.resolvedAt);
+        if (openHolds.length) {
+          openHolds.forEach(h => { h.resolvedAt = new Date(); });
+          addTimeline(order, "Hold Resolved", `Title received — No Title hold resolved.`);
+        }
+      }
+    }
 
     if (req.body.status && req.body.status !== oldStatus) {
       if (order.driveFolderId) {
@@ -664,6 +684,45 @@ router.put("/:id", async (req, res) => {
   } catch (err) {
     console.error("Update order error:", err);
     res.status(500).json({ error: "Failed to update order" });
+  }
+});
+
+// ADD PROBLEM/HOLD — manual entry, independent of status/titleStatus
+router.post("/:id/holds", async (req, res) => {
+  try {
+    const { note } = req.body;
+    if (!note || !note.trim()) return res.status(400).json({ error: "note is required" });
+
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    order.holds.push({ holdType: "Custom", note: note.trim() });
+    addTimeline(order, "Hold Opened", `Problem/Hold added: ${note.trim()}`);
+    await order.save();
+    res.json(order);
+  } catch (err) {
+    console.error("Add hold error:", err);
+    res.status(500).json({ error: "Failed to add hold" });
+  }
+});
+
+// RESOLVE PROBLEM/HOLD
+router.patch("/:id/holds/:holdId/resolve", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id);
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const hold = order.holds.id(req.params.holdId);
+    if (!hold) return res.status(404).json({ error: "Hold not found" });
+    if (hold.resolvedAt) return res.json(order); // already resolved — no-op
+
+    hold.resolvedAt = new Date();
+    addTimeline(order, "Hold Resolved", `Problem/Hold resolved: ${hold.note}`);
+    await order.save();
+    res.json(order);
+  } catch (err) {
+    console.error("Resolve hold error:", err);
+    res.status(500).json({ error: "Failed to resolve hold" });
   }
 });
 

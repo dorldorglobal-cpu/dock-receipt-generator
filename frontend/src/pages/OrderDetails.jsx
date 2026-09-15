@@ -401,6 +401,44 @@ export default function OrderDetails() {
   const [noteText, setNoteText] = useState("");
   const [holdNote, setHoldNote] = useState("");
 
+  // Problem/Hold overlay (independent of order.status)
+  const [addingHold,    setAddingHold]    = useState(false);
+  const [newHoldNote,   setNewHoldNote]   = useState("");
+  const [holdSaving,    setHoldSaving]    = useState(false);
+  const [resolvingHold, setResolvingHold] = useState(null); // hold _id being resolved
+
+  const addHold = async () => {
+    if (!newHoldNote.trim()) return;
+    setHoldSaving(true);
+    try {
+      const res = await fetch(`${API}/api/orders/${id}/holds`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ note: newHoldNote.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to add hold");
+      setOrder(data);
+      setNewHoldNote("");
+      setAddingHold(false);
+    } catch (e) {
+      setMessage("❌ " + e.message);
+    }
+    setHoldSaving(false);
+  };
+
+  const resolveHold = async (holdId) => {
+    setResolvingHold(holdId);
+    try {
+      const res = await fetch(`${API}/api/orders/${id}/holds/${holdId}/resolve`, { method: "PATCH" });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Failed to resolve hold");
+      setOrder(data);
+    } catch (e) {
+      setMessage("❌ " + e.message);
+    }
+    setResolvingHold(null);
+  };
+
   const [towingVerify, setTowingVerify] = useState(null);
   // { dispatchCost, currentCost, pickupCity, pol }
 
@@ -2027,6 +2065,15 @@ export default function OrderDetails() {
           <h1 style={{ fontSize: 32, fontWeight: 800 }}>Order #{order.refNumber}</h1>
           <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
             <p style={{ color: "var(--text-primary)", fontWeight: 500, margin:0 }}>{order.year} {order.make} {order.model} — {order.vin}</p>
+            {(order.holds || []).filter(h => !h.resolvedAt).map(h => (
+              <span key={h._id} title={h.note} style={{
+                display:"inline-flex", alignItems:"center", gap:6,
+                background:"rgba(248,113,113,0.15)", color:"#f87171",
+                border:"2px solid rgba(248,113,113,0.5)",
+                fontWeight:900, fontSize:16, letterSpacing:"0.05em", textTransform:"uppercase",
+                padding:"7px 16px", borderRadius:8, whiteSpace:"nowrap",
+              }}>⚠ {h.holdType === "No Title" ? "No Title" : h.note}</span>
+            ))}
             {order.dispatchMethod === "Self Dispatch" && (
               <span style={{
                 display:"inline-flex", alignItems:"center", gap:6,
@@ -2111,6 +2158,81 @@ export default function OrderDetails() {
         </div>
       </div>
 
+      {/* ── Problem / Hold overlay — independent of order.status ─────── */}
+      {(() => {
+        const activeHolds   = (order.holds || []).filter(h => !h.resolvedAt);
+        const resolvedHolds = (order.holds || []).filter(h => h.resolvedAt);
+        if (!activeHolds.length && !addingHold && !resolvedHolds.length) return null;
+        return (
+          <div style={{ marginBottom:16, borderRadius:10, border:"1px solid rgba(248,113,113,0.35)",
+            background:"rgba(248,113,113,0.06)", padding:"12px 16px" }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: activeHolds.length || resolvedHolds.length ? 8 : 0 }}>
+              <span style={{ fontSize:12, fontWeight:800, color:"#f87171", textTransform:"uppercase", letterSpacing:"0.05em" }}>
+                ⚠ Problem / Hold
+              </span>
+              {!addingHold && (
+                <button onClick={() => setAddingHold(true)}
+                  style={{ padding:"4px 12px", borderRadius:6, border:"1px solid rgba(248,113,113,0.4)",
+                    background:"none", color:"#f87171", cursor:"pointer", fontSize:11, fontWeight:600 }}>
+                  + Add Problem/Hold
+                </button>
+              )}
+            </div>
+            {activeHolds.map(h => (
+              <div key={h._id} style={{ display:"flex", alignItems:"flex-start", justifyContent:"space-between",
+                gap:10, padding:"6px 0", borderTop:"1px solid rgba(248,113,113,0.15)" }}>
+                <div>
+                  <div style={{ fontSize:13, color:"var(--text-primary)", fontWeight:600 }}>{h.note}</div>
+                  <div style={{ fontSize:11, color:"var(--text-muted)" }}>
+                    Opened {new Date(h.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+                  </div>
+                </div>
+                <button onClick={() => resolveHold(h._id)} disabled={resolvingHold === h._id}
+                  style={{ padding:"4px 10px", borderRadius:6, border:"1px solid rgba(52,211,153,0.4)",
+                    background:"none", color:"#34d399", cursor:"pointer", fontSize:11, fontWeight:600,
+                    opacity: resolvingHold === h._id ? 0.5 : 1, whiteSpace:"nowrap" }}>
+                  {resolvingHold === h._id ? "Resolving…" : "✓ Resolve"}
+                </button>
+              </div>
+            ))}
+            {resolvedHolds.length > 0 && (
+              <details style={{ marginTop:6 }}>
+                <summary style={{ fontSize:11, color:"var(--text-muted)", cursor:"pointer" }}>
+                  {resolvedHolds.length} resolved
+                </summary>
+                {resolvedHolds.map(h => (
+                  <div key={h._id} style={{ fontSize:12, color:"var(--text-muted)", padding:"4px 0 4px 4px" }}>
+                    {h.note} — {new Date(h.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric"})} → resolved{" "}
+                    {new Date(h.resolvedAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
+                  </div>
+                ))}
+              </details>
+            )}
+            {addingHold && (
+              <div style={{ marginTop:8, display:"flex", gap:8, alignItems:"flex-start" }}>
+                <textarea value={newHoldNote} onChange={e => setNewHoldNote(e.target.value)}
+                  placeholder="Describe the issue…" rows={2} autoFocus
+                  style={{ flex:1, padding:"8px 10px", borderRadius:7, fontSize:12,
+                    border:"1px solid rgba(248,113,113,0.4)", background:"var(--bg-panel)",
+                    color:"var(--text-primary)", resize:"vertical" }} />
+                <div style={{ display:"flex", flexDirection:"column", gap:6 }}>
+                  <button onClick={addHold} disabled={holdSaving || !newHoldNote.trim()}
+                    style={{ padding:"6px 14px", borderRadius:7, border:"none", background:"#dc2626",
+                      color:"#fff", cursor:"pointer", fontSize:12, fontWeight:700, opacity: holdSaving?0.6:1 }}>
+                    {holdSaving ? "Saving…" : "Add"}
+                  </button>
+                  <button onClick={() => { setAddingHold(false); setNewHoldNote(""); }}
+                    style={{ padding:"6px 14px", borderRadius:7, border:"1px solid var(--border)",
+                      background:"none", color:"var(--text-secondary)", cursor:"pointer", fontSize:12 }}>
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* ── Action Buttons ───────────────────────────── */}
       {(() => {
         const drSentEntry     = [...(order.timeline||[])].reverse().find(t => t.action === "DR Sent");
@@ -2132,6 +2254,12 @@ export default function OrderDetails() {
             background: "#7c3aed", color: "white", cursor: "pointer", fontSize: "13px" }}>
           ✏️ Edit Order
         </button>
+        {!(order.holds || []).some(h => !h.resolvedAt) && (
+          <button onClick={() => setAddingHold(true)} style={{ padding: "10px 14px", borderRadius: "10px",
+              border: "1px solid rgba(248,113,113,0.5)", background: "none", color: "#f87171", cursor: "pointer", fontSize: "13px" }}>
+            ⚠ Add Problem/Hold
+          </button>
+        )}
         <button onClick={() => openDrPreview()} style={{ padding: "10px 14px", borderRadius: "10px",
             border: "none", background: "#059669", color: "white", cursor: "pointer", fontSize: "13px" }}>
           Generate Dock Receipt
