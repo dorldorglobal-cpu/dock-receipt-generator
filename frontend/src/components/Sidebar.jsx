@@ -176,9 +176,9 @@ export default function Sidebar() {
           )}
         </div>
 
-        {navItems()}
-
-        <div className="sidebar-spacer" />
+        <div className="sidebar-scroll">
+          {navItems()}
+        </div>
 
         <div className="sidebar-footer" style={{ display:"flex", alignItems:"center", justifyContent: collapsed ? "center" : "space-between", gap:8 }}>
           {!collapsed && (

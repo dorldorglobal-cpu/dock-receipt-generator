@@ -12,9 +12,17 @@
   position: sticky;
   top: 0;
   height: 100vh;
+  transition: width 0.22s cubic-bezier(0.4,0,0.2,1);
+}
+
+/* Only this middle section scrolls — the logo header above and the
+   footer below stay put no matter how long the nav list gets, so the
+   header can never end up scrolled out of view (was "header is covered"). */
+.sidebar-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
   overflow-y: auto;
   overflow-x: hidden;
-  transition: width 0.22s cubic-bezier(0.4,0,0.2,1);
 }
 
 .sidebar--collapsed {
@@ -142,11 +150,6 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-}
-
-/* Spacer */
-.sidebar-spacer {
-  flex: 1;
 }
 
 /* Bottom status */
@@ -295,7 +298,6 @@
     border-right: 1px solid var(--sidebar-border);
     display: flex;
     flex-direction: column;
-    overflow-y: auto;
     animation: slideInLeft 0.2s cubic-bezier(0.4,0,0.2,1);
   }
 
@@ -326,7 +328,8 @@
   }
 
   .mobile-drawer-nav {
-    flex: 1;
+    flex: 1 1 auto;
+    min-height: 0;
     padding: 12px 0;
     overflow-y: auto;
   }
