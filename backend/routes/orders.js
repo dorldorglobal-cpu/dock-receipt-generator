@@ -536,7 +536,14 @@ router.post("/bulk-populate-ocean", async (req, res) => {
 router.get("/", async (req, res) => {
   try {
     const Invoice = require("../models/Invoice");
-    const orders = await Order.find().sort({ createdAt: -1 }).lean();
+    // List views (Dashboard, All Orders, Containers) never read these —
+    // timeline especially can run to 1000+ entries per order, so leaving it
+    // in was ballooning this response to 10+ MB and slowing every page that
+    // loads the order list. Full detail (incl. timeline) is still available
+    // via GET /:id for the order detail page.
+    const orders = await Order.find()
+      .select("-timeline -titleChain -additionalCosts -pendingInvoiceItems -files")
+      .sort({ createdAt: -1 }).lean();
     const paidIds = new Set(
       (await Invoice.find({ status: "paid" }).select("orderId").lean())
         .map(inv => String(inv.orderId))

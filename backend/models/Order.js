@@ -21,7 +21,7 @@ const orderSchema = new mongoose.Schema(
     year: String,
     make: String,
     model: String,
-    vin: String,
+    vin: { type: String, index: true },
 
     pickupLocation: String,
     pickupName: String,
