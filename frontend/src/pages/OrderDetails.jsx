@@ -330,6 +330,11 @@ export default function OrderDetails() {
   const [drWeightOverride, setDrWeightOverride] = useState("");
   const [showDrEdit, setShowDrEdit] = useState(false);
   const [drEditForm, setDrEditForm] = useState({});
+  // Once the user Applies changes in the DR Edit Fields modal, their Return /
+  // Delivery values must win over the auto address-book terminal lookup in
+  // generateDockReceipt (which otherwise exists to fix STALE stored delivery
+  // fields — but was silently overwriting a fresh manual edit too).
+  const [drDeliveryEdited, setDrDeliveryEdited] = useState(false);
   const [scheduleVessels, setScheduleVessels] = useState([]);
   const [scheduleLooking, setScheduleLooking] = useState(false);
 
@@ -1422,6 +1427,7 @@ export default function OrderDetails() {
       const data = await res.json();
       setDrPayload(data);
       setDrWeightOverride(data.weightKgs || "");
+      setDrDeliveryEdited(false); // fresh fetch — auto terminal lookup is safe to apply again
     } catch (err) {
       console.error("DR payload fetch failed", err);
       setDrPayload(null);
@@ -1454,9 +1460,12 @@ export default function OrderDetails() {
     const lineRaw = lineFromBooking || (base.shippingLine || "").toUpperCase();
     const lineKey = lineRaw.includes("ACL") ? "ACL" : lineRaw.includes("SALLAUM") ? "SALLAUM" : "";
 
-    // Always look up the correct terminal from address book by shippingLine + POL
-    // This prevents stale stored delivery fields from showing the wrong carrier terminal
-    const termEntry = lineKey && polKey ? drPortEntries.find(p => {
+    // Look up the correct terminal from the address book by shippingLine + POL —
+    // this catches STALE stored delivery fields showing the wrong carrier
+    // terminal. But skip it once the user has explicitly edited Return /
+    // Delivery in the Edit Fields modal — their typed values must win, not get
+    // silently replaced by this lookup.
+    const termEntry = (!drDeliveryEdited && lineKey && polKey) ? drPortEntries.find(p => {
       const name = (p.companyName || "").toUpperCase();
       const city = (p.city        || "").toUpperCase();
       return name.includes(lineKey) && (name.includes(polKey) || city.includes(polKey));
@@ -4806,6 +4815,7 @@ export default function OrderDetails() {
           onApply={(finalPayload) => {
             setDrPayload(finalPayload);
             setDrWeightOverride(finalPayload.weightKgs || "");
+            setDrDeliveryEdited(true); // trust what was just typed — don't let the auto terminal lookup overwrite it
             setShowDrEdit(false);
             // Save condition + titleStatus back to the order so they persist
             const orderUpdates = {};
