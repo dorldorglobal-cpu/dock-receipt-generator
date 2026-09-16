@@ -2594,6 +2594,14 @@ export default function OrderDetails() {
           {order.contactName  && <p style={{ margin: "0 0 4px", fontSize: 13, color:"var(--text-secondary)" }}>{order.contactName}</p>}
           {order.customerPhone && <p style={{ margin: "0 0 4px", fontSize: 13 }}>📞 {order.customerPhone}</p>}
           {order.customerEmail && <p style={{ margin: "0 0 10px", fontSize: 13 }}>✉️ {order.customerEmail}</p>}
+          {/* Consignee — shown here so it doesn't have to be looked up separately */}
+          <div style={{ margin: "0 0 10px", padding: "6px 10px", borderRadius: 7,
+            background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.25)" }}>
+            <div style={{ fontSize: 10, color: "var(--text-muted)", fontWeight: 700, letterSpacing: "0.05em" }}>CONSIGNEE</div>
+            <div style={{ fontSize: 13, fontWeight: 600, color: order.consigneeName ? "var(--text-primary)" : "var(--text-muted)" }}>
+              {order.consigneeName || "— not set —"}
+            </div>
+          </div>
           {/* Source / Office tag */}
           <div style={{ marginTop: 8, marginBottom: 8 }}>
             <label style={{ fontSize: 11, color: "var(--text-muted)", display: "block", marginBottom: 4 }}>SOURCE / OFFICE</label>
