@@ -3155,14 +3155,20 @@ export default function OrderDetails() {
         const towCost   = Number(charges.towingCost    || 0);
         const ocnSell   = Number(charges.oceanFreight  || 0);
         const ocnCost   = Number(charges.oceanCost     || 0);
+        // Additional tows added via the "+ Add Additional Tow" row in the
+        // Additional Costs modal (e.g. "port to warehouse") — each is its own
+        // line here too, and rolls into the Total like everything else.
+        const extraTows    = charges.extraTows || [];
+        const extraTowSell = extraTows.reduce((s,t) => s + Number(t.amount||0), 0);
+        const extraTowCost = extraTows.reduce((s,t) => s + Number(t.cost||0), 0);
         // Fee rows with non-zero sell values
         const activeFeeRows = feeRows.filter(([key]) => Number(charges[key] || 0) > 0);
         const feeTotal     = activeFeeRows.reduce((s,[key]) => s + Number(charges[key]||0), 0);
         const feeCostTotal = activeFeeRows.reduce((s,[key]) => s + Number(charges[key+"Cost"]||0), 0);
         // Discount — synced from the Invoices tab edit modal; stored as a negative amount
         const discountAmt = Number(charges.discount || 0);
-        const totSell   = towSell + ocnSell + feeTotal + discountAmt;
-        const totCost   = towCost + ocnCost + feeCostTotal;
+        const totSell   = towSell + extraTowSell + ocnSell + feeTotal + discountAmt;
+        const totCost   = towCost + extraTowCost + ocnCost + feeCostTotal;
         const totProfit = totSell - totCost;
         return (
           <section className="form-section" style={{ borderColor:"rgba(251,191,36,0.2)", background:"rgba(251,191,36,0.03)" }}>
@@ -3256,6 +3262,33 @@ export default function OrderDetails() {
                     </tr>
                   );
                 })()}
+                {/* Additional tows — added via the Additional Costs modal's "+ Add Additional Tow" */}
+                {extraTows.map((tow, ti) => {
+                  const sell = Number(tow.amount || 0);
+                  const cost = Number(tow.cost || 0);
+                  return (
+                    <tr key={`extratow-${ti}`} style={{ borderBottom:"1px solid var(--border)" }}>
+                      <td style={{ padding:"5px 8px", color:"var(--text-secondary)", fontStyle:"italic" }}>
+                        {tow.description || "Additional Tow"}
+                      </td>
+                      <td style={{ textAlign:"right", padding:"5px 8px", color:"var(--accent)", fontWeight:700 }}>
+                        {sell > 0 ? fmt(sell) : <span style={{ color:"var(--text-muted)" }}>—</span>}
+                      </td>
+                      <td style={{ textAlign:"right", padding:"5px 8px", color:"#f87171", fontWeight:700 }}>
+                        {cost > 0 ? fmt(cost) : <span style={{ color:"var(--text-muted)" }}>—</span>}
+                      </td>
+                      <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(sell-cost) }}>
+                        {pStr(sell-cost)}
+                      </td>
+                      <td style={{ textAlign:"center", padding:"4px 6px" }}>
+                        <button onClick={() => setShowCosts(true)} title="Edit in Additional Charges"
+                          style={{ background:"none", border:"none", cursor:"pointer", color:"#60a5fa", fontSize:12, padding:"2px 4px" }}>
+                          ✏️
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
                 {/* Ocean row — edit button with route lookup */}
                 {(() => {
                   const editing = editingInternalRow === "ocean";
