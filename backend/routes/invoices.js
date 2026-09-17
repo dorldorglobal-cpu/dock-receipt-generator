@@ -808,8 +808,13 @@ async function generateInvoicePdf(inv, order) {
     }
 
     // ── FOOTER — always on same page, after content ───────────────────────────
-    // Use the greater of: where content ended + 20px gap, or bottom margin area
-    const footerY = Math.max(y + 20, PH - 52);
+    // Use the greater of: where content ended + 20px gap, or bottom margin area.
+    // If content ran long enough that even the footer itself wouldn't fit here,
+    // start one clean new page for it instead of letting PDFKit's own
+    // auto-pagination silently split the two footer lines across near-empty
+    // trailing pages (was producing a 3-page PDF with 2 almost-blank pages).
+    let footerY = Math.max(y + 20, PH - 52);
+    if (footerY + 22 + 10 > PH) { doc.addPage(); footerY = PH - 52; }
     doc.rect(ML, footerY, W, 0.5).fill("#d1d5db");
     doc.fill(muted).font("Helvetica").fontSize(8)
        .text("Thank you for your business! — Dor L'Dor Global", ML, footerY + 8,
@@ -976,7 +981,12 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   y += TOT_H + 16;
 
   // ── FOOTER ────────────────────────────────────────────────────────────────────
-  const footerY = Math.max(y + 20, PH - 52);
+  // Same guard as the single-invoice generator: don't let PDFKit's own
+  // auto-pagination silently split these two lines across near-empty
+  // trailing pages when the vehicle list ran long enough to fill the page —
+  // just start one clean new page for the footer in that case.
+  let footerY = Math.max(y + 20, PH - 52);
+  if (footerY + 22 + 10 > PH) { doc.addPage(); footerY = PH - 52; }
   doc.rect(ML, footerY, W, 0.5).fill("#d1d5db");
   doc.fill(muted).font("Helvetica").fontSize(8).text("Thank you for your business! — Dor L'Dor Global", ML, footerY + 8, { align:"center", width:W, lineBreak:false });
   doc.fill(muted).font("Helvetica").fontSize(7).text("Payment due on receipt unless a due date is stated above.", ML, footerY + 22, { align:"center", width:W, lineBreak:false });
