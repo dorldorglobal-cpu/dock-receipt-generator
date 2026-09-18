@@ -484,6 +484,7 @@ export default function Containers() {
       arrivalDate:      l.arrivalDate      || "",
       status:           l.status           || "Pending",
       vessel:           l.vessel           || "",
+      shippingLine:     l.shippingLine     || "",
       pol:              l.pol              || "",
       pod:              l.pod              || "",
       loaderEmail:      l.loaderEmail      || "",
@@ -1201,6 +1202,7 @@ export default function Containers() {
                     </select>
                   </div>
                   <F label="VESSEL" value={editForm.vessel} onChange={setEF("vessel")} />
+                  <F label="SHIPPING LINE" value={editForm.shippingLine} onChange={setEF("shippingLine")} />
                   <div>
                     <label style={lbl}>PORT OF LOADING (WAREHOUSE)</label>
                     <select value={editForm.pol || ""} onChange={e=>setEditPol(e.target.value)} style={inp}>

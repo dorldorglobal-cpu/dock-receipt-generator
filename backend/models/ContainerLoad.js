@@ -4,6 +4,7 @@ const containerLoadSchema = new mongoose.Schema({
   name:          { type: String, required: true },
   orderIds:      [{ type: mongoose.Schema.Types.ObjectId, ref: "Order" }],
   vessel:        { type: String, default: "" },
+  shippingLine:  { type: String, default: "" },
   pol:           { type: String, default: "" },
   pod:           { type: String, default: "" },
   loaderEmail:   { type: String, default: "" },

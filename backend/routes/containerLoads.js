@@ -94,14 +94,14 @@ router.get("/", async (req, res) => {
 router.post("/", express.json(), async (req, res) => {
   try {
     const {
-      name, orderIds, vessel, pol, pod, loaderEmail, loaderCc, notes,
+      name, orderIds, vessel, shippingLine, pol, pod, loaderEmail, loaderCc, notes,
       consigneeName, consigneeAddress, consigneePhone, consigneeEmail, consigneeTin,
       notifyName, notifyAddress, notifyPhone, notifyEmail, notifyTin,
     } = req.body;
     if (!orderIds?.length) return res.status(400).json({ error: "Select at least one order" });
 
     const load = await ContainerLoad.create({
-      name, orderIds, vessel, pol, pod, notes,
+      name, orderIds, vessel, shippingLine, pol, pod, notes,
       ...deriveLoader({ pol, loaderEmail, loaderCc }),
       consigneeName, consigneeAddress, consigneePhone, consigneeEmail, consigneeTin,
       notifyName, notifyAddress, notifyPhone, notifyEmail, notifyTin,
@@ -122,7 +122,7 @@ router.patch("/:id", express.json(), async (req, res) => {
   try {
     const fields = [
       "name","bookingNumber","containerNumber","sealNumber","sailCutoff","arrivalDate","status",
-      "vessel","pol","pod","loaderEmail","loaderCc","notes",
+      "vessel","shippingLine","pol","pod","loaderEmail","loaderCc","notes",
       "consigneeName","consigneeAddress","consigneePhone","consigneeEmail","consigneeTin",
       "notifyName","notifyAddress","notifyPhone","notifyEmail","notifyTin",
     ];
@@ -140,11 +140,11 @@ router.patch("/:id", express.json(), async (req, res) => {
       load.loaderCc    = d.loaderCc;
     }
 
-    // Sail cutoff + arrival date both on file means the sailing schedule is
-    // confirmed — auto-advance to Sailed, same non-regressing guard as the
-    // Draft BL upload trigger.
+    // An arrival date on file means the sailing schedule is confirmed —
+    // auto-advance to Sailed, same non-regressing guard as the Draft BL
+    // upload trigger.
     const PRE_SAIL_LOAD_STATUSES = ["Pending", "Booked", "Loaded"];
-    if (load.sailCutoff && load.arrivalDate && PRE_SAIL_LOAD_STATUSES.includes(load.status)) {
+    if (load.arrivalDate && PRE_SAIL_LOAD_STATUSES.includes(load.status)) {
       load.status = "Sailed";
     }
 
