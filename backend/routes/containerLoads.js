@@ -139,6 +139,15 @@ router.patch("/:id", express.json(), async (req, res) => {
       load.loaderEmail = d.loaderEmail;
       load.loaderCc    = d.loaderCc;
     }
+
+    // Sail cutoff + arrival date both on file means the sailing schedule is
+    // confirmed — auto-advance to Sailed, same non-regressing guard as the
+    // Draft BL upload trigger.
+    const PRE_SAIL_LOAD_STATUSES = ["Pending", "Booked", "Loaded"];
+    if (load.sailCutoff && load.arrivalDate && PRE_SAIL_LOAD_STATUSES.includes(load.status)) {
+      load.status = "Sailed";
+    }
+
     await load.save();
     await upsertConsignee(load);
 
