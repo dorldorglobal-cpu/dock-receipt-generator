@@ -540,23 +540,29 @@ export default function Containers() {
     if (status === "Sailed" || status === "Arrived" || status === "Paid") return "sailed";
     return "pending"; // New Order, Awaiting Pickup, Picked Up, Delivered, Waiting to Sail, Problem/Hold
   };
-  // Fallback bucket from the load's own status field, used only when a load has no orders yet.
+  // Bucket from the load's own status field — this is a direct, explicit
+  // action (Draft BL upload, or the Released button) and should always be
+  // reflected even if the individual orders haven't all caught up yet.
   const loadOwnBucket = (status) => {
-    if (status === "Sailed" || status === "Arrived") return "sailed";
     if (status === "Released") return "completed";
+    if (status === "Sailed" || status === "Arrived") return "sailed";
     return "pending";
   };
-  // The container page should coincide with the individual orders' statuses:
-  // bucket a load by the weakest-link (least advanced) bucket among its own orders,
-  // ignoring Canceled orders since they shouldn't hold the whole container back.
+  // The container page should coincide with the individual orders' statuses,
+  // bucketed by the weakest-link (least advanced) order (ignoring Canceled
+  // orders, which shouldn't hold the whole container back) — but a load's
+  // own explicit status (e.g. manually marked Sailed or Released) wins if
+  // it's further along than what the orders show.
   // A "pending" load with a booking number on file gets its own "booked" bucket.
   const BUCKET_RANK = { pending:0, booked:0, sailed:1, completed:2 };
   const loadBucket = (l) => {
     const orders = (l.orderIds||[]).filter(o => o.status !== "Canceled");
-    const base = !orders.length ? loadOwnBucket(l.status) : orders.reduce((worst, o) => {
+    const fromOrders = orders.length ? orders.reduce((worst, o) => {
       const b = orderBucket(o.status);
       return BUCKET_RANK[b] < BUCKET_RANK[worst] ? b : worst;
-    }, "completed");
+    }, "completed") : "pending";
+    const fromLoad = loadOwnBucket(l.status);
+    const base = BUCKET_RANK[fromLoad] > BUCKET_RANK[fromOrders] ? fromLoad : fromOrders;
     if (base === "pending" && l.bookingNumber) return "booked";
     return base;
   };
@@ -903,17 +909,6 @@ export default function Containers() {
                   </button>
                 </div>
               </div>
-
-              {/* Released to Customer banner */}
-              {l.status === "Released" && (
-                <div style={{ background:"rgba(16,185,129,0.18)", borderTop:"2px solid #10b981",
-                  padding:"10px 20px", display:"flex", alignItems:"center", gap:10 }}>
-                  <span style={{ fontSize:22 }}>✅</span>
-                  <span style={{ fontSize:16, fontWeight:800, color:"#10b981", letterSpacing:1.5, textTransform:"uppercase" }}>
-                    Released to Customer
-                  </span>
-                </div>
-              )}
 
               {/* Collapsed: VIN chips */}
               {!open && (
