@@ -534,12 +534,29 @@ export default function Containers() {
     refresh();
   };
 
-  // Collapse the load's own status (Pending/Booked/Loaded/Sailed/Arrived/Released)
-  // into the 3 buckets the top tabs filter by — same idea as the RORO Orders tabs.
-  const loadBucket = (status) => {
+  // Collapse a single order's own status into the 3 buckets the top tabs use.
+  const orderBucket = (status) => {
+    if (status === "Completed") return "completed";
+    if (status === "Sailed" || status === "Arrived" || status === "Paid") return "sailed";
+    return "pending"; // New Order, Awaiting Pickup, Picked Up, Delivered, Waiting to Sail, Problem/Hold
+  };
+  // Fallback bucket from the load's own status field, used only when a load has no orders yet.
+  const loadOwnBucket = (status) => {
     if (status === "Sailed" || status === "Arrived") return "sailed";
     if (status === "Released") return "completed";
-    return "pending"; // Pending, Booked, Loaded (or unset)
+    return "pending";
+  };
+  // The container page should coincide with the individual orders' statuses:
+  // bucket a load by the weakest-link (least advanced) bucket among its own orders,
+  // ignoring Canceled orders since they shouldn't hold the whole container back.
+  const BUCKET_RANK = { pending:0, sailed:1, completed:2 };
+  const loadBucket = (l) => {
+    const orders = (l.orderIds||[]).filter(o => o.status !== "Canceled");
+    if (!orders.length) return loadOwnBucket(l.status);
+    return orders.reduce((worst, o) => {
+      const b = orderBucket(o.status);
+      return BUCKET_RANK[b] < BUCKET_RANK[worst] ? b : worst;
+    }, "completed");
   };
   const STATUS_TABS = [
     { value:"all",       label:"All",           color:"var(--text-secondary)" },
@@ -548,10 +565,10 @@ export default function Containers() {
     { value:"completed", label:"Completed",      color:"#94a3b8" },
   ];
   const statusCounts = { all: loads.length, pending:0, sailed:0, completed:0 };
-  loads.forEach(l => { statusCounts[loadBucket(l.status)]++; });
+  loads.forEach(l => { statusCounts[loadBucket(l)]++; });
 
   const filtered = loads.filter(l => {
-    if (statusFilter !== "all" && loadBucket(l.status) !== statusFilter) return false;
+    if (statusFilter !== "all" && loadBucket(l) !== statusFilter) return false;
     const s = search.toLowerCase();
     if (!s) return true;
     return `${l.name} ${l.bookingNumber} ${l.vessel} ${l.containerNumber}`

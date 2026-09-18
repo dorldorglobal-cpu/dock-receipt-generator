@@ -773,6 +773,14 @@ router.post("/:id/upload", upload.single("file"), async (req, res) => {
       driveUrl:     uploaded.webViewLink,
       mimetype:     req.file.mimetype,
     });
+
+    // Auto-advance load status to Sailed once the Draft BL is in — mirrors
+    // the order-level Draft-upload → Sailed automation in orders.js
+    const PRE_SAIL_LOAD_STATUSES = ["Pending", "Booked", "Loaded"];
+    if (label === "Draft BL" && PRE_SAIL_LOAD_STATUSES.includes(load.status)) {
+      load.status = "Sailed";
+    }
+
     await load.save();
 
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
