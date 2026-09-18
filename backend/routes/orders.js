@@ -1819,6 +1819,14 @@ router.get("/:id/dr-payload", async (req, res) => {
     const cleanAes      = cleanSpread(aesData);
     const cleanDispatch = cleanSpread(dispatchData);
 
+    // Delivery fields on the order are the source of truth — never let a
+    // re-parsed AES/dispatch PDF overwrite them (old dispatch sheets may have
+    // a different terminal address than what was manually set on the order).
+    const deliveryOverrideGuard = {};
+    for (const k of ["deliveryName","deliveryAddress","deliveryCity","deliveryState","deliveryZip","deliveryLocation"]) {
+      if (o[k]) deliveryOverrideGuard[k] = o[k];
+    }
+
     const payload = {
       // order base
       ...o,
@@ -1827,6 +1835,8 @@ router.get("/:id/dr-payload", async (req, res) => {
       ...cleanAes,
       // Dispatch data (overwrites where dispatch has real values)
       ...cleanDispatch,
+      // Delivery address: order wins over parsed PDFs
+      ...deliveryOverrideGuard,
       // Schedule
       ...cleanSpread(scheduleData),
       // VIN is already validated on the order (checked for duplicates at
