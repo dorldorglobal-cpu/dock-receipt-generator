@@ -549,22 +549,25 @@ export default function Containers() {
   // The container page should coincide with the individual orders' statuses:
   // bucket a load by the weakest-link (least advanced) bucket among its own orders,
   // ignoring Canceled orders since they shouldn't hold the whole container back.
-  const BUCKET_RANK = { pending:0, sailed:1, completed:2 };
+  // A "pending" load with a booking number on file gets its own "booked" bucket.
+  const BUCKET_RANK = { pending:0, booked:0, sailed:1, completed:2 };
   const loadBucket = (l) => {
     const orders = (l.orderIds||[]).filter(o => o.status !== "Canceled");
-    if (!orders.length) return loadOwnBucket(l.status);
-    return orders.reduce((worst, o) => {
+    const base = !orders.length ? loadOwnBucket(l.status) : orders.reduce((worst, o) => {
       const b = orderBucket(o.status);
       return BUCKET_RANK[b] < BUCKET_RANK[worst] ? b : worst;
     }, "completed");
+    if (base === "pending" && l.bookingNumber) return "booked";
+    return base;
   };
   const STATUS_TABS = [
     { value:"all",       label:"All",           color:"var(--text-secondary)" },
     { value:"pending",   label:"New / Pending",  color:"#fbbf24" },
+    { value:"booked",    label:"Booked",         color:"#60a5fa" },
     { value:"sailed",    label:"Sailed",         color:"#34d399" },
     { value:"completed", label:"Completed",      color:"#94a3b8" },
   ];
-  const statusCounts = { all: loads.length, pending:0, sailed:0, completed:0 };
+  const statusCounts = { all: loads.length, pending:0, booked:0, sailed:0, completed:0 };
   loads.forEach(l => { statusCounts[loadBucket(l)]++; });
 
   const filtered = loads.filter(l => {
