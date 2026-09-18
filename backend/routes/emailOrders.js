@@ -222,7 +222,7 @@ router.post("/sync", async (req, res) => {
 // ── POST /api/email-orders/cleanup — mark pending items as approved if order already exists ──
 router.post("/cleanup", async (req, res) => {
   try {
-    const pending = await EmailOrder.find({ status: "pending" });
+    const pending = await EmailOrder.find({ status: "pending" }).select("vin");
     let cleaned = 0;
     for (const eo of pending) {
       if (!eo.vin) continue;

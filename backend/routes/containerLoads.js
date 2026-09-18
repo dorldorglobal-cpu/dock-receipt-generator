@@ -95,7 +95,9 @@ router.get("/", async (req, res) => {
       { $set: { status: "Sailed" } }
     );
 
-    const loads = await ContainerLoad.find().sort({ createdAt: -1 }).populate("orderIds").lean();
+    const loads = await ContainerLoad.find().sort({ createdAt: -1 })
+      .populate({ path: "orderIds", select: "refNumber customerName vin year make model color status requestType bookingNumber pickupCity pickupState deliveryCity deliveryState" })
+      .lean();
     res.json(loads);
   } catch (e) {
     res.status(500).json({ error: e.message });

@@ -90,7 +90,7 @@ function getBody(parts = []) {
 
 // ── Auto-cleanup: mark pending items done if order already exists ─────────────
 async function autoCleanup() {
-  const pending = await EmailOrder.find({ status: "pending" });
+  const pending = await EmailOrder.find({ status: "pending" }).select("vin");
   for (const eo of pending) {
     if (!eo.vin) continue;
     const existing = await Order.findOne({ vin: eo.vin });
