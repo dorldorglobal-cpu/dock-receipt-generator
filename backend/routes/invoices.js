@@ -84,6 +84,18 @@ router.post("/", async (req, res) => {
     const order = await Order.findById(orderId);
     if (!order) return res.status(404).json({ error: "Order not found" });
 
+    // Generating an invoice is a reliable signal the vehicle has shipped —
+    // auto-advance to Sailed, same "from" set as the Draft-BL-upload trigger
+    // in orders.js. Never regresses a later status (Arrived/Paid/Completed/etc).
+    const PRE_SAIL_STATUSES = ["New Order", "Awaiting Pickup", "Picked Up", "Delivered", "Waiting to Sail"];
+    const advanceToSailed = async () => {
+      if (!PRE_SAIL_STATUSES.includes(order.status)) return;
+      await Order.findByIdAndUpdate(orderId, {
+        $set: { status: "Sailed" },
+        $push: { timeline: { action: "Status Changed", details: `Auto-updated from "${order.status}" to "Sailed" on invoice generated.`, createdAt: new Date() } },
+      });
+    };
+
     // Never duplicate — if an invoice already exists for this order, update it
     const existing = await Invoice.findOne({ orderId }).sort({ createdAt: 1 });
     if (existing) {
@@ -95,6 +107,7 @@ router.post("/", async (req, res) => {
         notes: notes || existing.notes,
         ...(dueDate ? { dueDate: new Date(dueDate) } : {}),
       }, { new: true });
+      await advanceToSailed();
       return res.json(updated);
     }
 
@@ -160,6 +173,7 @@ router.post("/", async (req, res) => {
         },
       },
     });
+    await advanceToSailed();
 
     res.json(invoice);
   } catch (e) {

@@ -168,6 +168,7 @@ export default function Containers() {
   const [loads,     setLoads]     = useState([]);
   const [allOrders, setAllOrders] = useState([]);
   const [search,    setSearch]    = useState("");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [expanded,  setExpanded]  = useState({});
   const [msg,       setMsg]       = useState("");
 
@@ -533,7 +534,24 @@ export default function Containers() {
     refresh();
   };
 
+  // Collapse the load's own status (Pending/Booked/Loaded/Sailed/Arrived/Released)
+  // into the 3 buckets the top tabs filter by — same idea as the RORO Orders tabs.
+  const loadBucket = (status) => {
+    if (status === "Sailed" || status === "Arrived") return "sailed";
+    if (status === "Released") return "completed";
+    return "pending"; // Pending, Booked, Loaded (or unset)
+  };
+  const STATUS_TABS = [
+    { value:"all",       label:"All",           color:"var(--text-secondary)" },
+    { value:"pending",   label:"New / Pending",  color:"#fbbf24" },
+    { value:"sailed",    label:"Sailed",         color:"#34d399" },
+    { value:"completed", label:"Completed",      color:"#94a3b8" },
+  ];
+  const statusCounts = { all: loads.length, pending:0, sailed:0, completed:0 };
+  loads.forEach(l => { statusCounts[loadBucket(l.status)]++; });
+
   const filtered = loads.filter(l => {
+    if (statusFilter !== "all" && loadBucket(l.status) !== statusFilter) return false;
     const s = search.toLowerCase();
     if (!s) return true;
     return `${l.name} ${l.bookingNumber} ${l.vessel} ${l.containerNumber}`
@@ -652,6 +670,28 @@ export default function Containers() {
             cursor:"pointer", fontWeight:600, fontSize:14 }}>
           + New Container Load
         </button>
+      </div>
+
+      {/* ── Status tabs ── */}
+      <div style={{ display:"flex", gap:4, marginBottom:16, borderBottom:"1px solid var(--border)", flexWrap:"wrap" }}>
+        {STATUS_TABS.map(t => (
+          <button key={t.value} onClick={() => setStatusFilter(t.value)}
+            style={{
+              padding:"8px 16px", borderRadius:"8px 8px 0 0", border:"none",
+              background: statusFilter === t.value ? "var(--bg-panel)" : "transparent",
+              color: statusFilter === t.value ? t.color : "var(--text-secondary)",
+              cursor:"pointer", fontSize:13, fontWeight: statusFilter === t.value ? 600 : 400,
+              borderBottom: statusFilter === t.value ? `2px solid ${t.color}` : "2px solid transparent",
+              transition:"all 0.15s",
+            }}>
+            {t.label}
+            <span style={{
+              marginLeft:6, fontSize:11, padding:"1px 6px", borderRadius:10,
+              background: statusFilter === t.value ? `${t.color}22` : "var(--bg-elevated)",
+              color: statusFilter === t.value ? t.color : "var(--text-secondary)",
+            }}>{statusCounts[t.value] || 0}</span>
+          </button>
+        ))}
       </div>
 
       <div style={{ marginBottom:18, display:"flex", alignItems:"center", gap:12 }}>
