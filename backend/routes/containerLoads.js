@@ -83,6 +83,18 @@ router.get("/config", (_req, res) => {
 // GET /api/container-loads
 router.get("/", async (req, res) => {
   try {
+    // Self-heal: once the sail cutoff date has actually passed, the load has
+    // sailed — advance it. Entering the schedule ahead of time (booking
+    // confirmed, cutoff/arrival dates known) should NOT flip it early; it
+    // must sit in Booked until that date arrives. sailCutoff is stored as
+    // "YYYY-MM-DD", which sorts correctly as a plain string.
+    const today = new Date().toISOString().slice(0, 10);
+    const PRE_SAIL_LOAD_STATUSES = ["Pending", "Booked", "Loaded"];
+    await ContainerLoad.updateMany(
+      { status: { $in: PRE_SAIL_LOAD_STATUSES }, sailCutoff: { $ne: "", $lte: today } },
+      { $set: { status: "Sailed" } }
+    );
+
     const loads = await ContainerLoad.find().sort({ createdAt: -1 }).populate("orderIds").lean();
     res.json(loads);
   } catch (e) {
@@ -140,13 +152,6 @@ router.patch("/:id", express.json(), async (req, res) => {
       load.loaderCc    = d.loaderCc;
     }
 
-    // An arrival date on file means the sailing schedule is confirmed —
-    // auto-advance to Sailed, same non-regressing guard as the Draft BL
-    // upload trigger.
-    const PRE_SAIL_LOAD_STATUSES = ["Pending", "Booked", "Loaded"];
-    if (load.arrivalDate && PRE_SAIL_LOAD_STATUSES.includes(load.status)) {
-      load.status = "Sailed";
-    }
 
     await load.save();
     await upsertConsignee(load);
