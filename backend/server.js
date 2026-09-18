@@ -1249,13 +1249,14 @@ mongoose
       // setInterval(autoRefreshSallaumSchedule, 24 * 60 * 60 * 1000);
 
       // ── Keep-alive ping (prevents Render free tier from sleeping) ──
-      // Pings the server's own health endpoint every 14 minutes
+      // Pings every 10 minutes — Render spins down after 15 min of inactivity,
+      // so 10 min gives a comfortable buffer even if one ping is slow to send.
       const SELF_URL = process.env.RENDER_EXTERNAL_URL || "http://localhost:4000";
       setInterval(() => {
         fetch(`${SELF_URL}/api/health`)
           .then(() => console.log("[keep-alive] ping ok"))
           .catch(err => console.warn("[keep-alive] ping failed:", err.message));
-      }, 14 * 60 * 1000);
+      }, 10 * 60 * 1000);
 
       // ── Arrival date checker — runs every hour ────────────────────────
       // When an order's arrivalDate has passed and status is Waiting to Sail or Sailed → Arrived

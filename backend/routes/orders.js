@@ -533,16 +533,23 @@ router.post("/bulk-populate-ocean", async (req, res) => {
 });
 
 // GET ALL ORDERS
+// Fields returned in the list endpoint — only what Dashboard/AllOrders/Containers actually read.
+// Exclusion projections leave every future field in by default (growing the payload);
+// inclusion projections stay lean automatically. Full detail via GET /:id.
+const ORDER_LIST_SELECT =
+  "refNumber customerName customerEmail customerPhone " +
+  "year make model vin color requestType dispatchMethod " +
+  "status titleStatus source requestDate " +
+  "pickupLocation pickupCity pol pod vessel voyage shippingLine bookingNumber " +
+  "lotNumber condition " +
+  "consigneeName consigneeAddress consigneeCity consigneeCountry " +
+  "charges holds createdAt updatedAt";
+
 router.get("/", async (req, res) => {
   try {
     const Invoice = require("../models/Invoice");
-    // List views (Dashboard, All Orders, Containers) never read these —
-    // timeline especially can run to 1000+ entries per order, so leaving it
-    // in was ballooning this response to 10+ MB and slowing every page that
-    // loads the order list. Full detail (incl. timeline) is still available
-    // via GET /:id for the order detail page.
     const orders = await Order.find()
-      .select("-timeline -titleChain -additionalCosts -pendingInvoiceItems -files")
+      .select(ORDER_LIST_SELECT)
       .sort({ createdAt: -1 }).lean();
     const paidIds = new Set(
       (await Invoice.find({ status: "paid" }).select("orderId").lean())
