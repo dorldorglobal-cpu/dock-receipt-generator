@@ -5819,12 +5819,16 @@ export default function OrderDetails() {
           const res = await fetch(`${API}/api/expenses`, { method: "POST", body });
           if (!res.ok) throw new Error("Failed to create expense");
 
-          // Save sell price directly to order charges so it auto-appears on invoice
-          const sellAmt = parseFloat(storageSellPrice);
-          if (sellAmt > 0) {
+          // Save cost (what we paid, from the receipt) and sell price (what to charge)
+          // directly to order charges so both auto-appear in Internal Costs / on invoice
+          const costAmt = parseFloat(parsed.amount) || 0;
+          const sellAmt = parseFloat(storageSellPrice) || 0;
+          if (costAmt > 0 || sellAmt > 0) {
             const vendor = (parsed.vendor || "Copart").toLowerCase();
             const chargeKey = /copart|iaa|iaai/.test(vendor) ? "storageAuctionFee" : "storageWarehouseFee";
-            const updatedCharges = { ...charges, [chargeKey]: String(sellAmt) };
+            const updatedCharges = { ...charges };
+            if (costAmt > 0) updatedCharges[chargeKey + "Cost"] = String(costAmt);
+            if (sellAmt > 0) updatedCharges[chargeKey] = String(sellAmt);
             const chRes = await fetch(`${API}/api/orders/${order._id}`, {
               method: "PUT", headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ charges: updatedCharges }),
@@ -5832,10 +5836,10 @@ export default function OrderDetails() {
             if (chRes.ok) {
               const updated = await chRes.json();
               setOrder(updated);
-              setCharges(prev => ({ ...prev, [chargeKey]: String(sellAmt) }));
+              setCharges(prev => ({ ...prev, ...(costAmt > 0 ? { [chargeKey + "Cost"]: String(costAmt) } : {}), ...(sellAmt > 0 ? { [chargeKey]: String(sellAmt) } : {}) }));
             }
-            // Also add to existing invoice if one already exists
-            if (orderInvoices.length > 0) {
+            // Also add to existing invoice if a sell price was given and one already exists
+            if (sellAmt > 0 && orderInvoices.length > 0) {
               const desc = `Storage Fee${parsed.lotNumber ? ` – Lot ${parsed.lotNumber}` : ""}`;
               const existingItems = (orderInvoices[0]?.items || []).map(i => ({ description: i.description, amount: Number(i.amount || 0) }));
               const invRes = await fetch(`${API}/api/invoices/${orderInvoices[0]._id}`, {
@@ -5848,7 +5852,7 @@ export default function OrderDetails() {
 
           setStorageConfirm(null);
           setStorageSellPrice("");
-          setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}${sellAmt > 0 ? " · sell price added to charges" : ""}.`);
+          setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}${costAmt > 0 ? " · cost saved" : ""}${sellAmt > 0 ? " · sell price added to charges" : ""}.`);
           fetchBills(order.refNumber);
         };
         return (
@@ -5858,7 +5862,7 @@ export default function OrderDetails() {
               <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:"8px 16px", marginBottom:20, fontSize:13 }}>
                 {[
                   ["Vendor", parsed.vendor],
-                  ["Amount", parsed.amount ? `$${parsed.amount.toFixed(2)}` : "—"],
+                  ["Amount Paid (→ Cost)", parsed.amount ? `$${parsed.amount.toFixed(2)}` : "—"],
                   ["Lot #", parsed.lotNumber || "—"],
                   ["Order #", parsed.orderRef || order.refNumber],
                   ["Date", parsed.date || "—"],
