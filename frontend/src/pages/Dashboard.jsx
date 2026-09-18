@@ -113,11 +113,8 @@ export default function Dashboard() {
   // active holds here instead of the legacy status value.
   const countActiveHolds = () => orders.filter(o => (o.holds || []).some(h => !h.resolvedAt)).length;
 
-  // Revenue estimate from order charges
-  const totalRevenue = orders.reduce((s, o) => {
-    const c = o.charges || {};
-    return s + [c.towingCharge, c.oceanFreight].reduce((cs, v) => cs + Number(v || 0), 0);
-  }, 0);
+  // Revenue estimate — pre-computed by the API as o.revenue (towingCharge + oceanFreight)
+  const totalRevenue = orders.reduce((s, o) => s + (o.revenue || 0), 0);
 
   const orderCards = [
     { label: "Total Orders",    value: orders.length,                    color: "var(--accent)",  status: "ALL" },

@@ -548,14 +548,19 @@ const ORDER_LIST_SELECT =
 router.get("/", async (req, res) => {
   try {
     const Invoice = require("../models/Invoice");
-    const orders = await Order.find()
-      .select(ORDER_LIST_SELECT)
-      .sort({ createdAt: -1 }).lean();
-    const paidIds = new Set(
-      (await Invoice.find({ status: "paid" }).select("orderId").lean())
-        .map(inv => String(inv.orderId))
-    );
-    const result = orders.map(o => ({ ...o, invoicePaid: paidIds.has(String(o._id)) }));
+    const [orders, paidInvoices] = await Promise.all([
+      Order.find().select(ORDER_LIST_SELECT).sort({ createdAt: -1 }).lean(),
+      Invoice.find({ status: "paid" }).select("orderId").lean(),
+    ]);
+    const paidIds = new Set(paidInvoices.map(inv => String(inv.orderId)));
+    // Pre-compute revenue (towingCharge + oceanFreight) so the caller doesn't
+    // need the full charges object — omitting it saves ~300 KB from the payload.
+    const result = orders.map(o => {
+      const c = o.charges || {};
+      const revenue = Number(c.towingCharge || 0) + Number(c.oceanFreight || 0);
+      const { charges: _c, ...rest } = o;
+      return { ...rest, revenue, invoicePaid: paidIds.has(String(o._id)) };
+    });
     res.json(result);
   } catch (err) {
     console.error("Get orders error:", err);
