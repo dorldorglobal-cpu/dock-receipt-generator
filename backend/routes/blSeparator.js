@@ -266,8 +266,28 @@ router.post("/attach", async (req, res) => {
         if (bl.vessel) { order.vessel = bl.vessel; order.markModified("vessel"); }
         if (bl.voyage) { order.voyage = bl.voyage; order.markModified("voyage"); }
 
-        // Auto-update status to Sailed on Draft upload (same logic as manual file upload)
-        const SAILED_STATUSES = ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail"];
+        // Pull cutoff/sail/arrival straight from the master schedule for this
+        // vessel/voyage so they reflect the real sailing, not a stale guess
+        // from before the Draft BL confirmed which vessel it actually shipped on.
+        if (order.vessel && order.pol && order.pod) {
+          try {
+            const { lookupSchedule } = require("./scheduleRoutes");
+            const s = await lookupSchedule({ voyageName: order.voyage || "", vessel: order.vessel, pol: order.pol, pod: order.pod });
+            if (s.found) {
+              if (!order.voyage) order.voyage = s.voyage;
+              order.cutoffDate  = s.cutoffDate;
+              order.sailDate    = s.sailDate;
+              order.arrivalDate = s.arrivalDate;
+            }
+          } catch (schErr) {
+            console.warn("[BL attach] schedule lookup failed:", schErr.message);
+          }
+        }
+
+        // Auto-update status to Sailed on Draft upload (same logic as manual file
+        // upload) — also corrects a status that was wrongly skip-promoted to
+        // Arrived off a stale arrival-date guess before the real Draft BL landed.
+        const SAILED_STATUSES = ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail","Arrived"];
         if (bl.type === "draft" && SAILED_STATUSES.includes(order.status)) {
           const prev = order.status;
           order.status = "Sailed";

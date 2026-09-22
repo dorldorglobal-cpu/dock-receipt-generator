@@ -1259,14 +1259,17 @@ mongoose
       }, 10 * 60 * 1000);
 
       // ── Arrival date checker — runs every hour ────────────────────────
-      // When an order's arrivalDate has passed and status is Waiting to Sail or Sailed → Arrived
+      // When an order's arrivalDate has passed and status is Sailed → Arrived.
+      // Must already be Sailed — an order still Waiting to Sail hasn't actually
+      // shipped yet, so a stale/preliminary arrival date should never skip it
+      // straight to Arrived without a real Draft BL confirming it sailed.
       const checkArrivals = async () => {
         try {
           const Order = require("./models/Order");
           const today = new Date();
           today.setHours(0, 0, 0, 0);
           const candidates = await Order.find({
-            status: { $in: ["Waiting to Sail", "Sailed"] },
+            status: "Sailed",
             arrivalDate: { $exists: true, $ne: "" },
           });
           let updated = 0;

@@ -931,7 +931,7 @@ router.post(
         "AES":         { from: ["Awaiting Pickup"],                                                        to: "Picked Up"       },
         "Dock Receipt":{ from: ["New Order","Awaiting Pickup","Picked Up"],                                to: "Picked Up"       },
         "Stamped DR":  { from: ["New Order","Awaiting Pickup","Picked Up","Delivered"],                    to: "Waiting to Sail" },
-        "Draft":       { from: ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail"],  to: "Sailed"          },
+        "Draft":       { from: ["New Order","Awaiting Pickup","Picked Up","Delivered","Waiting to Sail","Arrived"], to: "Sailed" },
       };
       const autoStatus = STATUS_FLOW[label];
       if (autoStatus && (autoStatus.from.includes(order.status) || autoStatus.from.length === 0)) {
@@ -942,18 +942,20 @@ router.post(
       }
 
       // ── When Draft is uploaded → auto-lookup schedule to populate sail/arrival dates ──
-      if (label === "Draft" && order.vessel) {
+      // The Draft BL is the authoritative confirmation of what it actually shipped
+      // on, so this overwrites cutoff/sail/arrival/voyage rather than only filling
+      // blanks — a stale pre-Draft guess should never be left standing.
+      if (label === "Draft" && order.vessel && order.pol && order.pod) {
         try {
-          const ScheduleRow = require("../models/Schedule");
-          const vesselRe = new RegExp(order.vessel.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
-          const schedRow = await ScheduleRow.findOne({ vessel: vesselRe }).sort({ updatedAt: -1 }).lean();
-          if (schedRow) {
-            if (schedRow.sailDate    && !order.sailDate)    order.sailDate    = schedRow.sailDate;
-            if (schedRow.arrivalDate && !order.arrivalDate) order.arrivalDate = schedRow.arrivalDate;
-            if (schedRow.cutoffDate  && !order.cutoffDate)  order.cutoffDate  = schedRow.cutoffDate;
-            if (schedRow.voyage      && !order.voyage)      order.voyage      = schedRow.voyage;
+          const { lookupSchedule } = require("./scheduleRoutes");
+          const s = await lookupSchedule({ voyageName: order.voyage || "", vessel: order.vessel, pol: order.pol, pod: order.pod });
+          if (s.found) {
+            if (!order.voyage) order.voyage = s.voyage;
+            order.cutoffDate  = s.cutoffDate;
+            order.sailDate    = s.sailDate;
+            order.arrivalDate = s.arrivalDate;
             addTimeline(order, "Schedule Populated",
-              `Auto-filled from schedule on Draft upload — Sail: ${schedRow.sailDate}, Arrival: ${schedRow.arrivalDate}`);
+              `Auto-filled from schedule on Draft upload — Sail: ${s.sailDate}, Arrival: ${s.arrivalDate}`);
           }
         } catch (schedErr) {
           console.warn("[Draft upload] schedule lookup failed:", schedErr.message);
