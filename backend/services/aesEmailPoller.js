@@ -113,7 +113,12 @@ async function pollAesEmails() {
           order.timeline.push({ action: "AES Rejected", details: `${order.aesFiling.srn}: ${order.aesFiling.lastError}`, createdAt: new Date() });
           changed = true;
         }
-        if (itn && notes) {
+        // Same email stays in the 21-day search window and gets re-scanned every
+        // cycle — without this check it re-pushes an identical timeline entry
+        // every 10 minutes for the email's whole lifetime in that window.
+        const alreadyLogged = itn && notes &&
+          (order.timeline || []).some(t => t.action === "AES Notes" && t.details === notes);
+        if (itn && notes && !alreadyLogged) {
           // keep the latest verify/compliance notes visible even on an accepted filing
           order.timeline.push({ action: "AES Notes", details: notes, createdAt: new Date() });
           changed = true;
