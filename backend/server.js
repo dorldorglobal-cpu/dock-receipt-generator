@@ -258,7 +258,9 @@ app.get("/oauth2callback", async (req, res) => {
 });
 
 // ── Start Copart email poller ──────────────────────────────────────────────────
-if (process.env.GMAIL_OAUTH_REFRESH_TOKEN) {
+// Set COPART_POLLER=off in the environment to disable (e.g. while not using
+// the Email Pickups feature yet) without a code change.
+if (process.env.GMAIL_OAUTH_REFRESH_TOKEN && process.env.COPART_POLLER !== "off") {
   const { startPoller } = require("./services/copartPoller");
   startPoller();
 }
