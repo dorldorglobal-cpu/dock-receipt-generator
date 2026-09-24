@@ -145,11 +145,7 @@ const orderSchema = new mongoose.Schema(
       default: "Runner",
     },
 
-    fuelType: {
-      type: String,
-      enum: ["Gas", "Hybrid", "Electric", "Diesel", ""],
-      default: "",
-    },
+    fuelType: { type: String, default: "" },
 
     titleStatus: {
       type: String,
