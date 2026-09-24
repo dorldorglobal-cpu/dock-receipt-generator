@@ -1681,8 +1681,8 @@ export default function OrderDetails() {
       const res = await fetch(`${API}/api/send-email`, {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          to:      "info@tartanterminals.com",
-          cc:      "sbrzezenski@balterm.com, sholloway@tartanterminals.com",
+          to:      "dorldorglobal@gmail.com",
+          bcc:     "info@tartanterminals.com, sbrzezenski@balterm.com, sholloway@tartanterminals.com, aps.clerks@apsstevedoring.com",
           subject: tartanSubject,
           body:    tartanBody,
         }),
@@ -2329,11 +2329,23 @@ export default function OrderDetails() {
           const titleStat2 = (order.titleStatus || "").toLowerCase();
           const isSallaum2 = (order.shippingLine || "").toUpperCase().includes("SALLAUM");
           const isNoTitle2 = titleStat2 === "no title";
+          const isTartan2  = isSallaum2 && /baltimore/i.test(order.pod || order.deliveryLocation || "");
           if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift" || isNoTitle2)) {
             const booking2 = order.bookingNumber || "";
             const isForklift2 = cond2 === "forklift";
             const isNonrunner2 = cond2 === "nonrunner";
-            if ((isForklift2 || isNonrunner2) && isNoTitle2) {
+            if (isNoTitle2 && isTartan2) {
+              // Baltimore no-title → direct to port via BCC
+              setTartanSubject(`NO TITLE - ${vin.slice(-6)}`);
+              setTartanBody(`Please allow the driver to drop off the ${ymm} VIN: ${vin}\nwithout the title. \nWe acknowledge the driver is responsible for the $75.00 fee.\n\n--\nRegards,\n\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`);
+              setTartanNoTitle(true);
+              if (isForklift2 || isNonrunner2) {
+                const condLabel2 = isForklift2 ? "Forklift" : "Nonrunner";
+                setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)} ${condLabel2.toUpperCase()}`);
+                setSallaumNotifyBody(`Please update to ${condLabel2}.`);
+                setSallaumNotify(true);
+              }
+            } else if ((isForklift2 || isNonrunner2) && isNoTitle2) {
               // Both — open condition modal first, queue no-title after
               const condLabel2 = isForklift2 ? "Forklift" : "Nonrunner";
               setSallaumNotifySubject(`${booking2} ${ymm} ${vin.slice(-6)} ${condLabel2.toUpperCase()}`);
