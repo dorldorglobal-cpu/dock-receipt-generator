@@ -1560,7 +1560,7 @@ export default function OrderDetails() {
     const isSallaum  = (order.shippingLine || payload.shippingLine || "").toUpperCase().includes("SALLAUM");
     const isNoTitle  = titleStat === "no title";
     // Baltimore/Tartan: Sallaum orders whose POD or delivery contains "baltimore"
-    const isTartan   = isSallaum && /baltimore/i.test(order.pod || order.deliveryLocation || "");
+    const isTartan   = isSallaum && /baltimore/i.test(`${order.pol || ""} ${order.deliveryLocation || ""}`);
     const needsNotify = isSallaum && (condition === "nonrunner" || condition === "forklift" || isNoTitle);
     if (needsNotify) {
       const booking = payload.bookingNumber || order.bookingNumber || "";
@@ -2329,7 +2329,7 @@ export default function OrderDetails() {
           const titleStat2 = (order.titleStatus || "").toLowerCase();
           const isSallaum2 = (order.shippingLine || "").toUpperCase().includes("SALLAUM");
           const isNoTitle2 = titleStat2 === "no title";
-          const isTartan2  = isSallaum2 && /baltimore/i.test(order.pod || order.deliveryLocation || "");
+          const isTartan2  = isSallaum2 && /baltimore/i.test(`${order.pol || ""} ${order.deliveryLocation || ""}`);
           if (isSallaum2 && (cond2 === "nonrunner" || cond2 === "forklift" || isNoTitle2)) {
             const booking2 = order.bookingNumber || "";
             const isForklift2 = cond2 === "forklift";
