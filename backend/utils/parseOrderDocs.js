@@ -1521,7 +1521,11 @@ async function parseBuyerReceipt(filePath) {
     year  = clean(cvl[1]);
     make  = clean(cvl[2]);
     // Strip trailing color words or junk from fallback match
-    model = clean(cvl[3]).replace(/\s+(BLACK|WHITE|SILVER|RED|BLUE|GREEN|GREY|GRAY|BROWN|YELLOW|ORANGE|GOLD|BURGUNDY|PURPLE|TAN|MAROON|BEIGE|CHAMPAGNE|PHY|ROW|KEYS?|ITEM|LOT)\b.*/i, "").replace(/\s+/g, " ").trim();
+    model = clean(cvl[3])
+      .replace(/\s+(BLACK|WHITE|SILVER|RED|BLUE|GREEN|GREY|GRAY|BROWN|YELLOW|ORANGE|GOLD|BURGUNDY|PURPLE|TAN|MAROON|BEIGE|CHAMPAGNE|PHY|ROW|KEYS?|ITEM|LOT)\b.*/i, "")
+      .replace(/\b(HYBRID|PLUG.?IN|PHEV|HEV|ELECTRIC|BEV|EV|DIESEL|TDI|HDI)\b/gi, "")
+      .replace(/\b(EXL|EX-L|EX|LX|SE|LE|XLE|XSE|XLT|SXT|GT|SV|SR|TRD|LIMITED|SPORT|PREMIUM|PLUS|ULTRA|AWD|FWD|4WD|4X4|2WD)\b/gi, "")
+      .replace(/\s{2,}/g, " ").trim();
   }
 
   return {
@@ -1532,6 +1536,7 @@ async function parseBuyerReceipt(filePath) {
     year,
     make,
     model,
+    fuelType: vehicle.fuelType || "",
     lotNumber,
     buyerNumber,
     pickupLocation,

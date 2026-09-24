@@ -3110,7 +3110,7 @@ export default function OrderDetails() {
                               if (data.pickupState)      updates.pickupState     = data.pickupState;
                               if (data.pickupZip)        updates.pickupZip       = data.pickupZip;
                               if (data.buyerName)        updates.buyerName       = data.buyerName;
-                              if (data.fuelType && !order.fuelType) updates.fuelType = data.fuelType;
+                              if (data.fuelType) updates.fuelType = data.fuelType;
                               if (!Object.keys(updates).length) { setMessage("✅ Nothing new to update — order already up to date."); return; }
                               await fetch(`${API}/api/orders/${order._id}`, {
                                 method:"PUT", headers:{"Content-Type":"application/json"},
