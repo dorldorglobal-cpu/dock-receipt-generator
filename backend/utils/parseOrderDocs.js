@@ -1029,10 +1029,12 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
   if (!make)  make  = vehicle.make  || "";
   if (!model) model = vehicle.model || "";
 
-  // Strip any residual Color / Mileage that may have crept into the model string
+  // Strip any residual Color / Mileage, fuel type keywords, and trim levels from model string
   const cleanModel = model
     .replace(new RegExp(`\\s+(?:${COLORS})\\b.*`, 'i'), "")
-    .trim();
+    .replace(/\b(HYBRID|PLUG.?IN|PHEV|HEV|ELECTRIC|BEV|EV|DIESEL|TDI|HDI)\b/gi, "")
+    .replace(/\b(EXL|EX-L|EX|LX|SE|LE|XLE|XSE|XLT|SXT|GT|SV|SR|TRD|LIMITED|SPORT|PREMIUM|PLUS|ULTRA|AWD|FWD|4WD|4X4|2WD)\b/gi, "")
+    .replace(/\s{2,}/g, " ").trim();
 
   // ── Phone / email ──────────────────────────────────────────────────────
   const { phone, email } = extractPhoneEmail(text);
@@ -1050,6 +1052,7 @@ function parseIAAReceipt(text, lines, vin, vehicle) {
     year,
     make,
     model: cleanModel,
+    fuelType: vehicle.fuelType || "",
     color,
     lotNumber,
     buyerNumber,
