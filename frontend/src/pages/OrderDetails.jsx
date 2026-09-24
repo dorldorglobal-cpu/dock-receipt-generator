@@ -5716,8 +5716,7 @@ export default function OrderDetails() {
           <div style={{ background:"var(--bg-panel)", border:"1px solid #60a5fa", borderRadius:12, padding:28, width:500, maxWidth:"95vw" }}>
             <h3 style={{ margin:"0 0 4px", color:"#60a5fa" }}>⚓ Tartan Terminals — No Title Email</h3>
             <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
-              To: <strong style={{color:"var(--text-primary)"}}>info@tartanterminals.com</strong>
-              &nbsp;· CC: <strong style={{color:"var(--text-primary)"}}>sbrzezenski@balterm.com, sholloway@tartanterminals.com</strong>
+              BCC: <strong style={{color:"var(--text-primary)"}}>info@tartanterminals.com, sbrzezenski@balterm.com, sholloway@tartanterminals.com, aps.clerks@apsstevedoring.com</strong>
             </p>
             <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
               Subject
