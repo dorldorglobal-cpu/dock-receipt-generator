@@ -665,12 +665,15 @@ export default function Containers() {
   const applyParsedBL = () => {
     if (!parsedBL) return;
     const updates = {};
+    // BL data is authoritative — overwrite whatever is already in the form
     if (parsedBL.bookingNumber)   updates.bookingNumber   = parsedBL.bookingNumber;
     if (parsedBL.containerNumber) updates.containerNumber = parsedBL.containerNumber;
     if (parsedBL.sealNumber)      updates.sealNumber      = parsedBL.sealNumber;
     if (parsedBL.vessel)          updates.vessel          = parsedBL.vessel;
     if (parsedBL.pol)             updates.pol             = parsedBL.pol;
     if (parsedBL.pod)             updates.pod             = parsedBL.pod;
+    if (parsedBL.shippingLine)    updates.shippingLine    = parsedBL.shippingLine;
+    if (parsedBL.arrivalDate)     updates.arrivalDate     = parsedBL.arrivalDate;
     setEditForm(f => ({ ...f, ...updates }));
     setParsedBL(null);
     flash("✅ Fields updated from BL — save to confirm");

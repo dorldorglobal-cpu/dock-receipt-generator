@@ -1148,14 +1148,24 @@ function parseBLText(text, filename = "") {
   const vins = [...new Set((t.match(/\bVIN[:\s]*([A-HJ-NPR-Z0-9]{17})\b/gi) || [])
     .map(v => v.replace(/VIN[:\s]*/i, "").trim()))];
 
+  // Infer shipping line from booking number
+  const bn = clean(bookingNumber, 30);
+  let shippingLine = "";
+  if      (/^NYC/i.test(bn))              shippingLine = "ARKAS";
+  else if (/^233/.test(bn))               shippingLine = "OOCL";
+  else if (/^(NAM|CMAU)/i.test(bn))       shippingLine = "CMA CGM";
+  else if (/^27[24]/.test(bn))            shippingLine = "MAERSK";
+  else if (/^(HLCU|HLCB)/i.test(bn))      shippingLine = "HAPAG LLOYD";
+
   return {
     containerNumber: clean(containerNumber, 20),
     sealNumber:      clean(sealNumber, 20),
-    bookingNumber:   clean(bookingNumber, 30),
+    bookingNumber:   bn,
     vessel:          clean(vesselFull, 60),
     pol:             clean(pol, 40),
     pod:             clean(pod, 40),
     aesItn:          clean(aesItn, 20),
+    shippingLine,
     vins,
   };
 }
