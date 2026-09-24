@@ -1572,7 +1572,7 @@ export default function OrderDetails() {
       if (isNoTitle && isTartan) {
         // Baltimore/Tartan no-title email
         setTartanSubject(`NO TITLE - ${vin.slice(-6)}`);
-        setTartanBody(`Please allow the driver to drop off the ${ymm} ${vin}\nwithout the title. \nWe acknowledge the driver is responsible for the $75.00 fee.\n\n--\nRegards,\n\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`);
+        setTartanBody(`Please allow the driver to drop off the ${ymm} ${vin}\nwithout the title. \nWe acknowledge the driver is responsible for the fee.\n\n--\nRegards,\n\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`);
         setTartanNoTitle(true);
         if (isForklift || isNonrunner) {
           const condLabel = isForklift ? "Forklift" : "Nonrunner";
@@ -2337,7 +2337,7 @@ export default function OrderDetails() {
             if (isNoTitle2 && isTartan2) {
               // Baltimore no-title → direct to port via BCC
               setTartanSubject(`NO TITLE - ${vin.slice(-6)}`);
-              setTartanBody(`Please allow the driver to drop off the ${ymm} VIN: ${vin}\nwithout the title. \nWe acknowledge the driver is responsible for the $75.00 fee.\n\n--\nRegards,\n\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`);
+              setTartanBody(`Please allow the driver to drop off the ${ymm} VIN: ${vin}\nwithout the title. \nWe acknowledge the driver is responsible for the fee.\n\n--\nRegards,\n\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`);
               setTartanNoTitle(true);
               if (isForklift2 || isNonrunner2) {
                 const condLabel2 = isForklift2 ? "Forklift" : "Nonrunner";
