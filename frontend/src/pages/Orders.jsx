@@ -293,10 +293,10 @@ export default function Orders() {
                   <div style={{ color: "var(--text-primary)", display:"flex", alignItems:"center", gap:5 }}>
                     {o.year} {o.make} {o.model}
                     {o.fuelType === "Electric" && (
-                      <span title="Electric" style={{ fontSize:12, padding:"1px 5px", borderRadius:5, background:"rgba(52,211,153,0.15)", color:"#34d399", border:"1px solid rgba(52,211,153,0.3)", fontWeight:700 }}>⚡ EV</span>
+                      <span style={{ fontSize:11, padding:"1px 6px", borderRadius:5, background:"rgba(52,211,153,0.15)", color:"#34d399", border:"1px solid rgba(52,211,153,0.3)", fontWeight:700 }}>⚡ Electric</span>
                     )}
                     {o.fuelType === "Hybrid" && (
-                      <span title="Hybrid" style={{ fontSize:12, padding:"1px 5px", borderRadius:5, background:"rgba(251,191,36,0.15)", color:"#fbbf24", border:"1px solid rgba(251,191,36,0.3)", fontWeight:700 }}>🔋 HYB</span>
+                      <span style={{ fontSize:11, padding:"1px 6px", borderRadius:5, background:"rgba(251,191,36,0.15)", color:"#fbbf24", border:"1px solid rgba(251,191,36,0.3)", fontWeight:700 }}>🔋 Hybrid</span>
                     )}
                   </div>
                   <small style={{ color: "var(--text-primary)", opacity: 0.7 }}>{o.vin}</small>
