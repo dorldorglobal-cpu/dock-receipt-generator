@@ -47,6 +47,7 @@ export default function Orders() {
   const [refSort, setRefSort]         = useState("desc"); // "desc" = newest first
   const [updatingStatus, setUpdatingStatus] = useState(null); // orderId being updated
   const [dispatchUploading, setDispatchUploading] = useState(null); // orderId being parsed
+  const [fuelFilter, setFuelFilter] = useState("");
   const navigate = useNavigate();
 
   const handleDispatchUpload = async (file, order) => {
@@ -113,7 +114,8 @@ export default function Orders() {
       : o.status === activeTab;
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
     const matchType    = typeFilter === "all" || (o.requestType || "").toLowerCase() === typeFilter.toLowerCase();
-    return matchSearch && matchTab && matchSource && matchType;
+    const matchFuel    = !fuelFilter || (o.fuelType || "") === fuelFilter;
+    return matchSearch && matchTab && matchSource && matchType && matchFuel;
   }).sort((a, b) => {
     const n = v => Number(String(v.refNumber || "0").replace(/\D/g, "")) || 0;
     return refSort === "asc" ? n(a) - n(b) : n(b) - n(a);
@@ -204,6 +206,16 @@ export default function Orders() {
           <option value="USA OFFICE">🇺🇸 USA Office</option>
           <option value="GHANA OFFICE">🇬🇭 Ghana Office</option>
         </select>
+
+        <select value={fuelFilter} onChange={e => setFuelFilter(e.target.value)}
+          style={{ padding:"6px 10px", borderRadius:6, border:"1px solid var(--border)",
+            background:"var(--bg-input)", color:"var(--text-primary)", fontSize:13 }}>
+          <option value="">All Fuel Types</option>
+          <option value="Electric">⚡ Electric</option>
+          <option value="Hybrid">🔋 Hybrid</option>
+          <option value="Gas">Gas</option>
+          <option value="Diesel">Diesel</option>
+        </select>
       </div>
 
       {/* Table */}
@@ -278,7 +290,15 @@ export default function Orders() {
                   {o.requestDate ? new Date(o.requestDate).toLocaleDateString("en-US", { month:"numeric", day:"numeric", year:"numeric" }) : "—"}
                 </td>
                 <td>
-                  <div style={{ color: "var(--text-primary)" }}>{o.year} {o.make} {o.model}</div>
+                  <div style={{ color: "var(--text-primary)", display:"flex", alignItems:"center", gap:5 }}>
+                    {o.year} {o.make} {o.model}
+                    {o.fuelType === "Electric" && (
+                      <span title="Electric" style={{ fontSize:12, padding:"1px 5px", borderRadius:5, background:"rgba(52,211,153,0.15)", color:"#34d399", border:"1px solid rgba(52,211,153,0.3)", fontWeight:700 }}>⚡ EV</span>
+                    )}
+                    {o.fuelType === "Hybrid" && (
+                      <span title="Hybrid" style={{ fontSize:12, padding:"1px 5px", borderRadius:5, background:"rgba(251,191,36,0.15)", color:"#fbbf24", border:"1px solid rgba(251,191,36,0.3)", fontWeight:700 }}>🔋 HYB</span>
+                    )}
+                  </div>
                   <small style={{ color: "var(--text-primary)", opacity: 0.7 }}>{o.vin}</small>
                 </td>
                 <td style={{ fontSize: 11, color: "var(--text-muted)" }}>

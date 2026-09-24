@@ -541,7 +541,7 @@ const ORDER_LIST_SELECT =
   "year make model vin color requestType dispatchMethod " +
   "status titleStatus source requestDate " +
   "pickupLocation pickupCity pol pod vessel voyage shippingLine bookingNumber " +
-  "lotNumber condition " +
+  "lotNumber condition fuelType " +
   "consigneeName consigneeAddress consigneeCity consigneeCountry " +
   "charges holds createdAt updatedAt";
 

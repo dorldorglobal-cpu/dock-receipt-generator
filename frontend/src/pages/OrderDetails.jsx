@@ -1318,6 +1318,7 @@ export default function OrderDetails() {
       lotNumber:       order.lotNumber       || "",
       pin:             order.pin             || "",
       condition:       order.condition       || "Runner",
+      fuelType:        order.fuelType        || "",
       titleStatus:     order.titleStatus     || "Pending",
       pickupLocation:  order.pickupLocation  || "",
       deliveryLocation:order.deliveryLocation|| "",
@@ -3099,13 +3100,20 @@ export default function OrderDetails() {
                               if (data.pickupState)      updates.pickupState     = data.pickupState;
                               if (data.pickupZip)        updates.pickupZip       = data.pickupZip;
                               if (data.buyerName)        updates.buyerName       = data.buyerName;
+                              if (data.fuelType && !order.fuelType) updates.fuelType = data.fuelType;
                               if (!Object.keys(updates).length) { setMessage("✅ Nothing new to update — order already up to date."); return; }
                               await fetch(`${API}/api/orders/${order._id}`, {
                                 method:"PUT", headers:{"Content-Type":"application/json"},
                                 body: JSON.stringify(updates),
                               });
                               await fetchOrder();
-                              setMessage(`✅ Reparsed — updated: ${Object.keys(updates).join(", ")}`);
+                              const isHybridElectric = (updates.fuelType === "Hybrid" || updates.fuelType === "Electric");
+                              const isRoro = (order.requestType || "").toUpperCase() === "RORO";
+                              if (isHybridElectric && isRoro) {
+                                setMessage(`⚠ ${updates.fuelType} detected — this unit cannot go RORO! Change to Container.`);
+                              } else {
+                                setMessage(`✅ Reparsed — updated: ${Object.keys(updates).join(", ")}`);
+                              }
                             } catch (err) {
                               setMessage("❌ Reparse failed: " + err.message);
                             }
@@ -4307,6 +4315,25 @@ export default function OrderDetails() {
                   <option>No Title</option>
                 </select>
               </label>
+            </div>
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                Fuel Type
+                <select value={editForm.fuelType||""}
+                  onChange={e=>setEditForm(f=>({...f,fuelType:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4 }}>
+                  <option value="">— Unknown —</option>
+                  <option>Gas</option>
+                  <option>Diesel</option>
+                  <option>Hybrid</option>
+                  <option>Electric</option>
+                </select>
+              </label>
+              {(editForm.fuelType === "Hybrid" || editForm.fuelType === "Electric") && (editForm.requestType||"").toUpperCase() === "RORO" && (
+                <div style={{ marginTop:6, padding:"8px 12px", borderRadius:7, background:"rgba(239,68,68,0.12)", border:"1px solid rgba(239,68,68,0.4)", color:"#fca5a5", fontSize:12, fontWeight:600 }}>
+                  ⚠ {editForm.fuelType} units cannot go RORO — must be containerized.
+                </div>
+              )}
             </div>
 
             {/* Locations */}

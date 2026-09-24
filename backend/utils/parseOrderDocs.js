@@ -262,7 +262,20 @@ function extractVehicleData(text) {
     }
   }
 
-  return { vin, weightKgs, value, year, make, model };
+  // Fuel type from model name or dedicated field
+  const upper = text.toUpperCase();
+  let fuelType = "";
+  if (/\b(ELECTRIC|FULL.?ELECTRIC|EV\b|BEV\b|BATTERY.?ELECTRIC)\b/.test(upper)) fuelType = "Electric";
+  else if (/\b(HYBRID|HEV\b|PHEV\b|PLUG.?IN)\b/.test(upper)) fuelType = "Hybrid";
+  else if (/\b(DIESEL|TDI\b|HDI\b)\b/.test(upper)) fuelType = "Diesel";
+  // Also check model name itself
+  const modelUp = (model || "").toUpperCase();
+  if (!fuelType) {
+    if (/HYBRID|HEV|PHEV/.test(modelUp)) fuelType = "Hybrid";
+    else if (/ELECTRIC|EV\b|BEV/.test(modelUp)) fuelType = "Electric";
+  }
+
+  return { vin, weightKgs, value, year, make, model, fuelType };
 }
 
 function findWeight(text) {
