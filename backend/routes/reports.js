@@ -22,33 +22,39 @@ const dateQ = (from, to, field) => {
 router.get("/income-by-customer", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const [orders, invoices] = await Promise.all([
+    const [orders, allInvoices] = await Promise.all([
       Order.find(dateQ(from, to, "createdAt"))
-        .select("refNumber customerName year make model vin pod status createdAt charges")
+        .select("refNumber customerName year make model vin pod status createdAt")
         .sort({ createdAt: -1 }).lean(),
-      Invoice.find({ status: "paid" }).select("orderId total").lean(),
+      Invoice.find().select("orderId total status").lean(),
     ]);
 
-    const paidByOrder = new Map();
-    for (const inv of invoices) {
+    // bucket invoices by orderId
+    const billedByOrder = new Map();
+    const paidByOrder   = new Map();
+    for (const inv of allInvoices) {
       const oid = String(inv.orderId);
-      paidByOrder.set(oid, (paidByOrder.get(oid) || 0) + (inv.total || 0));
+      billedByOrder.set(oid, (billedByOrder.get(oid) || 0) + (inv.total || 0));
+      if (inv.status === "paid") {
+        paidByOrder.set(oid, (paidByOrder.get(oid) || 0) + (inv.total || 0));
+      }
     }
 
     const map = {};
     for (const o of orders) {
-      const key = (o.customerName || "—").trim();
-      const amt = orderTotal(o);
-      const paid = paidByOrder.get(String(o._id)) || 0;
+      const key    = (o.customerName || "—").trim();
+      const oid    = String(o._id);
+      const billed = billedByOrder.get(oid) || 0;
+      const paid   = paidByOrder.get(oid)   || 0;
       if (!map[key]) map[key] = { customer: key, orders: 0, billed: 0, collected: 0, outstanding: 0, items: [] };
       map[key].orders++;
-      map[key].billed += amt;
-      map[key].collected += paid;
-      if (amt > paid) map[key].outstanding += (amt - paid);
+      map[key].billed      += billed;
+      map[key].collected   += paid;
+      map[key].outstanding += Math.max(0, billed - paid);
       map[key].items.push({
         _id: o._id, refNumber: o.refNumber, date: o.createdAt, status: o.status,
         vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
-        vin: o.vin || "", pod: o.pod || "", amount: amt, collected: paid,
+        vin: o.vin || "", pod: o.pod || "", amount: billed, collected: paid,
       });
     }
     const rows   = Object.values(map).sort((a, b) => b.billed - a.billed);
