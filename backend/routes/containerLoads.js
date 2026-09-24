@@ -158,11 +158,16 @@ router.patch("/:id", express.json(), async (req, res) => {
     await load.save();
     await upsertConsignee(load);
 
-    if (req.body.bookingNumber) {
-      await Order.updateMany(
-        { _id: { $in: load.orderIds } },
-        { $set: { bookingNumber: req.body.bookingNumber, ...(req.body.vessel ? { vessel: req.body.vessel } : {}) } }
-      );
+    if (req.body.bookingNumber || req.body.shippingLine || req.body.pol || req.body.pod) {
+      const orderFields = {};
+      if (req.body.bookingNumber) orderFields.bookingNumber = req.body.bookingNumber;
+      if (req.body.vessel)        orderFields.vessel        = req.body.vessel;
+      if (req.body.shippingLine)  orderFields.shippingLine  = req.body.shippingLine;
+      if (req.body.pol)           orderFields.pol           = req.body.pol;
+      if (req.body.pod)           orderFields.pod           = req.body.pod;
+      if (Object.keys(orderFields).length) {
+        await Order.updateMany({ _id: { $in: load.orderIds } }, { $set: orderFields });
+      }
     }
 
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
