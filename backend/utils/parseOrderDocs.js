@@ -267,12 +267,17 @@ function extractVehicleData(text) {
   if (/\b(ELECTRIC|FULL.?ELECTRIC|EV\b|BEV\b|BATTERY.?ELECTRIC)\b/.test(upper)) fuelType = "Electric";
   else if (/\b(HYBRID|HEV\b|PHEV\b|PLUG.?IN)\b/.test(upper)) fuelType = "Hybrid";
   else if (/\b(DIESEL|TDI\b|HDI\b)\b/.test(upper)) fuelType = "Diesel";
-  // Also check model name itself
   const modelUp = (model || "").toUpperCase();
   if (!fuelType) {
     if (/HYBRID|HEV|PHEV/.test(modelUp)) fuelType = "Hybrid";
     else if (/ELECTRIC|EV\b|BEV/.test(modelUp)) fuelType = "Electric";
   }
+
+  // Strip fuel type keywords and trim levels from model name
+  model = model
+    .replace(/\b(HYBRID|PLUG.?IN|PHEV|HEV|ELECTRIC|BEV|EV|DIESEL|TDI|HDI)\b/gi, "")
+    .replace(/\b(EXL|EX-L|EX|LX|SE|LE|XLE|XSE|XLT|SXT|GT|SV|SR|TRD|LIMITED|SPORT|PREMIUM|PLUS|ULTRA|AWD|FWD|4WD|4X4|2WD)\b/gi, "")
+    .replace(/\s{2,}/g, " ").trim();
 
   return { vin, weightKgs, value, year, make, model, fuelType };
 }
