@@ -843,19 +843,29 @@ app.post("/generate-pdf", async (req, res) => {
       return `${A} ${B}`;
     }
 
+    // Left-column box is roughly x=25 to x=275 (~250pt wide)
+    const CONSIGNEE_MAX_W = 245;
+    function shrinkText(value, x, topY, maxW) {
+      const str = safeVal(value);
+      if (!str) return;
+      let sz = 8.5;
+      while (sz > 5.0 && font.widthOfTextAtSize(str, sz) > maxW) sz -= 0.25;
+      text(str, x, topY, sz);
+    }
+
     text(safeVal(d.exporterName), 25, 62);
-    text(safeVal(d.exporterAddress), 25, 72);
-    text(safeLine(d.exporterCity, safePair(d.exporterState, d.exporterZip)), 25, 82);
+    shrinkText(d.exporterAddress, 25, 72, CONSIGNEE_MAX_W);
+    shrinkText(safeLine(d.exporterCity, safePair(d.exporterState, d.exporterZip)), 25, 82, CONSIGNEE_MAX_W);
     text(safeVal(d.exporterCountry), 25, 92);
 
     text(safeVal(d.bookingNumber), 305, 69);
     text(safeVal(d.referenceNumber), 510, 69);
     text(safeVal(d.cutoffDate), 510, 92);
 
-    text(safeVal(d.consigneeName), 25, 132);
-    text(safeVal(d.consigneeAddress), 25, 142);
-    text(safeVal(d.consigneeCity), 25, 152);
-    text(safeVal(d.consigneeCountry), 25, 162);
+    shrinkText(d.consigneeName,    25, 132, CONSIGNEE_MAX_W);
+    shrinkText(d.consigneeAddress, 25, 142, CONSIGNEE_MAX_W);
+    shrinkText(d.consigneeCity,    25, 152, CONSIGNEE_MAX_W);
+    shrinkText(d.consigneeCountry, 25, 162, CONSIGNEE_MAX_W);
 
     text(safeVal(d.sailDate), 510, 112);
     text(safeVal(d.arrivalDate), 510, 142);
