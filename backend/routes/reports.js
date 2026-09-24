@@ -22,20 +22,33 @@ const dateQ = (from, to, field) => {
 router.get("/income-by-customer", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const orders = await Order.find(dateQ(from, to, "createdAt")).sort({ createdAt: -1 }).lean();
+    const [orders, invoices] = await Promise.all([
+      Order.find(dateQ(from, to, "createdAt"))
+        .select("refNumber customerName year make model vin pod status createdAt charges")
+        .sort({ createdAt: -1 }).lean(),
+      Invoice.find({ status: "paid" }).select("orderId total").lean(),
+    ]);
+
+    const paidByOrder = new Map();
+    for (const inv of invoices) {
+      const oid = String(inv.orderId);
+      paidByOrder.set(oid, (paidByOrder.get(oid) || 0) + (inv.total || 0));
+    }
+
     const map = {};
     for (const o of orders) {
       const key = (o.customerName || "—").trim();
       const amt = orderTotal(o);
+      const paid = paidByOrder.get(String(o._id)) || 0;
       if (!map[key]) map[key] = { customer: key, orders: 0, billed: 0, collected: 0, outstanding: 0, items: [] };
       map[key].orders++;
       map[key].billed += amt;
-      if (o.status === "Completed") map[key].collected += amt;
-      else map[key].outstanding += amt;
+      map[key].collected += paid;
+      if (amt > paid) map[key].outstanding += (amt - paid);
       map[key].items.push({
         _id: o._id, refNumber: o.refNumber, date: o.createdAt, status: o.status,
         vehicle: [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
-        vin: o.vin || "", pod: o.pod || "", amount: amt,
+        vin: o.vin || "", pod: o.pod || "", amount: amt, collected: paid,
       });
     }
     const rows   = Object.values(map).sort((a, b) => b.billed - a.billed);
@@ -51,7 +64,9 @@ router.get("/income-by-customer", async (req, res) => {
 router.get("/income-by-destination", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const orders = await Order.find(dateQ(from, to, "createdAt")).sort({ createdAt: -1 }).lean();
+    const orders = await Order.find(dateQ(from, to, "createdAt"))
+      .select("refNumber customerName year make model vin pod status createdAt charges")
+      .sort({ createdAt: -1 }).lean();
     const map = {};
     for (const o of orders) {
       const key = (o.pod || "Unknown").trim();
@@ -77,7 +92,9 @@ router.get("/income-by-destination", async (req, res) => {
 router.get("/income-by-route", async (req, res) => {
   try {
     const { from, to } = req.query;
-    const orders = await Order.find(dateQ(from, to, "createdAt")).sort({ createdAt: -1 }).lean();
+    const orders = await Order.find(dateQ(from, to, "createdAt"))
+      .select("refNumber customerName year make model vin pol pod status createdAt charges")
+      .sort({ createdAt: -1 }).lean();
     const map = {};
     for (const o of orders) {
       const pol = o.pol || "?", pod = o.pod || "?";
