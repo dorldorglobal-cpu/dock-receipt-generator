@@ -263,7 +263,6 @@ function extractVehicleData(text) {
   }
 
   // Fuel type from model name or dedicated field
-  const upper = text.toUpperCase();
   let fuelType = "";
   if (/\b(ELECTRIC|FULL.?ELECTRIC|EV\b|BEV\b|BATTERY.?ELECTRIC)\b/.test(upper)) fuelType = "Electric";
   else if (/\b(HYBRID|HEV\b|PHEV\b|PLUG.?IN)\b/.test(upper)) fuelType = "Hybrid";
