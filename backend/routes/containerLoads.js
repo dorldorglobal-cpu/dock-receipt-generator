@@ -153,18 +153,27 @@ router.patch("/:id", express.json(), async (req, res) => {
       load.loaderEmail = d.loaderEmail;
       load.loaderCc    = d.loaderCc;
     }
+    // Auto-infer shipping line from booking number if not already set
+    if (!load.shippingLine && load.bookingNumber) {
+      const bn = load.bookingNumber.trim();
+      if      (/^NYC/i.test(bn))                                           load.shippingLine = "ARKAS";
+      else if (/^233/.test(bn))                                            load.shippingLine = "OOCL";
+      else if (/^(NAM|CMAU)/i.test(bn))                                   load.shippingLine = "CMA CGM";
+      else if (/^(274096070|272951625)$/.test(bn) || /^27[24]/.test(bn))  load.shippingLine = "MAERSK";
+      else if (/^(HLCU|HLCB)/i.test(bn))                                  load.shippingLine = "HAPAG LLOYD";
+    }
 
 
     await load.save();
     await upsertConsignee(load);
 
-    if (req.body.bookingNumber || req.body.shippingLine || req.body.pol || req.body.pod) {
+    if (req.body.bookingNumber || req.body.shippingLine || req.body.pol || req.body.pod || load.shippingLine) {
       const orderFields = {};
-      if (req.body.bookingNumber) orderFields.bookingNumber = req.body.bookingNumber;
-      if (req.body.vessel)        orderFields.vessel        = req.body.vessel;
-      if (req.body.shippingLine)  orderFields.shippingLine  = req.body.shippingLine;
-      if (req.body.pol)           orderFields.pol           = req.body.pol;
-      if (req.body.pod)           orderFields.pod           = req.body.pod;
+      if (load.bookingNumber) orderFields.bookingNumber = load.bookingNumber;
+      if (load.vessel)        orderFields.vessel        = load.vessel;
+      if (load.shippingLine)  orderFields.shippingLine  = load.shippingLine;
+      if (load.pol)           orderFields.pol           = load.pol;
+      if (load.pod)           orderFields.pod           = load.pod;
       if (Object.keys(orderFields).length) {
         await Order.updateMany({ _id: { $in: load.orderIds } }, { $set: orderFields });
       }
