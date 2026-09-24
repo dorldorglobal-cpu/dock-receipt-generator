@@ -46,7 +46,27 @@ export default function Orders() {
   const [deleting, setDeleting]       = useState(false);
   const [refSort, setRefSort]         = useState("desc"); // "desc" = newest first
   const [updatingStatus, setUpdatingStatus] = useState(null); // orderId being updated
+  const [dispatchUploading, setDispatchUploading] = useState(null); // orderId being parsed
   const navigate = useNavigate();
+
+  const handleDispatchUpload = async (file, order) => {
+    if (!file) return;
+    setDispatchUploading(order._id);
+    try {
+      const fd = new FormData();
+      fd.append("invoices", file);
+      const res = await fetch(`${API}/api/expenses/parse-dispatch`, { method: "POST", body: fd });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Parse failed");
+      const rows = (data.rows || []).map(r => ({ ...r, orderRef: order.refNumber, orderId: order._id }));
+      sessionStorage.setItem("dispatchParseResult", JSON.stringify({ rows, orderRef: order.refNumber, orderId: order._id }));
+      navigate("/expenses?importDispatch=1");
+    } catch (e) {
+      alert("Dispatch parse failed: " + e.message);
+    } finally {
+      setDispatchUploading(null);
+    }
+  };
 
   useEffect(() => {
     fetch(`${API}/api/orders/auto-advance-arrived`, { method: "POST" }).catch(() => {});
@@ -304,6 +324,15 @@ export default function Orders() {
                     style={{ padding:"4px 10px", marginRight:5, borderRadius:6,
                       border:"1px solid var(--border)", background:"var(--bg-panel)",
                       color:"var(--text-secondary)", cursor:"pointer", fontSize:13 }}>✏️</button>
+                  <label title="Upload Dispatch Sheet"
+                    style={{ padding:"4px 10px", marginRight:5, borderRadius:6, cursor:"pointer", fontSize:13,
+                      border:"1px solid rgba(96,165,250,0.4)", background:"rgba(96,165,250,0.08)",
+                      color: dispatchUploading === o._id ? "#94a3b8" : "#60a5fa",
+                      display:"inline-block", pointerEvents: dispatchUploading === o._id ? "none" : "auto" }}>
+                    {dispatchUploading === o._id ? "⏳" : "🚛"}
+                    <input type="file" accept=".pdf" hidden
+                      onChange={e => { handleDispatchUpload(e.target.files[0], o); e.target.value = ""; }} />
+                  </label>
                   <button title="Delete" onClick={() => setDeleteTarget({ id: o._id, refNumber: o.refNumber })}
                     style={{ padding:"4px 10px", borderRadius:6,
                       border:"1px solid rgba(239,68,68,0.35)", background:"rgba(239,68,68,0.1)",
