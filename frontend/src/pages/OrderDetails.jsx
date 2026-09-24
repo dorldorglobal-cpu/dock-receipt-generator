@@ -2074,7 +2074,11 @@ export default function OrderDetails() {
           )}
           <h1 style={{ fontSize: 32, fontWeight: 800 }}>Order #{order.refNumber}</h1>
           <div style={{ display:"flex", alignItems:"center", gap:14, flexWrap:"wrap" }}>
-            <p style={{ color: "var(--text-primary)", fontWeight: 500, margin:0 }}>{order.year} {order.make} {order.model} — {order.vin}</p>
+            <p style={{ color: "var(--text-primary)", fontWeight: 500, margin:0, display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
+              {order.year} {order.make} {order.model} — {order.vin}
+              {order.fuelType === "Electric" && <span style={{ fontSize:11, padding:"2px 7px", borderRadius:5, background:"rgba(52,211,153,0.15)", color:"#34d399", border:"1px solid rgba(52,211,153,0.3)", fontWeight:700 }}>⚡ Electric</span>}
+              {order.fuelType === "Hybrid"   && <span style={{ fontSize:11, padding:"2px 7px", borderRadius:5, background:"rgba(251,191,36,0.15)", color:"#fbbf24", border:"1px solid rgba(251,191,36,0.3)", fontWeight:700 }}>🔋 Hybrid</span>}
+            </p>
             {(order.holds || []).filter(h => !h.resolvedAt).map(h => (
               <span key={h._id} title={h.note} style={{
                 display:"inline-flex", alignItems:"center", gap:6,
@@ -2479,7 +2483,11 @@ export default function OrderDetails() {
         }}>
           <span style={{ fontWeight: 700, color: "var(--accent)", fontSize: 13 }}>#{order.refNumber}</span>
           <span style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-secondary)" }}>{order.vin}</span>
-          <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)" }}>{[order.year, order.make, order.model].filter(Boolean).join(" ")}</span>
+          <span style={{ fontWeight: 600, fontSize: 13, color: "var(--text-primary)", display:"flex", alignItems:"center", gap:6 }}>
+            {[order.year, order.make, order.model].filter(Boolean).join(" ")}
+            {order.fuelType === "Electric" && <span style={{ fontSize:10, padding:"1px 5px", borderRadius:4, background:"rgba(52,211,153,0.15)", color:"#34d399", border:"1px solid rgba(52,211,153,0.3)", fontWeight:700 }}>⚡ EV</span>}
+            {order.fuelType === "Hybrid"   && <span style={{ fontSize:10, padding:"1px 5px", borderRadius:4, background:"rgba(251,191,36,0.15)", color:"#fbbf24", border:"1px solid rgba(251,191,36,0.3)", fontWeight:700 }}>🔋 HYB</span>}
+          </span>
           {order.customerName && <span style={{ fontSize: 12, color: "var(--text-muted)" }}>{order.customerName}</span>}
           {order.lotNumber && <span style={{ fontSize: 11, color: "var(--text-muted)" }}>LOT# {order.lotNumber}</span>}
           {order.requestType && <span style={{ fontSize: 11, fontWeight: 700, color: "var(--text-secondary)", background: "var(--bg-panel)", padding: "2px 8px", borderRadius: 6 }}>{order.requestType}</span>}
@@ -2748,8 +2756,10 @@ export default function OrderDetails() {
         {/* Vehicle */}
         <section className="form-section">
           <h2>Vehicle</h2>
-          <p style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700, color: "var(--text-primary)" }}>
+          <p style={{ margin: "0 0 6px", fontSize: 18, fontWeight: 700, color: "var(--text-primary)", display:"flex", alignItems:"center", gap:8, flexWrap:"wrap" }}>
             {[order.year, order.make, order.model].filter(Boolean).join(" ") || "—"}
+            {order.fuelType === "Electric" && <span style={{ fontSize:12, padding:"2px 8px", borderRadius:6, background:"rgba(52,211,153,0.15)", color:"#34d399", border:"1px solid rgba(52,211,153,0.35)", fontWeight:700 }}>⚡ Electric</span>}
+            {order.fuelType === "Hybrid"   && <span style={{ fontSize:12, padding:"2px 8px", borderRadius:6, background:"rgba(251,191,36,0.15)", color:"#fbbf24", border:"1px solid rgba(251,191,36,0.35)", fontWeight:700 }}>🔋 Hybrid</span>}
           </p>
           <p style={{ margin: "0 0 10px", fontFamily: "monospace", fontSize: 13,
             color: "var(--text-muted)", letterSpacing: "0.05em" }}>{order.vin || "—"}</p>
