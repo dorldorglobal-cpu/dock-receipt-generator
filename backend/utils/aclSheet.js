@@ -55,20 +55,24 @@ async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber
     });
     const rows = getRes.data.values || [];
 
+    // Normalize booking number for matching (handle stored w/ or w/o dash)
+    let bn = (bookingNumber || "").trim();
+    if (/^S3\d{8}$/.test(bn)) bn = "S3-" + bn.slice(2);
+
     // Find matching row (skip header row 1, so data rows are index 1+)
     let matchRowIndex = -1; // 0-based index in `rows`
     for (let i = HEADER_ROW; i < rows.length; i++) {
       const rowBooking = (rows[i][0] || "").trim();
       const rowRef     = (rows[i][6] || "").toString().trim();
-      if (bookingNumber && rowBooking === bookingNumber) { matchRowIndex = i; break; }
-      if (refNumber     && rowRef     === String(refNumber))  { matchRowIndex = i; break; }
+      if (bn        && rowBooking === bn)              { matchRowIndex = i; break; }
+      if (refNumber && rowRef === String(refNumber))   { matchRowIndex = i; break; }
     }
 
     const status = buildStatus(order || {});
     // A  B  C    D          E    F    G          H
     const vinLast6 = (vin || "").replace(/\s/g, "").slice(-6);
     const rowData = [
-      bookingNumber || "",
+      bn,
       "",                    // RELEASE TYPE — left for manual entry
       vinLast6,
       consignee || "",       // caller passes customerName here
