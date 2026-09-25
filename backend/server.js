@@ -1029,7 +1029,7 @@ app.get("/api/google-access-token", async (req, res) => {
 // POST /api/send-email  { to, subject, body, pdfBase64, pdfName }
 app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) => {
   try {
-    const { to, subject, body, pdfBase64, pdfName, cc, bcc } = req.body;
+    const { to, subject, body, pdfBase64, pdfName, cc, bcc, truckerEmail, truckerVendor } = req.body;
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
     const accessToken = await getGmailAccessToken();
@@ -1090,6 +1090,16 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
     if (!gmailResp.ok) throw new Error(result.error?.message || `Gmail API error ${gmailResp.status}`);
 
     console.log(`[Email] Sent to ${to}`);
+
+    // Save trucker email to vendor record when a DR is sent with a trucker address
+    if (truckerEmail && truckerVendor) {
+      const Vendor = require("./models/Vendor");
+      Vendor.findOneAndUpdate(
+        { name: { $regex: `^${truckerVendor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, email: "" },
+        { $set: { email: truckerEmail.trim().toLowerCase() } }
+      ).catch(e => console.warn("[Email] Could not save trucker email:", e.message));
+    }
+
     res.json({ success: true });
   } catch (err) {
     console.error("[Email] Error sending to", to, ":", err.message);

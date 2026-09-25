@@ -1646,6 +1646,8 @@ export default function OrderDetails() {
           body:    drSendBody,
           pdfBase64: b64,
           pdfName: drSendModal.pdfName,
+          truckerEmail:  truckerList[0] || "",
+          truckerVendor: order.dispatchCarrier || "",
         }),
       })];
 
