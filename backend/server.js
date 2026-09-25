@@ -38,6 +38,23 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 // ── Health check (used by keep-alive self-ping) ──
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
 
+// ── Admin Gmail read-auth URL (open — no token needed to start the OAuth flow) ──
+app.get("/api/admin/gmail-read-auth-url", (req, res) => {
+  const { google } = require("googleapis");
+  const client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    "https://dock-receipt-backend.onrender.com/oauth2callback"
+  );
+  const url = client.generateAuthUrl({
+    access_type: "offline",
+    prompt:      "consent",
+    state:       "purpose=read",
+    scope:       ["https://www.googleapis.com/auth/gmail.readonly"],
+  });
+  res.json({ url });
+});
+
 // ── Auth: login route is open; the guard protects everything else ────────────
 app.use("/api/auth", require("./routes/auth"));
 app.use(require("./middleware/requireAuth"));
