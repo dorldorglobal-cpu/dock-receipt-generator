@@ -332,6 +332,12 @@ router.post("/", uploadFields, async (req, res) => {
     enforceVendorCategory(data);
     const expense = await Expense.create(data);
     ensureVendor(data.vendor, data.category);
+
+    // When a Towing / Transport expense is created for an order, stamp the
+    // trucker name onto the order so it's visible without opening expenses.
+    if (data.category === "Towing / Transport" && data.vendor && resolvedOrderId) {
+      Order.findByIdAndUpdate(resolvedOrderId, { dispatchCarrier: data.vendor }).catch(() => {});
+    }
     res.status(201).json(expense);
   } catch (err) {
     console.error("Expense create error:", err);
@@ -411,6 +417,11 @@ router.put("/:id", uploadFields, async (req, res) => {
     );
     if (!updated) return res.status(404).json({ error: "Expense not found" });
     ensureVendor(update.vendor, update.category);
+
+    // Keep order's dispatchCarrier in sync when trucker name changes
+    if (update.category === "Towing / Transport" && update.vendor && linkedOrderId) {
+      Order.findByIdAndUpdate(linkedOrderId, { dispatchCarrier: update.vendor }).catch(() => {});
+    }
     res.json(updated);
   } catch (err) {
     console.error("Expense update error:", err);
