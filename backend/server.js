@@ -243,13 +243,16 @@ app.get("/oauth2callback", async (req, res) => {
       REDIRECT_URI
     );
     const { tokens } = await client.getToken(code);
-    console.log("=== NEW REFRESH TOKEN (copy to GMAIL_OAUTH_REFRESH_TOKEN) ===");
+    const state   = req.query.state || "";
+    const purpose = state.includes("purpose=read") ? "read" : "send";
+    const envKey  = purpose === "read" ? "GMAIL_READ_REFRESH_TOKEN" : "GMAIL_OAUTH_REFRESH_TOKEN";
+    console.log(`=== NEW REFRESH TOKEN — add as ${envKey} in Render ===`);
     console.log(tokens.refresh_token || "(no new refresh token — reuse existing)");
     console.log("=== END TOKEN ===");
     res.send(`
       <h2>✅ Authorization successful!</h2>
-      <p>Gmail access granted. Copy the refresh token from your Render logs and add it as <code>GMAIL_OAUTH_REFRESH_TOKEN</code> in Render environment variables.</p>
-      ${tokens.refresh_token ? `<p><strong>New refresh token (also shown in Render logs):</strong><br><code style="word-break:break-all">${tokens.refresh_token}</code></p>` : "<p>No new refresh token returned — your existing token may already work.</p>"}
+      <p>Gmail access granted. Copy the refresh token from your Render logs and add it as <code>${envKey}</code> in Render environment variables.</p>
+      ${tokens.refresh_token ? `<p><strong>New refresh token (also in Render logs):</strong><br><code style="word-break:break-all">${tokens.refresh_token}</code></p>` : "<p>No new refresh token returned — your existing token may already work.</p>"}
       <p>You can close this tab.</p>
     `);
   } catch (e) {
@@ -1023,6 +1026,34 @@ app.get("/api/google-access-token", async (req, res) => {
     res.json({ accessToken });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/admin/gmail-read-auth-url — get URL to authorize gmail.readonly ──
+app.get("/api/admin/gmail-read-auth-url", (req, res) => {
+  const { google } = require("googleapis");
+  const client = new google.auth.OAuth2(
+    process.env.GMAIL_CLIENT_ID,
+    process.env.GMAIL_CLIENT_SECRET,
+    "https://dock-receipt-backend.onrender.com/oauth2callback"
+  );
+  const url = client.generateAuthUrl({
+    access_type: "offline",
+    prompt:      "consent",
+    state:       "purpose=read",
+    scope:       ["https://www.googleapis.com/auth/gmail.readonly"],
+  });
+  res.json({ url });
+});
+
+// ── POST /api/admin/scan-trucker-emails — one-time Gmail scan ─────────────────
+app.post("/api/admin/scan-trucker-emails", express.json(), async (req, res) => {
+  try {
+    const { runTruckerEmailScan } = require("./utils/gmailTruckerScan");
+    const stats = await runTruckerEmailScan();
+    res.json(stats);
+  } catch (e) {
+    res.status(500).json({ error: e.message });
   }
 });
 

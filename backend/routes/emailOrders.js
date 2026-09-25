@@ -240,13 +240,13 @@ router.post("/cleanup", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── GET /api/gmail-auth — generate OAuth URL with Gmail scope ─────────────────
+// ── GET /api/email-orders/gmail-auth-url — generate OAuth URL with gmail.readonly ──
 router.get("/gmail-auth-url", (req, res) => {
   const url = oauth2Client.generateAuthUrl({
     access_type: "offline",
     prompt: "consent",
+    state: "purpose=read",
     scope: [
-      "https://www.googleapis.com/auth/drive",
       "https://www.googleapis.com/auth/gmail.readonly",
     ],
   });
