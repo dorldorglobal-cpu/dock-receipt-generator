@@ -275,10 +275,10 @@ router.post("/attach", async (req, res) => {
             const { lookupSchedule } = require("./scheduleRoutes");
             const s = await lookupSchedule({ voyageName: order.voyage || "", vessel: order.vessel, pol: order.pol, pod: order.pod });
             if (s.found) {
-              if (!order.voyage) order.voyage = s.voyage;
-              order.cutoffDate  = s.cutoffDate;
-              order.sailDate    = s.sailDate;
-              order.arrivalDate = s.arrivalDate;
+              if (!order.voyage)      order.voyage      = s.voyage;
+              if (!order.cutoffDate)  order.cutoffDate  = s.cutoffDate;
+              if (!order.sailDate)    order.sailDate    = s.sailDate;
+              if (!order.arrivalDate) order.arrivalDate = s.arrivalDate;
             }
           } catch (schErr) {
             console.warn("[BL attach] schedule lookup failed:", schErr.message);
