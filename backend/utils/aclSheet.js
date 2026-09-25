@@ -16,15 +16,18 @@ const HEADER_ROW = 1;         // row 1 is the header, data starts at row 2
 
 const sheets = google.sheets({ version: "v4", auth: oauth2Client });
 
-// Build the STATUS string: "SAILED GPO0826" style
+// Build the STATUS string: "SAILED GTE0926" style
+// Abbreviation: first letter of first word + first 2 letters of second word
+// e.g. "GRANDE TEMA" → GTE, "GRANDE PORTO" → GPO
 function buildStatus(order) {
   if (!order.vessel) return "SAILED";
-  // Abbreviate vessel: first 3 uppercase letters of each word, e.g. "Grande Porto" → "GPO"
-  const abbr = order.vessel
-    .split(/\s+/)
-    .map(w => w.replace(/[^A-Za-z]/g, "").slice(0, 1).toUpperCase())
-    .join("")
-    .slice(0, 3);
+  const words = order.vessel.trim().toUpperCase().split(/\s+/).filter(Boolean);
+  let abbr = "";
+  if (words.length >= 2) {
+    abbr = words[0].slice(0, 1) + words[1].slice(0, 2);
+  } else {
+    abbr = words[0].slice(0, 3);
+  }
   // Sail date as MMYY
   let mmyy = "";
   if (order.sailDate) {
@@ -63,11 +66,12 @@ async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber
 
     const status = buildStatus(order || {});
     // A  B  C    D          E    F    G          H
+    const vinLast6 = (vin || "").replace(/\s/g, "").slice(-6);
     const rowData = [
       bookingNumber || "",
       "",                    // RELEASE TYPE — left for manual entry
-      vin || "",
-      consignee || "",
+      vinLast6,
+      consignee || "",       // caller passes customerName here
       pol || "",
       pod || "",
       refNumber ? String(refNumber) : "",

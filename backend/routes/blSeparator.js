@@ -327,7 +327,7 @@ router.post("/attach", async (req, res) => {
         upsertAclRow({
           bookingNumber: bl.blNumber || "",
           vin:           bl.vin || order.vin || "",
-          consignee:     order.consigneeName || order.customerName || "",
+          consignee:     order.customerName || "",
           pol:           order.pol || "",
           pod:           order.pod || "",
           refNumber:     order.refNumber || "",
