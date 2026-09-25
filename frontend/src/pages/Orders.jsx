@@ -56,15 +56,15 @@ export default function Orders() {
     setDispatchUploading(order._id);
     try {
       const fd = new FormData();
-      fd.append("invoices", file);
-      const res = await fetch(`${API}/api/expenses/parse-dispatch`, { method: "POST", body: fd });
+      fd.append("file", file);
+      fd.append("label", "Dispatch");
+      const res = await fetch(`${API}/api/orders/${order._id}/upload-drive`, { method: "POST", body: fd });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error || "Parse failed");
-      const rows = (data.rows || []).map(r => ({ ...r, orderRef: order.refNumber, orderId: order._id }));
-      sessionStorage.setItem("dispatchParseResult", JSON.stringify({ rows, orderRef: order.refNumber, orderId: order._id }));
-      navigate("/expenses?importDispatch=1");
+      if (!res.ok) throw new Error(data.error || "Upload failed");
+      // Refresh the orders list so status change is visible
+      fetchOrders();
     } catch (e) {
-      alert("Dispatch parse failed: " + e.message);
+      alert("Dispatch upload failed: " + e.message);
     } finally {
       setDispatchUploading(null);
     }
