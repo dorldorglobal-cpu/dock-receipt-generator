@@ -349,13 +349,17 @@ export default function Orders() {
                     onDragOver={e => { e.preventDefault(); setDispatchDragOver(o._id); }}
                     onDragLeave={() => setDispatchDragOver(null)}
                     onDrop={e => { e.preventDefault(); setDispatchDragOver(null); const f = e.dataTransfer.files[0]; if (f) handleDispatchUpload(f, o); }}
-                    style={{ padding:"4px 10px", marginRight:5, borderRadius:6, cursor:"pointer", fontSize:13,
-                      border: dispatchDragOver === o._id ? "1px solid #60a5fa" : "1px solid rgba(96,165,250,0.4)",
-                      background: dispatchDragOver === o._id ? "rgba(96,165,250,0.2)" : "rgba(96,165,250,0.08)",
+                    style={{ padding:"6px 14px", marginRight:5, borderRadius:6, cursor:"pointer",
+                      border: dispatchDragOver === o._id ? "1px solid #60a5fa" : "1px dashed rgba(96,165,250,0.5)",
+                      background: dispatchDragOver === o._id ? "rgba(96,165,250,0.2)" : "rgba(96,165,250,0.06)",
                       color: dispatchUploading === o._id ? "#94a3b8" : "#60a5fa",
-                      display:"inline-block", pointerEvents: dispatchUploading === o._id ? "none" : "auto",
+                      display:"inline-flex", alignItems:"center", gap:5,
+                      pointerEvents: dispatchUploading === o._id ? "none" : "auto",
                       transition:"background 0.15s, border 0.15s" }}>
-                    {dispatchUploading === o._id ? "⏳" : "🚛"}
+                    <span style={{ fontSize:14 }}>{dispatchUploading === o._id ? "⏳" : "🚛"}</span>
+                    <span style={{ fontSize:11, fontWeight:600, whiteSpace:"nowrap" }}>
+                      {dispatchUploading === o._id ? "Uploading…" : "Upload Dispatch"}
+                    </span>
                     <input type="file" accept=".pdf" hidden
                       onChange={e => { handleDispatchUpload(e.target.files[0], o); e.target.value = ""; }} />
                   </label>
