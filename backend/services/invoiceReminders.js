@@ -9,7 +9,7 @@
  *   day 0   (due date)      -> stage 1, first notice
  *   day 3+  (still unpaid)  -> stage 2, reminder
  *   day 7+  (still unpaid)  -> stage 3, overdue notice
- *   day 7+  thereafter      -> daily, once per calendar day, until paid
+ *   day 7+  thereafter      -> every 3 days, until paid
  *
  * Only invoices with status "sent" (not draft, not already paid) and a real
  * customer email are eligible. If the invoice's own customerEmail/arrivalDate
@@ -203,13 +203,14 @@ async function runInvoiceReminders({ dryRun = false, invoiceId = null, force = f
     let stageToSend = null;
     if (targetStage > inv.reminderStage) {
       stageToSend = targetStage; // first time reaching this urgency level
-    } else if (inv.reminderStage >= 3 && daysSince >= 7 && !isSameCalendarDay(inv.lastReminderSentAt, today)) {
-      // Already past the 1-week notice and it's a new day — daily repeat.
-      // Stage 4 is not a real DB stage (reminderStage caps its meaning at 3,
-      // "reached weekly"); it just tells emailContent() to use the escalating
-      // "URGENT: N days past due" wording instead of repeating the fixed
-      // "1 Week Past Due" text forever.
-      stageToSend = 4;
+    } else if (inv.reminderStage >= 3 && daysSince >= 7) {
+      // Already past the 1-week notice — repeat every 3 days.
+      const lastSent = inv.lastReminderSentAt ? new Date(inv.lastReminderSentAt) : null;
+      const daysSinceLast = lastSent ? daysBetween(lastSent, today) : 999;
+      if (daysSinceLast >= 3) {
+        // Stage 4 tells emailContent() to use escalating "URGENT: N days past due" wording.
+        stageToSend = 4;
+      }
     } else if (force) {
       // Explicit single-invoice resend — ignore the "already sent today" /
       // "already at this stage" gates and just resend the current level.
