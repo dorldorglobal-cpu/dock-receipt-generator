@@ -47,6 +47,7 @@ export default function Orders() {
   const [refSort, setRefSort]         = useState("desc"); // "desc" = newest first
   const [updatingStatus, setUpdatingStatus] = useState(null); // orderId being updated
   const [dispatchUploading, setDispatchUploading] = useState(null); // orderId being parsed
+  const [dispatchDragOver, setDispatchDragOver] = useState(null); // orderId being dragged over
   const [fuelFilter, setFuelFilter] = useState("");
   const navigate = useNavigate();
 
@@ -344,11 +345,16 @@ export default function Orders() {
                     style={{ padding:"4px 10px", marginRight:5, borderRadius:6,
                       border:"1px solid var(--border)", background:"var(--bg-panel)",
                       color:"var(--text-secondary)", cursor:"pointer", fontSize:13 }}>✏️</button>
-                  <label title="Upload Dispatch Sheet"
+                  <label title="Upload or drop Dispatch Sheet"
+                    onDragOver={e => { e.preventDefault(); setDispatchDragOver(o._id); }}
+                    onDragLeave={() => setDispatchDragOver(null)}
+                    onDrop={e => { e.preventDefault(); setDispatchDragOver(null); const f = e.dataTransfer.files[0]; if (f) handleDispatchUpload(f, o); }}
                     style={{ padding:"4px 10px", marginRight:5, borderRadius:6, cursor:"pointer", fontSize:13,
-                      border:"1px solid rgba(96,165,250,0.4)", background:"rgba(96,165,250,0.08)",
+                      border: dispatchDragOver === o._id ? "1px solid #60a5fa" : "1px solid rgba(96,165,250,0.4)",
+                      background: dispatchDragOver === o._id ? "rgba(96,165,250,0.2)" : "rgba(96,165,250,0.08)",
                       color: dispatchUploading === o._id ? "#94a3b8" : "#60a5fa",
-                      display:"inline-block", pointerEvents: dispatchUploading === o._id ? "none" : "auto" }}>
+                      display:"inline-block", pointerEvents: dispatchUploading === o._id ? "none" : "auto",
+                      transition:"background 0.15s, border 0.15s" }}>
                     {dispatchUploading === o._id ? "⏳" : "🚛"}
                     <input type="file" accept=".pdf" hidden
                       onChange={e => { handleDispatchUpload(e.target.files[0], o); e.target.value = ""; }} />
