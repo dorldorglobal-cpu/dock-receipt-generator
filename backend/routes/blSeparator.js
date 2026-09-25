@@ -9,6 +9,7 @@ const { execFile } = require("child_process");
 const Order = require("../models/Order");
 const Expense = require("../models/Expense");
 const { uploadBufferToDrive } = require("../googleDrive");
+const { upsertAclRow } = require("../utils/aclSheet");
 
 const upload = multer({ storage: multer.memoryStorage() });
 const TEMP_DIR = path.join(__dirname, "..", "temp");
@@ -321,6 +322,17 @@ router.post("/attach", async (req, res) => {
         }
 
         await order.save();
+
+        // Update ACL master sheet (non-fatal)
+        upsertAclRow({
+          bookingNumber: bl.blNumber || "",
+          vin:           bl.vin || order.vin || "",
+          consignee:     order.consigneeName || order.customerName || "",
+          pol:           order.pol || "",
+          pod:           order.pod || "",
+          refNumber:     order.refNumber || "",
+          order,
+        });
 
         results.push({
           blNumber: bl.blNumber,

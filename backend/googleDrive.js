@@ -136,6 +136,7 @@ async function getOrCreateFolder(name, parentId) {
 }
 
 module.exports = {
+  oauth2Client,
   drive,
   createDriveFolder,
   uploadFileToDrive,
