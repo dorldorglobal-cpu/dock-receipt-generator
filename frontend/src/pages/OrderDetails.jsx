@@ -623,6 +623,11 @@ export default function OrderDetails() {
     const pol          = (data.pol || "").toUpperCase();
     const pod          = (data.pod || "").toUpperCase();
     const shippingLine = (data.shippingLine || "").toUpperCase();
+    // Loose carrier match: "SALLAUM LINES" matches a pricing record stored as "SALLAUM"
+    const carrierMatch = (r) => {
+      const rl = (r.shippingLine || "").toUpperCase();
+      return rl && shippingLine && (shippingLine.includes(rl) || rl.includes(shippingLine));
+    };
 
     try {
       const [towingRates, oceanRates] = await Promise.all([
@@ -677,28 +682,26 @@ export default function OrderDetails() {
         const match =
           // 1. Exact pol+pod+carrier+cat1
           oceanRates.find(r =>
-            (r.pol          || "").toUpperCase() === pol &&
-            (r.pod          || "").toUpperCase() === pod &&
-            (r.shippingLine || "").toUpperCase() === shippingLine &&
-            r.category === "1"
+            (r.pol || "").toUpperCase() === pol &&
+            (r.pod || "").toUpperCase() === pod &&
+            carrierMatch(r) && r.category === "1"
           ) ||
           // 2. Exact pol+pod+carrier (any category)
           oceanRates.find(r =>
-            (r.pol          || "").toUpperCase() === pol &&
-            (r.pod          || "").toUpperCase() === pod &&
-            (r.shippingLine || "").toUpperCase() === shippingLine
+            (r.pol || "").toUpperCase() === pol &&
+            (r.pod || "").toUpperCase() === pod &&
+            carrierMatch(r)
           ) ||
-          // 3. POL differs per carrier (e.g. SALLAUM=DAVISVILLE, ACL=PROVIDENCE):
+          // 3. POL differs per carrier (SALLAUM=DAVISVILLE, ACL=PROVIDENCE):
           //    match pod+carrier before falling back to no-carrier pol+pod
-          (shippingLine && oceanRates.find(r =>
-            (r.pod          || "").toUpperCase() === pod &&
-            (r.shippingLine || "").toUpperCase() === shippingLine &&
-            r.category === "1"
-          )) ||
-          (shippingLine && oceanRates.find(r =>
-            (r.pod          || "").toUpperCase() === pod &&
-            (r.shippingLine || "").toUpperCase() === shippingLine
-          )) ||
+          oceanRates.find(r =>
+            (r.pod || "").toUpperCase() === pod &&
+            carrierMatch(r) && r.category === "1"
+          ) ||
+          oceanRates.find(r =>
+            (r.pod || "").toUpperCase() === pod &&
+            carrierMatch(r)
+          ) ||
           // 4. Last resort: pol+pod with no carrier filter
           oceanRates.find(r =>
             (r.pol || "").toUpperCase() === pol &&
