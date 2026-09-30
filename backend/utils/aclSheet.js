@@ -68,6 +68,10 @@ async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber
       if (refNumber && rowRef === String(refNumber))   { matchRowIndex = i; break; }
     }
 
+    // If the caller wants to set BOOKED but the row already exists (e.g. a prior
+    // BL attach already wrote SAILED), skip the update — don't downgrade.
+    if (statusOverride === "BOOKED" && matchRowIndex >= 0) return;
+
     const status = statusOverride || buildStatus(order || {});
     // A  B  C    D          E    F    G          H
     const vinLast6 = (vin || "").replace(/\s/g, "").slice(-6);
