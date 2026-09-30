@@ -221,6 +221,7 @@ router.post("/attach", async (req, res) => {
     }
 
     const results = [];
+    const aclSheetUpdated = new Set(); // deduplicate per order
 
     for (const bl of bls) {
       try {
@@ -270,11 +271,13 @@ router.post("/attach", async (req, res) => {
         // Pull cutoff/sail/arrival straight from the master schedule for this
         // vessel/voyage so they reflect the real sailing, not a stale guess
         // from before the Draft BL confirmed which vessel it actually shipped on.
+        let scheduleSailDate = null;
         if (order.vessel && order.pol && order.pod) {
           try {
             const { lookupSchedule } = require("./scheduleRoutes");
             const s = await lookupSchedule({ voyageName: order.voyage || "", vessel: order.vessel, pol: order.pol, pod: order.pod });
             if (s.found) {
+              scheduleSailDate = s.sailDate; // authoritative date for the sheet
               if (!order.voyage)      order.voyage      = s.voyage;
               if (!order.cutoffDate)  order.cutoffDate  = s.cutoffDate;
               if (!order.sailDate)    order.sailDate    = s.sailDate;
@@ -323,16 +326,22 @@ router.post("/attach", async (req, res) => {
 
         await order.save();
 
-        // Update ACL master sheet (non-fatal)
-        upsertAclRow({
-          bookingNumber: bl.blNumber || "",
-          vin:           bl.vin || order.vin || "",
-          consignee:     order.customerName || "",
-          pol:           order.pol || "",
-          pod:           order.pod || "",
-          refNumber:     order.refNumber || "",
-          order,
-        });
+        // Update ACL master sheet (non-fatal) — only once per order per batch
+        if (!aclSheetUpdated.has(String(order._id))) {
+          aclSheetUpdated.add(String(order._id));
+          upsertAclRow({
+            bookingNumber: bl.blNumber || "",
+            vin:           bl.vin || order.vin || "",
+            consignee:     order.customerName || "",
+            pol:           order.pol || "",
+            pod:           order.pod || "",
+            refNumber:     order.refNumber || "",
+            order: {
+              vessel:   order.vessel,
+              sailDate: scheduleSailDate || order.sailDate,
+            },
+          });
+        }
 
         results.push({
           blNumber: bl.blNumber,

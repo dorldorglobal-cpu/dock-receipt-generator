@@ -92,12 +92,17 @@ async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber
         requestBody: { values: [rowData] },
       });
     } else {
-      // Append new row
-      await sheets.spreadsheets.values.append({
+      // Find the true last row with data in col A, then write to the next row
+      // (avoids INSERT_ROWS landing in the middle when the sheet has blank rows)
+      let lastDataRow = HEADER_ROW; // at minimum the header row
+      for (let i = HEADER_ROW; i < rows.length; i++) {
+        if (rows[i] && rows[i][0] && String(rows[i][0]).trim()) lastDataRow = i + 1; // 1-based
+      }
+      const appendRow = lastDataRow + 1;
+      await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
-        range: `${TAB}!A:K`,
+        range: `${TAB}!A${appendRow}:H${appendRow}`,
         valueInputOption: "USER_ENTERED",
-        insertDataOption: "INSERT_ROWS",
         requestBody: { values: [rowData] },
       });
     }
