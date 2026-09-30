@@ -691,6 +691,17 @@ export default function OrderDetails() {
             (r.pod          || "").toUpperCase() === pod &&
             (r.shippingLine || "").toUpperCase() === shippingLine
           ) ||
+          // POL may differ between carriers (e.g. SALLAUM=DAVISVILLE, ACL=PROVIDENCE)
+          // so fall back to pod + shippingLine match before giving up on carrier specificity
+          (shippingLine && oceanRates.find(r =>
+            (r.pod          || "").toUpperCase() === pod &&
+            (r.shippingLine || "").toUpperCase() === shippingLine &&
+            r.category === "1"
+          )) ||
+          (shippingLine && oceanRates.find(r =>
+            (r.pod          || "").toUpperCase() === pod &&
+            (r.shippingLine || "").toUpperCase() === shippingLine
+          )) ||
           oceanRates.find(r =>
             (r.pol || "").toUpperCase() === pol &&
             (r.pod || "").toUpperCase() === pod
