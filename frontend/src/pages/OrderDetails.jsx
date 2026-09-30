@@ -1534,6 +1534,24 @@ export default function OrderDetails() {
       await uploadFile(drFile, "Dock Receipt");
     } catch (_) {}
 
+    // Update ACL Google Sheet with booking info when DR is generated
+    if ((payload.bookingNumber || order.bookingNumber || "").toUpperCase().startsWith("S3-") ||
+        (payload.bookingNumber || order.bookingNumber || "").toUpperCase().startsWith("S3")) {
+      fetch(`${API}/api/orders/${id}/acl-sheet-upsert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          bookingNumber: payload.bookingNumber || order.bookingNumber || "",
+          vin:           payload.vin           || order.vin           || "",
+          consignee:     order.customerName    || "",
+          pol:           payload.portOfLoading || order.pol           || "",
+          pod:           payload.portOfDischarge || order.pod         || "",
+          vessel:        payload.vessel        || order.vessel        || "",
+          statusOverride: "BOOKED",
+        }),
+      }).catch(() => {});
+    }
+
     // Cache base64 for Send DR button
     setLastDrBase64(base64);
 

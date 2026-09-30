@@ -2148,4 +2148,32 @@ router.post("/set-counter", async (req, res) => {
   }
 });
 
+// ── POST /:id/acl-sheet-upsert — update ACL Google Sheet from DR or BL attach ──
+// Called from frontend after DR generation (statusOverride = "BOOKED") or
+// from blSeparator after BL attach (statusOverride = "SAILED GTE0426").
+router.post("/:id/acl-sheet-upsert", express.json(), async (req, res) => {
+  try {
+    const { upsertAclRow } = require("../utils/aclSheet");
+    const order = await Order.findById(req.params.id).lean();
+    if (!order) return res.status(404).json({ error: "Order not found" });
+
+    const { bookingNumber, vin, consignee, pol, pod, vessel, sailDate, statusOverride } = req.body;
+
+    upsertAclRow({
+      bookingNumber: bookingNumber || order.bookingNumber || "",
+      vin:           vin          || order.vin           || "",
+      consignee:     consignee    || order.customerName  || "",
+      pol:           pol          || order.pol           || "",
+      pod:           pod          || order.pod           || "",
+      refNumber:     order.refNumber || "",
+      statusOverride: statusOverride || null,
+      order: { vessel: vessel || order.vessel, sailDate: sailDate || order.sailDate },
+    }).catch(e => console.warn("[acl-sheet-upsert]", e.message));
+
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;

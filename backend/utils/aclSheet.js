@@ -46,7 +46,7 @@ function buildStatus(order) {
  * Finds an existing row by BOOKING# (col A) or REFERENCE (col G).
  * Updates it in place if found; appends a new row if not.
  */
-async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber, order }) {
+async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber, order, statusOverride }) {
   try {
     // Read all existing data
     const getRes = await sheets.spreadsheets.values.get({
@@ -68,7 +68,7 @@ async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber
       if (refNumber && rowRef === String(refNumber))   { matchRowIndex = i; break; }
     }
 
-    const status = buildStatus(order || {});
+    const status = statusOverride || buildStatus(order || {});
     // A  B  C    D          E    F    G          H
     const vinLast6 = (vin || "").replace(/\s/g, "").slice(-6);
     const rowData = [
