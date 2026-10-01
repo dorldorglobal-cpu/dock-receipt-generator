@@ -101,6 +101,8 @@ export default function Orders() {
       ? orders.filter(o => !ACTIVE_EXCLUDED.includes(o.status) && !o.invoicePaid).length
       : t.value === "Paid"
       ? orders.filter(o => o.invoicePaid).length
+      : t.value === "Problem / Hold"
+      ? orders.filter(o => (o.holds || []).some(h => !h.resolvedAt)).length
       : orders.filter(o => o.status === t.value).length;
   }
 
@@ -113,6 +115,8 @@ export default function Orders() {
       ? !ACTIVE_EXCLUDED.includes(o.status) && !o.invoicePaid
       : activeTab === "Paid"
       ? o.invoicePaid
+      : activeTab === "Problem / Hold"
+      ? (o.holds || []).some(h => !h.resolvedAt)
       : o.status === activeTab;
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
     const matchType    = typeFilter === "all" || (o.requestType || "").toLowerCase() === typeFilter.toLowerCase();
@@ -151,24 +155,36 @@ export default function Orders() {
 
       {/* Tabs */}
       <div style={{ display: "flex", gap: 4, marginBottom: 16, borderBottom: "1px solid var(--border)", paddingBottom: 0, flexWrap: "wrap" }}>
-        {TABS.map(t => (
-          <button key={t.value} onClick={() => setActiveTab(t.value)}
-            style={{
-              padding: "8px 16px", borderRadius: "8px 8px 0 0", border: "none",
-              background: activeTab === t.value ? "var(--bg-panel)" : "transparent",
-              color: activeTab === t.value ? t.color : "var(--text-secondary)",
-              cursor: "pointer", fontSize: 13, fontWeight: activeTab === t.value ? 600 : 400,
-              borderBottom: activeTab === t.value ? `2px solid ${t.color}` : "2px solid transparent",
-              transition: "all 0.15s",
-            }}>
-            {t.label}
-            <span style={{
-              marginLeft: 6, fontSize: 11, padding: "1px 6px", borderRadius: 10,
-              background: activeTab === t.value ? `${t.color}22` : "var(--bg-elevated)",
-              color: activeTab === t.value ? t.color : "var(--text-secondary)",
-            }}>{counts[t.value] || 0}</span>
-          </button>
-        ))}
+        {TABS.map(t => {
+          const isHoldTab = t.value === "Problem / Hold";
+          const holdCount = isHoldTab ? counts[t.value] : 0;
+          const holdAlert = isHoldTab && holdCount > 0;
+          const isActive  = activeTab === t.value;
+          return (
+            <button key={t.value} onClick={() => setActiveTab(t.value)}
+              style={{
+                padding: holdAlert ? "8px 18px" : "8px 16px",
+                borderRadius: holdAlert ? 8 : "8px 8px 0 0",
+                border: holdAlert ? `2px solid #ef4444` : "none",
+                background: holdAlert
+                  ? (isActive ? "#ef4444" : "rgba(239,68,68,0.15)")
+                  : isActive ? "var(--bg-panel)" : "transparent",
+                color: holdAlert ? (isActive ? "#fff" : "#ef4444") : isActive ? t.color : "var(--text-secondary)",
+                cursor: "pointer", fontSize: holdAlert ? 14 : 13,
+                fontWeight: holdAlert || isActive ? 700 : 400,
+                borderBottom: !holdAlert && isActive ? `2px solid ${t.color}` : holdAlert ? undefined : "2px solid transparent",
+                transition: "all 0.15s",
+                alignSelf: "center",
+              }}>
+              {holdAlert ? "⚠ " : ""}{t.label}
+              <span style={{
+                marginLeft: 6, fontSize: 11, padding: "1px 6px", borderRadius: 10,
+                background: holdAlert ? (isActive ? "rgba(255,255,255,0.25)" : "rgba(239,68,68,0.2)") : isActive ? `${t.color}22` : "var(--bg-elevated)",
+                color: holdAlert ? (isActive ? "#fff" : "#ef4444") : isActive ? t.color : "var(--text-secondary)",
+              }}>{counts[t.value] || 0}</span>
+            </button>
+          );
+        })}
       </div>
 
       {/* Toolbar */}
@@ -220,14 +236,6 @@ export default function Orders() {
           <option value="Diesel">Diesel</option>
         </select>
 
-        <button onClick={() => setHoldFilter(v => !v)}
-          style={{ padding:"6px 12px", borderRadius:6, border:"1px solid",
-            borderColor: holdFilter ? "#ef4444" : "var(--border)",
-            background: holdFilter ? "rgba(239,68,68,0.12)" : "var(--bg-input)",
-            color: holdFilter ? "#ef4444" : "var(--text-muted)",
-            fontSize:13, cursor:"pointer", fontWeight: holdFilter ? 600 : 400, whiteSpace:"nowrap" }}>
-          ⚠ Problem / Hold{holdFilter ? ` (${orders.filter(o => (o.holds||[]).some(h=>!h.resolvedAt)).length})` : ""}
-        </button>
       </div>
 
       {/* Table */}
