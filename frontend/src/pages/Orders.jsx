@@ -49,6 +49,7 @@ export default function Orders() {
   const [dispatchUploading, setDispatchUploading] = useState(null); // orderId being parsed
   const [dispatchDragOver, setDispatchDragOver] = useState(null); // orderId being dragged over
   const [fuelFilter, setFuelFilter] = useState("");
+  const [holdFilter, setHoldFilter] = useState(false);
   const navigate = useNavigate();
 
   const handleDispatchUpload = async (file, order) => {
@@ -116,7 +117,8 @@ export default function Orders() {
     const matchSource  = sourceFilter ? (o.source || "") === sourceFilter : true;
     const matchType    = typeFilter === "all" || (o.requestType || "").toLowerCase() === typeFilter.toLowerCase();
     const matchFuel    = !fuelFilter || (o.fuelType || "") === fuelFilter;
-    return matchSearch && matchTab && matchSource && matchType && matchFuel;
+    const matchHold    = !holdFilter || ((o.holds || []).some(h => !h.resolvedAt));
+    return matchSearch && matchTab && matchSource && matchType && matchFuel && matchHold;
   }).sort((a, b) => {
     const n = v => Number(String(v.refNumber || "0").replace(/\D/g, "")) || 0;
     return refSort === "asc" ? n(a) - n(b) : n(b) - n(a);
@@ -217,6 +219,15 @@ export default function Orders() {
           <option value="Gas">Gas</option>
           <option value="Diesel">Diesel</option>
         </select>
+
+        <button onClick={() => setHoldFilter(v => !v)}
+          style={{ padding:"6px 12px", borderRadius:6, border:"1px solid",
+            borderColor: holdFilter ? "#ef4444" : "var(--border)",
+            background: holdFilter ? "rgba(239,68,68,0.12)" : "var(--bg-input)",
+            color: holdFilter ? "#ef4444" : "var(--text-muted)",
+            fontSize:13, cursor:"pointer", fontWeight: holdFilter ? 600 : 400, whiteSpace:"nowrap" }}>
+          ⚠ Problem / Hold{holdFilter ? ` (${orders.filter(o => (o.holds||[]).some(h=>!h.resolvedAt)).length})` : ""}
+        </button>
       </div>
 
       {/* Table */}
