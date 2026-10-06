@@ -158,6 +158,19 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ── GET /api/expenses/by-ids — refresh candidate data for bill picker ────────
+router.get("/by-ids", async (req, res) => {
+  try {
+    const ids = (req.query.ids || "").split(",").map(s => s.trim()).filter(Boolean);
+    if (!ids.length) return res.json([]);
+    const exps = await Expense.find({ _id: { $in: ids } })
+      .select("_id description vendor amount paidAmount status orderRef").lean();
+    res.json(exps);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/expenses/summary — totals ────────────────────────────────────────
 router.get("/summary", async (req, res) => {
   try {

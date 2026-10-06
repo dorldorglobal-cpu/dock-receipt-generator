@@ -2140,7 +2140,21 @@ export default function Expenses() {
                                 return <span style={{ display:"block", color:"var(--text-primary)", whiteSpace:"nowrap", overflow:"hidden", textOverflow:"ellipsis" }}>{list.map(c=>c.description).join(", ")}</span>;
                               }
                               if (row.candidates?.length) return (
-                                <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, _showCandidates: !r._showCandidates } : r))}
+                                <button onClick={async () => {
+                                  // Re-fetch candidates fresh so paidAmount reflects any payments
+                                  // made after this bank statement was first parsed
+                                  const ids = row.candidates.map(c => c._id).join(",");
+                                  let freshCandidates = row.candidates;
+                                  try {
+                                    const r = await fetch(`${API}/api/expenses/by-ids?ids=${ids}`);
+                                    if (r.ok) freshCandidates = await r.json();
+                                  } catch {}
+                                  setProofRows(rs => rs.map((r,j) => j!==i ? r : {
+                                    ...r,
+                                    candidates: freshCandidates,
+                                    _showCandidates: !r._showCandidates,
+                                  }));
+                                }}
                                   style={{ background:"none", border:"none", cursor:"pointer", padding:0, textAlign:"left" }}>
                                   <span style={{display:"block",color:"var(--warning)",fontSize:11,textDecoration:"underline dotted"}}>
                                     ⚠ {row.candidates.length} candidate(s) — click to pick
