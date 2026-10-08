@@ -176,6 +176,7 @@ export default function Containers() {
   const [showNew,     setShowNew]     = useState(false);
   const [form,        setForm]        = useState(BLANK);
   const [orderSearch, setOrderSearch] = useState("");
+  const [warehouseFilter, setWarehouseFilter] = useState("all");
   const [picked,      setPicked]      = useState([]);
   const [creating,    setCreating]    = useState(false);
   const [config,      setConfig]      = useState({ warehouses: [], pods: ["TEMA","LAGOS","LOME","COTONOU"] });
@@ -399,9 +400,22 @@ export default function Containers() {
     !o.bookingNumber &&
     !loadedIds.has(o._id)
   );
+  // Normalize warehouse names to short labels for filter buttons
+  const whLabel = (loc) => {
+    const l = (loc || "").toUpperCase();
+    if (/cedars/i.test(l))   return "CEDARS";
+    if (/iship/i.test(l))    return "iSHIP";
+    if (/savannah/i.test(l)) return "SAVANNAH";
+    if (/ezcargo|ez cargo/i.test(l)) return "EZ CARGO";
+    return loc || "—";
+  };
+  const availWarehouses = [...new Set(availableOrders.map(o => whLabel(o.deliveryLocation)).filter(w => w && w !== "—"))].sort();
+
   const filteredAvail = availableOrders.filter(o => {
     const s = orderSearch.toLowerCase();
-    return !s || `${o.refNumber} ${o.vin} ${o.customerName} ${o.make} ${o.model}`.toLowerCase().includes(s);
+    const matchSearch = !s || `${o.refNumber} ${o.vin} ${o.customerName} ${o.make} ${o.model}`.toLowerCase().includes(s);
+    const matchWh = warehouseFilter === "all" || whLabel(o.deliveryLocation) === warehouseFilter;
+    return matchSearch && matchWh;
   });
 
   const togglePick = id => {
@@ -432,7 +446,7 @@ export default function Containers() {
     setForm({ ...BLANK, name,
       loaderEmail: wh ? wh.loaderTo : "",
       loaderCc:    wh ? wh.loaderCc : "" });
-    setPicked([]); setOrderSearch(""); setShowNew(true);
+    setPicked([]); setOrderSearch(""); setWarehouseFilter("all"); setShowNew(true);
   };
 
   const createLoad = async () => {
@@ -1053,6 +1067,22 @@ export default function Containers() {
             <input placeholder="Search by ref #, VIN, customer, make…"
               value={orderSearch} onChange={e=>setOrderSearch(e.target.value)}
               style={{ ...inp, marginBottom:8 }} />
+
+            {/* Warehouse filter */}
+            {availWarehouses.length > 1 && (
+              <div style={{ display:"flex", gap:6, flexWrap:"wrap", marginBottom:10 }}>
+                {["all", ...availWarehouses].map(w => (
+                  <button key={w} type="button" onClick={() => setWarehouseFilter(w)}
+                    style={{ fontSize:11, padding:"3px 10px", borderRadius:12, cursor:"pointer", fontWeight:600,
+                      border: warehouseFilter===w ? "none" : "1px solid var(--border)",
+                      background: warehouseFilter===w ? "#7c3aed" : "var(--bg-panel)",
+                      color: warehouseFilter===w ? "#fff" : "var(--text-secondary)" }}>
+                    {w === "all" ? `All (${availableOrders.length})` : `${w} (${availableOrders.filter(o=>whLabel(o.deliveryLocation)===w).length})`}
+                  </button>
+                ))}
+              </div>
+            )}
+
             <div style={{ maxHeight:260, overflowY:"auto", border:"1px solid var(--border)", borderRadius:8, marginBottom:20 }}>
               {filteredAvail.length === 0 && (
                 <div style={{ padding:16, color:"var(--text-muted)", fontSize:13, textAlign:"center" }}>
@@ -1063,8 +1093,8 @@ export default function Containers() {
                 const sel = picked.includes(o._id);
                 return (
                   <div key={o._id} onClick={()=>togglePick(o._id)}
-                    style={{ display:"grid", gridTemplateColumns:"32px 1fr 2fr 1.2fr 1fr",
-                      gap:12, padding:"10px 14px", cursor:"pointer", alignItems:"center",
+                    style={{ display:"grid", gridTemplateColumns:"32px 1fr 2fr 1.2fr 0.8fr 0.8fr",
+                      gap:10, padding:"10px 14px", cursor:"pointer", alignItems:"center",
                       background:sel?"rgba(124,58,237,0.12)":idx%2===0?"var(--bg-elevated)":"transparent",
                       borderBottom:"1px solid var(--border)" }}>
                     <div style={{ width:18, height:18, borderRadius:4,
@@ -1082,6 +1112,15 @@ export default function Containers() {
                       <div style={{ fontSize:11, color:"var(--text-secondary)", fontFamily:"monospace" }}>{o.vin||"—"}</div>
                     </div>
                     <div style={{ fontSize:11, color:"var(--text-secondary)" }}>{o.consigneeName||"—"}</div>
+                    <div style={{ fontSize:11 }}>
+                      {o.deliveryLocation ? (
+                        <span style={{ background:"rgba(124,58,237,0.12)", color:"#a78bfa",
+                          border:"1px solid rgba(124,58,237,0.25)", borderRadius:5,
+                          padding:"1px 6px", fontWeight:600, whiteSpace:"nowrap" }}>
+                          {whLabel(o.deliveryLocation)}
+                        </span>
+                      ) : <span style={{ color:"var(--text-muted)" }}>—</span>}
+                    </div>
                     <div style={{ fontSize:11, color:"var(--text-secondary)" }}>→ {o.pod||"—"}</div>
                   </div>
                 );
@@ -1331,6 +1370,13 @@ export default function Containers() {
                               <span style={{ fontWeight:700, color:"var(--accent)" }}>#{o.refNumber}</span>
                               {" "}{o.year} {o.make} {o.model}
                               <span style={{ color:"var(--text-muted)", marginLeft:8 }}>{o.customerName}</span>
+                              {o.deliveryLocation && (
+                                <span style={{ marginLeft:8, fontSize:10, fontWeight:600, padding:"1px 5px",
+                                  borderRadius:4, background:"rgba(124,58,237,0.12)",
+                                  color:"#a78bfa", border:"1px solid rgba(124,58,237,0.25)" }}>
+                                  {whLabel(o.deliveryLocation)}
+                                </span>
+                              )}
                             </div>
                             <button
                               disabled={addingOrder}
