@@ -1517,6 +1517,25 @@ export default function OrderDetails() {
       }),
     };
 
+    // ── POL / POD mismatch check ──────────────────────────────────────────
+    // Warn if the DR's port of loading or discharge differs from what's
+    // stored on the order — catches wrong AES template / stale POA.
+    const drPol = (payload.portOfLoading   || "").toUpperCase().trim();
+    const drPod = (payload.portOfDischarge || "").toUpperCase().trim();
+    const ordPol = (order.pol || "").toUpperCase().trim();
+    const ordPod = (order.pod || "").toUpperCase().trim();
+    const polMismatch = drPol && ordPol && drPol !== ordPol;
+    const podMismatch = drPod && ordPod && drPod !== ordPod;
+    if (polMismatch || podMismatch) {
+      const issues = [];
+      if (polMismatch) issues.push(`• Port of Loading: DR says "${drPol}" but order has "${ordPol}"`);
+      if (podMismatch) issues.push(`• Port of Discharge: DR says "${drPod}" but order has "${ordPod}"`);
+      const ok = window.confirm(
+        `⚠️ Port mismatch detected — please verify before generating:\n\n${issues.join("\n")}\n\nPress OK to generate anyway, or Cancel to go back and fix.`
+      );
+      if (!ok) { setMessage(""); return; }
+    }
+
     const res = await fetch(`${API}/generate-pdf`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
