@@ -88,6 +88,8 @@ const EMPTY_FORM = {
   notes: "",
   bankAccount: "Metropolitan Bank 8042 (Business)",
   taxCategory: "",
+  copartFundsApplied: "",
+  receiptTotal: "",
 };
 
 // ── DropZone ──────────────────────────────────────────────────────────────────
@@ -394,12 +396,43 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
 
         {/* Amount */}
         <label style={labelStyle}>
-          Amount ($) *
+          {form.copartFundsApplied > 0 ? "Receipt Total ($) *" : "Amount ($) *"}
           <input
             type="number" min="0" step="0.01" required
-            {...inp("amount")} style={inputStyle} placeholder="0.00"
+            value={form.receiptTotal ?? form.amount ?? ""}
+            onChange={e => {
+              const receiptTotal = e.target.value;
+              const funds = Number(form.copartFundsApplied || 0);
+              const net = funds > 0 ? Math.max(0, Number(receiptTotal) - funds) : Number(receiptTotal);
+              setForm(f => ({ ...f, receiptTotal, amount: String(net) }));
+            }}
+            style={inputStyle} placeholder="0.00"
           />
         </label>
+
+        {/* Copart Funds Applied — shown for Storage/Copart expenses */}
+        {(/copart/i.test(form.vendor || "") || form.category === "Storage") && (
+          <label style={labelStyle}>
+            Copart Account Funds Applied ($)
+            <input
+              type="number" min="0" step="0.01"
+              value={form.copartFundsApplied ?? ""}
+              onChange={e => {
+                const funds = Number(e.target.value || 0);
+                const total = Number(form.receiptTotal ?? form.amount ?? 0);
+                const net = Math.max(0, total - funds);
+                setForm(f => ({ ...f, copartFundsApplied: e.target.value, amount: String(net) }));
+              }}
+              style={{ ...inputStyle, color: "#a78bfa" }}
+              placeholder="0.00 (leave blank if none)"
+            />
+            {Number(form.copartFundsApplied || 0) > 0 && (
+              <span style={{ fontSize: 11, color: "#a78bfa", marginTop: 3, display: "block" }}>
+                Out of pocket: <strong>${Math.max(0, Number(form.receiptTotal ?? form.amount ?? 0) - Number(form.copartFundsApplied)).toFixed(2)}</strong>
+              </span>
+            )}
+          </label>
+        )}
 
         {/* Date */}
         <label style={labelStyle}>
@@ -1227,8 +1260,10 @@ export default function Expenses() {
       status:        exp.status        || "unpaid",
       paidDate:      exp.paidDate ? exp.paidDate.slice(0, 10) : "",
       notes:         exp.notes         || "",
-      bankAccount:   exp.bankAccount   || "Metropolitan Bank 8042 (Business)",
-      taxCategory:   exp.taxCategory   || "",
+      bankAccount:          exp.bankAccount          || "Metropolitan Bank 8042 (Business)",
+      taxCategory:          exp.taxCategory          || "",
+      copartFundsApplied:   exp.copartFundsApplied != null ? String(exp.copartFundsApplied) : "",
+      receiptTotal:         exp.receiptTotal         != null ? String(exp.receiptTotal) : "",
     });
     setReceiptFile(null);
     setBillFile(null);
@@ -2724,6 +2759,12 @@ export default function Expenses() {
                     {/* Amount */}
                     <td style={{ ...td, textAlign: "right", fontWeight: 600, color: "var(--text-primary)", fontVariantNumeric: "tabular-nums" }}>
                       {fmt$(exp.amount)}
+                      {exp.copartFundsApplied > 0 && (
+                        <div style={{ fontSize: 10, color: "#a78bfa", fontWeight: 400, whiteSpace: "nowrap" }}>
+                          Receipt: {fmt$(exp.receiptTotal || (exp.amount + exp.copartFundsApplied))}
+                          <br />Funds: −{fmt$(exp.copartFundsApplied)}
+                        </div>
+                      )}
                     </td>
 
                     {/* Status */}

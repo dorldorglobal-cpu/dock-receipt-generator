@@ -43,8 +43,10 @@ const expenseSchema = new mongoose.Schema(
       receiptMime:     { type: String, default: "" },
     }],
 
-    vin:           { type: String, default: "" },
-    invoiceNumber: { type: String, default: "" },
+    vin:                 { type: String, default: "" },
+    invoiceNumber:       { type: String, default: "" },
+    receiptTotal:        { type: Number, default: null }, // full amount on Copart receipt before account funds
+    copartFundsApplied:  { type: Number, default: null }, // Copart account credit used; amount = receiptTotal - this
 
     // Bill document (vendor's invoice / dispatch sheet)
     billFileName:   { type: String, default: "" },
