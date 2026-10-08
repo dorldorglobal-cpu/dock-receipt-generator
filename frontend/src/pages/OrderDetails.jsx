@@ -2764,7 +2764,20 @@ export default function OrderDetails() {
           <h2>Pickup &amp; Delivery</h2>
           <p style={{ margin: "0 0 4px", fontSize: 13 }}>
             <strong>Pickup:</strong> {order.pickupLocation || "—"}
+            {order.isSubLot && (
+              <span style={{
+                marginLeft: 8, fontSize: 11, fontWeight: 700,
+                background: "rgba(251,191,36,0.18)", color: "#f59e0b",
+                border: "1px solid rgba(251,191,36,0.4)", borderRadius: 5,
+                padding: "1px 7px", verticalAlign: "middle",
+              }}>SUBLOT</span>
+            )}
           </p>
+          {order.isSubLot && order.subLotMainYard && (
+            <p style={{ margin: "0 0 4px", fontSize: 12, color: "var(--text-muted)" }}>
+              Main yard: {order.subLotMainYard}
+            </p>
+          )}
           <p style={{ margin: "0 0 12px", fontSize: 13 }}>
             <strong>Delivery:</strong> {order.deliveryLocation || "—"}
           </p>

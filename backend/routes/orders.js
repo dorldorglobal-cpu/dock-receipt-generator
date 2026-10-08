@@ -433,6 +433,16 @@ router.post("/", async (req, res) => {
       }
     }
 
+    // ── Auto-add NO TITLE hold for sublot orders ─────────────────────
+    if (req.body.isSubLot) {
+      const holdNote = req.body.subLotMainYard
+        ? `Sublot — title likely at main yard: ${req.body.subLotMainYard}`
+        : "Sublot — title likely at main yard";
+      await Order.findByIdAndUpdate(order._id, {
+        $push: { holds: { holdType: "No Title", note: holdNote } },
+      });
+    }
+
     autoLinkExpenses(order); // non-blocking
     res.status(201).json(order);
   } catch (err) {

@@ -113,6 +113,8 @@ export default function CreateOrder() {
 
     notes: "",
     source: "USA OFFICE",
+    isSubLot: false,
+    subLotMainYard: "",
   });
 
   const [message, setMessage] = useState("");
@@ -624,6 +626,8 @@ export default function CreateOrder() {
       pickupCity:     data.pickupCity    || prev.pickupCity,
       pickupState:    data.pickupState   || prev.pickupState,
       pickupZip:      data.pickupZip     || prev.pickupZip,
+      isSubLot:       data.isSubLot      || prev.isSubLot,
+      subLotMainYard: data.subLotMainYard || prev.subLotMainYard,
       pod:            effectivePod       || prev.pod,
       shippingLine:   effectiveLine      || prev.shippingLine,
       ...(data.towingQuote ? { towingCharge: data.towingQuote } : {}),

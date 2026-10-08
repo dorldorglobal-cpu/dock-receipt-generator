@@ -124,8 +124,10 @@ const orderSchema = new mongoose.Schema(
       env:           { type: String, default: "" },  // "test" | "prod" the filing was built for
     },
 
-    lotNumber: { type: String, default: "" },
-    pin:       { type: String, default: "" },
+    lotNumber:      { type: String, default: "" },
+    pin:            { type: String, default: "" },
+    isSubLot:       { type: Boolean, default: false },
+    subLotMainYard: { type: String, default: "" },
 
     // From the Central Dispatch sheet
     dispatchCarrier:      { type: String, default: "" }, // hauling company

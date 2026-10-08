@@ -1469,6 +1469,21 @@ async function parseBuyerReceipt(filePath) {
     }
   }
 
+  // ── Sublot detection ──────────────────────────────────────────────────────
+  // Copart marks sublots with "** This is a sub lot" in the receipt text.
+  // For sublots, the physical address (already captured above) is the real pickup.
+  // The selling yard name comes from the "SOLD THROUGH COPART <YARDNAME>" section.
+  let isSubLot = false;
+  let subLotMainYard = "";
+  if (/this\s+is\s+a\s+sub\s+lot/i.test(text)) {
+    isSubLot = true;
+    // Capture the selling yard: "SOLD THROUGH COPART HILLSBOROUGH NJ" → "COPART HILLSBOROUGH NJ"
+    const soldThroughMatch = text.match(/SOLD\s+THROUGH\s+(COPART\s+[A-Z][A-Z0-9 ,\-]+?)(?:\s*\n|\s{2,}|$)/i);
+    if (soldThroughMatch) {
+      subLotMainYard = clean(soldThroughMatch[1]).toUpperCase();
+    }
+  }
+
   // Build pickup name
   if (pickupCity) {
     pickupName = `COPART ${pickupCity} ${pickupState}`.trim();
@@ -1548,6 +1563,8 @@ async function parseBuyerReceipt(filePath) {
     pickupCity,
     pickupState,
     pickupZip,
+    isSubLot,
+    subLotMainYard,
   };
 }
 
