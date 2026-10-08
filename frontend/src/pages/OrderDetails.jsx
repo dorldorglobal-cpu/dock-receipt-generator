@@ -961,12 +961,13 @@ export default function OrderDetails() {
     const items = [];
 
     if (charges.towingCharge && Number(charges.towingCharge) > 0) {
-      const towDesc = [
-        "Towing",
-        order.pickupLocation && order.deliveryLocation
+      const isSelfDispatch = (order.dispatchMethod || "") === "Self Dispatch";
+      const towRoute = isSelfDispatch
+        ? "Self Dispatch"
+        : order.pickupLocation && order.deliveryLocation
           ? `${order.pickupLocation} → ${order.deliveryLocation}`
-          : order.pickupLocation || order.deliveryLocation || "",
-      ].filter(Boolean).join(" — ");
+          : order.pickupLocation || order.deliveryLocation || "";
+      const towDesc = ["Towing", towRoute].filter(Boolean).join(" — ");
       items.push({ description: towDesc, amount: charges.towingCharge });
     }
     (charges.extraTows || []).forEach(t => {
@@ -2438,9 +2439,13 @@ export default function OrderDetails() {
             const syncInvoice = async () => {
               const items = [];
               if (curTow > 0) {
-                const towDesc = ["Towing", order.pickupLocation && order.deliveryLocation
-                  ? `${order.pickupLocation} → ${order.deliveryLocation}`
-                  : order.pickupLocation || order.deliveryLocation || ""].filter(Boolean).join(" — ");
+                const isSelfDispatch = (order.dispatchMethod || "") === "Self Dispatch";
+                const towRoute = isSelfDispatch
+                  ? "Self Dispatch"
+                  : order.pickupLocation && order.deliveryLocation
+                    ? `${order.pickupLocation} → ${order.deliveryLocation}`
+                    : order.pickupLocation || order.deliveryLocation || "";
+                const towDesc = ["Towing", towRoute].filter(Boolean).join(" — ");
                 items.push({ description: towDesc, amount: String(curTow) });
               }
               if (curOcn > 0) {
