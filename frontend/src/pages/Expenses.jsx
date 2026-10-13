@@ -2416,7 +2416,7 @@ export default function Expenses() {
                                   const owed = c => c.status === "partial" ? Math.max((c.amount || 0) - (c.paidAmount || 0), 0) : (c.amount || 0);
                                   const search = (row._candidateSearch || "").toLowerCase();
                                   return row.candidates.filter(c =>
-                                    !search || (c.orderRef||"").toLowerCase().includes(search) || (c.description||"").toLowerCase().includes(search)
+                                    !search || (c.orderRef||"").toLowerCase().includes(search) || (c.description||"").toLowerCase().includes(search) || (c.orderId?.bookingNumber||c.bookingNumber||"").toLowerCase().includes(search)
                                   ).map(c => {
                                   const checked = (row._pickedCandidates || []).includes(c._id);
                                   return (
