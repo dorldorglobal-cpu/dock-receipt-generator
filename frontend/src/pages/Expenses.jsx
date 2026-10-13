@@ -2307,7 +2307,7 @@ export default function Expenses() {
                                   } catch(e) { console.error(e); }
                                 }}
                                   style={{ fontSize:10, fontWeight:700, color:"#fff", border:"none", borderRadius:5, padding:"3px 8px", background:"#7c3aed", cursor:"pointer" }}>
-                                  🔍 {/acl|grimaldi/i.test(row.payeeName||"") ? "Pick ACL Invoices" : "Load All Expenses"}
+                                  🔍 {/acl|grimaldi/i.test(row.payeeName||"") ? "Pick ACL Invoices" : "Pick Invoices"}
                                 </button>
                               )}
                               {/* + Create Bill */}
