@@ -923,11 +923,15 @@ export default function Expenses() {
       // Seed the candidate-picker checkboxes from whatever the backend
       // auto-matched, so opening the picker on a combined match shows those
       // bills already ticked instead of a blank list.
-      setProofRows(data.rows.map(r => (
-        r.matchedIds?.length && r.candidates?.length
-          ? { ...r, _pickedCandidates: r.matchedIds }
-          : r
-      )));
+      setProofRows(data.rows.map(r => {
+        const isLoader = /savannah|ez.?cargo|i.?ship|cedars/i.test(r.payeeName || "");
+        const isMultiRef = (r.orderRef || "").includes("/");
+        // Auto-expand picker for loader/multi-ref review rows so user sees all candidates immediately
+        const autoExpand = r.candidates?.length > 0 && r.matchType === "review" && (isLoader || isMultiRef);
+        if (r.matchedIds?.length && r.candidates?.length)
+          return { ...r, _pickedCandidates: r.matchedIds, _showCandidates: autoExpand };
+        return autoExpand ? { ...r, _showCandidates: true } : r;
+      }));
       setProofDriveFile(data.proofFile || null);
       const alreadyPaidCount = data.rows.filter(r => r.matchType === "already_paid" || r.matchType === "already_paid_mismatch").length;
       const needsReview = data.rows.filter(r => r.matchType === "review" || r.matchType === "none" || r.matchType === "already_paid_mismatch").length;

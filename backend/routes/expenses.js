@@ -2298,6 +2298,13 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         const ContainerLoad = require("../models/ContainerLoad");
         const loadOr = [];
         if (carrierBooking) loadOr.push({ bookingNumber: { $regex: esc(carrierBooking), $options: "i" } });
+        // For loader/warehouse vendors (Savannah Auto, EZ Cargo, etc.) the addenda
+        // often leads with a bare load/booking number (6+ digits, no prefix) before "REF xxxx".
+        // Try it as a ContainerLoad booking number.
+        if (LOADER_WAREHOUSE_VENDOR_RX.test(payeeName)) {
+          const bareBooking = addenda.match(/^(\d{6,})\b/);
+          if (bareBooking) loadOr.push({ bookingNumber: { $regex: esc(bareBooking[1]), $options: "i" } });
+        }
         // The order ref itself may be a load member — resolve its Order _id.
         const selfOrder = await Order.findOne({ refNumber: { $regex: `^${esc(orderRef)}$`, $options: "i" } }).select("_id bookingNumber").lean();
         if (selfOrder) {
