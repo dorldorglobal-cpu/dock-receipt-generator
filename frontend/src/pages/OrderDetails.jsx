@@ -3074,15 +3074,27 @@ export default function OrderDetails() {
               const createBillFromDoc = async (docLabel) => {
                 try {
                   setMessage(`Parsing ${docLabel}...`);
-                  const res = await fetch(`${API}/api/expenses/parse-dispatch-url`, {
-                    method: "POST",
-                    headers: { "Content-Type": "application/json" },
-                    body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
-                  });
-                  const data = await res.json();
-                  if (!res.ok) throw new Error(data.error || "Parse failed");
-                  sessionStorage.setItem("dispatchParseResult", JSON.stringify({ rows: data, orderRef: order.refNumber, orderId: order._id }));
-                  navigate("/expenses?importDispatch=1");
+                  if (docLabel === "Rated Draft") {
+                    const res = await fetch(`${API}/api/expenses/parse-acl-url`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ driveFileId: f.id, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Parse failed");
+                    sessionStorage.setItem("aclParseResult", JSON.stringify({ rows: data.rows, orderRef: order.refNumber, orderId: order._id }));
+                    navigate("/expenses?importAcl=1");
+                  } else {
+                    const res = await fetch(`${API}/api/expenses/parse-dispatch-url`, {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.error || "Parse failed");
+                    sessionStorage.setItem("dispatchParseResult", JSON.stringify({ rows: data, orderRef: order.refNumber, orderId: order._id }));
+                    navigate("/expenses?importDispatch=1");
+                  }
                 } catch(e) {
                   alert("Parse failed: " + e.message);
                   setMessage("❌ Parse failed: " + e.message);

@@ -1264,7 +1264,10 @@ router.post("/parse-acl", memUpload.array("invoices", 50), async (req, res) => {
         const vin = vinMatch?.[1] || "";
 
         // Total charges
-        const totalMatch = text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD[\s]+([\d,]+\.?\d*)/i);
+        const totalMatch =
+          text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD[\s]+([\d,]+\.?\d*)/i) ||
+          text.match(/TOTAL CHARGES PAYABLE AT\s+[\w ]+\s+USD\s+([\d,]+\.?\d*)/i) ||
+          text.match(/TOTAL CHARGES\s+(?:USD\s*)?([\d,]+\.?\d*)/i);
         const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
 
         // Ref No (their internal ref e.g. 13548)
@@ -1354,6 +1357,78 @@ router.post("/parse-acl", memUpload.array("invoices", 50), async (req, res) => {
     res.json({ rows: results });
   } catch (err) {
     console.error("parse-acl error:", err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/expenses/parse-acl-url — parse a Grimaldi/ACL rated BL already in Drive ──
+// Body: { driveFileId, filename, orderId, orderRef }
+router.post("/parse-acl-url", express.json(), async (req, res) => {
+  try {
+    const { driveFileId, filename, orderId, orderRef } = req.body;
+    if (!driveFileId) return res.status(400).json({ error: "driveFileId required" });
+
+    // Download the file from Drive into a temp buffer
+    const { drive } = require("../googleDrive");
+    const response = await drive.files.get(
+      { fileId: driveFileId, alt: "media" },
+      { responseType: "arraybuffer" }
+    );
+    const buffer = Buffer.from(response.data);
+
+    const data = await pdfParse(buffer);
+    const text = data.text;
+
+    const vinMatch = text.match(/([A-HJ-NPR-Z0-9]{17})/);
+    const vin = vinMatch?.[1] || "";
+
+    const totalMatch =
+      text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD[\s]+([\d,]+\.?\d*)/i) ||
+      text.match(/TOTAL CHARGES PAYABLE AT\s+[\w ]+\s+USD\s+([\d,]+\.?\d*)/i) ||
+      text.match(/TOTAL CHARGES\s+(?:USD\s*)?([\d,]+\.?\d*)/i);
+    const total = totalMatch ? parseFloat(totalMatch[1].replace(/,/g, "")) : 0;
+
+    const refMatch = text.match(/Ref(?:erence)?\.?\s*No\.?\s*[:\s]*(\d{4,})/i) || text.match(/Ref#\s*[:\s]*(\d{4,})/i);
+    const refNo = refMatch?.[1] || "";
+
+    const bookingMatch = text.match(/S3[23]\d{7,}/);
+    const bookingNo = bookingMatch?.[0] || "";
+
+    const vvMatch = text.match(/([A-Z]{2,5}\d{4})\s*[-–]\s*((?:GRANDE|GOOD|AUTO|SPIRIT|ASIA|AFRICA|ATLANTIC|EURO|AMERICA|CONGO|\w+)[A-Z \w]*?)(?:\r?\n|$)/i);
+    const voyage = vvMatch?.[1]?.trim() || "";
+    const vessel = vvMatch?.[2]?.trim() || "";
+
+    const polMatch = text.match(/\bPOL:\s*([^\n\r]+)/i) || text.match(/Port of loading\s*\r?\n([^\n]{3,60})/i);
+    const podMatch = text.match(/\bPOD:\s*([^\n\r]+)/i) || text.match(/Port of discharge\s*\r?\n([^\n]{3,60})/i);
+    const pol = (polMatch?.[1]?.trim() || "").replace(/\s+\d.*$/, "");
+    const pod = (podMatch?.[1]?.trim() || "").replace(/\s+\d.*$/, "");
+
+    const vehicleLineMatch = text.match(/\d USED UNPACKED VEHICLE.*?\n(.+?)\nModel Year (\d{4})/is);
+    const ymm = vehicleLineMatch ? `${vehicleLineMatch[2]} ${vehicleLineMatch[1].trim()}` : "";
+
+    let order = null;
+    if (orderId) {
+      order = await Order.findById(orderId).select("_id refNumber vin customerName year make model").lean();
+    } else if (vin) {
+      order = await Order.findOne({ vin: { $regex: `^${vin}$`, $options: "i" } }).select("_id refNumber vin customerName year make model").lean();
+    }
+
+    const row = {
+      fileName: filename || driveFileId,
+      vin, total, refNo, bookingNo, vessel, voyage, pol, pod, ymm, billDate: "",
+      chargeLines: [],
+      billFileName: filename || "", billDriveId: driveFileId, billDriveUrl: "", billMime: "application/pdf",
+      orderId: order?._id || orderId || null,
+      orderRef: order?.refNumber || orderRef || "",
+      customerName: order?.customerName || "",
+      matched: !!(order || orderId),
+      skip: false,
+      notes: "",
+    };
+
+    res.json({ rows: [row] });
+  } catch (err) {
+    console.error("parse-acl-url error:", err);
     res.status(500).json({ error: err.message });
   }
 });

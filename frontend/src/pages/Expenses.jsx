@@ -1024,6 +1024,21 @@ export default function Expenses() {
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [dispatchMsg, setDispatchMsg]       = useState("");
 
+  // Auto-load ACL parse result passed from order docs (Create Bill from Rated Draft)
+  useEffect(() => {
+    const stored = sessionStorage.getItem("aclParseResult");
+    if (!stored) return;
+    sessionStorage.removeItem("aclParseResult");
+    try {
+      const { rows } = JSON.parse(stored);
+      if (rows && rows.length) {
+        setAclRows(rows);
+        setAclMsg(`📋 Rated Draft imported — review and create expense.`);
+        setTimeout(() => document.getElementById("acl-section")?.scrollIntoView({ behavior: "smooth" }), 300);
+      }
+    } catch(e) { console.error("acl import error", e); }
+  }, []);
+
   // Auto-load dispatch parse result passed from order docs
   useEffect(() => {
     const stored = sessionStorage.getItem("dispatchParseResult");
@@ -1891,7 +1906,7 @@ export default function Expenses() {
 
         {/* ── ACL results ── */}
         {(aclMsg || aclRows.length > 0) && (
-          <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
+          <div id="acl-section" style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", marginBottom: 10 }}>⚓ ACL / Grimaldi Results</div>
             {aclMsg && <div style={{ marginBottom: 10, fontSize: 13, color: aclMsg.startsWith("✅") ? "#34d399" : aclMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{aclMsg}</div>}
             {aclRows.length > 0 && (
