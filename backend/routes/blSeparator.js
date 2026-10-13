@@ -191,10 +191,11 @@ router.post("/parse", upload.single("pdf"), async (req, res) => {
       const key = bl.blNumber || bl.bookingNumber || bl.vin || JSON.stringify(bl.pages);
       if (seen.has(key)) {
         const existing = seen.get(key);
-        // Upgrade to rated if this copy has charges
+        // Upgrade to rated if this copy has charges; also take its pages (it has the real BL content)
         if (bl.type === "rated" && existing.type !== "rated") {
           existing.type = "rated";
           existing.charges = bl.charges;
+          existing.pages = bl.pages;
         }
       } else {
         seen.set(key, bl);
