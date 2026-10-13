@@ -2292,7 +2292,7 @@ export default function Expenses() {
                                   try {
                                     const isAcl = /acl|grimaldi/i.test(row.payeeName || "");
                                     const vendorQ = encodeURIComponent(isAcl ? "ACL" : row.payeeName.split(" ").slice(0,2).join(" "));
-                                    const catQ    = encodeURIComponent(isAcl ? "Ocean Freight" : "Container Loading");
+                                    const catQ    = encodeURIComponent(isAcl ? "Ocean Freight" : "Loaders & Warehouses");
                                     const r = await fetch(`${API}/api/expenses?category=${catQ}&vendor=${vendorQ}`);
                                     if (!r.ok) return;
                                     const all = await r.json();
