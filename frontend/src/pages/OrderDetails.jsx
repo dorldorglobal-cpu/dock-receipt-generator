@@ -431,10 +431,14 @@ export default function OrderDetails() {
     setHoldSaving(false);
   };
 
-  const resolveHold = async (holdId) => {
+  const resolveHold = async (holdId, resolutionNote) => {
     setResolvingHold(holdId);
     try {
-      const res = await fetch(`${API}/api/orders/${id}/holds/${holdId}/resolve`, { method: "PATCH" });
+      const res = await fetch(`${API}/api/orders/${id}/holds/${holdId}/resolve`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ resolutionNote: resolutionNote || "" }),
+      });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Failed to resolve hold");
       setOrder(data);
@@ -2258,12 +2262,26 @@ export default function OrderDetails() {
                     Opened {new Date(h.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"})}
                   </div>
                 </div>
-                <button onClick={() => resolveHold(h._id)} disabled={resolvingHold === h._id}
-                  style={{ padding:"4px 10px", borderRadius:6, border:"1px solid rgba(52,211,153,0.4)",
-                    background:"none", color:"#34d399", cursor:"pointer", fontSize:11, fontWeight:600,
-                    opacity: resolvingHold === h._id ? 0.5 : 1, whiteSpace:"nowrap" }}>
-                  {resolvingHold === h._id ? "Resolving…" : "✓ Resolve"}
-                </button>
+                {/sublot.*confirm title/i.test(h.note) ? (
+                  <div style={{ display:"flex", flexDirection:"column", gap:4 }}>
+                    {["Title Picked Up", "Title Will Be Mailed"].map(opt => (
+                      <button key={opt} onClick={() => resolveHold(h._id, opt)}
+                        disabled={resolvingHold === h._id}
+                        style={{ padding:"4px 10px", borderRadius:6, border:"1px solid rgba(52,211,153,0.4)",
+                          background:"none", color:"#34d399", cursor:"pointer", fontSize:11, fontWeight:600,
+                          opacity: resolvingHold === h._id ? 0.5 : 1, whiteSpace:"nowrap" }}>
+                        {resolvingHold === h._id ? "…" : `✓ ${opt}`}
+                      </button>
+                    ))}
+                  </div>
+                ) : (
+                  <button onClick={() => resolveHold(h._id)} disabled={resolvingHold === h._id}
+                    style={{ padding:"4px 10px", borderRadius:6, border:"1px solid rgba(52,211,153,0.4)",
+                      background:"none", color:"#34d399", cursor:"pointer", fontSize:11, fontWeight:600,
+                      opacity: resolvingHold === h._id ? 0.5 : 1, whiteSpace:"nowrap" }}>
+                    {resolvingHold === h._id ? "Resolving…" : "✓ Resolve"}
+                  </button>
+                )}
               </div>
             ))}
             {resolvedHolds.length > 0 && (

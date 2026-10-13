@@ -433,13 +433,13 @@ router.post("/", async (req, res) => {
       }
     }
 
-    // ── Auto-add NO TITLE hold for sublot orders ─────────────────────
+    // ── Auto-add title-check flag for sublot orders ───────────────────
     if (req.body.isSubLot) {
       const holdNote = req.body.subLotMainYard
-        ? `Sublot — title likely at main yard: ${req.body.subLotMainYard}`
-        : "Sublot — title likely at main yard";
+        ? `Sublot — confirm title status (main yard: ${req.body.subLotMainYard})`
+        : "Sublot — confirm title status";
       await Order.findByIdAndUpdate(order._id, {
-        $push: { holds: { holdType: "No Title", note: holdNote } },
+        $push: { holds: { holdType: "Custom", note: holdNote } },
       });
     }
 
@@ -729,7 +729,7 @@ router.post("/:id/holds", async (req, res) => {
 });
 
 // RESOLVE PROBLEM/HOLD
-router.patch("/:id/holds/:holdId/resolve", async (req, res) => {
+router.patch("/:id/holds/:holdId/resolve", express.json(), async (req, res) => {
   try {
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: "Order not found" });
@@ -739,7 +739,8 @@ router.patch("/:id/holds/:holdId/resolve", async (req, res) => {
     if (hold.resolvedAt) return res.json(order); // already resolved — no-op
 
     hold.resolvedAt = new Date();
-    addTimeline(order, "Hold Resolved", `Problem/Hold resolved: ${hold.note}`);
+    const resolutionNote = req.body.resolutionNote ? ` — ${req.body.resolutionNote}` : "";
+    addTimeline(order, "Hold Resolved", `Problem/Hold resolved: ${hold.note}${resolutionNote}`);
     await order.save();
     res.json(order);
   } catch (err) {
