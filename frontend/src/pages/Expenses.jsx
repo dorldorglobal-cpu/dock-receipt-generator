@@ -2285,25 +2285,29 @@ export default function Expenses() {
                                   {row.markPartial ? "½ Partial ✓" : "½ Partial"}
                                 </button>
                               )}
-                              {/* 🔍 Pick ACL Invoices — for unmatched ACL/Grimaldi rows */}
-                              {!row.createBill && !row.splitBills && row.matchType === "none" && /acl|grimaldi/i.test(row.payeeName || "") && (
+                              {/* 🔍 Pick all unpaid expenses for this vendor */}
+                              {!row.createBill && !row.splitBills && (row.matchType === "none" || row.matchType === "review") &&
+                               (/acl|grimaldi/i.test(row.payeeName || "") || /savannah|ez.?cargo|i.?ship|cedars/i.test(row.payeeName || "")) && (
                                 <button onClick={async () => {
                                   try {
-                                    const r = await fetch(`${API}/api/expenses?category=Ocean+Freight&vendor=ACL`);
+                                    const isAcl = /acl|grimaldi/i.test(row.payeeName || "");
+                                    const vendorQ = encodeURIComponent(isAcl ? "ACL" : row.payeeName.split(" ").slice(0,2).join(" "));
+                                    const catQ    = isAcl ? "Ocean+Freight" : "Container+Loading";
+                                    const r = await fetch(`${API}/api/expenses?category=${catQ}&vendor=${vendorQ}`);
                                     if (!r.ok) return;
                                     const all = await r.json();
                                     const unpaid = all.filter(e => e.status !== "paid");
                                     setProofRows(rs => rs.map((r2, j) => j !== i ? r2 : {
                                       ...r2,
                                       candidates: unpaid,
-                                      _pickedCandidates: [],
+                                      _pickedCandidates: row._pickedCandidates || [],
                                       _showCandidates: true,
                                       matchType: "review",
                                     }));
                                   } catch(e) { console.error(e); }
                                 }}
                                   style={{ fontSize:10, fontWeight:700, color:"#fff", border:"none", borderRadius:5, padding:"3px 8px", background:"#7c3aed", cursor:"pointer" }}>
-                                  🔍 Pick ACL Invoices
+                                  🔍 {/acl|grimaldi/i.test(row.payeeName||"") ? "Pick ACL Invoices" : "Load All Expenses"}
                                 </button>
                               )}
                               {/* + Create Bill */}
@@ -2438,6 +2442,11 @@ export default function Expenses() {
                                         }));
                                       }} style={{ width:14, height:14 }} />
                                       <span style={{ fontSize:11, color:"#60a5fa", minWidth:60 }}>#{c.orderRef || "—"}</span>
+                                      {(c.orderId?.bookingNumber || c.bookingNumber) && (
+                                        <span style={{ fontSize:10, color:"var(--text-muted)", whiteSpace:"nowrap" }}>
+                                          BK {c.orderId?.bookingNumber || c.bookingNumber}
+                                        </span>
+                                      )}
                                       <span style={{ fontSize:11, color:"var(--text-secondary)", flex:1 }}>{c.description}{c.status === "partial" && <span style={{color:"var(--warning)"}}> (partial — {fmt$(owed(c))} owed)</span>}</span>
                                       <span style={{ fontSize:11, color:"#34d399", fontWeight:700, minWidth:60, textAlign:"right" }}>{fmt$(owed(c))}</span>
                                     </label>
