@@ -98,6 +98,7 @@ function parseACL(pageTexts) {
 
       const chargeMatch =
         text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i) ||
+        text.match(/TOTAL CHARGES PAYABLE AT\s+[\w ]+\s+USD\s+([\d,]+\.?\d*)/i) ||
         text.match(/TOTAL CHARGES\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
         text.match(/FREIGHT CHARGES?\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
         text.match(/OCEAN FREIGHT\s+(?:USD\s*)?([\d,]+\.?\d*)/i);
@@ -140,6 +141,7 @@ function parseACL(pageTexts) {
         }
         const chargeMatch =
           text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i) ||
+          text.match(/TOTAL CHARGES PAYABLE AT\s+[\w ]+\s+USD\s+([\d,]+\.?\d*)/i) ||
           text.match(/TOTAL CHARGES\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
           text.match(/FREIGHT CHARGES?\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
           text.match(/OCEAN FREIGHT\s+(?:USD\s*)?([\d,]+\.?\d*)/i);
