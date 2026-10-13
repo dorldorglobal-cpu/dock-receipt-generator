@@ -180,7 +180,26 @@ router.post("/parse", upload.single("pdf"), async (req, res) => {
       return res.status(400).json({ error: "Could not detect carrier (Sallaum or ACL/Grimaldi)" });
     }
 
-    const bls = isSallaum ? parseSallaum(pageTexts) : parseACL(pageTexts);
+    let bls = isSallaum ? parseSallaum(pageTexts) : parseACL(pageTexts);
+
+    // Deduplicate: same booking number or same VIN → keep one, preferring rated over draft
+    const seen = new Map();
+    const deduped = [];
+    for (const bl of bls) {
+      const key = bl.blNumber || bl.bookingNumber || bl.vin || JSON.stringify(bl.pages);
+      if (seen.has(key)) {
+        const existing = seen.get(key);
+        // Upgrade to rated if this copy has charges
+        if (bl.type === "rated" && existing.type !== "rated") {
+          existing.type = "rated";
+          existing.charges = bl.charges;
+        }
+      } else {
+        seen.set(key, bl);
+        deduped.push(bl);
+      }
+    }
+    bls = deduped;
 
     // Match ref numbers to orders
     const refNumbers = [...new Set(bls.map((b) => b.refNumber).filter(Boolean))];
