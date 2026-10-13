@@ -2396,6 +2396,18 @@ export default function Expenses() {
                             <td></td>
                             <td colSpan={6} style={{ padding:"4px 8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               <div style={{ background:"var(--bg-base)", border:"1px solid var(--warning)", borderRadius:6, padding:"8px 10px" }}>
+                                {(() => {
+                                  const seen = {}; const dups = new Set();
+                                  (row.candidates || []).forEach(c => {
+                                    const k = `${c.orderRef}|${c.amount}|${(c.description||"").trim()}`;
+                                    if (seen[k]) dups.add(k); else seen[k] = true;
+                                  });
+                                  return dups.size > 0 ? (
+                                    <div style={{ fontSize:11, color:"#f87171", fontWeight:700, marginBottom:4 }}>
+                                      ⚠ Duplicate expenses detected — check orders before applying
+                                    </div>
+                                  ) : null;
+                                })()}
                                 <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
                                   <span style={{ fontSize:11, color:"var(--warning)", fontWeight:700, flex:1 }}>
                                     Select which bills to apply — total must equal {fmt$(row.amount)}
@@ -2419,8 +2431,10 @@ export default function Expenses() {
                                     !search || (c.orderRef||"").toLowerCase().includes(search) || (c.description||"").toLowerCase().includes(search) || (c.orderId?.bookingNumber||c.bookingNumber||"").toLowerCase().includes(search)
                                   ).map(c => {
                                   const checked = (row._pickedCandidates || []).includes(c._id);
+                                  const dupKey = `${c.orderRef}|${c.amount}|${(c.description||"").trim()}`;
+                                  const isDup = (row.candidates||[]).filter(x => `${x.orderRef}|${x.amount}|${(x.description||"").trim()}` === dupKey).length > 1;
                                   return (
-                                    <label key={c._id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, cursor:"pointer" }}>
+                                    <label key={c._id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, cursor:"pointer", ...(isDup ? { background:"rgba(248,113,113,0.1)", borderRadius:4, padding:"2px 4px" } : {}) }}>
                                       <input type="checkbox" checked={checked} onChange={() => {
                                         setProofRows(rs => rs.map((r, j) => {
                                           if (j !== i) return r;
