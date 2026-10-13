@@ -3043,6 +3043,7 @@ export default function OrderDetails() {
           <tbody>
             {driveFiles.map((f) => {
               const match = (order.files || []).find(of =>
+                of.driveFileId === f.id ||
                 of.filename === f.name || of.originalName === f.name
               );
               const label = match?.label || "Document";
@@ -3100,13 +3101,13 @@ export default function OrderDetails() {
                         await fetch(`${API}/api/orders/${order._id}/file-label`, {
                           method: "PATCH",
                           headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ filename: f.name, label: newLabel }),
+                          body: JSON.stringify({ filename: f.name, driveFileId: f.id, label: newLabel }),
                         });
                         setOrder(prev => {
                           const files = [...(prev.files || [])];
-                          const idx = files.findIndex(x => x.filename === f.name || x.originalName === f.name);
+                          const idx = files.findIndex(x => x.driveFileId === f.id || x.filename === f.name || x.originalName === f.name);
                           if (idx >= 0) files[idx] = { ...files[idx], label: newLabel };
-                          else files.push({ filename: f.name, originalName: f.name, label: newLabel });
+                          else files.push({ filename: f.name, originalName: f.name, driveFileId: f.id, label: newLabel });
                           return { ...prev, files };
                         });
                       }}

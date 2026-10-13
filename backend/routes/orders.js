@@ -1940,16 +1940,20 @@ router.post("/:id/timeline", express.json(), async (req, res) => {
 // ── POST /api/orders/:id/pending-invoice-items — add a pending charge ────────
 router.patch("/:id/file-label", express.json(), async (req, res) => {
   try {
-    const { filename, label } = req.body;
+    const { filename, label, driveFileId } = req.body;
     if (!filename || !label) return res.status(400).json({ error: "filename and label required" });
     const order = await Order.findById(req.params.id);
     if (!order) return res.status(404).json({ error: "Not found" });
-    const existing = (order.files || []).find(f => f.filename === filename || f.originalName === filename);
+    // Prefer matching by Drive file ID to handle duplicate filenames
+    const existing = driveFileId
+      ? (order.files || []).find(f => f.driveFileId === driveFileId)
+      : null
+      || (order.files || []).find(f => f.filename === filename || f.originalName === filename);
     if (existing) {
       existing.label = label;
     } else {
       order.files = order.files || [];
-      order.files.push({ filename, originalName: filename, label, uploadedAt: new Date() });
+      order.files.push({ filename, originalName: filename, driveFileId: driveFileId || null, label, uploadedAt: new Date() });
     }
     await order.save();
     res.json({ ok: true });
