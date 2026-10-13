@@ -2281,6 +2281,27 @@ export default function Expenses() {
                                   {row.markPartial ? "½ Partial ✓" : "½ Partial"}
                                 </button>
                               )}
+                              {/* 🔍 Pick ACL Invoices — for unmatched ACL/Grimaldi rows */}
+                              {!row.createBill && !row.splitBills && row.matchType === "none" && /acl|grimaldi/i.test(row.payeeName || "") && (
+                                <button onClick={async () => {
+                                  try {
+                                    const r = await fetch(`${API}/api/expenses?category=Ocean+Freight&vendor=ACL`);
+                                    if (!r.ok) return;
+                                    const all = await r.json();
+                                    const unpaid = all.filter(e => e.status !== "paid");
+                                    setProofRows(rs => rs.map((r2, j) => j !== i ? r2 : {
+                                      ...r2,
+                                      candidates: unpaid,
+                                      _pickedCandidates: [],
+                                      _showCandidates: true,
+                                      matchType: "review",
+                                    }));
+                                  } catch(e) { console.error(e); }
+                                }}
+                                  style={{ fontSize:10, fontWeight:700, color:"#fff", border:"none", borderRadius:5, padding:"3px 8px", background:"#7c3aed", cursor:"pointer" }}>
+                                  🔍 Pick ACL Invoices
+                                </button>
+                              )}
                               {/* + Create Bill */}
                               {!row.createBill && !row.splitBills && (row.matchType === "none" || row.matchType === "review") && (
                                 <button onClick={() => setProofRows(rs => rs.map((r,j) => j===i ? { ...r, createBill: true, newCategory: autoCategoryFromVendor(r.payeeName) || "Port / Terminal Fees", newDescription: r.note && r.note !== r.payeeName ? r.note : "" } : r))}

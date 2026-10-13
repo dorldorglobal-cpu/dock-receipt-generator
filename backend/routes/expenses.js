@@ -126,11 +126,12 @@ function deleteFile(filename) {
 // ── GET /api/expenses — list with filters ─────────────────────────────────────
 router.get("/", async (req, res) => {
   try {
-    const { search, category, status, from, to, orderRef } = req.query;
+    const { search, category, status, from, to, orderRef, vendor } = req.query;
     const q = {};
 
     if (category) q.category = category;
     if (status)   q.status   = status;
+    if (vendor)   q.vendor   = { $regex: esc(vendor), $options: "i" };
     if (orderRef) q.orderRef = { $regex: `^${esc(orderRef)}$`, $options: "i" };
     if (from || to) {
       q.date = {};
