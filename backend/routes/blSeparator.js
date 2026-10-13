@@ -96,7 +96,11 @@ function parseACL(pageTexts) {
         if (vm) vehicle = vm[1].trim() + " " + vm[2];
       }
 
-      const chargeMatch = text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i);
+      const chargeMatch =
+        text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i) ||
+        text.match(/TOTAL CHARGES\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
+        text.match(/FREIGHT CHARGES?\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
+        text.match(/OCEAN FREIGHT\s+(?:USD\s*)?([\d,]+\.?\d*)/i);
       const charges = chargeMatch ? parseFloat(chargeMatch[1].replace(/,/g, "")) : null;
 
       // Voyage: "GSI0526" (3 letters + 4 digits); vessel: "GRANDE SICILIA"
@@ -134,7 +138,11 @@ function parseACL(pageTexts) {
           if (vc) current.voyage = vc[1];
           if (gm) current.vessel = ("GRANDE " + gm[1]).toUpperCase();
         }
-        const chargeMatch = text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i);
+        const chargeMatch =
+          text.match(/TOTAL CHARGES PAYABLE AT ORIGIN IN USD\s+([\d,]+\.?\d*)/i) ||
+          text.match(/TOTAL CHARGES\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
+          text.match(/FREIGHT CHARGES?\s+(?:USD\s*)?([\d,]+\.?\d*)/i) ||
+          text.match(/OCEAN FREIGHT\s+(?:USD\s*)?([\d,]+\.?\d*)/i);
         if (chargeMatch) {
           current.type = "rated";
           current.charges = parseFloat(chargeMatch[1].replace(/,/g, ""));
