@@ -345,6 +345,20 @@ router.post("/", uploadFields, async (req, res) => {
     }
 
     enforceVendorCategory(data);
+
+    // Duplicate guard: same orderRef + vendor + amount already exists and is unpaid
+    if (data.orderRef && data.vendor && data.amount) {
+      const dup = await Expense.findOne({
+        orderRef: data.orderRef,
+        vendor:   { $regex: `^${data.vendor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" },
+        amount:   data.amount,
+        status:   { $ne: "paid" },
+      }).lean();
+      if (dup) {
+        return res.status(409).json({ error: `Duplicate expense: an unpaid ${data.vendor} expense for $${data.amount} already exists on order ${data.orderRef} (ID: ${dup._id}).` });
+      }
+    }
+
     const expense = await Expense.create(data);
     ensureVendor(data.vendor, data.category);
 
@@ -2574,7 +2588,11 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
             );
             updated++;
           } else {
-            // 3. No existing bill found — create a new paid one
+            // 3. No existing bill found — create a new paid one (skip if duplicate)
+            const dupCheck = split.orderRef && row.payeeName && split.amount
+              ? await Expense.findOne({ orderRef: split.orderRef, vendor: { $regex: `^${esc(row.payeeName.trim())}$`, $options: "i" }, amount: Number(split.amount) }).lean()
+              : null;
+            if (dupCheck) { updated++; continue; }
             let orderId = null;
             if (split.orderRef) {
               const o = await Order.findOne({ refNumber: { $regex: `^${esc(split.orderRef)}$`, $options: "i" } })
@@ -2614,6 +2632,15 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       }
 
       if (row.createBill) {
+        // Duplicate guard before creating a brand-new bill from proof
+        if (row.orderRef && row.payeeName && row.amount) {
+          const dupBill = await Expense.findOne({
+            orderRef: row.orderRef,
+            vendor:   { $regex: `^${esc(row.payeeName.trim())}$`, $options: "i" },
+            amount:   Number(row.amount),
+          }).lean();
+          if (dupBill) { updated++; continue; }
+        }
         let orderId = null;
         if (row.orderRef) {
           const o = await Order.findOne({ refNumber: { $regex: `^${esc(row.orderRef)}$`, $options: "i" } })
