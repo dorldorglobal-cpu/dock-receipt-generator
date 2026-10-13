@@ -2392,8 +2392,17 @@ export default function Expenses() {
                             <td></td>
                             <td colSpan={6} style={{ padding:"4px 8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               <div style={{ background:"var(--bg-base)", border:"1px solid var(--warning)", borderRadius:6, padding:"8px 10px" }}>
-                                <div style={{ fontSize:11, color:"var(--warning)", fontWeight:700, marginBottom:6 }}>
-                                  Select which bills to apply — total must equal {fmt$(row.amount)}
+                                <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:6 }}>
+                                  <span style={{ fontSize:11, color:"var(--warning)", fontWeight:700, flex:1 }}>
+                                    Select which bills to apply — total must equal {fmt$(row.amount)}
+                                  </span>
+                                  <input
+                                    value={row._candidateSearch || ""}
+                                    onChange={e => setProofRows(rs => rs.map((r,j) => j!==i ? r : { ...r, _candidateSearch: e.target.value }))}
+                                    placeholder="🔍 search…"
+                                    style={{ fontSize:11, padding:"3px 8px", borderRadius:5, border:"1px solid var(--border)",
+                                      background:"var(--bg-elevated)", color:"var(--text-primary)", width:140 }}
+                                  />
                                 </div>
                                 {(() => {
                                   // Partial bills already have some amount paid — what's actually
@@ -2401,7 +2410,10 @@ export default function Expenses() {
                                   // balance, not the bill's original full amount. Matches the
                                   // effectiveAmt() logic the backend's own auto-match already uses.
                                   const owed = c => c.status === "partial" ? Math.max((c.amount || 0) - (c.paidAmount || 0), 0) : (c.amount || 0);
-                                  return row.candidates.map(c => {
+                                  const search = (row._candidateSearch || "").toLowerCase();
+                                  return row.candidates.filter(c =>
+                                    !search || (c.orderRef||"").toLowerCase().includes(search) || (c.description||"").toLowerCase().includes(search)
+                                  ).map(c => {
                                   const checked = (row._pickedCandidates || []).includes(c._id);
                                   return (
                                     <label key={c._id} style={{ display:"flex", alignItems:"center", gap:8, marginBottom:4, cursor:"pointer" }}>
