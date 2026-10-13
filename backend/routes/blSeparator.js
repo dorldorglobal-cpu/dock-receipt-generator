@@ -184,20 +184,13 @@ router.post("/parse", upload.single("pdf"), async (req, res) => {
 
     let bls = isSallaum ? parseSallaum(pageTexts) : parseACL(pageTexts);
 
-    // Deduplicate: same booking number or same VIN → keep one, preferring rated over draft
+    // Deduplicate: remove identical copies (same booking + same type).
+    // Keep draft + rated as separate entries — both get uploaded to the order.
     const seen = new Map();
     const deduped = [];
     for (const bl of bls) {
-      const key = bl.blNumber || bl.bookingNumber || bl.vin || JSON.stringify(bl.pages);
-      if (seen.has(key)) {
-        const existing = seen.get(key);
-        // Upgrade to rated if this copy has charges; also take its pages (it has the real BL content)
-        if (bl.type === "rated" && existing.type !== "rated") {
-          existing.type = "rated";
-          existing.charges = bl.charges;
-          existing.pages = bl.pages;
-        }
-      } else {
+      const key = (bl.blNumber || bl.bookingNumber || bl.vin || JSON.stringify(bl.pages)) + "|" + bl.type;
+      if (!seen.has(key)) {
         seen.set(key, bl);
         deduped.push(bl);
       }
