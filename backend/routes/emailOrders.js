@@ -124,11 +124,33 @@ router.post("/:id/approve", express.json(), async (req, res) => {
       }
     }
 
+    // Copy customer details from the most recent existing order with the same customer name
+    let custDefaults = {};
+    if (data.customerName) {
+      const prev = await Order.findOne({ customerName: { $regex: `^${data.customerName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" } })
+        .sort({ _id: -1 })
+        .select("customerPhone customerEmail consigneeName consigneeAddress consigneeCity consigneeState consigneeCountry source")
+        .lean();
+      if (prev) {
+        custDefaults = {
+          customerPhone:     prev.customerPhone     || "",
+          customerEmail:     prev.customerEmail     || "",
+          consigneeName:     prev.consigneeName     || "",
+          consigneeAddress:  prev.consigneeAddress  || "",
+          consigneeCity:     prev.consigneeCity     || "",
+          consigneeState:    prev.consigneeState    || "",
+          consigneeCountry:  prev.consigneeCountry  || "",
+          source:            prev.source            || "USA OFFICE",
+        };
+      }
+    }
+
     // Create the order
     const pickupFull = [data.pickupAddress, data.pickupCity, data.pickupState, data.pickupZip].filter(Boolean).join(", ");
     const order = await Order.create({
       refNumber,
       customerName:  data.customerName || "",
+      ...custDefaults,
       year:          data.year || "",
       make:          data.make || "",
       model:         data.model || "",
@@ -153,7 +175,7 @@ router.post("/:id/approve", express.json(), async (req, res) => {
       shippingLine,
       titleStatus:   data.titleStatus || "Title",
       status:        "New Order",
-      source:        "Copart Email",
+      source:        custDefaults.source || "Copart Email",
       notes:         data.notes || "",
     });
 
