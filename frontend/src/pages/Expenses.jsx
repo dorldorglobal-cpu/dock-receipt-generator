@@ -924,7 +924,7 @@ export default function Expenses() {
       // auto-matched, so opening the picker on a combined match shows those
       // bills already ticked instead of a blank list.
       setProofRows(data.rows.map(r => {
-        const isLoader = /savannah|ez.?cargo|i.?ship|cedars/i.test(r.payeeName || "");
+        const isLoader = /savannah|e-?z\s*cargo|i-?ship|cedars/i.test(r.payeeName || "");
         const isMultiRef = (r.orderRef || "").includes("/");
         // Auto-expand picker for loader/multi-ref review rows so user sees all candidates immediately
         const autoExpand = r.candidates?.length > 0 && r.matchType === "review" && (isLoader || isMultiRef);
@@ -2287,11 +2287,11 @@ export default function Expenses() {
                               )}
                               {/* 🔍 Pick all unpaid expenses for this vendor */}
                               {!row.createBill && !row.splitBills && (row.matchType === "none" || row.matchType === "review") &&
-                               (/acl|grimaldi/i.test(row.payeeName || "") || /savannah|ez.?cargo|i.?ship|cedars/i.test(row.payeeName || "")) && (
+                               (/acl|grimaldi/i.test(row.payeeName || "") || /savannah|e-?z\s*cargo|i-?ship|cedars/i.test(row.payeeName || "")) && (
                                 <button onClick={async () => {
                                   try {
                                     const isAcl = /acl|grimaldi/i.test(row.payeeName || "");
-                                    const vendorQ = encodeURIComponent(isAcl ? "ACL" : row.payeeName.split(" ").slice(0,2).join(" "));
+                                    const vendorQ = encodeURIComponent(isAcl ? "ACL" : row.payeeName.replace(/-/g, "").replace(/\s+/g, " ").trim().split(" ").slice(0,2).join(" "));
                                     const catQ    = encodeURIComponent(isAcl ? "Ocean Freight" : "Loaders & Warehouses");
                                     const r = await fetch(`${API}/api/expenses?category=${catQ}&vendor=${vendorQ}`);
                                     if (!r.ok) return;
