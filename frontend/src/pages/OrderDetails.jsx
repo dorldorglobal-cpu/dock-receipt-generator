@@ -6098,25 +6098,23 @@ export default function OrderDetails() {
                     </div>
                   ))}
                 </div>
+              </div>
 
-                {/* Add attachment buttons */}
-                <div style={{ display:"flex", gap:8, marginTop:10 }}>
-                  {/* Pick from order files */}
-                  {(order.files||[]).filter(f => f.driveFileId && !invExtraDriveIds.includes(f.driveFileId) && (f.label||"").toLowerCase() !== "draft").length > 0 && (
-                    <select onChange={e => { if (e.target.value) { setInvExtraDriveIds(ids => [...ids, e.target.value]); e.target.value = ""; } }}
-                      style={{ flex:1, fontSize:11, padding:"4px 6px", background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-primary)" }}>
-                      <option value="">+ Add from order files…</option>
-                      {(order.files||[]).filter(f => f.driveFileId && !invExtraDriveIds.includes(f.driveFileId) && (f.label||"").toLowerCase() !== "draft").map(f => (
-                        <option key={f.driveFileId} value={f.driveFileId}>{f.label ? `[${f.label}] ` : ""}{f.originalName || f.filename}</option>
-                      ))}
-                    </select>
-                  )}
-                  {/* Upload from computer */}
-                  <label style={{ fontSize:11, padding:"4px 8px", background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-secondary)", cursor:"pointer", whiteSpace:"nowrap" }}>
-                    + From computer
-                    <input type="file" multiple style={{ display:"none" }} onChange={e => setInvExtraFiles(fs => [...fs, ...Array.from(e.target.files)])} />
-                  </label>
-                </div>
+              {/* Add attachment buttons — outside the border box */}
+              <div style={{ display:"flex", gap:8, marginBottom:12, flexWrap:"wrap" }}>
+                {(order.files||[]).filter(f => f.driveFileId && !invExtraDriveIds.includes(f.driveFileId) && (f.label||"").toLowerCase() !== "draft").length > 0 && (
+                  <select onChange={e => { if (e.target.value) { setInvExtraDriveIds(ids => [...ids, e.target.value]); e.target.value = ""; } }}
+                    style={{ flex:1, minWidth:0, fontSize:11, padding:"4px 6px", background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-primary)" }}>
+                    <option value="">+ Add from order files…</option>
+                    {(order.files||[]).filter(f => f.driveFileId && !invExtraDriveIds.includes(f.driveFileId) && (f.label||"").toLowerCase() !== "draft").map(f => (
+                      <option key={f.driveFileId} value={f.driveFileId}>{f.label ? `[${f.label}] ` : ""}{f.originalName || f.filename}</option>
+                    ))}
+                  </select>
+                )}
+                <label style={{ fontSize:11, padding:"4px 10px", background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-secondary)", cursor:"pointer", whiteSpace:"nowrap", display:"inline-flex", alignItems:"center" }}>
+                  + From computer
+                  <input type="file" multiple style={{ display:"none" }} onChange={e => setInvExtraFiles(fs => [...fs, ...Array.from(e.target.files)])} />
+                </label>
               </div>
 
               <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
