@@ -478,10 +478,12 @@ export default function OrderDetails() {
   const [billReceiptFile, setBillReceiptFile] = useState(null);
   const [billDocFile,    setBillDocFile]      = useState(null);
   const [invoiceSendModal, setInvoiceSendModal] = useState(null); // { pdfBase64, pdfName, invoiceNumber }
-  const [invSendTo,   setInvSendTo]   = useState("");
-  const [invSubject,  setInvSubject]  = useState("");
-  const [invBody,     setInvBody]     = useState("");
-  const [invSending,  setInvSending]  = useState(false);
+  const [invSendTo,        setInvSendTo]        = useState("");
+  const [invSubject,       setInvSubject]       = useState("");
+  const [invBody,          setInvBody]          = useState("");
+  const [invSending,       setInvSending]       = useState(false);
+  const [invExtraDriveIds, setInvExtraDriveIds] = useState([]); // driveFileId strings from order files
+  const [invExtraFiles,    setInvExtraFiles]    = useState([]); // local File objects
 
   const [drSendModal,  setDrSendModal]  = useState(null); // { pdfBase64, pdfName }
   const [drSendTo,     setDrSendTo]     = useState("");
@@ -2020,11 +2022,15 @@ export default function OrderDetails() {
     if (!to) return alert("Enter customer email.");
     setInvSending(true);
     try {
-      // Uses the dedicated send endpoint — auto-attaches invoice PDF + Draft doc from order files
+      const fd = new FormData();
+      fd.append("to", to);
+      fd.append("subject", invSubject);
+      fd.append("body", invBody);
+      if (invExtraDriveIds.length) fd.append("extraDriveIds", JSON.stringify(invExtraDriveIds));
+      invExtraFiles.forEach(f => fd.append("extraFiles", f));
       const res = await fetch(`${API}/api/invoices/${invoiceSendModal.invoiceId}/send`, {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to, subject: invSubject, body: invBody }),
+        body: fd,
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Send failed");
@@ -2037,6 +2043,7 @@ export default function OrderDetails() {
       fetchOrder();
       fetchOrderInvoices();
       setInvoiceSendModal(null);
+      setInvExtraDriveIds([]); setInvExtraFiles([]);
       setMessage(`✅ Invoice sent to ${to}${data.attachments?.length > 1 ? ` with ${data.attachments.length} attachments` : ""}`);
       const params = new URLSearchParams(location.search);
       const loadId = params.get("loadId");
@@ -6061,7 +6068,7 @@ export default function OrderDetails() {
               <h3 style={{ margin:"0 0 18px", color:"var(--text-primary)" }}>✉️ Send Invoice #{invoiceSendModal.invoiceNumber}</h3>
 
               {/* Attachments preview */}
-              <div style={{ marginBottom:16, padding:"10px 14px", background:"var(--bg-base)", borderRadius:8, border:"1px solid var(--border)" }}>
+              <div style={{ marginBottom:12, padding:"10px 14px", background:"var(--bg-base)", borderRadius:8, border:"1px solid var(--border)" }}>
                 <div style={{ fontSize:11, color:"var(--text-secondary)", textTransform:"uppercase", letterSpacing:"0.05em", marginBottom:8 }}>Attachments</div>
                 <div style={{ display:"flex", flexDirection:"column", gap:5 }}>
                   <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-primary)" }}>
@@ -6071,6 +6078,44 @@ export default function OrderDetails() {
                     <span>{hasDraft ? "📝" : "⚠️"}</span>
                     {hasDraft ? "Draft.pdf" : "Draft — not uploaded on this order"}
                   </div>
+                  {/* Extra Drive files */}
+                  {invExtraDriveIds.map(id => {
+                    const f = (order.files||[]).find(x => x.driveFileId === id);
+                    return (
+                      <div key={id} style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-primary)" }}>
+                        <span>📎</span> {f?.originalName || f?.filename || id}
+                        <button onClick={() => setInvExtraDriveIds(ids => ids.filter(x => x !== id))}
+                          style={{ marginLeft:"auto", background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:12 }}>✕</button>
+                      </div>
+                    );
+                  })}
+                  {/* Extra local files */}
+                  {invExtraFiles.map((f,i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-primary)" }}>
+                      <span>📎</span> {f.name}
+                      <button onClick={() => setInvExtraFiles(fs => fs.filter((_,j) => j !== i))}
+                        style={{ marginLeft:"auto", background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:12 }}>✕</button>
+                    </div>
+                  ))}
+                </div>
+
+                {/* Add attachment buttons */}
+                <div style={{ display:"flex", gap:8, marginTop:10 }}>
+                  {/* Pick from order files */}
+                  {(order.files||[]).filter(f => f.driveFileId && !invExtraDriveIds.includes(f.driveFileId) && (f.label||"").toLowerCase() !== "draft").length > 0 && (
+                    <select onChange={e => { if (e.target.value) { setInvExtraDriveIds(ids => [...ids, e.target.value]); e.target.value = ""; } }}
+                      style={{ flex:1, fontSize:11, padding:"4px 6px", background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-primary)" }}>
+                      <option value="">+ Add from order files…</option>
+                      {(order.files||[]).filter(f => f.driveFileId && !invExtraDriveIds.includes(f.driveFileId) && (f.label||"").toLowerCase() !== "draft").map(f => (
+                        <option key={f.driveFileId} value={f.driveFileId}>{f.label ? `[${f.label}] ` : ""}{f.originalName || f.filename}</option>
+                      ))}
+                    </select>
+                  )}
+                  {/* Upload from computer */}
+                  <label style={{ fontSize:11, padding:"4px 8px", background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-secondary)", cursor:"pointer", whiteSpace:"nowrap" }}>
+                    + From computer
+                    <input type="file" multiple style={{ display:"none" }} onChange={e => setInvExtraFiles(fs => [...fs, ...Array.from(e.target.files)])} />
+                  </label>
                 </div>
               </div>
 

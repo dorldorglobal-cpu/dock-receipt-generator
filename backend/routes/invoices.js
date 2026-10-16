@@ -1,12 +1,15 @@
 const express = require("express");
 const router  = express.Router();
 const path    = require("path");
+const multer  = require("multer");
 const Invoice        = require("../models/Invoice");
 const Order          = require("../models/Order");
 const CustomerCredit = require("../models/CustomerCredit");
 const PDFDocument = require("pdfkit");
-const { uploadBufferToDrive, deleteDriveFile } = require("../googleDrive");
+const { uploadBufferToDrive, deleteDriveFile, downloadDriveFile } = require("../googleDrive");
 const { b64lines } = require("../utils/mime");
+
+const memUploadInv = multer({ storage: multer.memoryStorage() });
 
 // ── Auto-generate next invoice number ─────────────────────────────────────────
 async function nextInvoiceNumber() {
@@ -1026,9 +1029,9 @@ router.get("/:id/pdf", async (req, res) => {
 });
 
 // ── POST /api/invoices/:id/send — email invoice + draft attachment ────────────
-router.post("/:id/send", async (req, res) => {
+router.post("/:id/send", memUploadInv.array("extraFiles"), async (req, res) => {
   try {
-    const { to, subject, body } = req.body;
+    const { to, subject, body, extraDriveIds } = req.body;
     if (!to) return res.status(400).json({ error: "to is required" });
 
     const inv = await Invoice.findById(req.params.id).lean();
@@ -1052,7 +1055,6 @@ router.post("/:id/send", async (req, res) => {
         try {
           const fs = require("fs");
           const os = require("os");
-          const { downloadDriveFile } = require("../googleDrive");
           const tmpPath = path.join(os.tmpdir(), `draft-${Date.now()}.pdf`);
           await downloadDriveFile(draftFile.driveFileId, tmpPath);
           const draftBuffer = fs.readFileSync(tmpPath);
@@ -1068,7 +1070,27 @@ router.post("/:id/send", async (req, res) => {
       }
     }
 
-    // ── 3. Send via Gmail API (same path as DR send) ─────────────────────────
+    // ── 3. Extra attachments — Drive files picked from order ─────────────────
+    const extraIds = extraDriveIds ? JSON.parse(extraDriveIds) : [];
+    for (const driveId of extraIds) {
+      try {
+        const os = require("os");
+        const fs = require("fs");
+        const tmpPath = path.join(os.tmpdir(), `inv-extra-${Date.now()}-${driveId}.pdf`);
+        await downloadDriveFile(driveId, tmpPath);
+        const buf = fs.readFileSync(tmpPath);
+        fs.unlinkSync(tmpPath);
+        const orderFile = (order?.files || []).find(f => f.driveFileId === driveId);
+        attachments.push({ filename: orderFile?.originalName || orderFile?.filename || `${driveId}.pdf`, content: buf.toString("base64"), encoding: "base64" });
+      } catch (e) { console.warn("[Invoice Send] extra drive attach failed:", e.message); }
+    }
+
+    // Extra attachments — uploaded from computer
+    for (const f of (req.files || [])) {
+      attachments.push({ filename: f.originalname, content: f.buffer.toString("base64"), encoding: "base64" });
+    }
+
+    // ── 4. Send via Gmail API (same path as DR send) ─────────────────────────
     const { getGmailAccessToken } = require("../utils/gmail");
     const accessToken = await getGmailAccessToken();
     const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
