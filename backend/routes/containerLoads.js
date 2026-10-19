@@ -624,19 +624,48 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
       }
     } catch (uploadErr) { console.warn("Could not save invoice to load docs:", uploadErr.message); }
 
+    // Collect attachments: combined invoice + Draft BL if found
+    const combinedAttachments = [{ filename, b64 }];
+    try {
+      const { downloadDriveFile } = require("../googleDrive");
+      const fs = require("fs");
+      const os = require("os");
+      const isDraft = f => /^draft/i.test(f.label || "") || /draft/i.test(f.originalName || "") || /draft/i.test(f.filename || "");
+      let draftFile = (load.files || []).find(isDraft);
+      if (!draftFile) {
+        for (const o of orders) {
+          draftFile = (o.files || []).find(isDraft);
+          if (draftFile) break;
+        }
+      }
+      if (draftFile?.driveFileId) {
+        const tmpPath = require("path").join(os.tmpdir(), `draft-bl-${Date.now()}.pdf`);
+        await downloadDriveFile(draftFile.driveFileId, tmpPath);
+        const buf = fs.readFileSync(tmpPath);
+        fs.unlinkSync(tmpPath);
+        combinedAttachments.push({ filename: draftFile.originalName || "Draft-BL.pdf", b64: buf.toString("base64") });
+      }
+    } catch (draftErr) {
+      console.warn("[send-combined-invoice] Could not attach Draft BL:", draftErr.message);
+    }
+
     const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
     const boundary = "DDG_COMB_" + Date.now();
+    const attachmentParts = combinedAttachments.map(a => [
+      `--${boundary}`,
+      `Content-Type: application/pdf; name="${a.filename}"`,
+      `Content-Transfer-Encoding: base64`,
+      `Content-Disposition: attachment; filename="${a.filename}"`,
+      ``, b64lines(a.b64), ``,
+    ].join("\r\n")).join("\r\n");
     const mimeLines = [
       `From: ${from}`, `To: ${to}`,
       `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
       `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`,
       ``, `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``,
       body || "", ``,
-      `--${boundary}`,
-      `Content-Type: application/pdf; name="${filename}"`,
-      `Content-Transfer-Encoding: base64`,
-      `Content-Disposition: attachment; filename="${filename}"`,
-      ``, b64lines(b64), ``, `--${boundary}--`,
+      attachmentParts,
+      `--${boundary}--`,
     ];
 
     const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
