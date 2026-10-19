@@ -485,6 +485,12 @@ export default function OrderDetails() {
   const [invExtraDriveIds, setInvExtraDriveIds] = useState([]); // driveFileId strings from order files
   const [invExtraFiles,    setInvExtraFiles]    = useState([]); // local File objects
 
+  const [draftSendModal,  setDraftSendModal]  = useState(null); // { driveFileId, filename }
+  const [draftSendTo,     setDraftSendTo]     = useState("");
+  const [draftSendSubject,setDraftSendSubject]= useState("");
+  const [draftSendBody,   setDraftSendBody]   = useState("");
+  const [draftSending,    setDraftSending]    = useState(false);
+
   const [drSendModal,  setDrSendModal]  = useState(null); // { pdfBase64, pdfName }
   const [drSendTo,     setDrSendTo]     = useState("");
   const [drSendTrucker,setDrSendTrucker]= useState("");
@@ -1736,6 +1742,48 @@ export default function OrderDetails() {
       setMessage("❌ Failed to send DR: " + msg);
     } finally {
       setDrSending(false);
+    }
+  };
+
+  const openDraftSendModal = (driveFileId, filename) => {
+    const custEmail = order.customerEmail || "";
+    const ref = order.refNumber || "";
+    const ymm = [order.year, order.make, order.model].filter(Boolean).join(" ");
+    setDraftSendTo(custEmail);
+    setDraftSendSubject(`${ref} Draft BL${ymm ? ` — ${ymm}` : ""}`);
+    setDraftSendBody(`Dear Customer,\n\nPlease find your Draft Bill of Lading attached for review.\n\nRef: ${ref}${ymm ? `\nVehicle: ${ymm}` : ""}${order.vin ? `\nVIN: ${order.vin}` : ""}\n\nPlease review and confirm all details are correct.\n\nRegards,\nDDG OPS`);
+    setDraftSendModal({ driveFileId, filename });
+  };
+
+  const sendDraftEmail = async () => {
+    if (!draftSendModal) return;
+    if (!draftSendTo.trim()) return alert("Enter a recipient email address.");
+    setDraftSending(true);
+    try {
+      const res = await fetch(`${API}/api/orders/${id}/send-draft-bl`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to:       draftSendTo.trim(),
+          subject:  draftSendSubject,
+          body:     draftSendBody,
+          driveFileId: draftSendModal.driveFileId,
+          filename:    draftSendModal.filename,
+        }),
+      });
+      if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error || `Server error ${res.status}`); }
+      await fetch(`${API}/api/orders/${id}/timeline`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "Draft BL Sent", details: `Sent to ${draftSendTo.trim()}` }),
+      });
+      fetchOrder();
+      setDraftSendModal(null);
+      setMessage("✅ Draft BL sent to customer");
+    } catch(e) {
+      setMessage("❌ Failed to send Draft BL: " + e.message);
+    } finally {
+      setDraftSending(false);
     }
   };
 
@@ -3076,6 +3124,7 @@ export default function OrderDetails() {
               const isRatedDraft    = label === "Rated Draft";
               const isStoragePaid   = label === "Storage Paid";
               const isBuyerReceipt  = label === "Buyer Receipt";
+              const isDraftBl       = label === "Draft";
 
               const createStorageBill = async () => {
                 try {
@@ -3244,6 +3293,14 @@ export default function OrderDetails() {
                           🔄 Reparse
                         </button>
                       </>
+                    )}
+                    {isDraftBl && (
+                      <button
+                        title="Send Draft BL to customer"
+                        onClick={e => { e.stopPropagation(); openDraftSendModal(f.id, f.name); }}
+                        style={{ background:"none", border:"none", cursor:"pointer", color:"#38bdf8", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                        📨 Send to Customer
+                      </button>
                     )}
                     {isRatedDraft && (
                       <button
@@ -5706,6 +5763,37 @@ export default function OrderDetails() {
               <button onClick={() => setDrSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
               <button onClick={sendDrEmail} disabled={drSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {drSending ? "Sending…" : "Send DR"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send Draft BL Modal ── */}
+      {draftSendModal && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2000, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #38bdf8", borderRadius:12, padding:28, width:500, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 4px", color:"#38bdf8" }}>📨 Send Draft BL to Customer</h3>
+            <p style={{ margin:"0 0 18px", fontSize:12, color:"var(--text-muted)" }}>{draftSendModal.filename}</p>
+            {[
+              { label:"To (Customer Email)", value: draftSendTo, set: setDraftSendTo, placeholder:"customer@example.com" },
+              { label:"Subject", value: draftSendSubject, set: setDraftSendSubject, placeholder:"Subject" },
+            ].map(({ label, value, set, placeholder }) => (
+              <label key={label} style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
+                {label}
+                <input value={value} onChange={e => set(e.target.value)} placeholder={placeholder}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+              </label>
+            ))}
+            <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
+              Message
+              <textarea value={draftSendBody} onChange={e => setDraftSendBody(e.target.value)} rows={6}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+            </label>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setDraftSendModal(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
+              <button onClick={sendDraftEmail} disabled={draftSending} style={{ padding:"8px 20px", background:"#0284c7", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600, opacity:draftSending?0.6:1 }}>
+                {draftSending ? "Sending…" : "Send Draft BL"}
               </button>
             </div>
           </div>

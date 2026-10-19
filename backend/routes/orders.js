@@ -2191,4 +2191,54 @@ router.post("/:id/acl-sheet-upsert", express.json(), async (req, res) => {
   }
 });
 
+// ── POST /api/orders/:id/send-draft-bl — email Draft BL from Drive ────────────
+router.post("/:id/send-draft-bl", express.json(), async (req, res) => {
+  try {
+    const { to, subject, body, driveFileId, filename } = req.body;
+    if (!to || !driveFileId) return res.status(400).json({ error: "to and driveFileId are required" });
+
+    const { downloadDriveFile } = require("../googleDrive");
+    const { getGmailAccessToken } = require("../utils/gmail");
+    const { google } = require("googleapis");
+    const fs = require("fs");
+    const os = require("os");
+    const path = require("path");
+
+    const tmpPath = path.join(os.tmpdir(), `draft-bl-send-${Date.now()}.pdf`);
+    await downloadDriveFile(driveFileId, tmpPath);
+    const buf = fs.readFileSync(tmpPath);
+    fs.unlinkSync(tmpPath);
+
+    const b64 = buf.toString("base64");
+    const wrappedB64 = b64.match(/.{1,76}/g).join("\r\n");
+    const fname = filename || "Draft-BL.pdf";
+    const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+    const boundary = "DDG_DRAFT_" + Date.now();
+    const mimeLines = [
+      `From: ${from}`, `To: ${to}`,
+      `Subject: =?UTF-8?B?${Buffer.from(subject || fname).toString("base64")}?=`,
+      `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`,
+      ``, `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``,
+      body || "",
+      `--${boundary}`,
+      `Content-Type: application/pdf; name="${fname}"`,
+      `Content-Transfer-Encoding: base64`,
+      `Content-Disposition: attachment; filename="${fname}"`,
+      ``, wrappedB64, ``, `--${boundary}--`,
+    ];
+
+    const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+    const accessToken = await getGmailAccessToken();
+    const gmail = google.gmail("v1");
+    const auth = new google.auth.OAuth2();
+    auth.setCredentials({ access_token: accessToken });
+    await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[send-draft-bl]", err.message);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 module.exports = router;
