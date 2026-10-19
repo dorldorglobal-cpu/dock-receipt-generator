@@ -2174,6 +2174,10 @@ router.post("/:id/acl-sheet-upsert", express.json(), async (req, res) => {
 
     const { bookingNumber, vin, consignee, pol, pod, vessel, sailDate, statusOverride } = req.body;
 
+    if ((order.shippingLine || "").toUpperCase() === "SALLAUM") {
+      return res.json({ ok: true, skipped: "Sallaum orders are not tracked in the ACL sheet" });
+    }
+
     upsertAclRow({
       bookingNumber: bookingNumber || order.bookingNumber || "",
       vin:           vin          || order.vin           || "",

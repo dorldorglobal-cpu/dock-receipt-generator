@@ -349,8 +349,9 @@ router.post("/attach", async (req, res) => {
 
         await order.save();
 
-        // Update ACL master sheet (non-fatal) — only once per order per batch
-        if (!aclSheetUpdated.has(String(order._id))) {
+        // Update ACL master sheet (non-fatal) — only once per order per batch, ACL only
+        const isAcl = (order.shippingLine || "").toUpperCase() !== "SALLAUM";
+        if (isAcl && !aclSheetUpdated.has(String(order._id))) {
           aclSheetUpdated.add(String(order._id));
           upsertAclRow({
             bookingNumber: bl.blNumber || "",
