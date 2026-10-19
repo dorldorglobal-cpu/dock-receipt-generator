@@ -1852,6 +1852,14 @@ router.get("/:id/dr-payload", async (req, res) => {
       if (o[k]) deliveryOverrideGuard[k] = o[k];
     }
 
+    // Consignee fields on the order are also protected — the AES parser can
+    // pick up garbled/concatenated text from the AES form and corrupt the
+    // clean address the user entered on the order.
+    const consigneeOverrideGuard = {};
+    for (const k of ["consigneeName","consigneeAddress","consigneeCity","consigneeState","consigneeZip","consigneeCountry"]) {
+      if (o[k]) consigneeOverrideGuard[k] = o[k];
+    }
+
     const payload = {
       // order base
       ...o,
@@ -1862,6 +1870,8 @@ router.get("/:id/dr-payload", async (req, res) => {
       ...cleanDispatch,
       // Delivery address: order wins over parsed PDFs
       ...deliveryOverrideGuard,
+      // Consignee address: order wins over AES/dispatch re-parse
+      ...consigneeOverrideGuard,
       // Schedule
       ...cleanSpread(scheduleData),
       // VIN is already validated on the order (checked for duplicates at
