@@ -1750,7 +1750,8 @@ export default function OrderDetails() {
     const ref = order.refNumber || "";
     const ymm = [order.year, order.make, order.model].filter(Boolean).join(" ");
     setDraftSendTo(custEmail);
-    setDraftSendSubject(`${ref} Draft BL${ymm ? ` — ${ymm}` : ""}`);
+    const vin6 = (order.vin || "").slice(-6);
+    setDraftSendSubject(`${ref} Draft BL${ymm ? ` — ${ymm}` : ""}${vin6 ? ` VIN: ${vin6}` : ""}`);
     setDraftSendBody(`Dear Customer,\n\nPlease find your Draft Bill of Lading attached for review.\n\nRef: ${ref}${ymm ? `\nVehicle: ${ymm}` : ""}${order.vin ? `\nVIN: ${order.vin}` : ""}\n\nPlease review and confirm all details are correct.\n\nRegards,\nDDG OPS`);
     setDraftSendModal({ driveFileId, filename });
   };
