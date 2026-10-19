@@ -817,10 +817,13 @@ router.post(
           const updates = [];
 
           // Always save the full DR fields from AES (overwrite blanks, keep existing)
+          // NOTE: consigneeAddress/City/Country are intentionally excluded — the AES
+          // two-column PDF layout causes the parser to produce garbled concatenated text.
+          // Those fields should come from the user's order entry, not the AES form.
           const aesFields = [
             "bookingNumber","vin","year","make","model","pol","pod",
             "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
-            "consigneeName","consigneeAddress","consigneeCity","consigneeCountry",
+            "consigneeName",
             "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
           ];
           for (const field of aesFields) {
@@ -1016,10 +1019,11 @@ router.post("/:id/parse-drive-files", async (req, res) => {
       if (name.includes("aes")) {
         const parsed  = await parseAES(tempPath);
         const updates = [];
+        // consigneeAddress/City/Country excluded — AES two-column layout produces garbled text
         const aesFields = [
           "bookingNumber","vin","year","make","model","pol","pod",
           "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
-          "consigneeName","consigneeAddress","consigneeCity","consigneeCountry",
+          "consigneeName",
           "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
         ];
         for (const field of aesFields) {
