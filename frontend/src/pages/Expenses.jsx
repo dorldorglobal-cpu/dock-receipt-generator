@@ -2030,18 +2030,24 @@ export default function Expenses() {
                 {inv.error ? <div style={{ color: "#f87171", fontSize: 13 }}>❌ {inv.error}</div> : (
                   <div style={{ overflowX: "auto" }}>
                     <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                      <thead><tr>{["✓","VIN","Vehicle","Booking #","Order Ref","Customer","Amount","Status"].map(h => <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"var(--text-muted)", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
+                      <thead><tr>{["✓","VIN","Vehicle","Booking #","Order Ref","Customer","Amount","Status",""].map(h => <th key={h} style={{ padding:"8px 10px", textAlign:"left", color:"var(--text-muted)", fontSize:11, fontWeight:600, borderBottom:"1px solid var(--border)", whiteSpace:"nowrap" }}>{h}</th>)}</tr></thead>
                       <tbody>
                         {inv.rows?.map((row, i) => (
                           <tr key={i} style={{ opacity: row.skip ? 0.4 : 1 }}>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}><input type="checkbox" checked={!row.skip} onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, skip: !e.target.checked } : rr) }))}/></td>
-                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>{row.vin}</td>
+                            <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", fontFamily:"monospace", fontSize:12, color:"#94a3b8" }}>
+                              {row.manual
+                                ? <input value={row.vin} placeholder="Enter VIN…"
+                                    onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, vin: e.target.value } : rr) }))}
+                                    style={{ background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:6, padding:"3px 8px", color:"#94a3b8", fontSize:12, width:160, fontFamily:"monospace" }}/>
+                                : row.vin}
+                            </td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-primary)", whiteSpace:"nowrap" }}>{row.ymm || "—"}</td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"#a78bfa", fontWeight:600, fontSize:12 }}>{inv.booking || "—"}</td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               {row.matched ? <span style={{ color:"#60a5fa", fontWeight:600 }}>{row.orderRef}</span>
                                 : <input value={row.orderRef} placeholder="Enter ref…"
-                                    onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, orderRef: e.target.value } : rr) }))}
+                                    onChange={e => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.map((rr, j) => j === i ? { ...rr, orderRef: e.target.value, matched: false } : rr) }))}
                                     style={{ background:"var(--bg-elevated)", border:"1px solid var(--warning)", borderRadius:6, padding:"3px 8px", color:"var(--warning)", fontSize:12, width:100 }}/>}
                             </td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)", color:"var(--text-secondary)", fontSize:12 }}>{row.customerName || "—"}</td>
@@ -2055,10 +2061,24 @@ export default function Expenses() {
                                 : row.matched ? <span style={{ color:"#34d399", fontSize:12 }}>✅ Matched</span>
                                 : <span style={{ color:"var(--warning)", fontSize:12 }}>⚠ No match</span>}
                             </td>
+                            <td style={{ padding:"4px 6px", borderBottom:"1px solid var(--border-muted)" }}>
+                              {row.manual && (
+                                <button onClick={() => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : { ...r, rows: r.rows.filter((_, j) => j !== i) }))}
+                                  style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:14, padding:"2px 4px" }}>✕</button>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                     </table>
+                    <button
+                      onClick={() => setContainerResults(rs => rs.map((r, ri) => ri !== ii ? r : {
+                        ...r,
+                        rows: [...(r.rows||[]), { vin:"", ymm:"", orderRef:"", customerName:"", total: r.rows?.[0]?.total || 0, matched:false, skip:false, manual:true }]
+                      }))}
+                      style={{ marginTop:8, background:"none", border:"1px dashed var(--border)", borderRadius:6, padding:"4px 12px", color:"var(--text-muted)", fontSize:12, cursor:"pointer" }}>
+                      + Add Missing VIN
+                    </button>
                   </div>
                 )}
               </div>
