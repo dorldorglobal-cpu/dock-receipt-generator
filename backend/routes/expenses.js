@@ -1793,7 +1793,7 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
           const duplicate = dupOrderIds.has(String(order?._id));
           return {
             vin,
-            ymm:          d.ymm || (order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : ""),
+            ymm:          (order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : "") || d.ymm,
             total:        rowTotal,
             orderId:      order?._id || null,
             orderRef:     order?.refNumber || "",
