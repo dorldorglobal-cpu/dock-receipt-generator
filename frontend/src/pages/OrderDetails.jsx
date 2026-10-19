@@ -3333,10 +3333,19 @@ export default function OrderDetails() {
                 {/* Towing row — edit button */}
                 {(() => {
                   const editing = editingInternalRow === "towing";
+                  const isSelfDispatch = (order.dispatchMethod || "") === "Self Dispatch";
                   return (
                     <tr style={{ borderBottom:"1px solid var(--border)" }}>
                       <td style={{ padding:"5px 8px" }}>
-                        <div style={{ fontWeight:600 }}>Towing</div>
+                        <div style={{ fontWeight:600 }}>
+                          Towing
+                          {isSelfDispatch && (
+                            <span style={{ marginLeft:6, fontSize:10, fontWeight:700,
+                              background:"rgba(217,119,6,0.15)", color:"#d97706",
+                              border:"1px solid rgba(217,119,6,0.35)", borderRadius:4,
+                              padding:"1px 5px" }}>Self Tow</span>
+                          )}
+                        </div>
                         {(order.pickupLocation || order.pickupCity) && (
                           <div style={{ fontSize:10, color:"var(--text-muted)", marginTop:1 }}>
                             {(() => {
@@ -3372,7 +3381,14 @@ export default function OrderDetails() {
                       ) : (
                         <>
                           <td style={{ textAlign:"right", padding:"5px 8px", color:"var(--accent)", fontWeight:700 }}>
-                            {towSell > 0 ? fmt(towSell) : <span style={{ color:"var(--text-muted)" }}>—</span>}
+                            {towSell > 0 ? fmt(towSell) : (
+                              isSelfDispatch
+                                ? <span onClick={() => setEditingInternalRow("towing")}
+                                    style={{ color:"#d97706", fontSize:11, cursor:"pointer", textDecoration:"underline dotted" }}>
+                                    + Add price
+                                  </span>
+                                : <span style={{ color:"var(--text-muted)" }}>—</span>
+                            )}
                           </td>
                           <td style={{ textAlign:"right", padding:"5px 8px", color:"#f87171", fontWeight:700 }}>
                             {towCost > 0 ? fmt(towCost) : <span style={{ color:"var(--text-muted)" }}>—</span>}
