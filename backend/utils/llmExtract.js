@@ -41,7 +41,8 @@ const AES_SYSTEM_PROMPT =
   "- bookingNumber: from the field labeled \"TRANSPORTATION REFERENCE NO.\" (format like \"S3-29596609\")\n" +
   "- referenceNumber: from the field labeled \"SHIPMENT REFERENCE NO.\"\n" +
   "- exporterName, exporterAddress, exporterCity, exporterState, exporterZip\n" +
-  "- consigneeName, consigneeAddress, consigneeCity\n" +
+  "- consigneeName: the ULTIMATE CONSIGNEE name from field \"4a. ULTIMATE CONSIGNEE\" — this is the overseas buyer/recipient, NOT the authorized agent in field 5a (which is DOR LDOR GLOBAL, the forwarder — never use that for consigneeName)\n" +
+  "- consigneeAddress, consigneeCity: the address lines under field 4a only\n" +
   "- vessel: the ship name from the field labeled \"9. EXPORTING CARRIER/CONVEYANCE NAME\" " +
   "(e.g. \"GRANDE ABIDJAN\", \"GLOVIS SUN\") — it sits on the line directly under that label\n" +
   "- portOfLoading, portOfDischarge: JUST the port city name (e.g. \"BALTIMORE\", \"TEMA\") — no " +
