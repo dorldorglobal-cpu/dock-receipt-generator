@@ -405,18 +405,23 @@ router.put("/:id", uploadFields, async (req, res) => {
     Object.keys(update).forEach(k => update[k] === undefined && delete update[k]);
 
     const old = await Expense.findById(req.params.id)
-      .select("receiptFileName billFileName receiptDriveId billDriveId orderId paidAmount").lean();
+      .select("receiptFileName billFileName receiptDriveId billDriveId orderId paidAmount status amount").lean();
     const linkedOrderId = orderId || old?.orderId || null;
 
-    // If this bill already has a tracked payment (e.g. via the Payment Proof
-    // matcher or Add Payment) and the form still says "paid", don't trust that
-    // blindly — the total may have changed since (e.g. a line item added after
-    // the bill was fully paid). Recompute from the real paidAmount instead so
-    // it correctly drops back to "partial" when the payment no longer covers
-    // it. Only applies when the form is asserting "paid" — an explicit revert
-    // to unpaid/partial via the dropdown is left alone.
-    if (update.status === "paid" && old?.paidAmount > 0 && update.amount != null) {
-      update.status = old.paidAmount >= update.amount - 0.005 ? "paid" : "partial";
+    // If this bill already has a tracked payment and the form still says "paid",
+    // don't trust that blindly — the total may have changed (e.g. a line item
+    // added after the bill was fully paid). Recompute from the real paidAmount
+    // so it correctly drops back to "partial" when the payment no longer covers
+    // the new total. Falls back to old.amount when paidAmount wasn't tracked
+    // (e.g. manually marked paid without going through the payment-proof flow).
+    if (update.status === "paid" && update.amount != null) {
+      const effectivePaid = old?.paidAmount > 0
+        ? old.paidAmount
+        : (old?.status === "paid" ? (old?.amount || 0) : 0);
+      if (effectivePaid > 0) {
+        update.status = effectivePaid >= update.amount - 0.005 ? "paid" : "partial";
+        if (update.status === "partial") update.paidAmount = effectivePaid;
+      }
     }
 
     if (req.files?.receipt?.[0]) {
