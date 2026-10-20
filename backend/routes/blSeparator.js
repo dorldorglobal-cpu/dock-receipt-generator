@@ -349,6 +349,51 @@ router.post("/attach", async (req, res) => {
 
         await order.save();
 
+        // Auto-send Draft BL email to customer (non-fatal)
+        if (bl.type === "draft" && order.customerEmail) {
+          try {
+            const { downloadDriveFile } = require("../googleDrive");
+            const { getGmailAccessToken } = require("../utils/gmail");
+            const { google } = require("googleapis");
+            const os = require("os");
+            const tmpPath = require("path").join(os.tmpdir(), `draft-bl-auto-${Date.now()}.pdf`);
+            await downloadDriveFile(uploaded.id, tmpPath);
+            const buf = fs.readFileSync(tmpPath);
+            try { fs.unlinkSync(tmpPath); } catch {}
+            const b64 = buf.toString("base64");
+            const wrappedB64 = b64.match(/.{1,76}/g).join("\r\n");
+            const ref = order.refNumber || bl.refNumber || "";
+            const ymm = bl.vehicle || [order.year, order.make, order.model].filter(Boolean).join(" ");
+            const vin6 = (bl.vin || order.vin || "").slice(-6);
+            const subjectLine = `${ref} Draft BL${ymm ? ` — ${ymm}` : ""}${vin6 ? ` VIN: ${vin6}` : ""}`;
+            const bodyText = `Please find your Draft Bill of Lading attached.\n\nVIN: ${bl.vin || order.vin || ""}\nVessel: ${order.vessel || ""} | Voyage: ${order.voyage || ""}\n\nRegards,\nDDG OPS`;
+            const boundary = "DDG_DRAFT_AUTO_" + Date.now();
+            const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+            const mimeLines = [
+              `From: ${from}`, `To: ${order.customerEmail}`,
+              `Subject: =?UTF-8?B?${Buffer.from(subjectLine).toString("base64")}?=`,
+              `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`,
+              ``, `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``,
+              bodyText,
+              `--${boundary}`,
+              `Content-Type: application/pdf; name="${fileName}"`,
+              `Content-Transfer-Encoding: base64`,
+              `Content-Disposition: attachment; filename="${fileName}"`,
+              ``, wrappedB64, ``, `--${boundary}--`,
+            ];
+            const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+            const accessToken = await getGmailAccessToken();
+            const gmail = google.gmail("v1");
+            const auth = new google.auth.OAuth2();
+            auth.setCredentials({ access_token: accessToken });
+            await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
+            order.timeline.push({ action: "Draft BL Emailed", details: `Auto-sent Draft BL to ${order.customerEmail}`, createdAt: new Date() });
+            await order.save();
+          } catch (emailErr) {
+            console.warn("[BL attach] auto draft email failed:", emailErr.message);
+          }
+        }
+
         // Update ACL master sheet (non-fatal) — only once per order per batch, ACL only
         const isAcl = (order.shippingLine || "").toUpperCase() !== "SALLAUM";
         if (isAcl && !aclSheetUpdated.has(String(order._id))) {
