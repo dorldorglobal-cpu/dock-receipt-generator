@@ -1667,6 +1667,25 @@ export default function OrderDetails() {
       }
     }
 
+    // Auto-add Non-runner Fee or Forklift Fee to charges if condition is set and fee not yet applied
+    if (condition === "nonrunner" && (!charges.nonRunnerFee || Number(charges.nonRunnerFee) === 0)) {
+      const newCharges = { ...charges, nonRunnerFee: "400" };
+      setCharges(newCharges);
+      fetch(`${API}/api/orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ charges: newCharges }),
+      });
+    } else if (condition === "forklift" && (!charges.forkliftFee || Number(charges.forkliftFee) === 0)) {
+      const newCharges = { ...charges, forkliftFee: "500" };
+      setCharges(newCharges);
+      fetch(`${API}/api/orders/${id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ charges: newCharges }),
+      });
+    }
+
     setMessage("Dock Receipt generated & uploaded");
     } catch (err) {
       console.error("generateDockReceipt error:", err);

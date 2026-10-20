@@ -1277,6 +1277,7 @@ export default function Expenses() {
       vin:           exp.vin           || "",
       invoiceNumber: exp.invoiceNumber || "",
       status:        exp.status        || "unpaid",
+      paymentMethod: exp.paymentMethod || "",
       paidDate:      exp.paidDate ? exp.paidDate.slice(0, 10) : "",
       notes:         exp.notes         || "",
       bankAccount:          exp.bankAccount          || "Metropolitan Bank 8042 (Business)",
