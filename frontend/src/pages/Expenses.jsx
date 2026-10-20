@@ -1271,7 +1271,7 @@ export default function Expenses() {
       category:      exp.category      || "",
       description:   exp.description   || "",
       vendor:        exp.vendor        || "",
-      amount:        exp.amount != null ? String(exp.amount) : "",
+      amount:        exp.amount != null ? String(exp.amount - (exp.lineItems || []).reduce((s, l) => s + Number(l.amount || 0), 0)) : "",
       date:          exp.date ? exp.date.slice(0, 10) : todayISO(),
       orderRef:      exp.orderRef      || "",
       vin:           exp.vin           || "",
