@@ -865,9 +865,11 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
 
   // Use first invoice for customer/header info
   const first = invoices[0];
-  const extraLines = (opts.extraLines || []).filter(l => l.label && l.amount);
+  const extraLines    = (opts.extraLines    || []).filter(l => l.label && l.amount);
+  const discountLines = (opts.discountLines || []).filter(l => l.label && l.amount);
   const grandTotal = invoices.reduce((s, inv) => s + Number(inv.total || 0), 0)
-                   + extraLines.reduce((s, l) => s + Number(l.amount || 0), 0);
+                   + extraLines.reduce((s, l) => s + Number(l.amount || 0), 0)
+                   - discountLines.reduce((s, l) => s + Number(l.amount || 0), 0);
   const combinedNumber = load?.name ? `LOAD-${load.name}` : `CMB-${invoices.map(i => i.invoiceNumber).join("+")}`;
 
   // ── HEADER ──────────────────────────────────────────────────────────────────
@@ -984,6 +986,18 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
       doc.rect(ML, y, W, rowH).lineWidth(0.3).strokeColor("#e2e8f0").stroke();
       doc.fill(dark).font("Helvetica").fontSize(9).text(txt(line.label), ML + 10, y + 7, { width: 320, lineBreak:false });
       doc.fill(dark).font("Helvetica-Bold").fontSize(9).text(fmt(Number(line.amount || 0)), ML, y + 7, { align:"right", width: W - 10, lineBreak:false });
+      y += rowH;
+    });
+  }
+
+  // ── DISCOUNT LINES ──────────────────────────────────────────────────────────
+  if (discountLines.length) {
+    discountLines.forEach((line, idx) => {
+      const rowH = 24;
+      doc.rect(ML, y, W, rowH).fill("#fff0f0");
+      doc.rect(ML, y, W, rowH).lineWidth(0.3).strokeColor("#e2e8f0").stroke();
+      doc.fill(dark).font("Helvetica").fontSize(9).text(txt(line.label) + " (Discount)", ML + 10, y + 7, { width: 320, lineBreak:false });
+      doc.fill("#e53e3e").font("Helvetica-Bold").fontSize(9).text(`-${fmt(Number(line.amount || 0))}`, ML, y + 7, { align:"right", width: W - 10, lineBreak:false });
       y += rowH;
     });
   }

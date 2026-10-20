@@ -193,7 +193,8 @@ export default function Containers() {
   const [billingLoad,   setBillingLoad]   = useState(null);
   const [billingRows,   setBillingRows]   = useState([]);
   const [billingLoading,setBillingLoading]= useState(false);
-  const [extraLines,    setExtraLines]    = useState([]); // [{ label, amount }]
+  const [extraLines,    setExtraLines]    = useState([]); // [{ label, amount, mode }]
+  const [discountLines, setDiscountLines] = useState([]); // [{ label, amount }] — negative adjustments
   const [sendingAll,    setSendingAll]    = useState(false);
   const [sendResults,   setSendResults]   = useState(null);
   const [sendPreview,   setSendPreview]   = useState(null); // { to, subject, body }
@@ -254,6 +255,7 @@ export default function Containers() {
     setBillingRows([]);
     setSendResults(null);
     setExtraLines([]);
+    setDiscountLines([]);
     setBillingLoading(true);
     fetch(`${API}/api/container-loads/${load._id}/billing-summary`)
       .then(r => r.json())
@@ -1892,8 +1894,40 @@ export default function Containers() {
                             </td>
                           </tr>
                         ))}
+                        {discountLines.map((line, i) => (
+                          <tr key={`disc-${i}`} style={{ borderTop:"1px solid var(--border)", background:"rgba(248,113,113,0.05)" }}>
+                            <td colSpan={3} style={{ padding:"7px 8px" }}>
+                              <input
+                                value={line.label}
+                                onChange={e => setDiscountLines(p => p.map((l,j) => j===i ? {...l, label:e.target.value} : l))}
+                                placeholder="e.g. Loyalty Discount"
+                                style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4,
+                                  padding:"3px 7px", fontSize:12, color:"var(--text-primary)", width:"100%" }}
+                              />
+                            </td>
+                            <td style={{ padding:"7px 8px" }} />
+                            <td style={{ padding:"7px 8px", textAlign:"right" }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:4, justifyContent:"flex-end" }}>
+                                <span style={{ color:"#f87171", fontSize:12 }}>-$</span>
+                                <input
+                                  type="number" value={line.amount}
+                                  onChange={e => setDiscountLines(p => p.map((l,j) => j===i ? {...l, amount:parseFloat(e.target.value)||0} : l))}
+                                  style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4,
+                                    padding:"3px 7px", fontSize:12, color:"#f87171", width:80, textAlign:"right" }}
+                                />
+                              </div>
+                            </td>
+                            <td style={{ padding:"7px 8px", textAlign:"right", color:"#f87171", fontSize:12 }}>
+                              -{line.amount > 0 ? `$${line.amount.toFixed(2)}` : "—"}
+                            </td>
+                            <td style={{ padding:"7px 8px", textAlign:"center" }}>
+                              <button onClick={() => setDiscountLines(p => p.filter((_,j) => j!==i))}
+                                style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:14 }}>✕</button>
+                            </td>
+                          </tr>
+                        ))}
                         <tr>
-                          <td colSpan={7} style={{ padding:"6px 8px" }}>
+                          <td colSpan={7} style={{ padding:"6px 8px", display:"flex", gap:8 }}>
                             <button onClick={() => {
                                 const mode = window.confirm(
                                   "Is this charge tied to one unit/vehicle, or a shared cost?\n\n" +
@@ -1906,6 +1940,11 @@ export default function Containers() {
                                 color:"var(--text-muted)", fontSize:12, cursor:"pointer", padding:"4px 12px" }}>
                               + Add line
                             </button>
+                            <button onClick={() => setDiscountLines(p => [...p, { label:"Discount", amount:0 }])}
+                              style={{ background:"none", border:"1px dashed #f87171", borderRadius:6,
+                                color:"#f87171", fontSize:12, cursor:"pointer", padding:"4px 12px" }}>
+                              + Add Discount
+                            </button>
                           </td>
                         </tr>
                         <tr style={{ borderTop:"2px solid var(--border)", fontWeight:700 }}>
@@ -1914,11 +1953,11 @@ export default function Containers() {
                             ${billingRows.reduce((s,r)=>s+r.totalExpenses,0).toFixed(2)}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right", color:"#34d399" }}>
-                            ${(billingRows.reduce((s,r)=>s+r.invoiceTotal,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
+                            ${(billingRows.reduce((s,r)=>s+r.invoiceTotal,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0) - discountLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right",
-                            color: (billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0))>=0 ? "#34d399" : "#f87171" }}>
-                            ${(billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
+                            color: (billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0) - discountLines.reduce((s,l)=>s+(l.amount||0),0))>=0 ? "#34d399" : "#f87171" }}>
+                            ${(billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0) - discountLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
                           </td>
                           <td />
                         </tr>
@@ -1966,7 +2005,9 @@ export default function Containers() {
                   {sendPreview.combined && (
                     <button type="button" onClick={()=>{
                         const validLines = extraLines.filter(l => l.label && l.amount);
-                        const qs = validLines.length ? `?extraLines=${encodeURIComponent(JSON.stringify(validLines))}` : "";
+                        const validDiscs = discountLines.filter(l => l.label && l.amount);
+                        const qsParams = [...(validLines.length?[`extraLines=${encodeURIComponent(JSON.stringify(validLines))}`]:[]), ...(validDiscs.length?[`discountLines=${encodeURIComponent(JSON.stringify(validDiscs))}`]:[])];
+                        const qs = qsParams.length ? `?${qsParams.join("&")}` : "";
                         const a = document.createElement("a");
                         a.href = authUrl(`/api/container-loads/${billingLoad._id}/combined-invoice-pdf${qs}`);
                         a.download = `Combined-Invoice-${billingLoad.name}.pdf`;
@@ -2031,7 +2072,8 @@ export default function Containers() {
                         const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/${endpoint}`, {
                           method:"POST", headers:{"Content-Type":"application/json"},
                           body: JSON.stringify({ to: sendPreview.to, subject: sendPreview.subject, body: sendPreview.body,
-                            extraLines: extraLines.filter(l => l.label && l.amount) }),
+                            extraLines: extraLines.filter(l => l.label && l.amount),
+                            discountLines: discountLines.filter(l => l.label && l.amount) }),
                         });
                         const d = await r.json();
                         if (!r.ok) throw new Error(d.error);
