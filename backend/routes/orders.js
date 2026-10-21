@@ -235,7 +235,13 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
           const l = rawLines[i];
           if (/^\*+\s*\d/.test(l)) break;            // "** 304 NJ ROUTE 68"
           if (/PHYSICAL|SELLER:|SOLD\s+THROUGH|COPART|^LOT[#:]|^VEHICLE:|^VIN:/i.test(l)) break;
+          // US address lines: street number followed by road word, or USAA/insurer names
+          if (/^(\d+\s+(S\.|N\.|E\.|W\.)?\s*\S)/i.test(l) && !/^(NO\.|NO\s*\d|HOUSE\s*NO|HSN|HOUSENO)/i.test(l)) break;
+          if (/\bUSAA\b|\bNATIONAL\s+GENERAL\b|\bVEHICLES\s+FOR\s+VETERANS\b/i.test(l)) break;
+          // Once we've seen a line with an embedded country code, stop collecting after it
+          const hasCC = /(NG|GH|BJ|TG|SN|CI|SL|LR|GM|GN|CM|AO|ML)(\d+)?\s*$/.test(l.replace(/\s/g, ""));
           foreign.push(l);
+          if (hasCC) break;
         }
         if (foreign.length) {
           const last = foreign[foreign.length - 1];
