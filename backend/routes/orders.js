@@ -239,8 +239,9 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
           if (/^(\d+\s+(S\.|N\.|E\.|W\.)?\s*\S)/i.test(l) && !/^(NO\.|NO\s*\d|HOUSE\s*NO|HSN|HOUSENO)/i.test(l)) break;
           if (/\bUSAA\b|\bNATIONAL\s+GENERAL\b|\bVEHICLES\s+FOR\s+VETERANS\b/i.test(l)) break;
           // Once we've seen a line with an embedded country code, stop collecting after it
-          const hasCC = /(NG|GH|BJ|TG|SN|CI|SL|LR|GM|GN|CM|AO|ML)(\d+)?\s*$/.test(l.replace(/\s/g, ""));
-          foreign.push(l);
+          const hasCC = /(NG|GH|BJ|TG|SN|CI|SL|LR|GM|GN|CM|AO|ML)\d*\s*$/.test(l.replace(/\s/g, ""));
+          // Strip postal-code digits jammed after the country code (e.g. "KANONG700213" → "KANONG")
+          foreign.push(l.replace(/(NG|GH|BJ|TG|SN|CI|SL|LR|GM|GN|CM|AO|ML)\d+(\s*)$/, "$1$2"));
           if (hasCC) break;
         }
         if (foreign.length) {
