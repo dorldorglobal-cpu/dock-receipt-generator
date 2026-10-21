@@ -696,6 +696,24 @@ router.put("/:id", async (req, res) => {
       );
     }
 
+    // If arrivalDate is being pushed to a future date on an already-"Arrived" order,
+    // the vessel hasn't actually arrived yet — revert to Sailed automatically.
+    if (req.body.arrivalDate && order.status === "Arrived") {
+      const newArrival = new Date(req.body.arrivalDate);
+      const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
+      if (!isNaN(newArrival.getTime())) {
+        newArrival.setHours(0,0,0,0);
+        if (newArrival > todayMidnight) {
+          order.status = "Sailed";
+          if (order.driveFolderId) {
+            try { await moveDriveFolder(order.driveFolderId, folderForStatus("Sailed")); } catch {}
+          }
+          addTimeline(order, "Status Changed", `Reverted from Arrived to Sailed — arrival date updated to ${req.body.arrivalDate} (still in the future).`);
+          await order.save();
+        }
+      }
+    }
+
     await order.save();
     autoLinkExpenses(order); // non-blocking
     // Sync customerName to any invoices on this order
