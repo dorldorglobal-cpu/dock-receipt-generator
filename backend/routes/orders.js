@@ -209,54 +209,22 @@ router.post("/parse-buyer-receipt", upload.single("file"), async (req, res) => {
     const fileBuffer = fs.readFileSync(req.file.path);
     fs.unlink(req.file.path, () => {});
 
-    // ── Copart: extract consignee address from the member block ────────────
+    // ── Consignee address: LLM extraction (Copart + IAA) ─────────────────
     const pdfParse2 = require("pdf-parse");
     const rawText   = (await pdfParse2(fileBuffer)).text;
 
-    if (/copart/i.test(rawText)) {
-      const rawLines = rawText.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
-
-      // Customer name already extracted correctly by parseBuyerReceipt
-      // Extract the foreign consignee address block that follows it
-      const COUNTRY_CODES = {
-        GH:"GHANA", NG:"NIGERIA", BJ:"BENIN", TG:"TOGO", SN:"SENEGAL",
-        CI:"IVORY COAST", SL:"SIERRA LEONE", LR:"LIBERIA", GM:"GAMBIA",
-        GN:"GUINEA", CM:"CAMEROON", AO:"ANGOLA", ML:"MALI",
-      };
-
-      const custName = (parsed.customerName || "").toUpperCase();
-      const custIdx  = custName
-        ? rawLines.findIndex(l => l.toUpperCase() === custName)
-        : -1;
-
-      if (custIdx >= 0) {
-        const foreign = [];
-        for (let i = custIdx + 1; i < Math.min(custIdx + 8, rawLines.length); i++) {
-          const l = rawLines[i];
-          if (/^\*+\s*\d/.test(l)) break;            // "** 304 NJ ROUTE 68"
-          if (/PHYSICAL|SELLER:|SOLD\s+THROUGH|COPART|^LOT[#:]|^VEHICLE:|^VIN:/i.test(l)) break;
-          // US address lines: street number followed by road word, or USAA/insurer names
-          if (/^(\d+\s+(S\.|N\.|E\.|W\.)?\s*\S)/i.test(l) && !/^(NO\.|NO\s*\d|HOUSE\s*NO|HSN|HOUSENO)/i.test(l)) break;
-          if (/\bUSAA\b|\bNATIONAL\s+GENERAL\b|\bVEHICLES\s+FOR\s+VETERANS\b/i.test(l)) break;
-          // Once we've seen a line with an embedded country code, stop collecting after it
-          const hasCC = /(NG|GH|BJ|TG|SN|CI|SL|LR|GM|GN|CM|AO|ML)\d*\s*$/.test(l.replace(/\s/g, ""));
-          // Strip postal-code digits jammed after the country code (e.g. "KANONG700213" → "KANONG")
-          foreign.push(l.replace(/(NG|GH|BJ|TG|SN|CI|SL|LR|GM|GN|CM|AO|ML)\d+(\s*)$/, "$1$2"));
-          if (hasCC) break;
-        }
-        if (foreign.length) {
-          const last = foreign[foreign.length - 1];
-          const cc   = last.match(/,?\s*([A-Z]{2})\s*$/);
-          if (cc && COUNTRY_CODES[cc[1]]) {
-            parsed.consigneeName    = parsed.customerName;
-            parsed.consigneeCountry = COUNTRY_CODES[cc[1]];
-            parsed.consigneeCity    = last.replace(/,?\s*[A-Z]{2}\s*$/, "").replace(/,\s*$/, "").trim().toUpperCase();
-            parsed.consigneeAddress = foreign.slice(0, -1).join(", ").toUpperCase();
-          } else {
-            parsed.consigneeName    = parsed.customerName;
-            parsed.consigneeAddress = foreign.join(", ").toUpperCase();
-          }
-        }
+    if (/copart|iaa|insurance auto/i.test(rawText)) {
+      try {
+        const { extractBuyerReceiptConsignee } = require("../utils/llmExtract");
+        const llm = await extractBuyerReceiptConsignee(rawText);
+        if (llm.consigneeName)    parsed.consigneeName    = llm.consigneeName.toUpperCase();
+        if (llm.consigneeAddress) parsed.consigneeAddress = llm.consigneeAddress.toUpperCase();
+        if (llm.consigneeCity)    parsed.consigneeCity    = llm.consigneeCity.toUpperCase();
+        if (llm.consigneeCountry) parsed.consigneeCountry = llm.consigneeCountry.toUpperCase();
+        if (llm.customerPhone && !parsed.customerPhone)   parsed.customerPhone = llm.customerPhone;
+        if (llm.customerEmail && !parsed.customerEmail)   parsed.customerEmail = llm.customerEmail;
+      } catch (llmErr) {
+        console.warn("[parse-buyer-receipt] LLM consignee extraction failed, skipping:", llmErr.message);
       }
     }
 

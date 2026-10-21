@@ -95,4 +95,32 @@ async function extractContainerInvoiceFields(text) {
   return aiJSON(CONTAINER_SYSTEM_PROMPT, `Extract from this document:\n\n${text.slice(0, 8000)}`);
 }
 
-module.exports = { extractAESFields, extractContainerInvoiceFields };
+// ── Buyer receipt consignee extraction ────────────────────────────────────────
+// Used to extract the overseas consignee address from Copart/IAA buyer receipts.
+// The regex parser is fragile because the raw PDF text jams the overseas buyer
+// address and the US seller address together. The LLM can reliably separate them.
+const BUYER_RECEIPT_CONSIGNEE_PROMPT =
+  "You are a logistics document parser reading a vehicle auction buyer receipt (Copart or IAA). " +
+  "The receipt has TWO address blocks after the buyer/member name: " +
+  "(1) the OVERSEAS consignee address (foreign country — Nigeria, Ghana, Benin, Togo, etc.) and " +
+  "(2) the US seller/pickup address (a US street address). " +
+  "Return ONLY a JSON object with these exact keys (empty string if not found):\n" +
+  "- consigneeName: the overseas buyer/member company name\n" +
+  "- consigneeAddress: the overseas street address lines only — NO city, NO country, NO postal/zip codes\n" +
+  "- consigneeCity: the overseas city name only (e.g. \"KANO\", \"ACCRA\", \"COTONOU\")\n" +
+  "- consigneeCountry: the overseas country name in full (e.g. \"NIGERIA\", \"GHANA\", \"BENIN\")\n" +
+  "- customerPhone: the buyer's phone number if present\n" +
+  "- customerEmail: the buyer's email address if present\n" +
+  "\n" +
+  "IMPORTANT rules:\n" +
+  "- The overseas address ends when you see a US state abbreviation + zip code, or a US auction company name (COPART, USAA, IAAI, INSURANCE, etc.).\n" +
+  "- NEVER include any US address in consigneeAddress — stop at the foreign country line.\n" +
+  "- NEVER include postal/zip codes in consigneeAddress or consigneeCity — strip any trailing digits from the country code.\n" +
+  "- If the address text jams city + country code together (e.g. \"KANONG\" = Kano city + NG country code, \"TEMAGH\" = Tema city + GH), split them correctly.\n" +
+  "- Common country codes jammed with city: NG=Nigeria, GH=Ghana, BJ=Benin, TG=Togo, SN=Senegal, CI=Ivory Coast, SL=Sierra Leone, CM=Cameroon.\n";
+
+async function extractBuyerReceiptConsignee(text) {
+  return aiJSON(BUYER_RECEIPT_CONSIGNEE_PROMPT, `Extract from this document:\n\n${text.slice(0, 6000)}`);
+}
+
+module.exports = { extractAESFields, extractContainerInvoiceFields, extractBuyerReceiptConsignee };
