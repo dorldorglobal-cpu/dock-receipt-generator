@@ -809,10 +809,8 @@ router.post(
           const parsed = await parseAES(req.file.path);
           const updates = [];
 
-          // Always save the full DR fields from AES (overwrite blanks, keep existing)
-          // NOTE: consigneeAddress/City/Country are intentionally excluded — the AES
-          // two-column PDF layout causes the parser to produce garbled concatenated text.
-          // Those fields should come from the user's order entry, not the AES form.
+          // AES is the authoritative source for consignee data (field 4a is a labeled box).
+          // consigneeAddress/City/Country always overwrite — AES wins over buyer-receipt values.
           const aesFields = [
             "bookingNumber","vin","year","make","model","pol","pod",
             "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
@@ -821,6 +819,13 @@ router.post(
           ];
           for (const field of aesFields) {
             if (parsed[field] && !order[field]) {
+              order[field] = parsed[field];
+              updates.push(field);
+            }
+          }
+          // Consignee address fields: AES always overwrites (more reliable than buyer receipt)
+          for (const field of ["consigneeAddress","consigneeCity","consigneeCountry"]) {
+            if (parsed[field]) {
               order[field] = parsed[field];
               updates.push(field);
             }
@@ -1076,7 +1081,6 @@ router.post("/:id/parse-drive-files", async (req, res) => {
       if (name.includes("aes")) {
         const parsed  = await parseAES(tempPath);
         const updates = [];
-        // consigneeAddress/City/Country excluded — AES two-column layout produces garbled text
         const aesFields = [
           "bookingNumber","vin","year","make","model","pol","pod",
           "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
@@ -1085,6 +1089,10 @@ router.post("/:id/parse-drive-files", async (req, res) => {
         ];
         for (const field of aesFields) {
           if (parsed[field] && !order[field]) { order[field] = parsed[field]; updates.push(field); }
+        }
+        // Consignee address fields: AES always overwrites (more reliable than buyer receipt)
+        for (const field of ["consigneeAddress","consigneeCity","consigneeCountry"]) {
+          if (parsed[field]) { order[field] = parsed[field]; updates.push(field); }
         }
         if (parsed.aesItn && applyItn(order, parsed.aesItn, "AES PDF (Drive)") === "set") updates.push("aesItn");
         addTimeline(order, "AES Parsed",

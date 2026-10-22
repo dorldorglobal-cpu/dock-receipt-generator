@@ -42,7 +42,9 @@ const AES_SYSTEM_PROMPT =
   "- referenceNumber: from the field labeled \"SHIPMENT REFERENCE NO.\"\n" +
   "- exporterName, exporterAddress, exporterCity, exporterState, exporterZip\n" +
   "- consigneeName: the ULTIMATE CONSIGNEE name from field \"4a. ULTIMATE CONSIGNEE\" — this is the overseas buyer/recipient, NOT the authorized agent in field 5a (which is DOR LDOR GLOBAL, the forwarder — never use that for consigneeName)\n" +
-  "- consigneeAddress, consigneeCity: the address lines under field 4a only\n" +
+  "- consigneeAddress: street/house address lines under field 4a only — NO city, NO country, NO postal codes\n" +
+  "- consigneeCity: city name only from field 4a (e.g. \"ACCRA\", \"KANO\", \"COTONOU\")\n" +
+  "- consigneeCountry: full country name (e.g. \"GHANA\", \"NIGERIA\", \"BENIN\") — expand the 2-letter country code: GH=Ghana, NG=Nigeria, BJ=Benin, TG=Togo, SN=Senegal, CI=Ivory Coast, SL=Sierra Leone, CM=Cameroon, LR=Liberia\n" +
   "- vessel: the ship name from the field labeled \"9. EXPORTING CARRIER/CONVEYANCE NAME\" " +
   "(e.g. \"GRANDE ABIDJAN\", \"GLOVIS SUN\") — it sits on the line directly under that label\n" +
   "- portOfLoading, portOfDischarge: JUST the port city name (e.g. \"BALTIMORE\", \"TEMA\") — no " +
