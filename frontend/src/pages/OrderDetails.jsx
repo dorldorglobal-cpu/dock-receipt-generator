@@ -1918,9 +1918,63 @@ export default function OrderDetails() {
     }
   };
 
+  // Generate DR PDF and return { pdfBase64, pdfName } without downloading
+  const buildDrPdfBase64 = async () => {
+    const payloadRes = await fetch(`${API}/api/orders/${id}/dr-payload`);
+    const base = await payloadRes.json();
+    const polKey  = (base.pol || base.portOfLoading || "").toUpperCase();
+    const bookingUp = (base.bookingNumber || "").toUpperCase().trim();
+    const lineFromBooking =
+      bookingUp.startsWith("ACL") || bookingUp.startsWith("GLL") ? "ACL" :
+      bookingUp.startsWith("SLSE") || bookingUp.startsWith("SLS") ? "SALLAUM" : "";
+    const lineKey = lineFromBooking
+      ? (lineFromBooking.includes("ACL") ? "ACL" : "SALLAUM")
+      : (base.shippingLine || "").toUpperCase().includes("ACL") ? "ACL"
+      : (base.shippingLine || "").toUpperCase().includes("SALLAUM") ? "SALLAUM" : "";
+    const termEntry = (lineKey && polKey) ? drPortEntries.find(p => {
+      const name = (p.companyName || "").toUpperCase();
+      const city = (p.city        || "").toUpperCase();
+      return name.includes(lineKey) && (name.includes(polKey) || city.includes(polKey));
+    }) : null;
+    const payload = {
+      ...base,
+      referenceNumber: base.refNumber || base.referenceNumber,
+      vehicleYearMakeModel: base.vehicleYearMakeModel || `${base.year||""} ${base.make||""} ${base.model||""}`.trim(),
+      portOfLoading:   base.pol || base.portOfLoading || "",
+      portOfDischarge: base.pod || base.portOfDischarge || "",
+      shippingLine:    lineFromBooking || base.shippingLine || "",
+      ...(termEntry ? {
+        deliveryName:    termEntry.companyName || "",
+        deliveryAddress: termEntry.address     || "",
+        deliveryCity:    termEntry.city        || "",
+        deliveryState:   termEntry.state       || "",
+        deliveryZip:     termEntry.postalCode  || "",
+      } : {}),
+    };
+    const pdfRes = await fetch(`${API}/generate-pdf`, {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!pdfRes.ok) throw new Error("DR generation failed");
+    const arrayBuffer = await pdfRes.arrayBuffer();
+    const uint8 = new Uint8Array(arrayBuffer);
+    let binary = "";
+    uint8.forEach(b => binary += String.fromCharCode(b));
+    return { pdfBase64: btoa(binary), pdfName: `${order.refNumber || "dock-receipt"} DR.pdf` };
+  };
+
   const sendSallaumNotify = async () => {
     setSallaumSending(true);
     try {
+      const isNoTitle = /no.title/i.test(sallaumNotifySubject);
+      let pdfBase64, pdfName;
+      if (isNoTitle) {
+        try {
+          ({ pdfBase64, pdfName } = await buildDrPdfBase64());
+        } catch (drErr) {
+          console.warn("[sendSallaumNotify] DR generation failed, sending without attachment:", drErr.message);
+        }
+      }
       const res = await fetch(`${API}/api/send-email`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1929,6 +1983,7 @@ export default function OrderDetails() {
           cc:      "Office@sallaumlines.us",
           subject: sallaumNotifySubject,
           body:    sallaumNotifyBody,
+          ...(pdfBase64 ? { pdfBase64, pdfName } : {}),
         }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
