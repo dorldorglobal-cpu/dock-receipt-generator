@@ -449,6 +449,7 @@ export default function OrderDetails() {
   };
 
   const [towingVerify, setTowingVerify] = useState(null);
+  const [dispatchWarnings, setDispatchWarnings] = useState(null);
   // { dispatchCost, currentCost, pickupCity, pol }
 
   const [showInvoice,   setShowInvoice]   = useState(false);
@@ -1183,6 +1184,7 @@ export default function OrderDetails() {
         return;
       }
       if (data.towingCostVerification) setTowingVerify(data.towingCostVerification);
+      if (data.dispatchWarnings?.length) setDispatchWarnings(data.dispatchWarnings);
       try { await fetchDriveFiles(); } catch {}
       const refreshed = await fetchOrder();
       setMessage(`✅ ${file.name} uploaded`);
@@ -1330,9 +1332,8 @@ export default function OrderDetails() {
     await fetchDriveFiles();
     setMessage("Drive files parsed");
 
-    if (data.towingCostVerification) {
-      setTowingVerify(data.towingCostVerification);
-    }
+    if (data.towingCostVerification) setTowingVerify(data.towingCostVerification);
+    if (data.dispatchWarnings?.length) setDispatchWarnings(data.dispatchWarnings);
   };
 
   const openEdit = () => {
@@ -5196,6 +5197,50 @@ export default function OrderDetails() {
                 if (updated) fetchOrder();
               }}
             />
+          </div>
+        </div>
+      )}
+
+      {dispatchWarnings && (
+        <div className="modal-backdrop" onClick={() => setDispatchWarnings(null)}>
+          <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 500 }}>
+            <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:4 }}>
+              <span style={{ fontSize:22 }}>⚠️</span>
+              <h2 style={{ margin:0 }}>Dispatch Sheet Mismatch</h2>
+            </div>
+            <p style={{ fontSize:13, color:"var(--text-secondary)", margin:"0 0 16px" }}>
+              The dispatch sheet was scanned and contains information that doesn't match this order.
+              Review carefully before proceeding.
+            </p>
+            <div style={{ display:"flex", flexDirection:"column", gap:8, marginBottom:20 }}>
+              {dispatchWarnings.map((w, i) => (
+                <div key={i} style={{
+                  padding:"12px 14px", borderRadius:8,
+                  background: w.severity === "error" ? "rgba(239,68,68,0.08)" : "rgba(251,191,36,0.08)",
+                  border: `1px solid ${w.severity === "error" ? "rgba(239,68,68,0.4)" : "rgba(251,191,36,0.35)"}`,
+                }}>
+                  <div style={{ fontSize:11, fontWeight:700, textTransform:"uppercase", letterSpacing:"0.06em",
+                    color: w.severity === "error" ? "#ef4444" : "#fbbf24", marginBottom:6 }}>
+                    {w.severity === "error" ? "⛔ " : "⚠️ "}{w.field}
+                  </div>
+                  <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8 }}>
+                    <div style={{ fontSize:12 }}>
+                      <div style={{ color:"var(--text-muted)", marginBottom:2 }}>Dispatch sheet</div>
+                      <div style={{ fontWeight:600, color:"var(--text-primary)" }}>{w.dispatch}</div>
+                    </div>
+                    <div style={{ fontSize:12 }}>
+                      <div style={{ color:"var(--text-muted)", marginBottom:2 }}>This order</div>
+                      <div style={{ fontWeight:600, color:"var(--text-primary)" }}>{w.order}</div>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+            <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
+              <button className="btn-secondary" onClick={() => setDispatchWarnings(null)}>
+                Acknowledged
+              </button>
+            </div>
           </div>
         </div>
       )}

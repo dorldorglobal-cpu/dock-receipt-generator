@@ -866,6 +866,72 @@ router.post(
           const parsed = await parseDispatch(req.file.path);
           const updates = [];
 
+          // ── Cross-check parsed dispatch vs. stored order ──────────────────
+          const dispatchWarnings = [];
+
+          const normStr = s => (s || "").toString().toUpperCase().replace(/\s+/g, " ").trim();
+
+          // VIN mismatch — hard check
+          const parsedVin = normStr(parsed.dispatchVin || parsed.vin);
+          const orderVin  = normStr(order.vin);
+          if (parsedVin && orderVin && parsedVin !== orderVin) {
+            dispatchWarnings.push({
+              field: "VIN",
+              severity: "error",
+              dispatch: parsedVin,
+              order: orderVin,
+              message: `Dispatch VIN (${parsedVin}) does not match order VIN (${orderVin})`,
+            });
+          }
+
+          // Year / Make / Model mismatch
+          const parsedYMM = normStr(`${parsed.year || ""} ${parsed.make || ""} ${parsed.model || ""}`.trim());
+          const orderYMM  = normStr(`${order.year  || ""} ${order.make  || ""} ${order.model  || ""}`.trim());
+          if (parsedYMM && orderYMM && parsedYMM !== orderYMM) {
+            dispatchWarnings.push({
+              field: "Vehicle",
+              severity: "warning",
+              dispatch: parsedYMM,
+              order: orderYMM,
+              message: `Vehicle mismatch — dispatch says "${parsedYMM}", order has "${orderYMM}"`,
+            });
+          }
+
+          // Delivery destination mismatch — catch RORO vs. warehouse routing errors
+          const parsedDelivery = normStr(parsed.deliveryName || parsed.deliveryLocation || "");
+          const orderDelivery  = normStr(order.deliveryName  || order.deliveryLocation  || "");
+          if (parsedDelivery && orderDelivery) {
+            // Extract the first meaningful word from each (e.g. "ACL" "SALLAUM" "HODGES" "WAREHOUSE")
+            const keywordOf = s => s.replace(/\b(TERMINAL|PORT|RORO|LLC|INC|CO\b|CORP)\b/g, "").trim().split(/\s+/)[0];
+            const pKey = keywordOf(parsedDelivery);
+            const oKey = keywordOf(orderDelivery);
+            if (pKey && oKey && pKey !== oKey) {
+              dispatchWarnings.push({
+                field: "Delivery destination",
+                severity: "warning",
+                dispatch: parsedDelivery,
+                order: orderDelivery,
+                message: `Dispatch delivers to "${parsedDelivery}" but order expects "${orderDelivery}"`,
+              });
+            }
+          }
+
+          // Pickup city mismatch — wrong auction branch
+          const parsedPickupCity = normStr(parsed.pickupCity || "");
+          const orderPickupCity  = normStr(order.pickupCity  || "");
+          if (parsedPickupCity && orderPickupCity && parsedPickupCity !== orderPickupCity) {
+            dispatchWarnings.push({
+              field: "Pickup city",
+              severity: "warning",
+              dispatch: parsedPickupCity,
+              order: orderPickupCity,
+              message: `Dispatch pickup city is "${parsedPickupCity}" but order has "${orderPickupCity}"`,
+            });
+          }
+
+          if (dispatchWarnings.length) req._dispatchWarnings = dispatchWarnings;
+
+          // ── Apply fields ──────────────────────────────────────────────────
           const dispatchFields = [
             "vin","year","make","model","condition",
             "pickupLocation","pickupName","pickupAddress","pickupCity","pickupState","pickupZip",
@@ -899,9 +965,6 @@ router.post(
           if (parsed.dispatchTowingCost) {
             const storedCost   = Number((order.charges || {}).towingCost   || 0);
             const storedCharge = Number((order.charges || {}).towingCharge || 0);
-            // Only flag a mismatch if the dispatch cost doesn't match EITHER
-            // the stored sell price (towingCharge) OR the stored cost (towingCost).
-            // If towingCharge already matches, the rate is correct — no popup needed.
             const alreadyMatches = parsed.dispatchTowingCost === storedCharge ||
                                    parsed.dispatchTowingCost === storedCost;
             if (!alreadyMatches) {
@@ -977,6 +1040,7 @@ router.post(
       res.json({
         ...order.toObject(),
         towingCostVerification: req._towingCostVerification || null,
+        dispatchWarnings: req._dispatchWarnings || null,
       });
     } catch (err) {
       console.error("Drive upload error:", err);
