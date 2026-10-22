@@ -906,11 +906,23 @@ router.post(
           const parsedDelivery = normStr(parsed.deliveryName || parsed.deliveryLocation || "");
           const orderDelivery  = normStr(order.deliveryName  || order.deliveryLocation  || "");
           if (parsedDelivery && orderDelivery) {
-            // Extract the first meaningful word from each (e.g. "ACL" "SALLAUM" "HODGES" "WAREHOUSE")
-            const keywordOf = s => s.replace(/\b(TERMINAL|PORT|RORO|LLC|INC|CO\b|CORP)\b/g, "").trim().split(/\s+/)[0];
-            const pKey = keywordOf(parsedDelivery);
-            const oKey = keywordOf(orderDelivery);
-            if (pKey && oKey && pKey !== oKey) {
+            // Strip "DOR LDOR C/O", "C/O <word>", and noise words before comparing
+            const stripNoise = s => s
+              .replace(/\bDOR\s+LDOR\b/g, "")
+              .replace(/\bC\/O\s+\S+/g, "")
+              .replace(/\b(TERMINAL|PORT|RORO|LLC|INC|CO\b|CORP|EXPORT|AUTO|LINES|SHIPPING)\b/g, "")
+              .replace(/\s+/g, " ").trim();
+            const pClean = stripNoise(parsedDelivery);
+            const oClean = stripNoise(orderDelivery);
+            const pKey = pClean.split(/\s+/)[0];
+            const oKey = oClean.split(/\s+/)[0];
+            // Only warn if neither string contains the other's key word
+            const match = pKey && oKey && (
+              pKey === oKey ||
+              parsedDelivery.includes(oKey) ||
+              orderDelivery.includes(pKey)
+            );
+            if (!match && pKey && oKey) {
               dispatchWarnings.push({
                 field: "Delivery destination",
                 severity: "warning",
