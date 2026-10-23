@@ -317,6 +317,13 @@ export default function CreateOrder() {
       source:        item.defaultOffice || "USA OFFICE",
       ...(suggestedPod  ? { pod:          suggestedPod  } : {}),
       ...(suggestedLine ? { shippingLine: suggestedLine } : {}),
+      // Pre-fill consignee from customer record (customer is usually the consignee)
+      ...(item.companyName ? { consigneeName:    item.companyName } : {}),
+      ...(item.address     ? { consigneeAddress: item.address     } : {}),
+      ...(item.city        ? { consigneeCity:    item.city        } : {}),
+      ...(item.state       ? { consigneeState:   item.state       } : {}),
+      ...(item.postalCode  ? { consigneeZip:     item.postalCode  } : {}),
+      ...(item.country     ? { consigneeCountry: item.country     } : {}),
     }));
   };
 
