@@ -2300,7 +2300,13 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
               matchedIds = found.map(c => c._id);
               matchType = "combined";
             } else {
-              matchType = "review"; // candidates exist but none sum to the amount
+              // 3. Single candidate and payment is less than its balance → partial payment
+              if (candidates.length === 1 && amount < effectiveAmt(candidates[0]) - 0.005) {
+                matchedIds = [candidates[0]._id];
+                matchType = "partial";
+              } else {
+                matchType = "review"; // candidates exist but none sum to the amount
+              }
             }
           }
         } else if (alreadyPaid.length) {
@@ -2464,7 +2470,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         bookingNumbers,
         isMultiBooking,
         splitSeed,
-        selected: matchType === "exact" || matchType === "combined",
+        selected: matchType === "exact" || matchType === "combined" || matchType === "partial",
       });
     }
 

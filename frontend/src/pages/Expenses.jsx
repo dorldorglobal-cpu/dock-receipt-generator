@@ -935,7 +935,7 @@ export default function Expenses() {
       setProofDriveFile(data.proofFile || null);
       const alreadyPaidCount = data.rows.filter(r => r.matchType === "already_paid" || r.matchType === "already_paid_mismatch").length;
       const needsReview = data.rows.filter(r => r.matchType === "review" || r.matchType === "none" || r.matchType === "already_paid_mismatch").length;
-      const autoMatched = data.rows.filter(r => r.matchType === "exact" || r.matchType === "combined").length;
+      const autoMatched = data.rows.filter(r => r.matchType === "exact" || r.matchType === "combined" || r.matchType === "partial").length;
       const parts = [];
       if (autoMatched)     parts.push(`✅ ${autoMatched} auto-matched`);
       if (alreadyPaidCount) parts.push(`already marked paid: ${alreadyPaidCount}`);
@@ -2257,6 +2257,8 @@ export default function Expenses() {
                                 return badge(row.markPartial ? "✅ Exact → ½ Partial" : "✅ Exact", "#16a34a");
                               if (row.matchType === "combined")
                                 return badge(row.markPartial ? "✅ Combined → ½ Partial" : "✅ Combined", "#0d9488");
+                              if (row.matchType === "partial")
+                                return badge("½ Partial Payment", "#0284c7");
                               if (row.matchType === "already_paid")
                                 return badge("✔ Already Paid", "#1d4ed8");
                               if (row.matchType === "already_paid_mismatch")
