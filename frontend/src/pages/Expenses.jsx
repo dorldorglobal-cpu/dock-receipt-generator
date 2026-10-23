@@ -2975,6 +2975,26 @@ export default function Expenses() {
                       <td style={{ ...td, borderTop: "none" }} colSpan={3} />
                     </tr>
                   ))}
+                  {exp.payments?.length > 1 && exp.payments.map((p, pi) => (
+                    <tr key={`${exp._id}-pay-${pi}`}
+                      style={{ background: selected[exp._id] ? "#162416" : "#0a1628" }}
+                      onClick={() => toggleSelect(exp._id, exp)}>
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none", fontSize: 10, color: "#4b5563" }}>
+                        {new Date(p.date).toLocaleDateString()}
+                      </td>
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none", fontSize: 11, color: "#60a5fa", paddingLeft: 20 }}>
+                        💳 Payment {pi + 1}{p.notes ? ` · ${p.notes}` : ""}
+                      </td>
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none" }} />
+                      <td style={{ ...td, borderTop: "none", textAlign: "right", fontSize: 12, color: "#34d399", fontWeight: 600, fontVariantNumeric: "tabular-nums" }}>
+                        {fmt$(p.amount)}
+                      </td>
+                      <td style={{ ...td, borderTop: "none" }} colSpan={3} />
+                    </tr>
+                  ))}
                   </React.Fragment>
                 ))}
               </tbody>
