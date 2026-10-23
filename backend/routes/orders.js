@@ -814,7 +814,6 @@ router.post(
           const aesFields = [
             "bookingNumber","vin","year","make","model","pol","pod",
             "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
-            "consigneeName",
             "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
           ];
           for (const field of aesFields) {
@@ -823,8 +822,8 @@ router.post(
               updates.push(field);
             }
           }
-          // Consignee address fields: AES always overwrites (more reliable than buyer receipt)
-          for (const field of ["consigneeAddress","consigneeCity","consigneeCountry"]) {
+          // Consignee fields: AES field 4a always overwrites (more reliable than buyer receipt)
+          for (const field of ["consigneeName","consigneeAddress","consigneeCity","consigneeCountry"]) {
             if (parsed[field]) {
               order[field] = parsed[field];
               updates.push(field);
@@ -1096,14 +1095,13 @@ router.post("/:id/parse-drive-files", async (req, res) => {
         const aesFields = [
           "bookingNumber","vin","year","make","model","pol","pod",
           "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
-          "consigneeName",
           "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
         ];
         for (const field of aesFields) {
           if (parsed[field] && !order[field]) { order[field] = parsed[field]; updates.push(field); }
         }
-        // Consignee address fields: AES always overwrites (more reliable than buyer receipt)
-        for (const field of ["consigneeAddress","consigneeCity","consigneeCountry"]) {
+        // Consignee fields: AES field 4a always overwrites (more reliable than buyer receipt)
+        for (const field of ["consigneeName","consigneeAddress","consigneeCity","consigneeCountry"]) {
           if (parsed[field]) { order[field] = parsed[field]; updates.push(field); }
         }
         if (parsed.aesItn && applyItn(order, parsed.aesItn, "AES PDF (Drive)") === "set") updates.push("aesItn");
