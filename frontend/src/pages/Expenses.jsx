@@ -879,6 +879,27 @@ export default function Expenses() {
   const [expPickerResults, setExpPickerResults]  = useState([]);
   const [expPickerLoading, setExpPickerLoading]  = useState(false);
 
+  // When a split row's orderRef is filled in, auto-find matching unpaid bills and link them.
+  const autoLinkSplitRef = async (rowIdx, splitIdx, ref, amount) => {
+    const trimRef = (ref || "").trim();
+    if (!trimRef) return;
+    try {
+      const res = await fetch(`${API}/api/expenses?orderRef=${encodeURIComponent(trimRef)}&status=unpaid`);
+      const data = await res.json();
+      const bills = Array.isArray(data) ? data : [];
+      if (!bills.length) return;
+      // Prefer exact amount match, otherwise take first
+      const match = bills.find(b => Math.abs(b.amount - amount) < 0.01) || bills[0];
+      setProofRows(rs => rs.map((r, i) => {
+        if (i !== rowIdx) return r;
+        return { ...r, splitBills: r.splitBills.map((s, sk) => sk !== splitIdx ? s : {
+          ...s, createBill: false, existingExpenseId: match._id,
+          existingExpenseDesc: `#${match.orderRef || "—"} ${match.description} ${fmt$(match.amount)}`,
+        })};
+      }));
+    } catch (_) {}
+  };
+
   const openExpPicker = async (rowIdx, splitIdx = null, vendorHint = "") => {
     setExpPicker({ rowIdx, splitIdx });
     setExpPickerSearch("");
@@ -2527,7 +2548,9 @@ export default function Expenses() {
                                 {row.splitBills.map((split, k) => (
                                   <div key={k} style={{ display:"flex", gap:8, alignItems:"center", marginBottom:6 }}>
                                     <span style={{ fontSize:10, color:"var(--text-muted)", width:14 }}>{k+1}.</span>
-                                    <input value={split.orderRef} placeholder="Order ref" onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,orderRef:e.target.value}:s)}:r))}
+                                    <input value={split.orderRef} placeholder="Order ref"
+                                      onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,orderRef:e.target.value,existingExpenseId:null,existingExpenseDesc:null,createBill:true}:s)}:r))}
+                                      onBlur={e=>{ if(e.target.value.trim()) autoLinkSplitRef(i, k, e.target.value.trim(), Number(split.amount)); }}
                                       style={{ width:80, background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"#60a5fa", fontSize:11 }} />
                                     <select value={split.category} onChange={e=>setProofRows(rs=>rs.map((r,j)=>j===i?{...r,splitBills:r.splitBills.map((s,sk)=>sk===k?{...s,category:e.target.value}:s)}:r))}
                                       style={{ background:"var(--bg-elevated)", border:"1px solid var(--border)", borderRadius:5, padding:"3px 6px", color:"var(--text-primary)", fontSize:11 }}>
