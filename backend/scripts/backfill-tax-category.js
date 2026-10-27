@@ -14,6 +14,7 @@ const TAX_BY_CATEGORY = {
   "Legal Fees":           "Operating Expense",
   "Office & Admin":       "Operating Expense",
   "General Overhead":     "Operating Expense",
+  "Ghana Office":         "Cost of Goods Sold (COGS)",
 };
 
 async function run() {

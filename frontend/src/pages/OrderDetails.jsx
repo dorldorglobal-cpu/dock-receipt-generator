@@ -785,7 +785,7 @@ export default function OrderDetails() {
 
   const BILL_CATEGORIES = [
     "Towing / Transport", "Ocean Freight", "Storage", "Port / Terminal Fees",
-    "Loaders & Warehouses", "Software", "Mailing Fees", "Legal Fees", "Office & Admin", "General Overhead",
+    "Loaders & Warehouses", "Software", "Mailing Fees", "Legal Fees", "Office & Admin", "General Overhead", "Ghana Office",
   ];
 
   const BILL_CAT_COLORS = {
@@ -799,6 +799,7 @@ export default function OrderDetails() {
     "Legal Fees":           "#f43f5e",
     "Office & Admin":       "#fbbf24",
     "General Overhead":     "var(--text-secondary)",
+    "Ghana Office":         "#22c55e",
   };
 
   const openAddBill = (mode = "manual") => {

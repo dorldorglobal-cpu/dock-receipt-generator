@@ -16,6 +16,7 @@ const CATEGORIES = [
   "Legal Fees",
   "Office & Admin",
   "General Overhead",
+  "Ghana Office",
 ];
 
 const TAX_CATEGORIES = [
@@ -58,6 +59,7 @@ const CAT_COLORS = {
   "Legal Fees":           "#f472b6",
   "Office & Admin":       "#fbbf24",
   "General Overhead":     "var(--text-secondary)",
+  "Ghana Office":         "#22c55e",
 };
 
 function fmt$(n) {
@@ -303,6 +305,7 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
     "Legal Fees":           "Operating Expense",
     "Office & Admin":       "Operating Expense",
     "General Overhead":     "Operating Expense",
+    "Ghana Office":         "Cost of Goods Sold (COGS)",
   };
 
   const inp = (key) => ({

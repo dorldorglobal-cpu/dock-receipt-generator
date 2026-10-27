@@ -11,6 +11,7 @@ const CATEGORIES = [
   "Legal Fees",
   "Office & Admin",
   "General Overhead",
+  "Ghana Office",
 ];
 
 const expenseSchema = new mongoose.Schema(

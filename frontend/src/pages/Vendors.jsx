@@ -12,6 +12,7 @@ const CATEGORIES = [
   "Legal Fees",
   "Office & Admin",
   "General Overhead",
+  "Ghana Office",
 ];
 
 const CAT_COLORS = {
@@ -23,6 +24,7 @@ const CAT_COLORS = {
   "Legal Fees":           "#f472b6",
   "Office & Admin":       "#fbbf24",
   "General Overhead":     "var(--text-secondary)",
+  "Ghana Office":         "#22c55e",
 };
 
 function fmt$(n) {

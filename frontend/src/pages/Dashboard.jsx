@@ -147,6 +147,7 @@ export default function Dashboard() {
     "Legal Fees":           "#f472b6",
     "Office & Admin":       "#fbbf24",
     "General Overhead":     "var(--text-secondary)",
+    "Ghana Office":         "#22c55e",
   };
 
   return (
