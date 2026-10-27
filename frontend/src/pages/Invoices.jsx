@@ -13,7 +13,7 @@ const fD = (d) =>
   d ? new Date(d).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—";
 const toInput = (d) => d ? new Date(d).toISOString().slice(0, 10) : "";
 
-const PAYMENT_METHODS = ["Wire", "Bank ACH", "Zelle", "Venmo", "Check", "Cash", "Other"];
+const PAYMENT_METHODS = ["Wire", "Bank ACH", "Zelle", "Venmo", "Check", "Cash", "Ghana Office", "Other"];
 
 const STATUS_STYLES = {
   draft: { bg: "rgba(107,114,128,0.15)", color: "var(--text-secondary)", border: "rgba(107,114,128,0.3)", label: "Draft" },

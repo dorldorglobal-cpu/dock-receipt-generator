@@ -148,6 +148,38 @@ router.get("/aged-receivables", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── GET /api/reports/payments-by-method ─────────────────────────────────────
+// Every customer payment recorded on an invoice, filtered by payment date.
+router.get("/payments-by-method", async (req, res) => {
+  try {
+    const { from, to } = req.query;
+    const fromD = from ? new Date(from) : null;
+    const toD   = to   ? new Date(new Date(to).setHours(23, 59, 59, 999)) : null;
+    const invoices = await Invoice.find({ "payments.0": { $exists: true } })
+      .select("invoiceNumber orderRef customerName vehicle payments").lean();
+    const rows = [];
+    for (const inv of invoices) {
+      for (const p of inv.payments || []) {
+        const d = p.date ? new Date(p.date) : null;
+        if (fromD && (!d || d < fromD)) continue;
+        if (toD   && (!d || d > toD))   continue;
+        rows.push({
+          date: p.date,
+          method: p.method || "Unspecified",
+          amount: Number(p.amount || 0),
+          notes: p.notes || "",
+          customer: inv.customerName || "—",
+          orderRef: inv.orderRef || "",
+          invoiceNumber: inv.invoiceNumber,
+          vehicle: inv.vehicle || "",
+        });
+      }
+    }
+    rows.sort((a, b) => new Date(b.date || 0) - new Date(a.date || 0));
+    res.json({ rows, total: rows.reduce((s, r) => s + r.amount, 0) });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // ── GET /api/reports/aged-payables ───────────────────────────────────────────
 router.get("/aged-payables", async (req, res) => {
   try {

@@ -21,6 +21,7 @@ const NAV = [
   ]},
   { g: "Receivables", icon: "💰", items: [
     { id: "aged-receivables", label: "Aged Receivables" },
+    { id: "payments-by-method", label: "Payments by Method" },
   ]},
   { g: "Expenses", icon: "🧾", items: [
     { id: "expenses-by-category", label: "By Category" },
@@ -41,6 +42,7 @@ const TITLES = {
   "income-by-destination": "Income by Destination",
   "income-by-route":       "Income by Route",
   "aged-receivables":      "Aged Receivables",
+  "payments-by-method":    "Payments Received by Method",
   "expenses-by-category":  "Expenses by Category",
   "purchases-by-vendor":   "Purchases by Vendor",
   "aged-payables":         "Aged Payables",
@@ -52,11 +54,13 @@ const TITLES = {
 const HAS_DATES = new Set([
   "income-by-customer", "income-by-destination", "income-by-route",
   "expenses-by-category", "purchases-by-vendor", "pl-accrual", "pl-cash",
+  "payments-by-method",
 ]);
 
 const HAS_SEARCH = new Set([
   "income-by-customer", "income-by-destination", "income-by-route",
   "aged-receivables", "aged-payables", "expenses-by-category", "purchases-by-vendor",
+  "payments-by-method",
 ]);
 
 const SEARCH_LABEL = {
@@ -65,6 +69,7 @@ const SEARCH_LABEL = {
   "income-by-route":       "Filter by route or port…",
   "aged-receivables":      "Filter by customer, ref # or vehicle…",
   "aged-payables":         "Filter by vendor…",
+  "payments-by-method":    "Filter by method, customer or order #…",
   "expenses-by-category":  "Filter by category…",
   "purchases-by-vendor":   "Filter by vendor…",
 };
@@ -416,6 +421,34 @@ function AgedReceivables({ d, sub, filter }) {
     ]} />
     <ExBar onCSV={() => dlCSV(H, Rcsv, "Aged-Receivables")} onPDF={() => dlPDF("Aged Receivables", sub, H, Rcsv, F)} />
     <RT headers={H} rows={R} footer={F} rights={[4, 5]} />
+  </>;
+}
+
+function PaymentsByMethod({ d, sub, filter }) {
+  const rows  = applyFilter(d.rows || [], filter, r => r.method, r => r.customer, r => r.orderRef, r => r.invoiceNumber, r => r.notes);
+  const total = rows.reduce((s, r) => s + r.amount, 0);
+  const byMethod = Object.entries(rows.reduce((m, r) => ({ ...m, [r.method]: (m[r.method] || 0) + r.amount }), {}))
+    .sort((a, b) => b[1] - a[1]);
+  const H = ["Date", "Method", "Customer", "Order #", "Invoice #", "Amount", "Notes"];
+  const R = rows.map((r) => [
+    fD(r.date),
+    <span style={{ fontWeight: 600, color: /ghana/i.test(r.method) ? "#22c55e" : "var(--text-primary)" }}>{r.method}</span>,
+    r.customer,
+    <span style={{ color: "var(--accent)", fontWeight: 600 }}>{r.orderRef || "—"}</span>,
+    <span style={{ fontFamily: "monospace", fontSize: 11 }}>{r.invoiceNumber}</span>,
+    <span style={{ color: "#34d399", fontWeight: 600 }}>{f$(r.amount)}</span>,
+    <span style={{ fontSize: 11, color: "var(--text-muted)" }}>{r.notes}</span>,
+  ]);
+  const F    = ["", "", "", "", "TOTAL", f$(total), ""];
+  const Rcsv = rows.map((r) => [fD(r.date), r.method, r.customer, r.orderRef || "—", r.invoiceNumber, f$(r.amount), r.notes]);
+  return <>
+    <Chips items={[
+      { label: "Total Received", val: f$(total), clr: "#34d399", sub: `${rows.length} payment${rows.length === 1 ? "" : "s"}` },
+      ...byMethod.map(([m, v]) => ({ label: m, val: f$(v), sub: total > 0 ? ((v / total) * 100).toFixed(0) + "%" : "",
+        clr: /ghana/i.test(m) ? "#22c55e" : undefined })),
+    ]} />
+    <ExBar onCSV={() => dlCSV(H, Rcsv, "Payments-by-Method")} onPDF={() => dlPDF("Payments by Method", sub, H, Rcsv, F)} />
+    <RT headers={H} rows={R} footer={F} rights={[5]} />
   </>;
 }
 
@@ -988,6 +1021,7 @@ export default function Reports() {
       case "income-by-route":       return <IncomeByRoute       {...props} />;
       case "aged-receivables":      return <AgedReceivables     {...props} />;
       case "aged-payables":         return <AgedPayables        {...props} />;
+      case "payments-by-method":    return <PaymentsByMethod    {...props} />;
       case "expenses-by-category":  return <ExpensesByCategory  {...props} />;
       case "purchases-by-vendor":   return <PurchasesByVendor   {...props} />;
       case "pl-accrual":

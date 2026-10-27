@@ -33,7 +33,7 @@ const BANK_ACCOUNTS = [
   "Personal",
 ];
 
-const PAYMENT_METHODS = ["Bank ACH", "Wire", "Zelle", "Venmo", "PayPal", "Check", "Cash", "Credit Card", "Other"];
+const PAYMENT_METHODS = ["Bank ACH", "Wire", "Zelle", "Venmo", "PayPal", "Check", "Cash", "Credit Card", "Ghana Office", "Other"];
 
 const KNOWN_VENDORS = [
   "ACL", "Sallaum Lines", "Savannah Auto Export", "Hey Logistics",
