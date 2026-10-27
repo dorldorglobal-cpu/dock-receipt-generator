@@ -70,6 +70,7 @@ export default function Invoices() {
   const [bulkMethod,    setBulkMethod]    = useState("Wire");
   const [bulkDate,      setBulkDate]      = useState(todayISO());
   const [bulkNotes,     setBulkNotes]     = useState("");
+  const [bulkAmount,    setBulkAmount]    = useState("");
   const [bulkSaving,    setBulkSaving]    = useState(false);
 
   // Summary-card click filters — resets to the "all" tab (so the full set is
@@ -167,29 +168,50 @@ export default function Invoices() {
     return s + Math.max(0, (i.total || 0) - paid);
   }, 0);
 
+  useEffect(() => {
+    if (bulkModal) setBulkAmount(selectedRemaining.toFixed(2));
+  }, [bulkModal]);
+
+  const bulkAmountNum = Number(bulkAmount);
+  const bulkAmountBad = bulkAmount === "" || isNaN(bulkAmountNum) || bulkAmountNum < 0
+    || bulkAmountNum > selectedRemaining + 0.005 || (selectedRemaining > 0 && bulkAmountNum <= 0);
+  const bulkIsPartial = !bulkAmountBad && bulkAmountNum < selectedRemaining - 0.005;
+
   const bulkMarkPaid = async () => {
-    if (!selectedIds.size) return;
+    if (!selectedIds.size || bulkAmountBad) return;
     setBulkSaving(true);
     // Only act on selections still present in the currently loaded list — a
     // stale id (e.g. filtered out by a search after it was selected) would
     // otherwise inflate the displayed count without anything actually happening.
-    const ids = selectedInvoices.map(i => i._id);
+    const ordered = [...selectedInvoices].sort((a, b) => new Date(a.createdAt || 0) - new Date(b.createdAt || 0));
+    const ids = ordered.map(i => i._id);
     const count = ids.length;
     const failed = [];
+    let left = Math.round(bulkAmountNum * 100) / 100;
+    const alloc = {};
+    for (const inv of ordered) {
+      const remaining = Math.max(0, (inv.total || 0) - (inv.payments || []).reduce((s, p) => s + p.amount, 0));
+      const pay = Math.round(Math.min(remaining, left) * 100) / 100;
+      left = Math.round((left - pay) * 100) / 100;
+      alloc[inv._id] = { pay, full: pay >= remaining - 0.005 };
+    }
+    let partials = 0;
     try {
       await Promise.all(ids.map(async id => {
         const inv = invoices.find(i => i._id === id);
         try {
           if (!inv) return;
-          const remaining = Math.max(0, (inv.total || 0) - (inv.payments || []).reduce((s, p) => s + p.amount, 0));
+          const { pay, full } = alloc[id];
           // Record payment entry
-          if (remaining > 0) {
+          if (pay > 0) {
             const payRes = await fetch(`${API}/api/invoices/${id}/payments`, {
               method: "POST", headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ amount: remaining, method: bulkMethod, date: bulkDate, notes: bulkNotes }),
+              body: JSON.stringify({ amount: pay, method: bulkMethod, date: bulkDate, notes: bulkNotes }),
             });
             if (!payRes.ok) throw new Error((await payRes.json().catch(() => ({}))).error || "Payment failed");
           }
+          // Partial payment — leave the invoice open with the rest still owed
+          if (!full) { if (pay > 0) partials++; return; }
           // Mark as paid
           const statusRes = await fetch(`${API}/api/invoices/${id}/status`, {
             method: "PATCH", headers: { "Content-Type": "application/json" },
@@ -208,7 +230,9 @@ export default function Invoices() {
     if (failed.length) {
       setMessage(`${count - failed.length}/${count} marked as Paid — failed: ${failed.join("; ")}`);
     } else {
-      setMessage(`${count} invoice(s) marked as Paid`);
+      setMessage(partials
+        ? `Payment of ${f$(bulkAmountNum)} recorded — ${count - partials} marked Paid, ${partials} partially paid`
+        : `${count} invoice(s) marked as Paid`);
     }
     load();
   };
@@ -846,7 +870,7 @@ export default function Invoices() {
             </h3>
             <p style={{ margin:"0 0 20px", fontSize:13, color:"var(--text-secondary)" }}>
               {selectedInvoices.length} invoice{selectedInvoices.length !== 1 ? "s" : ""} — remaining balance of{" "}
-              <strong style={{ color:"#34d399" }}>{f$(selectedRemaining)}</strong> will be recorded as a payment.
+              <strong style={{ color:"#34d399" }}>{f$(selectedRemaining)}</strong>. Change the amount below for a partial payment.
             </p>
             {selectedIds.size !== selectedInvoices.length && (
               <p style={{ margin:"-14px 0 20px", fontSize:11, color:"#fbbf24" }}>
@@ -854,6 +878,23 @@ export default function Invoices() {
               </p>
             )}
             <div style={{ display:"grid", gap:14 }}>
+              <label style={{ display:"block", fontSize:12, color:"var(--text-secondary)" }}>
+                Amount Paid
+                <input type="number" step="0.01" min="0" value={bulkAmount} onChange={e => setBulkAmount(e.target.value)}
+                  style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px",
+                    background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:7,
+                    color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+                {bulkAmountBad ? (
+                  <span style={{ display:"block", marginTop:4, fontSize:11, color:"#f87171" }}>
+                    {bulkAmountNum > selectedRemaining ? `Can't be more than ${f$(selectedRemaining)}` : "Enter an amount"}
+                  </span>
+                ) : bulkIsPartial && (
+                  <span style={{ display:"block", marginTop:4, fontSize:11, color:"#fbbf24" }}>
+                    Partial payment — {f$(selectedRemaining - bulkAmountNum)} will stay open
+                    {selectedInvoices.length > 1 ? " (applied to the oldest invoices first)" : ""}
+                  </span>
+                )}
+              </label>
               <label style={{ display:"block", fontSize:12, color:"var(--text-secondary)" }}>
                 Payment Method
                 <select value={bulkMethod} onChange={e => setBulkMethod(e.target.value)}
@@ -885,10 +926,10 @@ export default function Invoices() {
                   borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>
                 Cancel
               </button>
-              <button onClick={bulkMarkPaid} disabled={bulkSaving}
+              <button onClick={bulkMarkPaid} disabled={bulkSaving || bulkAmountBad}
                 style={{ padding:"9px 22px", background:"#059669", color:"#fff", border:"none",
-                  borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14, opacity: bulkSaving ? 0.6 : 1 }}>
-                {bulkSaving ? "Saving…" : `Mark ${selectedInvoices.length} as Paid`}
+                  borderRadius:8, cursor:"pointer", fontWeight:700, fontSize:14, opacity: (bulkSaving || bulkAmountBad) ? 0.6 : 1 }}>
+                {bulkSaving ? "Saving…" : bulkIsPartial ? "Record Partial Payment" : `Mark ${selectedInvoices.length} as Paid`}
               </button>
             </div>
           </div>
