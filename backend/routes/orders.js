@@ -1170,6 +1170,19 @@ router.post("/:id/parse-drive-files", async (req, res) => {
         continue;
       }
 
+      // DR PDF — extract booking number from box 5 if the order doesn't have one
+      if (!order.bookingNumber && (name.includes(" dr") || name.endsWith(" dr.pdf") || name.includes("dock receipt"))) {
+        try {
+          const drText = (await pdfParse(fs.readFileSync(tempPath))).text || "";
+          const bkMatch = drText.match(/(?:booking\s*(?:number|#)[:\s]*|5\.\s*BOOKING\s*NUMBER[:\s]*)\s*(S3-\d+|\d{6,})/i);
+          if (bkMatch) {
+            order.bookingNumber = bkMatch[1];
+            addTimeline(order, "Booking # Restored", `Booking number ${bkMatch[1]} recovered from ${file.name}`);
+            parsedSomething = true;
+          }
+        } catch (_) {}
+      }
+
       try { fs.unlinkSync(tempPath); } catch (_) {}
     }
 
