@@ -1531,33 +1531,33 @@ export default function OrderDetails() {
       }),
     };
 
-    // ── Missing critical fields check ─────────────────────────────────────
-    const missingFields = [];
-    if (!payload.bookingNumber) missingFields.push("Booking Number");
-    if (!payload.vin)           missingFields.push("VIN");
-    if (!payload.vessel)        missingFields.push("Vessel");
-    if (missingFields.length) {
-      const ok = window.confirm(
-        `⚠️ The following required fields are missing:\n\n${missingFields.map(f => `• ${f}`).join("\n")}\n\nPress OK to generate anyway, or Cancel to go back and fill them in.`
-      );
-      if (!ok) { setMessage(""); return; }
-    }
+    // ── Pre-generate validation: missing fields + mismatches ──────────────
+    const drWarnings = [];
 
-    // ── POL / POD mismatch check ──────────────────────────────────────────
-    // Warn if the DR's port of loading or discharge differs from what's
-    // stored on the order — catches wrong AES template / stale POA.
-    const drPol = (payload.portOfLoading   || "").toUpperCase().trim();
-    const drPod = (payload.portOfDischarge || "").toUpperCase().trim();
+    // Missing required fields
+    if (!payload.bookingNumber) drWarnings.push("❌ Missing: Booking Number");
+    if (!payload.vin)           drWarnings.push("❌ Missing: VIN");
+    if (!payload.vessel)        drWarnings.push("❌ Missing: Vessel");
+
+    // POL / POD mismatch
+    const drPol  = (payload.portOfLoading    || "").toUpperCase().trim();
+    const drPod  = (payload.portOfDischarge  || "").toUpperCase().trim();
     const ordPol = (order.pol || "").toUpperCase().trim();
     const ordPod = (order.pod || "").toUpperCase().trim();
-    const polMismatch = drPol && ordPol && drPol !== ordPol;
-    const podMismatch = drPod && ordPod && drPod !== ordPod;
-    if (polMismatch || podMismatch) {
-      const issues = [];
-      if (polMismatch) issues.push(`• Port of Loading: DR says "${drPol}" but order has "${ordPol}"`);
-      if (podMismatch) issues.push(`• Port of Discharge: DR says "${drPod}" but order has "${ordPod}"`);
+    if (drPol && ordPol && drPol !== ordPol)
+      drWarnings.push(`⚠️ Port of Loading mismatch: DR="${drPol}" vs Order="${ordPol}"`);
+    if (drPod && ordPod && drPod !== ordPod)
+      drWarnings.push(`⚠️ Port of Discharge mismatch: DR="${drPod}" vs Order="${ordPod}"`);
+
+    // Consignee mismatch between DR payload and order
+    const drConsignee  = (payload.consigneeName || "").toUpperCase().trim();
+    const ordConsignee = (order.consigneeName   || "").toUpperCase().trim();
+    if (drConsignee && ordConsignee && drConsignee !== ordConsignee)
+      drWarnings.push(`⚠️ Consignee mismatch: DR="${drConsignee}" vs Order="${ordConsignee}"`);
+
+    if (drWarnings.length) {
       const ok = window.confirm(
-        `⚠️ Port mismatch detected — please verify before generating:\n\n${issues.join("\n")}\n\nPress OK to generate anyway, or Cancel to go back and fix.`
+        `⚠️ Issues detected — please review before generating:\n\n${drWarnings.join("\n")}\n\nPress OK to generate anyway, or Cancel to go back and fix.`
       );
       if (!ok) { setMessage(""); return; }
     }
