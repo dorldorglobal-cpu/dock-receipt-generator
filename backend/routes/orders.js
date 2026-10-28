@@ -632,7 +632,15 @@ router.put("/:id", async (req, res) => {
     const oldStatus      = order.status;
     const oldTitleStatus = order.titleStatus;
 
-    Object.assign(order, req.body);
+    // Never let an empty string from the frontend clobber a value already in the DB.
+    // Fields that are set by automated processes (AES upload, DR generation) and are
+    // unlikely to be intentionally cleared through the edit form are protected here.
+    const NEVER_BLANK = ["bookingNumber", "aesItn", "vessel", "voyage", "vin", "usppiEin"];
+    const safeBody = { ...req.body };
+    for (const f of NEVER_BLANK) {
+      if (f in safeBody && !safeBody[f] && order[f]) delete safeBody[f];
+    }
+    Object.assign(order, safeBody);
     if (req.body.charges) order.markModified("charges");
 
     // Dor L'Dor Global Ghana as the customer ⇒ always the Ghana office
