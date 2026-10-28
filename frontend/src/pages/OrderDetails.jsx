@@ -1531,6 +1531,18 @@ export default function OrderDetails() {
       }),
     };
 
+    // ── Missing critical fields check ─────────────────────────────────────
+    const missingFields = [];
+    if (!payload.bookingNumber) missingFields.push("Booking Number");
+    if (!payload.vin)           missingFields.push("VIN");
+    if (!payload.vessel)        missingFields.push("Vessel");
+    if (missingFields.length) {
+      const ok = window.confirm(
+        `⚠️ The following required fields are missing:\n\n${missingFields.map(f => `• ${f}`).join("\n")}\n\nPress OK to generate anyway, or Cancel to go back and fill them in.`
+      );
+      if (!ok) { setMessage(""); return; }
+    }
+
     // ── POL / POD mismatch check ──────────────────────────────────────────
     // Warn if the DR's port of loading or discharge differs from what's
     // stored on the order — catches wrong AES template / stale POA.
