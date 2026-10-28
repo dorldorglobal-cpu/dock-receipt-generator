@@ -503,6 +503,7 @@ export default function OrderDetails() {
   const [googleContacts, setGoogleContacts] = useState([]);
   const [storageConfirm, setStorageConfirm] = useState(null); // { parsed, file }
   const [storageSellPrice, setStorageSellPrice] = useState("");
+  const [storageCopartFunds, setStorageCopartFunds] = useState("");
   const [payConfirm, setPayConfirm] = useState(null); // { billId, amount } — partial-pay modal
   const [payConfirmAmt, setPayConfirmAmt] = useState("");
 
@@ -6202,7 +6203,13 @@ export default function OrderDetails() {
           body.append("category", "Storage");
           body.append("description", `Storage Fee – ${order.refNumber}${parsed.lotNumber ? ` (Lot ${parsed.lotNumber})` : ""}`);
           body.append("vendor", parsed.vendor || "Copart");
-          body.append("amount", parsed.amount || 0);
+          const copartFunds = parseFloat(storageCopartFunds) || 0;
+          const netAmount = copartFunds > 0 ? Math.max(0, (parsed.amount || 0) - copartFunds) : (parsed.amount || 0);
+          body.append("amount", netAmount);
+          if (copartFunds > 0) {
+            body.append("copartFundsApplied", copartFunds);
+            body.append("receiptTotal", parsed.amount || 0);
+          }
           body.append("date", parsed.date ? new Date(parsed.date).toISOString().slice(0,10) : new Date().toISOString().slice(0,10));
           body.append("orderId", parsed.orderId || order._id);
           body.append("orderRef", parsed.orderRef || order.refNumber);
@@ -6216,9 +6223,9 @@ export default function OrderDetails() {
           const res = await fetch(`${API}/api/expenses`, { method: "POST", body });
           if (!res.ok) throw new Error("Failed to create expense");
 
-          // Save cost (what we paid, from the receipt) and sell price (what to charge)
+          // Save cost (what we paid out of pocket) and sell price (what to charge)
           // directly to order charges so both auto-appear in Internal Costs / on invoice
-          const costAmt = parseFloat(parsed.amount) || 0;
+          const costAmt = netAmount;
           const sellAmt = parseFloat(storageSellPrice) || 0;
           if (costAmt > 0 || sellAmt > 0) {
             const vendor = (parsed.vendor || "Copart").toLowerCase();
@@ -6249,6 +6256,7 @@ export default function OrderDetails() {
 
           setStorageConfirm(null);
           setStorageSellPrice("");
+          setStorageCopartFunds("");
           setMessage(`✅ Storage bill created${markPaid ? " and marked paid" : ""}${costAmt > 0 ? " · cost saved" : ""}${sellAmt > 0 ? " · sell price added to charges" : ""}.`);
           fetchBills(order.refNumber);
         };
@@ -6284,6 +6292,24 @@ export default function OrderDetails() {
                     style={{ flex:1, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13 }}
                   />
                 </div>
+              </label>
+              <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
+                Copart Available Funds Applied (leave blank if none)
+                <div style={{ display:"flex", alignItems:"center", gap:6, marginTop:4 }}>
+                  <span style={{ color:"var(--text-primary)" }}>$</span>
+                  <input
+                    type="number" min="0" step="0.01"
+                    value={storageCopartFunds}
+                    onChange={e => setStorageCopartFunds(e.target.value)}
+                    placeholder="0.00"
+                    style={{ flex:1, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid #a78bfa", borderRadius:6, color:"#a78bfa", fontSize:13 }}
+                  />
+                </div>
+                {parseFloat(storageCopartFunds) > 0 && parsed.amount > 0 && (
+                  <span style={{ fontSize:11, color:"#a78bfa", marginTop:3, display:"block" }}>
+                    Out of pocket: <strong>${Math.max(0, parsed.amount - parseFloat(storageCopartFunds)).toFixed(2)}</strong>
+                  </span>
+                )}
               </label>
               <p style={{ margin:"0 0 18px", fontSize:13, color:"var(--text-secondary)" }}>Mark this bill as <strong style={{color:"#34d399"}}>PAID</strong>? (You usually pay with credit card)</p>
               <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
