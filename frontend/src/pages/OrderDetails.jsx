@@ -1499,11 +1499,22 @@ export default function OrderDetails() {
     // terminal. But skip it once the user has explicitly edited Return /
     // Delivery in the Edit Fields modal — their typed values must win, not get
     // silently replaced by this lookup.
-    const termEntry = (!drDeliveryEdited && lineKey && polKey) ? drPortEntries.find(p => {
-      const name = (p.companyName || "").toUpperCase();
-      const city = (p.city        || "").toUpperCase();
-      return name.includes(lineKey) && (name.includes(polKey) || city.includes(polKey));
-    }) : null;
+    const savedDelivery = (base.deliveryLocation || base.deliveryName || "").toUpperCase();
+    const termEntry = (!drDeliveryEdited && lineKey && polKey) ? (() => {
+      const candidates = drPortEntries.filter(p => {
+        const name = (p.companyName || "").toUpperCase();
+        const city = (p.city        || "").toUpperCase();
+        return name.includes(lineKey) && (name.includes(polKey) || city.includes(polKey));
+      });
+      if (!candidates.length) return null;
+      // Prefer the entry whose name best matches what's saved on the order
+      if (savedDelivery && candidates.length > 1) {
+        const exact = candidates.find(p => savedDelivery.includes((p.companyName || "").toUpperCase()) ||
+          (p.companyName || "").toUpperCase().split("(")[1]?.replace(")","").trim().split(" ").some(w => w.length > 3 && savedDelivery.includes(w)));
+        if (exact) return exact;
+      }
+      return candidates[0];
+    })() : null;
 
     const payload = {
       ...base,
@@ -1945,11 +1956,21 @@ export default function OrderDetails() {
       ? (lineFromBooking.includes("ACL") ? "ACL" : "SALLAUM")
       : (base.shippingLine || "").toUpperCase().includes("ACL") ? "ACL"
       : (base.shippingLine || "").toUpperCase().includes("SALLAUM") ? "SALLAUM" : "";
-    const termEntry = (lineKey && polKey) ? drPortEntries.find(p => {
-      const name = (p.companyName || "").toUpperCase();
-      const city = (p.city        || "").toUpperCase();
-      return name.includes(lineKey) && (name.includes(polKey) || city.includes(polKey));
-    }) : null;
+    const savedDelivery2 = (base.deliveryLocation || base.deliveryName || "").toUpperCase();
+    const termEntry = (lineKey && polKey) ? (() => {
+      const candidates = drPortEntries.filter(p => {
+        const name = (p.companyName || "").toUpperCase();
+        const city = (p.city        || "").toUpperCase();
+        return name.includes(lineKey) && (name.includes(polKey) || city.includes(polKey));
+      });
+      if (!candidates.length) return null;
+      if (savedDelivery2 && candidates.length > 1) {
+        const exact = candidates.find(p => savedDelivery2.includes((p.companyName || "").toUpperCase()) ||
+          (p.companyName || "").toUpperCase().split("(")[1]?.replace(")","").trim().split(" ").some(w => w.length > 3 && savedDelivery2.includes(w)));
+        if (exact) return exact;
+      }
+      return candidates[0];
+    })() : null;
     const payload = {
       ...base,
       referenceNumber: base.refNumber || base.referenceNumber,
