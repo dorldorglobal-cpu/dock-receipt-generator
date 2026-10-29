@@ -2500,6 +2500,19 @@ export default function OrderDetails() {
               )}
               {allPaid && <span style={{ fontSize:12, color:"#34d399", fontWeight:700 }}>✓ PAID</span>}
             </div>
+            {(order.voyage || order.arrivalDate) && (
+              <div style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(107,114,128,0.08)", border:"1px solid var(--border)", borderRadius:10, padding:"7px 16px" }}>
+                {order.voyage && (
+                  <span style={{ fontSize:13, color:"var(--text-primary)", fontWeight:700 }}>{order.vessel ? `${order.vessel} · ` : ""}{order.voyage}</span>
+                )}
+                {order.sailDate && (
+                  <span style={{ fontSize:12, color:"var(--text-secondary)" }}>⛵ {new Date(order.sailDate).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</span>
+                )}
+                {order.arrivalDate && (
+                  <span style={{ fontSize:12, color:"#34d399", fontWeight:600 }}>ETA {new Date(order.arrivalDate).toLocaleDateString("en-US",{month:"short",day:"numeric"})}</span>
+                )}
+              </div>
+            )}
           </div>
         );
       })()}
