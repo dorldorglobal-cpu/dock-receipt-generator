@@ -3550,7 +3550,11 @@ export default function OrderDetails() {
                                   billDriveId: f.id,
                                   billFileName: f.name,
                                   billDriveUrl: f.webViewLink,
-                                  status: "unpaid",
+                                  status: "paid",
+                                  paidAmount: 11.80,
+                                  paidDate: new Date(),
+                                  paymentMethod: "Credit Card",
+                                  payments: [{ amount: 11.80, method: "Credit Card", date: new Date(), notes: "Auto-marked paid on bill creation" }],
                                 }),
                               });
                               // Set blFedexFee on order charges (sell $35, cost $11.80)
