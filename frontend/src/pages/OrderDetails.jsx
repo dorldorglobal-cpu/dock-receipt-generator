@@ -3255,6 +3255,7 @@ export default function OrderDetails() {
             { label:"Draft",              icon:"📝" },
             { label:"Rated Draft",        icon:"🧮" },
             { label:"Storage Paid",       icon:"🏬" },
+            { label:"FedEx/Mailing",      icon:"📦" },
             { label:"Other",              icon:"📎" },
           ].map(({ label, icon }) => {
             const busy = (uploadingLabels[label] || 0) > 0;
@@ -3315,6 +3316,7 @@ export default function OrderDetails() {
               const isDispatch      = label === "Dispatch";
               const isRatedDraft    = label === "Rated Draft";
               const isStoragePaid   = label === "Storage Paid";
+              const isFedexMailing  = label === "FedEx/Mailing";
               const isBuyerReceipt  = label === "Buyer Receipt";
               const isDraftBl       = label === "Draft";
 
@@ -3405,7 +3407,7 @@ export default function OrderDetails() {
                         color:      isRatedDraft ? "#fbbf24"              : "var(--text-secondary)",
                         border:`1px solid ${isRatedDraft ? "rgba(251,191,36,0.3)" : "var(--border)"}` }}>
                       {["Invoice","Buyer Receipt","Email","Order Request Form","Dispatch","Title","AES",
-                        "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","Other","Document"]
+                        "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","FedEx/Mailing","Other","Document"]
                         .map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </td>
@@ -3521,6 +3523,52 @@ export default function OrderDetails() {
                           onClick={e => { e.stopPropagation(); if (!hasStorageBill) createStorageBill(); }}
                           style={{ background:"none", border:"none", cursor: hasStorageBill ? "default" : "pointer", color: hasStorageBill ? "#34d399" : "#a78bfa", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
                           {hasStorageBill ? "✅ Bill Created" : "🏬 Create Storage Bill"}
+                        </button>
+                      );
+                    })()}
+                    {isFedexMailing && (() => {
+                      const hasFedexBill = bills.some(b => /mailing/i.test(b.category) && b.orderRef === order.refNumber);
+                      return (
+                        <button
+                          title={hasFedexBill ? "FedEx bill already created" : "Create FedEx/Mailing bill and add charge to order"}
+                          onClick={async e => {
+                            e.stopPropagation();
+                            if (hasFedexBill) return;
+                            try {
+                              setMessage("Creating FedEx/Mailing bill...");
+                              // Create the expense
+                              await fetch(`${API}/api/expenses`, {
+                                method: "POST",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({
+                                  category: "Mailing Fees",
+                                  description: "FedEx/Mailing Fee",
+                                  vendor: "FedEx",
+                                  amount: 11.80,
+                                  orderRef: order.refNumber,
+                                  orderId: order._id,
+                                  billDriveId: f.id,
+                                  billFileName: f.name,
+                                  billDriveUrl: f.webViewLink,
+                                  status: "unpaid",
+                                }),
+                              });
+                              // Set blFedexFee on order charges (sell $35, cost $11.80)
+                              const updatedCharges = { ...charges, blFedexFee: "35", blFedexFeeCost: "11.80" };
+                              await fetch(`${API}/api/orders/${order._id}`, {
+                                method: "PUT",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ charges: updatedCharges }),
+                              });
+                              await fetchOrder();
+                              await fetchBills();
+                              setMessage("✅ FedEx/Mailing bill created — $35 sell / $11.80 cost added to order charges.");
+                            } catch(err) {
+                              setMessage("❌ " + err.message);
+                            }
+                          }}
+                          style={{ background:"none", border:"none", cursor: hasFedexBill ? "default" : "pointer", color: hasFedexBill ? "#34d399" : "#e879f9", fontSize:13, padding:"2px 6px", borderRadius:4, whiteSpace:"nowrap" }}>
+                          {hasFedexBill ? "✅ Bill Created" : "📦 Create FedEx Bill"}
                         </button>
                       );
                     })()}
