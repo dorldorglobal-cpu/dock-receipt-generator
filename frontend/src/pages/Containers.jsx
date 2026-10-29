@@ -1121,6 +1121,12 @@ export default function Containers() {
                           padding:"1px 6px", fontWeight:600, whiteSpace:"nowrap" }}>
                           {whLabel(o.deliveryLocation)}
                         </span>
+                      ) : o.pol ? (
+                        <span style={{ background:"rgba(6,182,212,0.1)", color:"#22d3ee",
+                          border:"1px solid rgba(6,182,212,0.25)", borderRadius:5,
+                          padding:"1px 6px", fontWeight:600, whiteSpace:"nowrap" }}>
+                          {o.pol}
+                        </span>
                       ) : <span style={{ color:"var(--text-muted)" }}>—</span>}
                     </div>
                     <div style={{ fontSize:11, color:"var(--text-secondary)" }}>→ {o.pod||"—"}</div>
