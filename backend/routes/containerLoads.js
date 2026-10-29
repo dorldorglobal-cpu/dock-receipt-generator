@@ -223,14 +223,77 @@ router.post("/:id/send-email", express.json(), async (req, res) => {
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
 
-    await sendRawEmail({ to, cc, subject, body });
+    // Attach buyer receipts for each order in the load
+    const attachments = [];
+    if (load.orderIds && load.orderIds.length) {
+      const { downloadDriveFile } = require("../googleDrive");
+      const os = require("os");
+      const orders = await Order.find({ _id: { $in: load.orderIds } }).select("refNumber files").lean();
+      for (const order of orders) {
+        const receipt = (order.files || []).find(f => f.label === "Buyer Receipt" && f.driveFileId);
+        if (!receipt) continue;
+        try {
+          const tmpPath = path.join(os.tmpdir(), `br-${order.refNumber}-${Date.now()}.pdf`);
+          await downloadDriveFile(receipt.driveFileId, tmpPath);
+          const buf = fs.readFileSync(tmpPath);
+          fs.unlinkSync(tmpPath);
+          const filename = receipt.originalName || `BuyerReceipt-${order.refNumber}.pdf`;
+          attachments.push({ filename, content: buf.toString("base64") });
+        } catch (err) {
+          console.warn(`[send-email] Could not attach buyer receipt for order ${order.refNumber}:`, err.message);
+        }
+      }
+    }
+
+    if (attachments.length === 0) {
+      // No attachments — use simple plain-text sender
+      await sendRawEmail({ to, cc, subject, body });
+    } else {
+      // Build multipart/mixed email with buyer receipt attachments
+      const { google } = require("googleapis");
+      const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+      const boundary = "DDG_LOADER_" + Date.now();
+      const mimeLines = [
+        `From: ${from}`,
+        `To: ${to}`,
+        ...(cc ? [`Cc: ${cc}`] : []),
+        `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+        `MIME-Version: 1.0`,
+        `Content-Type: multipart/mixed; boundary="${boundary}"`,
+        ``,
+        `--${boundary}`,
+        `Content-Type: text/plain; charset="UTF-8"`,
+        ``,
+        body || "",
+        ``,
+      ];
+      for (const att of attachments) {
+        mimeLines.push(
+          `--${boundary}`,
+          `Content-Type: application/pdf; name="${att.filename}"`,
+          `Content-Transfer-Encoding: base64`,
+          `Content-Disposition: attachment; filename="${att.filename}"`,
+          ``,
+          b64lines(att.content),
+          ``
+        );
+      }
+      mimeLines.push(`--${boundary}--`);
+      const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+      const accessToken = await getGmailAccessToken();
+      const gmail = google.gmail("v1");
+      const auth  = new google.auth.OAuth2();
+      auth.setCredentials({ access_token: accessToken });
+      await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
+      console.log(`[ContainerLoad] Loader email sent → ${to} with ${attachments.length} buyer receipt(s)`);
+    }
 
     load.emailSentAt = new Date();
     load.loaderEmail = to;
     if (cc !== undefined) load.loaderCc = cc;
     await load.save();
 
-    res.json({ success: true });
+    res.json({ success: true, attachments: attachments.map(a => a.filename) });
   } catch (e) {
     console.error("[ContainerLoad] send-email error:", e.message);
     res.status(500).json({ error: e.message });
