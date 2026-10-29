@@ -3021,6 +3021,54 @@ export default function OrderDetails() {
               </div>
             </div>
           </div>
+
+          {/* ── Driver Fees ── */}
+          <div style={{ marginTop: 16 }}>
+            <div style={{ display:"flex", alignItems:"center", justifyContent:"space-between", marginBottom: 8 }}>
+              <span style={{ fontSize: 11, fontWeight: 700, textTransform:"uppercase",
+                letterSpacing:"0.07em", color:"var(--text-muted)" }}>Driver Fees</span>
+              <button onClick={async () => {
+                const desc = window.prompt("Fee description (e.g. Storage, Tire Change, Cleaning):");
+                if (!desc) return;
+                const amt = window.prompt("Amount ($):");
+                if (!amt || isNaN(parseFloat(amt))) return;
+                const newFees = [...(charges.driverFees || []), { description: desc.trim(), amount: parseFloat(amt) }];
+                await fetch(`${API}/api/orders/${id}`, {
+                  method: "PUT", headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify({ charges: { ...charges, driverFees: newFees } }),
+                });
+                fetchOrder();
+              }} style={{ fontSize: 11, padding:"3px 10px", borderRadius: 6, border:"none",
+                background:"rgba(96,165,250,0.15)", color:"#60a5fa", cursor:"pointer", fontWeight:600 }}>
+                + Add Fee
+              </button>
+            </div>
+            {(charges.driverFees || []).length === 0 ? (
+              <div style={{ fontSize: 12, color:"var(--text-muted)", fontStyle:"italic" }}>No driver fees — click + Add Fee to record storage, tire change, etc.</div>
+            ) : (
+              <div style={{ display:"flex", flexDirection:"column", gap: 6 }}>
+                {(charges.driverFees || []).map((fee, idx) => (
+                  <div key={idx} style={{ display:"flex", alignItems:"center", gap: 8,
+                    padding:"6px 10px", borderRadius: 7,
+                    background:"var(--bg-panel)", border:"1px solid var(--border)" }}>
+                    <span style={{ flex:1, fontSize:13 }}>{fee.description}</span>
+                    <span style={{ fontSize:13, fontWeight:700, color:"var(--text-primary)" }}>
+                      ${Number(fee.amount).toFixed(2)}
+                    </span>
+                    <button onClick={async () => {
+                      const newFees = (charges.driverFees || []).filter((_, i) => i !== idx);
+                      await fetch(`${API}/api/orders/${id}`, {
+                        method:"PUT", headers:{"Content-Type":"application/json"},
+                        body: JSON.stringify({ charges: { ...charges, driverFees: newFees } }),
+                      });
+                      fetchOrder();
+                    }} style={{ fontSize:11, background:"none", border:"none", color:"var(--text-muted)",
+                      cursor:"pointer", padding:"0 4px" }} title="Remove">✕</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
         </section>
 
         {/* Vehicle */}
@@ -3289,6 +3337,17 @@ export default function OrderDetails() {
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || "Parse failed");
+                    // Inject driver fees as extra line items on the first dispatch row
+                    const driverFees = (order.charges?.driverFees || []);
+                    if (driverFees.length > 0) {
+                      const rows = Array.isArray(data) ? data : (data.rows || []);
+                      if (rows.length > 0) {
+                        rows[0].lineItems = [
+                          ...(rows[0].lineItems || []),
+                          ...driverFees.map(f => ({ description: f.description, amount: f.amount })),
+                        ];
+                      }
+                    }
                     sessionStorage.setItem("dispatchParseResult", JSON.stringify({ rows: data, orderRef: order.refNumber, orderId: order._id }));
                     navigate("/expenses?importDispatch=1");
                   }
