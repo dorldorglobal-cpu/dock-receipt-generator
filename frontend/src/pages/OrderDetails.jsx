@@ -2483,6 +2483,26 @@ export default function OrderDetails() {
           </div>
         );
       })()}
+      {/* ── Invoiced Amount chip ─────────────────────────────────────────── */}
+      {orderInvoices.length > 0 && (() => {
+        const invoicedTotal = orderInvoices.reduce((s, i) => s + Number(i.total || 0), 0);
+        const paidTotal     = orderInvoices.filter(i => i.status === "paid").reduce((s, i) => s + Number(i.total || 0), 0);
+        const allPaid       = orderInvoices.every(i => i.status === "paid");
+        const anyPaid       = paidTotal > 0;
+        const fmt = v => "$" + Number(v).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        return (
+          <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+            <div style={{ display:"flex", alignItems:"center", gap:8, background: allPaid ? "rgba(5,150,105,0.12)" : "rgba(37,99,235,0.1)", border:`1px solid ${allPaid ? "#059669" : "#3b82f6"}`, borderRadius:10, padding:"7px 16px" }}>
+              <span style={{ fontSize:12, color:"var(--text-secondary)", fontWeight:600, textTransform:"uppercase", letterSpacing:".05em" }}>Invoiced</span>
+              <span style={{ fontSize:20, fontWeight:800, color: allPaid ? "#34d399" : "#60a5fa", fontVariantNumeric:"tabular-nums" }}>{fmt(invoicedTotal)}</span>
+              {anyPaid && !allPaid && (
+                <span style={{ fontSize:12, color:"#34d399", fontWeight:600 }}>· {fmt(paidTotal)} paid</span>
+              )}
+              {allPaid && <span style={{ fontSize:12, color:"#34d399", fontWeight:700 }}>✓ PAID</span>}
+            </div>
+          </div>
+        );
+      })()}
       <div style={{ display: "flex", gap: "10px", marginBottom: orderInvoices.length > 0 ? 10 : "20px", flexWrap: "wrap" }}>
         <button onClick={openEdit} style={{ padding: "10px 14px", borderRadius: "10px", border: "none",
             background: "#7c3aed", color: "white", cursor: "pointer", fontSize: "13px" }}>
