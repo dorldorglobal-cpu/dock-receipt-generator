@@ -11,6 +11,7 @@ const Order        = require("../models/Order");
 const Vendor       = require("../models/Vendor");
 const { uploadBufferToDrive, getOrCreateFolder, deleteDriveFile } = require("../googleDrive");
 const { extractContainerInvoiceFields } = require("../utils/llmExtract");
+const { appendAchRows } = require("../utils/achSheet");
 
 const TEMP_DIR     = path.join(__dirname, "..", "temp");
 const HIGHLIGHT_PY = path.join(__dirname, "..", "highlight_pdf.py");
@@ -523,6 +524,21 @@ router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
     }));
 
     res.json({ updated: ids.length });
+
+    // Append to ACH PAYMENTS Google Sheet for Bank ACH payments
+    if (paymentMethod && paymentMethod.toLowerCase().includes("ach")) {
+      const achEntries = expenses.map(exp => ({
+        paymentDate: dateObj,
+        payee:       exp.vendor || exp.description || "",
+        reference:   exp.orderRef || "",
+        amount:      amountOverrides[exp._id.toString()]
+                       ? parseFloat(amountOverrides[exp._id.toString()])
+                       : exp.amount,
+      }));
+      appendAchRows(achEntries).catch(err =>
+        console.warn("[bulk-pay] achSheet append failed:", err.message)
+      );
+    }
   } catch (err) {
     console.error("bulk-pay error:", err);
     res.status(500).json({ error: err.message });
