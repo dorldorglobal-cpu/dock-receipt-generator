@@ -2695,6 +2695,36 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
     }
 
     res.json({ updated, created, attached });
+
+    // Append all approved rows to ACH PAYMENTS Google Sheet
+    try {
+      const achEntries = [];
+      for (const row of rows) {
+        if (!row.selected) continue;
+        const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
+        if (row.splitBills?.length) {
+          for (const split of row.splitBills) {
+            if (!split.amount) continue;
+            achEntries.push({
+              paymentDate: dateObj,
+              payee:       row.payeeName || "",
+              reference:   split.orderRef || row.orderRef || "",
+              amount:      Number(split.amount) || 0,
+            });
+          }
+        } else {
+          achEntries.push({
+            paymentDate: dateObj,
+            payee:       row.payeeName || "",
+            reference:   row.orderRef || "",
+            amount:      Number(row.amount) || 0,
+          });
+        }
+      }
+      if (achEntries.length) appendAchRows(achEntries);
+    } catch (sheetErr) {
+      console.warn("[apply-payment-proof] achSheet append failed:", sheetErr.message);
+    }
   } catch (err) {
     console.error("apply-payment-proof error:", err);
     res.status(500).json({ error: err.message });
