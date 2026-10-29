@@ -4667,16 +4667,34 @@ export default function OrderDetails() {
                 <LocationSearch key={field}
                   label={lbl}
                   value={editForm[field]||""}
-                  onChange={v => setEditForm(f=>({...f,[field]:v}))}
-                  onSelect={item => setEditForm(f=>({
-                    ...f,
-                    [field]: item.companyName||"",
-                    [addrFields.name]:    item.companyName||"",
-                    [addrFields.address]: item.address||"",
-                    [addrFields.city]:    item.city||"",
-                    [addrFields.state]:   item.state||"",
-                    [addrFields.zip]:     item.postalCode||"",
-                  }))}
+                  onChange={v => {
+                    const extra = {};
+                    if (field === "deliveryLocation") {
+                      const up = (v || "").toUpperCase();
+                      if (up.includes("ACL"))     extra.shippingLine = "ACL";
+                      else if (up.includes("SALLAUM")) extra.shippingLine = "SALLAUM";
+                    }
+                    setEditForm(f=>({...f,[field]:v,...extra}));
+                  }}
+                  onSelect={item => {
+                    const name = item.companyName||"";
+                    const extra = {};
+                    if (field === "deliveryLocation") {
+                      const up = name.toUpperCase();
+                      if (up.includes("ACL"))     extra.shippingLine = "ACL";
+                      else if (up.includes("SALLAUM")) extra.shippingLine = "SALLAUM";
+                    }
+                    setEditForm(f=>({
+                      ...f,
+                      [field]: name,
+                      [addrFields.name]:    name,
+                      [addrFields.address]: item.address||"",
+                      [addrFields.city]:    item.city||"",
+                      [addrFields.state]:   item.state||"",
+                      [addrFields.zip]:     item.postalCode||"",
+                      ...extra,
+                    }));
+                  }}
                 />
               ))}
             </div>
