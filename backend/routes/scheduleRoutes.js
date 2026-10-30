@@ -1140,7 +1140,11 @@ async function lookupSchedule({ voyageName, vessel, pol, pod }) {
   const q = (extra) => ScheduleRow.find({ ...extra, pol: polUp, pod: podUp }).lean();
 
   if (voyageCode) {
-    dbRow = pickBest(await q({ voyage: { $regex: `^${esc(voyageCode)}$`, $options: "i" } }));
+    // Exact voyage code match — return it directly, even if already sailed.
+    // pickBest would swap it for a future voyage on the same vessel, which
+    // is wrong when the order is already booked on a specific voyage.
+    const exact = await q({ voyage: { $regex: `^${esc(voyageCode)}$`, $options: "i" } });
+    dbRow = exact.length === 1 ? exact[0] : pickBest(exact);
   }
   if (!dbRow && vesselPart) {
     dbRow = pickBest(await q({ vessel: { $regex: `^${esc(vesselPart)}$`, $options: "i" } }));
