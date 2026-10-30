@@ -12,11 +12,14 @@ const TAB      = "Sheet1";
 
 const sheets = google.sheets({ version: "v4", auth: oauth2Client });
 
-function fmtDate(d) {
+// Convert JS Date to Google Sheets serial number (days since 12/30/1899)
+// so dates are always stored as real date values, not text strings.
+function toSerial(d) {
   if (!d) return "";
   const dt = d instanceof Date ? d : new Date(d);
   if (isNaN(dt)) return "";
-  return `${dt.getMonth() + 1}/${dt.getDate()}/${dt.getFullYear()}`;
+  const epoch = Date.UTC(1899, 11, 30);
+  return (dt.getTime() - epoch) / 86400000;
 }
 
 /**
@@ -32,18 +35,19 @@ async function appendAchRows(entries) {
       const procDate = new Date(payDate);
       procDate.setDate(procDate.getDate() - 1);
       return [
-        fmtDate(payDate),
+        toSerial(payDate),
         e.payee || "",
         e.reference || "",
         e.amount != null ? e.amount : "",
-        fmtDate(procDate),
+        "",               // col E — empty spacer
+        toSerial(procDate), // col F — PROCESSING DATE
       ];
     });
 
     await sheets.spreadsheets.values.append({
       spreadsheetId: SHEET_ID,
-      range: `${TAB}!A:E`,
-      valueInputOption: "USER_ENTERED",
+      range: `${TAB}!A:F`,
+      valueInputOption: "RAW",
       insertDataOption: "INSERT_ROWS",
       requestBody: { values: rows },
     });
