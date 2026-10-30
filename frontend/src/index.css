@@ -49,36 +49,36 @@
 
 /* ─── Light Theme Overrides ─────────────────────────────────────────────── */
 [data-theme="light"] {
-  --bg-base:      #e8eef6;
-  --bg-elevated:  #ddeaf8;
-  --bg-panel:     #e4eef8;
-  --bg-input:     #f0f6ff;
-  --bg-hover:     #cdddf0;
+  --bg-base:      #f5f7fa;
+  --bg-elevated:  #f1f4f8;
+  --bg-panel:     #ffffff;
+  --bg-input:     #ffffff;
+  --bg-hover:     #eef2f7;
   --sidebar-bg:   #ffffff;
-  --sidebar-border: #d0d7e3;
+  --sidebar-border: #e5e7eb;
 
-  --border:       #d0d7e3;
-  --border-muted: #e2e8f0;
+  --border:       #e3e7ee;
+  --border-muted: #eef1f5;
 
-  --text-primary:   #0f172a;
+  --text-primary:   #111827;
   --text-secondary: #4b5563;
-  --text-muted:     #9ca3af;
+  --text-muted:     #6b7280;
 
   --accent:        #2563eb;
   --accent-hover:  #3b82f6;
-  --accent-dim:    rgba(37,99,235,0.10);
+  --accent-dim:    #e8f0fe;
 
   --success:       #16a34a;
-  --success-dim:   rgba(22,163,74,0.10);
+  --success-dim:   #e7f6ec;
   --warning:       #b45309;
-  --warning-dim:   rgba(180,83,9,0.10);
+  --warning-dim:   #fdf3e1;
   --danger:        #dc2626;
-  --danger-dim:    rgba(220,38,38,0.10);
-  --purple:        #7c3aed;
-  --purple-dim:    rgba(124,58,237,0.10);
+  --danger-dim:    #fdecec;
+  --purple:        #6d28d9;
+  --purple-dim:    #f0eafd;
 
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.10);
-  --shadow-md: 0 4px 16px rgba(0,0,0,0.12);
+  --shadow-sm: 0 1px 2px rgba(16,24,40,0.06);
+  --shadow-md: 0 4px 12px rgba(16,24,40,0.08);
   --shadow-lg: 0 8px 32px rgba(0,0,0,0.16);
 
   color-scheme: light;
