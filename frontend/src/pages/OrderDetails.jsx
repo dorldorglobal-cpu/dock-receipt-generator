@@ -392,11 +392,11 @@ export default function OrderDetails() {
   }, [order?._id, order?.vessel, order?.pol, order?.pod, order?.sailDate]); // eslint-disable-line
 
   // Called from the manual Lookup button — uses AES vessel
-  const lookupAndApplySchedule = async (vessel, pol, pod) => {
+  const lookupAndApplySchedule = async (vessel, pol, pod, voyageName) => {
     if (!pol || !pod) return;
     setScheduleLooking(true);
     try {
-      await applyScheduleResult({ vessel: vessel || "", pol, pod });
+      await applyScheduleResult({ vessel: vessel || "", pol, pod, ...(voyageName ? { voyageName } : {}) });
     } catch (e) {
       setMessage("Schedule lookup failed: " + e.message);
     }
@@ -3154,7 +3154,7 @@ export default function OrderDetails() {
             <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:8 }}>
               <strong style={{ fontSize:13 }}>Vessel & Schedule</strong>
               <button
-                onClick={() => lookupAndApplySchedule(order.vessel, order.pol, order.pod)}
+                onClick={() => lookupAndApplySchedule(order.vessel, order.pol, order.pod, order.voyage)}
                 disabled={scheduleLooking || !order.vessel || !order.pol || !order.pod}
                 title="Look up dates from master schedule"
                 style={{ fontSize:11, padding:"3px 9px", borderRadius:6, border:"1px solid var(--border)",
