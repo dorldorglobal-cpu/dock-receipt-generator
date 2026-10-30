@@ -32,6 +32,12 @@ const containerLoadSchema = new mongoose.Schema({
   notifyEmail:   { type: String, default: "" },
   notifyTin:     { type: String, default: "" },
 
+  customsHold:            { type: Boolean, default: false },
+  customsHoldDate:        { type: Date },
+  customsHoldNote:        { type: String, default: "" },
+  customsHoldCleared:     { type: Boolean, default: false },
+  customsHoldClearedDate: { type: Date },
+
   driveFolderId:   { type: String, default: "" },
   driveFolderLink: { type: String, default: "" },
 

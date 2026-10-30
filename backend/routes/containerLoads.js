@@ -186,6 +186,30 @@ router.patch("/:id", express.json(), async (req, res) => {
   }
 });
 
+// POST /api/container-loads/:id/customs-hold — set or clear a customs hold
+router.post("/:id/customs-hold", express.json(), async (req, res) => {
+  try {
+    const { action, note } = req.body; // action: "hold" | "clear"
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    if (action === "hold") {
+      load.customsHold        = true;
+      load.customsHoldDate    = new Date();
+      load.customsHoldNote    = note || "";
+      load.customsHoldCleared = false;
+      load.customsHoldClearedDate = undefined;
+    } else if (action === "clear") {
+      load.customsHold            = false;
+      load.customsHoldCleared     = true;
+      load.customsHoldClearedDate = new Date();
+    }
+    await load.save();
+    res.json({ ok: true, load });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // POST /api/container-loads/:id/add-order — add an order to the load
 router.post("/:id/add-order", express.json(), async (req, res) => {
   try {

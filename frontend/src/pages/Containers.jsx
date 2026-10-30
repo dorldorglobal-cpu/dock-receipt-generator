@@ -803,6 +803,19 @@ export default function Containers() {
                     background:sc.bg, border:`1px solid ${sc.border}`, color:sc.text }}>
                     {l.status}
                   </span>
+                  {l.customsHold && (
+                    <span style={{ fontSize:11, fontWeight:700, padding:"2px 8px", borderRadius:20,
+                      background:"rgba(251,113,133,0.15)", border:"1px solid rgba(251,113,133,0.5)", color:"#fb7185" }}>
+                      🚨 CUSTOMS HOLD
+                    </span>
+                  )}
+                  {!l.customsHold && l.customsHoldCleared && l.customsHoldClearedDate && (
+                    <span title={`Was on customs hold — cleared ${new Date(l.customsHoldClearedDate).toLocaleDateString("en-US")}`}
+                      style={{ fontSize:11, fontWeight:600, padding:"2px 8px", borderRadius:20,
+                        background:"rgba(148,163,184,0.1)", border:"1px solid rgba(148,163,184,0.3)", color:"#94a3b8", cursor:"default" }}>
+                      ✅ Customs Cleared {new Date(l.customsHoldClearedDate).toLocaleDateString("en-US")}
+                    </span>
+                  )}
                 </div>
 
                 <div style={{ flex:1, display:"flex", gap:24, minWidth:0 }}>
@@ -919,6 +932,38 @@ export default function Containers() {
                         background:"rgba(16,185,129,0.3)", border:"2px solid #10b981",
                         color:"#10b981", cursor:"pointer", whiteSpace:"nowrap" }}>
                       ✅ Released
+                    </button>
+                  )}
+                  {l.customsHold ? (
+                    <button onClick={async () => {
+                        if (!window.confirm(`Mark customs hold on "${l.name}" as CLEARED?`)) return;
+                        await fetch(`${API}/api/container-loads/${l._id}/customs-hold`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "clear" }),
+                        });
+                        refresh();
+                      }}
+                      style={{ padding:"6px 12px", fontSize:12, fontWeight:700, borderRadius:8,
+                        background:"rgba(251,113,133,0.2)", border:"2px solid #fb7185",
+                        color:"#fb7185", cursor:"pointer", whiteSpace:"nowrap" }}>
+                      ✅ Clear Hold
+                    </button>
+                  ) : (
+                    <button onClick={async () => {
+                        const note = window.prompt(`Customs hold note for "${l.name}" (optional):`);
+                        if (note === null) return; // cancelled
+                        await fetch(`${API}/api/container-loads/${l._id}/customs-hold`, {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ action: "hold", note }),
+                        });
+                        refresh();
+                      }}
+                      style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
+                        background:"rgba(251,113,133,0.1)", border:"1px solid rgba(251,113,133,0.35)",
+                        color:"#fb7185", cursor:"pointer", whiteSpace:"nowrap" }}>
+                      🚨 Hold
                     </button>
                   )}
                   <button onClick={()=>deleteLoad(l)}
