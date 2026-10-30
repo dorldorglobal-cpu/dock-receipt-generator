@@ -1365,6 +1365,9 @@ export default function OrderDetails() {
       containerNumber: order.containerNumber || "",
       sealNumber:      order.sealNumber      || "",
       notes:           order.notes           || "",
+      sailDate:        order.sailDate        ? order.sailDate.slice(0,10)    : "",
+      arrivalDate:     order.arrivalDate     ? order.arrivalDate.slice(0,10) : "",
+      cutoffDate:      order.cutoffDate      ? order.cutoffDate.slice(0,10)  : "",
     });
     // Pre-load ocean rates for Container auto-price lookup
     fetch(`${API}/api/pricing?type=ocean`)
@@ -4971,6 +4974,22 @@ export default function OrderDetails() {
               <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                 Booking #
                 <input value={editForm.bookingNumber||""} onChange={e=>setEditForm(f=>({...f,bookingNumber:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4 }} />
+              </label>
+
+              <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                Cutoff Date
+                <input type="date" value={editForm.cutoffDate||""} onChange={e=>setEditForm(f=>({...f,cutoffDate:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4 }} />
+              </label>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                Sail Date
+                <input type="date" value={editForm.sailDate||""} onChange={e=>setEditForm(f=>({...f,sailDate:e.target.value}))}
+                  style={{ display:"block", width:"100%", marginTop:4 }} />
+              </label>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                Arrival Date
+                <input type="date" value={editForm.arrivalDate||""} onChange={e=>setEditForm(f=>({...f,arrivalDate:e.target.value}))}
                   style={{ display:"block", width:"100%", marginTop:4 }} />
               </label>
 
