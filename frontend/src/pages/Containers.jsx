@@ -585,15 +585,20 @@ export default function Containers() {
   };
   const STATUS_TABS = [
     { value:"all",       label:"All",           color:"var(--text-secondary)" },
+    { value:"hold",      label:"🚨 Customs Hold", color:"#fb7185" },
     { value:"pending",   label:"New / Pending",  color:"#fbbf24" },
     { value:"booked",    label:"Booked",         color:"#60a5fa" },
     { value:"sailed",    label:"Sailed",         color:"#34d399" },
     { value:"completed", label:"Completed",      color:"#94a3b8" },
   ];
-  const statusCounts = { all: loads.length, pending:0, booked:0, sailed:0, completed:0 };
-  loads.forEach(l => { statusCounts[loadBucket(l)]++; });
+  const statusCounts = { all: loads.length, hold:0, pending:0, booked:0, sailed:0, completed:0 };
+  loads.forEach(l => {
+    statusCounts[loadBucket(l)]++;
+    if (l.customsHold) statusCounts.hold++;
+  });
 
   const filtered = loads.filter(l => {
+    if (statusFilter === "hold") return l.customsHold;
     if (statusFilter !== "all" && loadBucket(l) !== statusFilter) return false;
     const s = search.toLowerCase();
     if (!s) return true;
@@ -763,12 +768,14 @@ export default function Containers() {
           const open  = !!expanded[l._id];
           const orders = l.orderIds || [];
           return (
-            <div key={l._id} id={`load-${l._id}`} style={{ background:"var(--bg-panel)", border:"1px solid var(--border)",
+            <div key={l._id} id={`load-${l._id}`} style={{ background: l.customsHold ? "rgba(251,113,133,0.08)" : "var(--bg-panel)",
+              border: l.customsHold ? "2px solid rgba(251,113,133,0.6)" : "1px solid var(--border)",
               borderRadius:12, overflow:"hidden" }}>
 
               {/* Header row */}
               <div style={{ display:"flex", alignItems:"center", gap:14, padding:"14px 20px",
-                borderBottom: open ? "1px solid var(--border)" : "none" }}>
+                background: l.customsHold ? "rgba(251,113,133,0.12)" : "transparent",
+                borderBottom: open ? `1px solid ${l.customsHold ? "rgba(251,113,133,0.3)" : "var(--border)"}` : "none" }}>
 
                 <div onClick={()=>setExpanded(p=>({...p,[l._id]:!p[l._id]}))}
                   style={{ cursor:"pointer", color:"var(--text-secondary)", fontSize:15, minWidth:18 }}>
