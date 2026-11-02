@@ -9,6 +9,10 @@
   --sidebar-bg:   #0d1117;
   --sidebar-border: #1e2533;
 
+  /* aliases used by some modals */
+  --bg-card:      var(--bg-panel);
+  --text:         var(--text-primary);
+
   --border:       #2a3245;
   --border-muted: #1e2533;
 

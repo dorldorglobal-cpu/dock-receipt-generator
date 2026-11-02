@@ -198,6 +198,7 @@ export default function Containers() {
   const [sendingAll,    setSendingAll]    = useState(false);
   const [sendResults,   setSendResults]   = useState(null);
   const [sendPreview,   setSendPreview]   = useState(null); // { to, subject, body }
+  const [draftBl,       setDraftBl]       = useState(null); // { found, name, orderRef } | null while checking
 
   // Edit modal
   const [editLoad,    setEditLoad]    = useState(null);
@@ -2048,15 +2049,20 @@ export default function Containers() {
                   </div>
                   {(() => {
                     const invoiceCount = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid").length;
-                    const hasDraft = (billingLoad?.files||[]).some(f =>
-                      /^draft/i.test(f.label||"") || /draft/i.test(f.originalName||"") || /draft/i.test(f.filename||"")
-                    );
                     return (
                       <div style={{ fontSize:11, color:"var(--text-muted)", display:"flex", flexDirection:"column", gap:3 }}>
                         <span>📄 {invoiceCount} invoice PDF(s) will be attached</span>
-                        <span style={{ color: hasDraft ? "#34d399" : "#f87171" }}>
-                          {hasDraft ? "📝 Draft BL will be attached" : "⚠️ No Draft BL found in this load's docs — upload one to include it"}
-                        </span>
+                        {!draftBl ? (
+                          <span>🔎 Checking for a Draft BL…</span>
+                        ) : draftBl.found ? (
+                          <span style={{ color:"#34d399", fontWeight:600 }}>
+                            📝 Draft BL will be attached: {draftBl.name}{draftBl.orderRef ? ` (from order #${draftBl.orderRef})` : ""}
+                          </span>
+                        ) : (
+                          <span style={{ color:"#f87171", fontWeight:600 }}>
+                            {draftBl.error ? "⚠️ Couldn't check for a Draft BL" : "⚠️ No Draft BL will be attached — none found in this load's or its orders' docs"}
+                          </span>
+                        )}
                       </div>
                     );
                   })()}
@@ -2108,6 +2114,10 @@ export default function Containers() {
                         const names = [vehicleNames, extraNames].filter(Boolean).join("\n");
                         const body = `Dear Customer,\n\nPlease find ${combined?"the combined invoice":"your invoices"} attached for the following vehicles:\n\n${names}\n\nVessel: ${vessel}\nBooking #: ${booking}\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
                         setSendPreview({ to, subject, body, combined });
+                        setDraftBl(null);
+                        fetch(`${API}/api/container-loads/${billingLoad._id}/draft-bl`)
+                          .then(r => r.json()).then(setDraftBl)
+                          .catch(() => setDraftBl({ found: false, error: true }));
                       };
                       return (<>
                         <button disabled={disabled} onClick={()=>buildPreview(false)}

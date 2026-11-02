@@ -504,6 +504,32 @@ router.post("/:id/mark-all-paid", express.json(), async (req, res) => {
   }
 });
 
+// Draft BL attached to invoice emails — the load's own docs first, then any
+// order's docs (matched by label or filename containing "draft").
+const isDraftBl = f => /^draft/i.test(f.label || "") || /draft/i.test(f.originalName || "") || /draft/i.test(f.filename || "");
+function findDraftBl(load, orders) {
+  const own = (load.files || []).find(isDraftBl);
+  if (own) return { file: own, orderRef: null };
+  for (const o of orders) {
+    const f = (o.files || []).find(isDraftBl);
+    if (f) return { file: f, orderRef: o.refNumber || null };
+  }
+  return { file: null, orderRef: null };
+}
+
+// GET /api/container-loads/:id/draft-bl — which Draft BL the invoice emails will attach
+router.get("/:id/draft-bl", async (req, res) => {
+  try {
+    const load = await ContainerLoad.findById(req.params.id).lean();
+    if (!load) return res.status(404).json({ error: "Not found" });
+    const orders = await Order.find({ _id: { $in: load.orderIds } }).select("refNumber files").lean();
+    const { file, orderRef } = findDraftBl(load, orders);
+    res.json(file?.driveFileId
+      ? { found: true, name: file.originalName || file.filename || "Draft-BL.pdf", orderRef }
+      : { found: false });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/container-loads/:id/send-all-invoices — send invoices for all orders in load
 router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
   try {
@@ -565,16 +591,7 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
       const fs = require("fs");
       const os = require("os");
 
-      // Match by label OR by filename containing "draft"
-      const isDraft = f => /^draft/i.test(f.label || "") || /draft/i.test(f.originalName || "") || /draft/i.test(f.filename || "");
-      let draftFile = (load.files || []).find(isDraft);
-      if (!draftFile) {
-        for (const o of orders) {
-          draftFile = (o.files || []).find(isDraft);
-          if (draftFile) break;
-        }
-      }
-
+      const { file: draftFile } = findDraftBl(load, orders);
       if (draftFile?.driveFileId) {
         const tmpPath = require("path").join(os.tmpdir(), `draft-bl-${Date.now()}.pdf`);
         await downloadDriveFile(draftFile.driveFileId, tmpPath);
@@ -720,14 +737,7 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
       const { downloadDriveFile } = require("../googleDrive");
       const fs = require("fs");
       const os = require("os");
-      const isDraft = f => /^draft/i.test(f.label || "") || /draft/i.test(f.originalName || "") || /draft/i.test(f.filename || "");
-      let draftFile = (load.files || []).find(isDraft);
-      if (!draftFile) {
-        for (const o of orders) {
-          draftFile = (o.files || []).find(isDraft);
-          if (draftFile) break;
-        }
-      }
+      const { file: draftFile } = findDraftBl(load, orders);
       if (draftFile?.driveFileId) {
         const tmpPath = require("path").join(os.tmpdir(), `draft-bl-${Date.now()}.pdf`);
         await downloadDriveFile(draftFile.driveFileId, tmpPath);
