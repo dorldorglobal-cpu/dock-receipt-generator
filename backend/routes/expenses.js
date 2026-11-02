@@ -2725,6 +2725,50 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
     } catch (sheetErr) {
       console.warn("[apply-payment-proof] achSheet append failed:", sheetErr.message);
     }
+
+    // Email payment proof to owner
+    try {
+      if (proofFile?.driveId) {
+        const { downloadDriveFile } = require("../googleDrive");
+        const { getGmailAccessToken } = require("../utils/gmail");
+        const { google } = require("googleapis");
+        const os = require("os");
+        const tmpPath = path.join(os.tmpdir(), `payment-proof-${Date.now()}.pdf`);
+        await downloadDriveFile(proofFile.driveId, tmpPath);
+        const buf = fs.readFileSync(tmpPath);
+        try { fs.unlinkSync(tmpPath); } catch {}
+        const b64 = buf.toString("base64");
+        const wrappedB64 = b64.match(/.{1,76}/g).join("\r\n");
+        // Use the batch payment date if available, else today
+        const payDate = rows.find(r => r.selected && r.batchPaidDate)?.batchPaidDate;
+        const d = payDate ? new Date(payDate) : new Date();
+        const dateStr = `${d.getMonth()+1}/${d.getDate()}/${d.getFullYear()}`;
+        const subject = `${dateStr} PAYMENTS`;
+        const fname = proofFile.fname || "payment-proof.pdf";
+        const to = process.env.GMAIL_USER || "dorldorglobal@gmail.com";
+        const boundary = "DDG_PAYMENT_" + Date.now();
+        const mimeLines = [
+          `From: Dor Ldor Global <${to}>`, `To: ${to}`,
+          `Subject: ${subject}`,
+          `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`,
+          ``, `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``,
+          `Payment proof attached — ${subject}.`,
+          `--${boundary}`,
+          `Content-Type: application/pdf; name="${fname}"`,
+          `Content-Transfer-Encoding: base64`,
+          `Content-Disposition: attachment; filename="${fname}"`,
+          ``, wrappedB64, ``, `--${boundary}--`,
+        ];
+        const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
+        const accessToken = await getGmailAccessToken();
+        const gmail = google.gmail("v1");
+        const auth = new google.auth.OAuth2();
+        auth.setCredentials({ access_token: accessToken });
+        await gmail.users.messages.send({ userId: "me", requestBody: { raw }, auth });
+      }
+    } catch (emailErr) {
+      console.warn("[apply-payment-proof] email failed:", emailErr.message);
+    }
   } catch (err) {
     console.error("apply-payment-proof error:", err);
     res.status(500).json({ error: err.message });
