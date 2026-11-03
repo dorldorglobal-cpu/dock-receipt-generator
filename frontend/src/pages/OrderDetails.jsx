@@ -1852,6 +1852,10 @@ export default function OrderDetails() {
   };
 
   const openAclNoTitle = ({ booking, ymm, vin }) => {
+    if (/PROVIDENCE/i.test(`${order.deliveryLocation || ""} ${order.pol || ""}`)) {
+      setMessage("⚠️ ACL Providence does not allow no-title delivery — the title must be delivered with the unit.");
+      return;
+    }
     const d = new Date();
     d.setDate(d.getDate() + 7);
     setAclExpected(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
@@ -6413,11 +6417,6 @@ export default function OrderDetails() {
             <p style={{ margin:"0 0 18px", fontSize:12, color:"var(--text-secondary)" }}>
               📎 Attaches ACL's no-title form for this port, filled in —{" "}
               <a href={authUrl(`/api/orders/${id}/acl-no-title-pdf?expected=${aclExpected}`)} target="_blank" rel="noreferrer">preview form</a>
-              {/PROVIDENCE/i.test(`${order.deliveryLocation || ""} ${order.pol || ""}`) && (
-                <span style={{ display:"block", marginTop:6, color:"#f87171", fontWeight:600 }}>
-                  ⚠️ No ACL form on file for Providence yet — this email can't be sent until one is added.
-                </span>
-              )}
             </p>
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={() => setAclNoTitle(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>

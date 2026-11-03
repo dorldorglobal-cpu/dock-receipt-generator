@@ -27,8 +27,8 @@ const FORMS = {
           pod: [98, 628.8], date: [264, 588.6], signature: [72, 388] },
 };
 
-// Ports ACL ships from that have no form on file yet
-const NO_FORM_PORTS = { PVD: "Providence" };
+// ACL ports that refuse no-title delivery outright (title must come with the unit)
+const NO_TITLE_REFUSED = { PVD: "Providence" };
 
 const isAclOrder = (order) => /\b(ACL|GRIMALDI|ATLANTIC CONTAINER)\b/i.test(order?.shippingLine || "");
 
@@ -64,8 +64,8 @@ async function buildAclNoTitlePdf(order, { port, expectedDate } = {}) {
   port = port || aclNoTitlePort(order);
   const form = FORMS[port];
   if (!form) {
-    const err = new Error(NO_FORM_PORTS[port]
-      ? `No ACL no-title form on file for ${NO_FORM_PORTS[port]}`
+    const err = new Error(NO_TITLE_REFUSED[port]
+      ? `ACL ${NO_TITLE_REFUSED[port]} does not allow no-title delivery`
       : "Couldn't tell which ACL port this order delivers to");
     err.status = 404;
     throw err;
@@ -90,4 +90,4 @@ async function buildAclNoTitlePdf(order, { port, expectedDate } = {}) {
   return { bytes: await pdf.save(), port };
 }
 
-module.exports = { FORMS, NO_FORM_PORTS, isAclOrder, aclNoTitlePort, buildAclNoTitlePdf };
+module.exports = { FORMS, NO_TITLE_REFUSED, isAclOrder, aclNoTitlePort, buildAclNoTitlePdf };
