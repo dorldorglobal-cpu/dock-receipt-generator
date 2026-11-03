@@ -2048,6 +2048,22 @@ router.post("/:id/timeline", express.json(), async (req, res) => {
   }
 });
 
+// GET /:id/acl-no-title-pdf?expected=YYYY-MM-DD — ACL's port-specific
+// "Cargo Received without Title" form, filled in for this order
+router.get("/:id/acl-no-title-pdf", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).lean();
+    if (!order) return res.status(404).json({ error: "Not found" });
+    const { buildAclNoTitlePdf } = require("../utils/aclNoTitle");
+    const { bytes } = await buildAclNoTitlePdf(order, { expectedDate: req.query.expected });
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${order.refNumber || "order"} NO TITLE.pdf"`);
+    res.send(Buffer.from(bytes));
+  } catch (err) {
+    res.status(err.status || 500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/orders/:id/pending-invoice-items — add a pending charge ────────
 router.patch("/:id/file-label", express.json(), async (req, res) => {
   try {

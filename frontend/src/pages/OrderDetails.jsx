@@ -522,6 +522,12 @@ export default function OrderDetails() {
   const [tartanSubject,        setTartanSubject]        = useState("");
   const [tartanBody,           setTartanBody]           = useState("");
   const [tartanSending,        setTartanSending]        = useState(false);
+  // ACL (Grimaldi) no-title email — attaches ACL's port-specific no-title form
+  const [aclNoTitle,           setAclNoTitle]           = useState(false);
+  const [aclSubject,           setAclSubject]           = useState("");
+  const [aclBody,              setAclBody]              = useState("");
+  const [aclExpected,          setAclExpected]          = useState(""); // YYYY-MM-DD title expected at the port agent
+  const [aclSending,           setAclSending]           = useState(false);
 
   // Warehouse delivery-appointment email (Container orders)
   const [warehouses,          setWarehouses]           = useState([]);
@@ -1696,6 +1702,15 @@ export default function OrderDetails() {
       }
     }
 
+    // ACL + No Title → Grimaldi email with ACL's port-specific no-title form
+    if (isNoTitle && /\b(ACL|GRIMALDI)\b/i.test(order.shippingLine || payload.shippingLine || "")) {
+      openAclNoTitle({
+        booking: payload.bookingNumber || order.bookingNumber || "",
+        ymm:     payload.vehicleYearMakeModel || [order.year, order.make, order.model].filter(Boolean).join(" "),
+        vin:     payload.vin || order.vin || "",
+      });
+    }
+
     // Auto-add Non-runner Fee or Forklift Fee to charges if condition is set and fee not yet applied
     if (condition === "nonrunner" && (!charges.nonRunnerFee || Number(charges.nonRunnerFee) === 0)) {
       const newCharges = { ...charges, nonRunnerFee: "400" };
@@ -1833,6 +1848,48 @@ export default function OrderDetails() {
       setMessage("❌ Failed to send Draft BL: " + e.message);
     } finally {
       setDraftSending(false);
+    }
+  };
+
+  const openAclNoTitle = ({ booking, ymm, vin }) => {
+    const d = new Date();
+    d.setDate(d.getDate() + 7);
+    setAclExpected(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`);
+    setAclSubject(`${booking} ${ymm} VIN: ${vin.slice(-6)} NO TITLE`);
+    setAclBody(`Please approve no title delivery for this unit.\n\n--\nRegards,\n\nEli Levy\n9172003998\nDorLdorGlobal@gmail.com`);
+    setAclNoTitle(true);
+  };
+
+  const sendAclNoTitle = async () => {
+    setAclSending(true);
+    try {
+      const formRes = await fetch(`${API}/api/orders/${id}/acl-no-title-pdf?expected=${aclExpected}`);
+      if (!formRes.ok) { const d = await formRes.json().catch(() => ({})); throw new Error(d.error || "Couldn't build the ACL form"); }
+      const bytes = new Uint8Array(await formRes.arrayBuffer());
+      let binary = "";
+      bytes.forEach(b => binary += String.fromCharCode(b));
+      const res = await fetch(`${API}/api/send-email`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          to:        ["Grimaldi Docs NA <GRIMALDIDOCSNA@aclcargo.com>", "Grimaldi Bookings NA <GrimaldiBookingsNA@aclcargo.com>"],
+          subject:   aclSubject,
+          body:      aclBody,
+          pdfBase64: btoa(binary),
+          pdfName:   `${order.refNumber || "order"} NO TITLE.pdf`,
+        }),
+      });
+      if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
+      await fetch(`${API}/api/orders/${id}/timeline`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "ACL No-Title Email Sent", details: aclSubject }),
+      });
+      fetchOrder();
+      setAclNoTitle(false);
+      setMessage("✅ ACL no-title email sent");
+    } catch (err) {
+      setMessage("❌ ACL no-title email failed: " + err.message);
+    } finally {
+      setAclSending(false);
     }
   };
 
@@ -2644,6 +2701,10 @@ export default function OrderDetails() {
               setSallaumNotifyBody(`Please update to ${condLabel2}.`);
               setSallaumNotify(true);
             }
+          }
+          // ACL + No Title → Grimaldi email with ACL's port-specific no-title form
+          if (isNoTitle2 && /\b(ACL|GRIMALDI)\b/i.test(order.shippingLine || "")) {
+            openAclNoTitle({ booking: order.bookingNumber || "", ymm, vin });
           }
         }} style={{ padding:"10px 14px", borderRadius:"10px", border:"none", background:"#2563eb", color:"white", cursor:"pointer", fontSize:"13px" }}>
           ✉️ Send DR
@@ -6321,6 +6382,47 @@ export default function OrderDetails() {
               <button onClick={() => setTartanNoTitle(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
               <button onClick={sendTartanNoTitle} disabled={tartanSending} style={{ padding:"8px 20px", background:"#2563eb", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                 {tartanSending ? "Sending…" : "Send to Tartan"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {aclNoTitle && (
+        <div style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.7)", zIndex:2002, display:"flex", alignItems:"center", justifyContent:"center", padding:16 }}>
+          <div style={{ background:"var(--bg-panel)", border:"1px solid #60a5fa", borderRadius:12, padding:28, width:500, maxWidth:"95vw" }}>
+            <h3 style={{ margin:"0 0 4px", color:"#60a5fa" }}>⚓ ACL / Grimaldi — No Title Email</h3>
+            <p style={{ margin:"0 0 16px", fontSize:12, color:"var(--text-secondary)" }}>
+              To: <strong style={{color:"var(--text-primary)"}}>GRIMALDIDOCSNA@aclcargo.com, GrimaldiBookingsNA@aclcargo.com</strong>
+            </p>
+            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
+              Subject
+              <input value={aclSubject} onChange={e => setAclSubject(e.target.value)}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+            </label>
+            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
+              Message
+              <textarea value={aclBody} onChange={e => setAclBody(e.target.value)} rows={7}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box" }} />
+            </label>
+            <label style={{ display:"block", marginBottom:12, fontSize:12, color:"var(--text-secondary)" }}>
+              Date title expected to be sent (goes on the ACL form)
+              <input type="date" value={aclExpected} onChange={e => setAclExpected(e.target.value)}
+                style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
+            </label>
+            <p style={{ margin:"0 0 18px", fontSize:12, color:"var(--text-secondary)" }}>
+              📎 Attaches ACL's no-title form for this port, filled in —{" "}
+              <a href={authUrl(`/api/orders/${id}/acl-no-title-pdf?expected=${aclExpected}`)} target="_blank" rel="noreferrer">preview form</a>
+              {/PROVIDENCE/i.test(`${order.deliveryLocation || ""} ${order.pol || ""}`) && (
+                <span style={{ display:"block", marginTop:6, color:"#f87171", fontWeight:600 }}>
+                  ⚠️ No ACL form on file for Providence yet — this email can't be sent until one is added.
+                </span>
+              )}
+            </p>
+            <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
+              <button onClick={() => setAclNoTitle(false)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
+              <button onClick={sendAclNoTitle} disabled={aclSending || !aclExpected} style={{ padding:"8px 20px", background:"#2563eb", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
+                {aclSending ? "Sending…" : "Send to ACL"}
               </button>
             </div>
           </div>
