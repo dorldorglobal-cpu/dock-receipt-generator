@@ -53,6 +53,21 @@ router.get("/", async (req, res) => {
   }
 });
 
+// ── GET /api/customers/by-name?name= — one customer's address-book record ─────
+router.get("/by-name", async (req, res) => {
+  try {
+    const name = (req.query.name || "").trim();
+    if (!name) return res.json(null);
+    const customer = await AddressBook.findOne({
+      type:        { $regex: "^customer$", $options: "i" },
+      companyName: { $regex: `^${esc(name)}$`, $options: "i" },
+    }).lean();
+    res.json(customer || null);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/customers/:id/orders — orders for one customer ──────────────────
 router.get("/:id/orders", async (req, res) => {
   try {

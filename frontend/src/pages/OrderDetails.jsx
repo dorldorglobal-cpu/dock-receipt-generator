@@ -269,6 +269,7 @@ export default function OrderDetails() {
 
   const [order, setOrder] = useState(null);
   const [containerLoad, setContainerLoad] = useState(null);
+  const [customerRecord, setCustomerRecord] = useState(null); // address-book entry for order.customerName
   const [message, setMessage] = useState("");
   const [stickyVisible, setStickyVisible] = useState(false);
   const dashGridRef = useRef(null);
@@ -609,6 +610,11 @@ export default function OrderDetails() {
     // Check if this order is in a container load
     fetch(`${API}/api/container-loads/by-order/${data._id}`)
       .then(r => r.json()).then(cl => setContainerLoad(cl || null)).catch(() => {});
+    // Customer's address/phone/email from the address book, for the Customer card
+    if (data.customerName) {
+      fetch(`${API}/api/customers/by-name?name=${encodeURIComponent(data.customerName)}`)
+        .then(r => r.json()).then(c => setCustomerRecord(c && !c.error ? c : null)).catch(() => {});
+    } else setCustomerRecord(null);
     setNoteText(data.notes || "");
     setHoldNote(data.holdNote || "");
     setEmailNote(data.emailNote || "");
@@ -2850,6 +2856,24 @@ export default function OrderDetails() {
           style={{ cursor: "pointer" }} title="Click to edit">
           <span>Customer</span>
           <strong className="small">{order.customerName || "—"}</strong>
+          {(() => {
+            const c = customerRecord || {};
+            const contact  = order.contactName || c.contactName;
+            const phone    = order.customerPhone || c.phone;
+            const email    = order.customerEmail || c.email;
+            const cityLine = [c.city, [c.state, c.postalCode].filter(Boolean).join(" ")].filter(Boolean).join(", ");
+            const line = { fontSize: 12, color: "var(--text-secondary)", lineHeight: 1.45, overflowWrap: "anywhere" };
+            return (
+              <div style={{ marginTop: 6 }}>
+                {contact     && <div style={line}>{contact}</div>}
+                {c.address   && <div style={line}>{c.address}</div>}
+                {cityLine    && <div style={line}>{cityLine}</div>}
+                {c.country   && <div style={line}>{c.country}</div>}
+                {phone       && <div style={{ ...line, marginTop: 4 }}>📞 {phone}</div>}
+                {email       && <div style={line}>✉️ {email}</div>}
+              </div>
+            );
+          })()}
         </div>
         <div className="dashboard-card" onClick={() => setCardPopup({ card: "requestDate", form: { createdAt: order.createdAt ? new Date(order.createdAt).toISOString().slice(0,16) : "" } })}
           style={{ cursor: "pointer" }} title="Click to edit">
@@ -2962,9 +2986,16 @@ export default function OrderDetails() {
         <section className="form-section">
           <h2>Customer</h2>
           <p style={{ margin: "0 0 2px" }}><strong>{order.customerName || "—"}</strong></p>
-          {order.contactName  && <p style={{ margin: "0 0 4px", fontSize: 13, color:"var(--text-secondary)" }}>{order.contactName}</p>}
-          {order.customerPhone && <p style={{ margin: "0 0 4px", fontSize: 13 }}>📞 {order.customerPhone}</p>}
-          {order.customerEmail && <p style={{ margin: "0 0 10px", fontSize: 13 }}>✉️ {order.customerEmail}</p>}
+          {(order.contactName || customerRecord?.contactName) && <p style={{ margin: "0 0 4px", fontSize: 13, color:"var(--text-secondary)" }}>{order.contactName || customerRecord.contactName}</p>}
+          {customerRecord?.address && (
+            <p style={{ margin: "0 0 4px", fontSize: 13, color:"var(--text-secondary)" }}>
+              {customerRecord.address}
+              {[customerRecord.city, [customerRecord.state, customerRecord.postalCode].filter(Boolean).join(" "), customerRecord.country].filter(Boolean).length > 0 &&
+                <><br />{[customerRecord.city, [customerRecord.state, customerRecord.postalCode].filter(Boolean).join(" "), customerRecord.country].filter(Boolean).join(", ")}</>}
+            </p>
+          )}
+          {(order.customerPhone || customerRecord?.phone) && <p style={{ margin: "0 0 4px", fontSize: 13 }}>📞 {order.customerPhone || customerRecord.phone}</p>}
+          {(order.customerEmail || customerRecord?.email) && <p style={{ margin: "0 0 10px", fontSize: 13 }}>✉️ {order.customerEmail || customerRecord.email}</p>}
           {/* Consignee — shown here so it doesn't have to be looked up separately */}
           <div style={{ margin: "0 0 10px", padding: "6px 10px", borderRadius: 7,
             background: "rgba(96,165,250,0.08)", border: "1px solid rgba(96,165,250,0.25)" }}>
