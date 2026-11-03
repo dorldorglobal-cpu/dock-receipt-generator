@@ -6,7 +6,7 @@
  * backend/aclNoTitle/; this fills the blanks by drawing text over them.
  *
  * Coordinates are PDF points from the bottom-left, measured from each blank
- * form (Letter, 612×792). All four share the same top section; the date line
+ * form (Letter, 612×792). All three share the same top section; the date line
  * and signature line sit at different heights per form.
  */
 const fs   = require("fs");
@@ -22,13 +22,10 @@ const FORMS = {
   JAX:  { file: "JAX.pdf",  label: "Jacksonville", ...COMMON, date: [273, 590], signature: [72, 388] },
   WILM: { file: "WILM.pdf", label: "Wilmington",   ...COMMON, date: [274, 603.5], signature: [72, 429] },
   FPO:  { file: "FPO.pdf",  label: "Freeport",     ...COMMON, date: [273, 590], signature: [72, 388] },
-  // Baltimore form is converted from ACL's Word doc: no underscores, POL is pre-printed
-  BWI:  { file: "BWI.pdf",  label: "Baltimore",    shipment: [136, 669], shipper: [143, 655.6], pol: null,
-          pod: [98, 628.8], date: [264, 588.6], signature: [72, 388] },
 };
 
 // ACL ports that refuse no-title delivery outright (title must come with the unit)
-const NO_TITLE_REFUSED = { PVD: "Providence" };
+const NO_TITLE_REFUSED = { BWI: "Baltimore", PVD: "Providence" };
 
 const isAclOrder = (order) => /\b(ACL|GRIMALDI|ATLANTIC CONTAINER)\b/i.test(order?.shippingLine || "");
 
