@@ -53,6 +53,63 @@ function clearStalePayments(exp) {
   exp.payments   = [];
 }
 
+// ── Payment-proof matching helpers ────────────────────────────────────────────
+// Payee names on bank proofs are shorter/looser than our vendor names ("ACL" vs
+// "ACL / Grimaldi", "SAVANNAH AUTO EXPORT" vs "SAVANNAH AUTO EXPORT LLC.").
+const normVendorName = (s) => (s || "").replace(/['‘’`]/g, "").replace(/\b(LLC|INC|CORP|LTD|CO)\b\.?/gi, "")
+  .replace(/\bTRANSPORTATION\b/gi, "TRANSPORT")
+  .replace(/[^A-Z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toUpperCase();
+const sameVendor = (a, b) => {
+  const x = normVendorName(a), y = normVendorName(b);
+  return !!x && !!y && (x === y || x.startsWith(y + " ") || y.startsWith(x + " "));
+};
+
+// A proof reference is either one of our order refs ("13815") or a carrier
+// booking ("S3-29771380") — resolve either to the order it belongs to.
+async function resolveProofOrder(ref) {
+  ref = (ref || "").trim();
+  if (!ref) return null;
+  const byRef = await Order.findOne({ refNumber: { $regex: `^${esc(ref)}$`, $options: "i" } }).select("_id refNumber").lean();
+  if (byRef) return byRef;
+  const digits = ref.replace(/^S3-?\s*/i, "").replace(/\s+/g, "");
+  if (!/^\d{6,}$/.test(digits)) return null;
+  return Order.findOne({ bookingNumber: { $regex: `(^|[^0-9])${digits}$`, $options: "i" } }).select("_id refNumber").lean();
+}
+
+// Before a payment proof creates a new bill, look for the bill that's already
+// on file for that order and amount (any vendor spelling). Unpaid/partial ones
+// come first — those should be paid, not duplicated.
+async function findExistingProofBill(ref, amount, payeeName) {
+  ref = (ref || "").trim();
+  const order = await resolveProofOrder(ref);
+  if (!amount || (!order && !/^\d{3,8}$/.test(ref))) return { order, bill: null };
+  // Some bills carry only the order # (no linked order record), so match on that too
+  const or = [{ orderRef: { $regex: `^${esc(order?.refNumber || ref)}$`, $options: "i" } }];
+  if (order) or.push({ orderId: order._id });
+  const bills = await Expense.find({
+    $or: or,
+    amount: { $gte: Number(amount) - 0.01, $lte: Number(amount) + 0.01 },
+  }).sort({ createdAt: 1 });
+  // Open bills before paid ones; within each, the payee's own bill first
+  const rank = (b) => (b.status !== "paid" ? 0 : 2) + (sameVendor(b.vendor, payeeName) ? 0 : 1);
+  return { order, bill: bills.sort((a, b) => rank(a) - rank(b))[0] || null };
+}
+
+// Record a proof payment on an existing bill (full remaining balance unless an amount is given)
+function payFromProof(exp, { amount, date, method, receiptFields }) {
+  clearStalePayments(exp);
+  const prev = exp.paidAmount || 0;
+  const amt  = amount != null ? Number(amount) : Math.max(exp.amount - prev, 0);
+  exp.payments.push({ amount: amt, date, method, notes: "" });
+  exp.paidAmount    = prev + amt;
+  exp.paidDate      = date;
+  exp.paymentMethod = method;
+  exp.status        = exp.paidAmount >= exp.amount - 0.005 ? "paid" : "partial";
+  if (exp.status === "paid") exp.toPay = false;
+  if (receiptFields?.receiptDriveId) Object.assign(exp, receiptFields);
+  return exp.save();
+}
+
 // Vendors that are always Loaders & Warehouses, regardless of what category the
 // form/import submitted.
 const LOADER_WAREHOUSE_VENDOR_RX = /e-?z\s*cargo|savannah|i-?ship|cedars/i;
@@ -2413,6 +2470,13 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // useful than booking numbers when we have them.
       const splitSeed = plainRefs.length > 1 ? plainRefs : bookingNumbers;
 
+      // A single carrier booking and no order ref (ACL: "S3-29771380") — the
+      // booking belongs to one order, so match that order's bills.
+      if (!orderRef && bookingNumbers.length === 1) {
+        const o = await resolveProofOrder(bookingNumbers[0]);
+        if (o) orderRef = o.refNumber;
+      }
+
       // Find candidate unpaid expenses tied to this order ref
       let candidates = [];
       let matchedIds = [];
@@ -2554,14 +2618,12 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // Normalizes both sides: strips apostrophes/punctuation and suffixes
       // like LLC, INC, CORP so "JOLA LOGISTICS" matches "J'OLA LOGISTICS LLC".
       if (matchType === "none" && !orderRef) {
-        const normVendor = s => s.replace(/['''`]/g, "").replace(/\b(LLC|INC|CORP|LTD|CO)\b\.?/gi, "").replace(/[^A-Z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toUpperCase();
-        const normPayee = normVendor(payeeName);
         const byVendorAmt = await Expense.find({
           amount: parseFloat(amount.toFixed(2)),
           status: { $in: ["unpaid", "partial"] },
         }).select("_id description vendor amount paidAmount status orderRef").lean();
 
-        const vendorMatches = byVendorAmt.filter(c => normVendor(c.vendor || "") === normPayee);
+        const vendorMatches = byVendorAmt.filter(c => sameVendor(c.vendor, payeeName));
         if (vendorMatches.length) {
           const exact = vendorMatches.find(c => Math.abs(c.amount - amount) < 0.01 && c.status !== "partial");
           if (exact) {
@@ -2583,11 +2645,11 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // contains the booking number, so match on vendor + booking number
       // instead of order ref.
       if (matchType === "none" && bookingNumbers.length) {
-        const bookingOr = bookingNumbers.map(bn => ({ description: { $regex: esc(bn), $options: "i" } }));
-        const byBooking = await Expense.find({
-          vendor: { $regex: `^${esc(payeeName)}$`, $options: "i" },
-          $or: bookingOr,
-        }).select("_id description vendor amount status paidDate receiptFileName orderRef").lean();
+        // Descriptions carry the booking with or without the dash ("BL S329771380")
+        const bookingOr = bookingNumbers.map(bn => ({ description: { $regex: esc(bn).replace("-", "-?"), $options: "i" } }));
+        const byBooking = (await Expense.find({ $or: bookingOr })
+          .select("_id description vendor amount paidAmount status paidDate receiptFileName orderRef").lean())
+          .filter(c => sameVendor(c.vendor, payeeName));
 
         if (byBooking.length) {
           const paidOnes   = byBooking.filter(c => c.status === "paid");
@@ -2741,40 +2803,25 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
             continue;
           }
 
-          // 2. Fall back: look for any existing unpaid bill with same vendor + orderRef
-          const existingQuery = {
-            vendor: { $regex: `^${esc((row.payeeName || "").trim())}$`, $options: "i" },
-            status: { $in: ["unpaid", "partial"] },
-          };
-          if (split.orderRef) existingQuery.orderRef = { $regex: `^${esc(split.orderRef.trim())}$`, $options: "i" };
-          const existing = await Expense.findOne(existingQuery).lean();
-
+          // 2. The bill already on file for this order + amount (split lines are
+          //    often keyed by booking number, and vendor spellings differ) — pay
+          //    it if it's open, leave it alone if it's already paid.
+          const { order: splitOrder, bill: existing } = await findExistingProofBill(split.orderRef, split.amount, row.payeeName);
           if (existing) {
-            await Expense.updateOne(
-              { _id: existing._id },
-              { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
-            );
+            if (existing.status !== "paid") {
+              await payFromProof(existing, { date: dateObj, method: paymentMethod || "Bank ACH", receiptFields });
+            }
             updated++;
           } else {
-            // 3. No existing bill found — create a new paid one (skip if duplicate)
-            const dupCheck = split.orderRef && row.payeeName && split.amount
-              ? await Expense.findOne({ orderRef: split.orderRef, vendor: { $regex: `^${esc(row.payeeName.trim())}$`, $options: "i" }, amount: Number(split.amount) }).lean()
-              : null;
-            if (dupCheck) { updated++; continue; }
-            let orderId = null;
-            if (split.orderRef) {
-              const o = await Order.findOne({ refNumber: { $regex: `^${esc(split.orderRef)}$`, $options: "i" } })
-                .select("_id refNumber").lean();
-              if (o) orderId = o._id;
-            }
+            // 3. No existing bill — create a new paid one
             const splitData = {
               category:      split.category || "Port / Terminal Fees",
               description:   split.description || row.payeeName,
               vendor:        row.payeeName,
               amount:        Number(split.amount) || 0,
               date:          dateObj,
-              orderId,
-              orderRef:      split.orderRef || "",
+              orderId:       splitOrder?._id || null,
+              orderRef:      splitOrder?.refNumber || split.orderRef || "",
               status:        "paid",
               paidDate:      dateObj,
               paymentMethod: paymentMethod || "Bank ACH",
@@ -2800,20 +2847,16 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       }
 
       if (row.createBill) {
-        // Duplicate guard before creating a brand-new bill from proof
-        if (row.orderRef && row.payeeName && row.amount) {
-          const dupBill = await Expense.findOne({
-            orderRef: row.orderRef,
-            vendor:   { $regex: `^${esc(row.payeeName.trim())}$`, $options: "i" },
-            amount:   Number(row.amount),
-          }).lean();
-          if (dupBill) { updated++; continue; }
-        }
-        let orderId = null;
-        if (row.orderRef) {
-          const o = await Order.findOne({ refNumber: { $regex: `^${esc(row.orderRef)}$`, $options: "i" } })
-            .select("_id refNumber").lean();
-          if (o) orderId = o._id;
+        // Duplicate guard: the bill may already be on file under another
+        // vendor spelling or keyed by booking # — pay that one instead
+        const ref = row.orderRef || (row.bookingNumbers?.length === 1 ? row.bookingNumbers[0] : "");
+        const { order: billOrder, bill: existing } = await findExistingProofBill(ref, row.amount, row.payeeName);
+        if (existing) {
+          if (existing.status !== "paid") {
+            await payFromProof(existing, { amount: row.amount, date: dateObj, method: paymentMethod || "Bank ACH", receiptFields });
+          }
+          updated++;
+          continue;
         }
         const newBillData = {
           category:      row.newCategory || "Port / Terminal Fees",
@@ -2821,8 +2864,8 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           vendor:        row.payeeName,
           amount:        row.amount,
           date:          dateObj,
-          orderId,
-          orderRef:      row.orderRef || "",
+          orderId:       billOrder?._id || null,
+          orderRef:      billOrder?.refNumber || row.orderRef || "",
           status:        "paid",
           paidDate:      dateObj,
           paymentMethod: paymentMethod || "Bank ACH",
