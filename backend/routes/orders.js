@@ -2048,6 +2048,27 @@ router.post("/:id/timeline", express.json(), async (req, res) => {
   }
 });
 
+// GET /:id/buyer-receipt — the order's Buyer Receipt file, fetched from Drive
+// (attached to the warehouse delivery-appointment email)
+router.get("/:id/buyer-receipt", async (req, res) => {
+  try {
+    const order = await Order.findById(req.params.id).select("refNumber files").lean();
+    if (!order) return res.status(404).json({ error: "Not found" });
+    const file = (order.files || []).find(f => f.label === "Buyer Receipt" && f.driveFileId);
+    if (!file) return res.status(404).json({ error: "No buyer receipt on this order" });
+    const tmpPath = path.join(require("os").tmpdir(), `br-${order.refNumber}-${Date.now()}`);
+    await downloadDriveFile(file.driveFileId, tmpPath);
+    const buf = fs.readFileSync(tmpPath);
+    fs.unlink(tmpPath, () => {});
+    const name = file.originalName || `BuyerReceipt-${order.refNumber}.pdf`;
+    res.setHeader("Content-Type", file.mimetype || "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="${name.replace(/"/g, "")}"`);
+    res.send(buf);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // GET /:id/acl-no-title-pdf?expected=YYYY-MM-DD — ACL's port-specific
 // "Cargo Received without Title" form, filled in for this order
 router.get("/:id/acl-no-title-pdf", async (req, res) => {

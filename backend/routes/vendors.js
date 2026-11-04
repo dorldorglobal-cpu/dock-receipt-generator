@@ -181,8 +181,11 @@ router.get("/", async (req, res) => {
     const vendors = await Vendor.find(q).sort({ name: 1 }).lean();
 
     // Also pull every distinct vendor name from expense history and merge in
-    // any that don't already have a Vendor record
-    const expVendorNames = await Expense.distinct("vendor", { vendor: { $nin: ["", null] } });
+    // any that don't already have a Vendor record. These have no category, so
+    // a category filter excludes them; the search applies to their name.
+    const expVendorNames = category ? [] : await Expense.distinct("vendor", {
+      vendor: search ? { $regex: esc(search), $options: "i" } : { $nin: ["", null] },
+    });
     const knownNames = new Set(vendors.map(v => v.name.toLowerCase().trim()));
     for (const name of expVendorNames) {
       const key = (name || "").toLowerCase().trim();
@@ -243,6 +246,42 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("Vendor create error:", err);
     res.status(500).json({ error: "Failed to create vendor" });
+  }
+});
+
+// ── POST /api/vendors/merge — fold one vendor name (and its bills) into another
+// Body: { keepName, mergeName }. Every bill under mergeName is renamed to the
+// kept vendor; contact details the kept record lacks are copied over; the
+// merged Vendor record is removed.
+router.post("/merge", async (req, res) => {
+  try {
+    const keepName  = (req.body.keepName  || "").trim();
+    const mergeName = (req.body.mergeName || "").trim();
+    if (!keepName || !mergeName) return res.status(400).json({ error: "Both vendor names are required." });
+    if (keepName.toLowerCase() === mergeName.toLowerCase()) return res.status(400).json({ error: "Pick two different vendors." });
+
+    const exact = (n) => ({ $regex: `^${esc(n)}$`, $options: "i" });
+    const keep = await Vendor.findOne({ name: exact(keepName) });
+    const gone = await Vendor.findOne({ name: exact(mergeName) }).lean();
+    const finalName = keep?.name || keepName;
+
+    const { modifiedCount } = await Expense.updateMany({ vendor: exact(mergeName) }, { $set: { vendor: finalName } });
+
+    if (gone && keep) {
+      for (const f of ["contactName", "phone", "email", "address", "city", "state", "zip", "category", "notes"]) {
+        if (!keep[f] && gone[f]) keep[f] = gone[f];
+      }
+      await keep.save();
+      await Vendor.deleteOne({ _id: gone._id });
+    } else if (gone) {
+      // Only the merged name had a Vendor record — it becomes the kept vendor
+      await Vendor.updateOne({ _id: gone._id }, { $set: { name: finalName } });
+    }
+
+    res.json({ success: true, name: finalName, billsMoved: modifiedCount });
+  } catch (err) {
+    console.error("Vendor merge error:", err);
+    res.status(500).json({ error: "Failed to merge vendors" });
   }
 });
 

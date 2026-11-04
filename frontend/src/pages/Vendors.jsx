@@ -195,6 +195,13 @@ export default function Vendors() {
   const [detailVendor, setDetailVendor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
+  // Merge a duplicate vendor into another
+  const [mergeFrom, setMergeFrom]   = useState(null); // vendor row being merged away
+  const [mergeInto, setMergeInto]   = useState("");
+  const [allNames, setAllNames]     = useState([]);   // every vendor name, for the "merge into" picker
+  const [merging, setMerging]       = useState(false);
+  const [mergeMsg, setMergeMsg]     = useState("");
+
   // Wave paste import
   const [wavePaste, setWavePaste]   = useState("");
   const [importing, setImporting]   = useState(false);
@@ -232,6 +239,30 @@ export default function Vendors() {
   };
 
   useEffect(() => { fetchVendors(); }, [search, filterCat]);
+
+  const openMerge = async (v) => {
+    setMergeFrom(v); setMergeInto(""); setMergeMsg("");
+    try {
+      const data = await (await fetch(`${API}/api/vendors`)).json();
+      setAllNames((Array.isArray(data) ? data : []).map(x => x.name).filter(n => n && n.toLowerCase() !== v.name.toLowerCase()));
+    } catch { setAllNames([]); }
+  };
+
+  const doMerge = async () => {
+    setMerging(true); setMergeMsg("");
+    try {
+      const res  = await fetch(`${API}/api/vendors/merge`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ keepName: mergeInto, mergeName: mergeFrom.name }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Merge failed");
+      setMergeFrom(null);
+      setDetailVendor(null);
+      fetchVendors();
+    } catch (e) { setMergeMsg(e.message); }
+    setMerging(false);
+  };
 
   // ── Wave import ─────────────────────────────────────────────────────────────
   const doWaveImport = async () => {
@@ -408,7 +439,7 @@ export default function Vendors() {
                 </thead>
                 <tbody>
                   {vendors.map(v => (
-                    <tr key={v._id}
+                    <tr key={v._id || v.name}
                       style={{ background: detailVendor?._id===v._id ? "var(--bg-hover)" : "var(--bg-elevated)", cursor:"pointer" }}
                       onMouseEnter={e=>e.currentTarget.style.background="var(--bg-hover)"}
                       onMouseLeave={e=>e.currentTarget.style.background=detailVendor?._id===v._id?"var(--bg-hover)":"var(--bg-elevated)"}
@@ -435,6 +466,7 @@ export default function Vendors() {
                       <td style={{ ...td,textAlign:"right" }}>
                         <div style={{ display:"flex",gap:6,justifyContent:"flex-end" }} onClick={e=>e.stopPropagation()}>
                           <button onClick={()=>openEdit(v)} style={{ background:"#3b82f620",color:"#60a5fa",border:"none",borderRadius:5,padding:"4px 10px",fontSize:11,cursor:"pointer" }}>Edit</button>
+                          <button onClick={()=>openMerge(v)} title="Merge this vendor into another (duplicates)" style={{ background:"#a78bfa20",color:"#a78bfa",border:"none",borderRadius:5,padding:"4px 10px",fontSize:11,cursor:"pointer" }}>Merge</button>
                           <button onClick={()=>setConfirmDelete(v)} style={{ background:"#f8717120",color:"#f87171",border:"none",borderRadius:5,padding:"4px 8px",fontSize:11,cursor:"pointer" }}>✕</button>
                         </div>
                       </td>
@@ -686,6 +718,33 @@ export default function Vendors() {
       {(showAdd || editVendor) && (
         <Modal title={editVendor ? "Edit Vendor" : "Add Vendor"} onClose={()=>{setShowAdd(false);setEditVendor(null);}}>
           <VendorForm form={vForm} setForm={setVForm} onSubmit={saveVendor} saving={vSaving} />
+        </Modal>
+      )}
+
+      {/* ── Merge Vendor ─────────────────────────────────────────────────────── */}
+      {mergeFrom && (
+        <Modal title="Merge Vendor" onClose={()=>setMergeFrom(null)}>
+          <p style={{ color:"var(--text-primary)",fontSize:14,marginTop:0 }}>
+            Move all <strong>{mergeFrom.expenseCount || 0}</strong> bill{mergeFrom.expenseCount === 1 ? "" : "s"} from <strong>{mergeFrom.name}</strong> into:
+          </p>
+          <input list="merge-vendor-names" value={mergeInto} onChange={e=>setMergeInto(e.target.value)} autoFocus
+            placeholder="Start typing the vendor to keep…"
+            style={{ width:"100%",boxSizing:"border-box",background:"var(--bg-base)",border:"1px solid var(--border)",borderRadius:7,padding:"8px 12px",color:"var(--text-primary)",fontSize:13,marginBottom:8 }} />
+          <datalist id="merge-vendor-names">
+            {allNames.map(n => <option key={n} value={n} />)}
+          </datalist>
+          <p style={{ fontSize:12,color:"var(--text-secondary)",margin:"0 0 14px" }}>
+            {mergeFrom.name} is removed from the vendor list; any contact details the kept vendor is missing are copied over.
+          </p>
+          {mergeMsg && <p style={{ fontSize:12,color:"#f87171",margin:"0 0 10px" }}>{mergeMsg}</p>}
+          <div style={{ display:"flex",gap:10,justifyContent:"flex-end" }}>
+            <button onClick={()=>setMergeFrom(null)} style={{ background:"var(--border)",color:"var(--text-secondary)",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,cursor:"pointer" }}>Cancel</button>
+            <button onClick={doMerge} disabled={merging || !allNames.some(n => n.toLowerCase() === mergeInto.trim().toLowerCase())}
+              style={{ background:"#7c3aed",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer",
+                opacity: (merging || !allNames.some(n => n.toLowerCase() === mergeInto.trim().toLowerCase())) ? 0.5 : 1 }}>
+              {merging ? "Merging…" : "Merge"}
+            </button>
+          </div>
         </Modal>
       )}
 

@@ -184,6 +184,42 @@ router.get("/by-ids", async (req, res) => {
   }
 });
 
+// ── GET /api/expenses/to-pay — unpaid/partial trucking bills, one row per unit ─
+// Feeds the "Truckers to Pay" list; the page groups the rows by vendor.
+router.get("/to-pay", async (req, res) => {
+  try {
+    const bills = await Expense.find({ category: "Towing / Transport", status: { $in: ["unpaid", "partial"] } })
+      .select("_id vendor amount paidAmount status orderRef orderId date invoiceNumber description")
+      .sort({ date: 1 }).lean();
+
+    const refs   = [...new Set(bills.map(b => b.orderRef).filter(Boolean))];
+    const orders = await Order.find({ refNumber: { $in: refs } })
+      .select("refNumber year make model vin pickupCity pickupState pickupLocation").lean();
+    const byRef  = Object.fromEntries(orders.map(o => [o.refNumber, o]));
+
+    res.json(bills.map(b => {
+      const o = byRef[b.orderRef] || {};
+      return {
+        _id:           b._id,
+        vendor:        b.vendor || "—",
+        orderRef:      b.orderRef || "",
+        orderId:       b.orderId || null,
+        invoiceNumber: b.invoiceNumber || "",
+        description:   b.description || "",
+        vehicle:       [o.year, o.make, o.model].filter(Boolean).join(" "),
+        vin:           o.vin || "",
+        pickup:        [o.pickupCity, o.pickupState].filter(Boolean).join(", ") || o.pickupLocation || "",
+        date:          b.date,
+        amount:        b.amount,
+        status:        b.status,
+        owed:          b.status === "partial" ? Math.max(b.amount - (b.paidAmount || 0), 0) : b.amount,
+      };
+    }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/expenses/summary — totals ────────────────────────────────────────
 router.get("/summary", async (req, res) => {
   try {

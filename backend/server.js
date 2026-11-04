@@ -1077,7 +1077,7 @@ app.post("/api/admin/scan-trucker-emails", express.json(), async (req, res) => {
 // POST /api/send-email  { to, subject, body, pdfBase64, pdfName }
 app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) => {
   try {
-    const { to, subject, body, pdfBase64, pdfName, cc, bcc, truckerEmail, truckerVendor } = req.body;
+    const { to, subject, body, pdfBase64, pdfName, pdfMime, cc, bcc, truckerEmail, truckerVendor } = req.body;
     if (!to || !subject) return res.status(400).json({ error: "to and subject are required" });
 
     const accessToken = await getGmailAccessToken();
@@ -1101,7 +1101,7 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
         ``,
         body || "",
         `--${boundary}`,
-        `Content-Type: application/pdf; name="${pdfName || "document.pdf"}"`,
+        `Content-Type: ${pdfMime || "application/pdf"}; name="${pdfName || "document.pdf"}"`,
         `Content-Transfer-Encoding: base64`,
         `Content-Disposition: attachment; filename="${pdfName || "document.pdf"}"`,
         ``,

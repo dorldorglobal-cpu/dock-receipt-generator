@@ -1984,6 +1984,11 @@ export default function OrderDetails() {
       body:    whBody(carrierGuess, date),
       bodyEdited: false,
       warehouseName: wh?.name || "",
+      // Buyer receipt goes along so the warehouse has it on file
+      ...(() => {
+        const br = (order.files || []).find(f => f.label === "Buyer Receipt" && f.driveFileId);
+        return { receiptName: br ? (br.originalName || br.filename || `BuyerReceipt-${order.refNumber}.pdf`) : "", attachReceipt: !!br };
+      })(),
     });
   };
   const setWhField = (patch) => setWhEmail(m => {
@@ -1998,14 +2003,27 @@ export default function OrderDetails() {
     if (!whEmail?.to) { setMessage("❌ No warehouse email — set the order's Port of Loading first"); return; }
     setWhSending(true);
     try {
+      let attachment = {};
+      if (whEmail.attachReceipt) {
+        const rRes = await fetch(`${API}/api/orders/${id}/buyer-receipt`);
+        if (!rRes.ok) { const d = await rRes.json().catch(() => ({})); throw new Error(d.error || "Couldn't load the buyer receipt"); }
+        const bytes = new Uint8Array(await rRes.arrayBuffer());
+        let binary = "";
+        bytes.forEach(b => binary += String.fromCharCode(b));
+        attachment = {
+          pdfBase64: btoa(binary),
+          pdfName:   whEmail.receiptName || `BuyerReceipt-${order.refNumber}.pdf`,
+          pdfMime:   rRes.headers.get("Content-Type") || "application/pdf",
+        };
+      }
       const res = await fetch(`${API}/api/send-email`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ to: whEmail.to, cc: whEmail.cc, subject: whEmail.subject, body: whEmail.body }),
+        body: JSON.stringify({ to: whEmail.to, cc: whEmail.cc, subject: whEmail.subject, body: whEmail.body, ...attachment }),
       });
       if (!res.ok) { const d = await res.json(); throw new Error(d.error || "Failed"); }
       await fetch(`${API}/api/orders/${id}/timeline`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "Warehouse Delivery Email Sent", details: `${whEmail.subject} → ${whEmail.to}` }),
+        body: JSON.stringify({ action: "Warehouse Delivery Email Sent", details: `${whEmail.subject} → ${whEmail.to}${attachment.pdfBase64 ? " (with buyer receipt)" : ""}` }),
       });
       fetchOrder();
       setWhEmail(null);
@@ -6271,6 +6289,14 @@ export default function OrderDetails() {
               <textarea value={whEmail.body} onChange={e=>setWhField({ body:e.target.value, bodyEdited:true })} rows={7}
                 style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, resize:"vertical", boxSizing:"border-box", fontFamily:"inherit" }} />
             </label>
+            {whEmail.receiptName ? (
+              <label style={{ display:"flex", alignItems:"center", gap:8, margin:"-6px 0 16px", fontSize:12, color:"var(--text-secondary)", cursor:"pointer" }}>
+                <input type="checkbox" checked={whEmail.attachReceipt} onChange={e=>setWhField({ attachReceipt:e.target.checked })} />
+                📎 Attach buyer receipt: <strong style={{ color:"var(--text-primary)" }}>{whEmail.receiptName}</strong>
+              </label>
+            ) : (
+              <p style={{ margin:"-6px 0 16px", fontSize:12, color:"var(--warning)" }}>⚠ No buyer receipt on this order — the email goes without one.</p>
+            )}
             <div style={{ display:"flex", gap:10, justifyContent:"flex-end" }}>
               <button onClick={() => setWhEmail(null)} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Cancel</button>
               <button onClick={sendWarehouseEmail} disabled={whSending || !whEmail.to} style={{ padding:"8px 20px", background:"#c2410c", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600, opacity:(whSending||!whEmail.to)?0.6:1 }}>

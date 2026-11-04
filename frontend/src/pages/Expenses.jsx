@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authUrl } from "../lib/auth";
+import TruckersToPay from "../components/TruckersToPay";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -570,6 +571,7 @@ export default function Expenses() {
   const [filterCat, setFilterCat]   = useState("");
   const [filterStatus, setFilterStatus] = useState("");
   const [filterVendor, setFilterVendor] = useState("");
+  const [showToPay, setShowToPay] = useState(false); // "Truckers to Pay" list
   const [dateFrom, setDateFrom]     = useState("");
   const [dateTo, setDateTo]         = useState("");
   const [filterMonthYear, setFilterMonthYear] = useState(""); // "YYYY-MM" or ""
@@ -1516,6 +1518,7 @@ export default function Expenses() {
 
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1300, margin: "0 auto", paddingBottom: selectedIds.length > 0 ? 100 : 28 }}>
+      {showToPay && <TruckersToPay onClose={() => setShowToPay(false)} onPaid={fetchAll} />}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
@@ -1526,6 +1529,10 @@ export default function Expenses() {
           </p>
         </div>
         <div style={{ display:"flex", gap:10 }}>
+          <button onClick={() => setShowToPay(true)}
+            style={{ background:"#059669", color:"#fff", border:"none", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            🚚 Truckers to Pay
+          </button>
           <button onClick={exportCSV}
             style={{ background:"var(--bg-panel)", color:"var(--text-secondary)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>
             ⬇ Export CSV
