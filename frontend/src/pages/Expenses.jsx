@@ -1990,40 +1990,40 @@ export default function Expenses() {
             {dispatchMsg && <div style={{ marginBottom: 10, fontSize: 13, color: dispatchMsg.startsWith("✅") ? "#34d399" : dispatchMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{dispatchMsg}</div>}
             {dispatchRows.length > 0 && (
               <>
+                {(() => { const showDispatchFile = dispatchRows.some(r => r.fileName); return (
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead><tr>{["✓","File","Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status","To Pay"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"var(--text-muted)",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","🚚 To Pay",...(showDispatchFile?["File"]:[]),"Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"6px 7px",textAlign:"left",color:"var(--text-muted)",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {dispatchRows.map((row,i)=>(
                         <React.Fragment key={i}>
                         <tr style={{opacity:row.skip?0.4:1}}>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-muted)",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"#a78bfa",fontWeight:600,fontSize:13}}>{row.loadId||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:12,color:"#94a3b8"}}>{row.vin||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",whiteSpace:"nowrap"}}>{row.ymm||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,whiteSpace:"nowrap"}}>{row.origin||"—"}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--warning)",borderRadius:6,padding:"3px 8px",color:"var(--warning)",fontSize:12,width:100}}/>}</td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:130}}/></td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)"}}>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)"}}><input type="checkbox" checked={!row.skip} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,skip:!e.target.checked}:r))}/></td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",whiteSpace:"nowrap"}} title="Ticked on the Truckers to Pay list until it's paid">
+                            <label style={{display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}>
+                              <input type="checkbox" checked={row.toPay !== false} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,toPay:e.target.checked}:r))}/>
+                            </label>
+                          </td>
+                          {showDispatchFile && <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-muted)",fontSize:11,maxWidth:100,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{row.fileName}</td>}
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"#a78bfa",fontWeight:600,fontSize:12,maxWidth:110,overflowWrap:"anywhere"}}>{row.loadId||"—"}</td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:11,color:"#94a3b8"}}>{row.vin||"—"}</td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",fontSize:12,maxWidth:150}}>{row.ymm||"—"}</td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,maxWidth:150}}>{row.origin||"—"}</td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--warning)",borderRadius:6,padding:"3px 8px",color:"var(--warning)",fontSize:12,width:100}}/>}</td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)"}}><input value={row.notes} placeholder="misc charges…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,notes:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"var(--text-primary)",fontSize:12,width:100}}/></td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)"}}>
                             {row.error?<span style={{color:"#f87171",fontSize:11}}>❌ Error</span>:row.matched?<span style={{color:"#34d399",fontSize:12}}>✅ Matched</span>:<span style={{color:"var(--warning)",fontSize:12}}>⚠ No match</span>}
                             <button onClick={()=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,lineItems:[...(r.lineItems||[]),{description:"",amount:""}]}:r))}
-                              style={{marginLeft:8,fontSize:10,padding:"1px 7px",borderRadius:5,border:"1px solid var(--border)",background:"none",color:"#34d399",cursor:"pointer"}}>
+                              style={{display:"block",marginTop:3,fontSize:10,padding:"1px 7px",borderRadius:5,border:"1px solid var(--border)",background:"none",color:"#34d399",cursor:"pointer"}}>
                               + Extra
                             </button>
-                          </td>
-                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",whiteSpace:"nowrap"}} title="Ticked on the Truckers to Pay list until it's paid">
-                            <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"var(--text-secondary)",cursor:"pointer"}}>
-                              <input type="checkbox" checked={row.toPay !== false} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,toPay:e.target.checked}:r))}/>
-                              🚚
-                            </label>
                           </td>
                         </tr>
                         {(row.lineItems||[]).map((li,li_i)=>(
                           <tr key={`li-${i}-${li_i}`} style={{background:"var(--bg-base)",opacity:row.skip?0.4:1}}>
-                            <td colSpan={8}></td>
+                            <td colSpan={showDispatchFile ? 9 : 8}></td>
                             <td style={{padding:"4px 8px"}} colSpan={1}>
                               <input value={li.description} placeholder="Extra charge description…"
                                 onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j!==i?r:{...r,lineItems:r.lineItems.map((l,k)=>k===li_i?{...l,description:e.target.value}:l)}))}
@@ -2045,6 +2045,7 @@ export default function Expenses() {
                     </tbody>
                   </table>
                 </div>
+                ); })()}
                 <div style={{marginTop:14,display:"flex",alignItems:"center",gap:16}}>
                   <button onClick={applyDispatchBills} disabled={dispatchLoading} style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
                     {dispatchLoading?"Applying…":`✅ Create ${dispatchRows.filter(r=>!r.skip&&!r.error).length} Expenses`}
