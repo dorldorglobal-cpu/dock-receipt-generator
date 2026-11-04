@@ -646,7 +646,7 @@ export default function Expenses() {
       if (!res.ok) throw new Error(data.error);
       setExpenses(prev => prev.map(e => {
         if (!selectedIds.includes(e._id)) return e;
-        if (action === "unpay") return { ...e, status: "unpaid", paidDate: null, paymentMethod: "" };
+        if (action === "unpay") return { ...e, status: "unpaid", paidDate: null, paymentMethod: "", paidAmount: null, payments: [] };
         return { ...e, status: "paid", paidDate: payDate, paymentMethod: bulkMethod };
       }));
       setSelected({}); setSelectedCache({});
@@ -1359,8 +1359,12 @@ export default function Expenses() {
   };
 
   // Mark as paid / add payment
+  // What's already been paid on a bill — an Unpaid bill counts as nothing paid,
+  // even if it still carries an old paidAmount from before it was marked Unpaid
+  const paidSoFar = (exp) => exp.status === "unpaid" ? 0 : (exp.paidAmount || 0);
+
   const markPaid = (exp) => {
-    const remaining = exp.amount - (exp.paidAmount || 0);
+    const remaining = exp.amount - paidSoFar(exp);
     setPayConfirm({ exp });
     setPayConfirmAmt(remaining > 0 ? remaining.toFixed(2) : String(exp.amount));
     setPayConfirmDate(todayISO());
@@ -3249,7 +3253,7 @@ export default function Expenses() {
       {payConfirm && (() => {
         const { exp, addTo } = payConfirm;
         const entered    = parseFloat(payConfirmAmt) || 0;
-        const prevPaid   = addTo != null ? addTo : (exp.paidAmount || 0);
+        const prevPaid   = addTo != null ? addTo : paidSoFar(exp);
         const newTotal   = prevPaid + entered;
         const balance    = exp.amount - newTotal;
         const isPartial  = entered > 0 && balance > 0.005;

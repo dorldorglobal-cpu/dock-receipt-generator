@@ -44,6 +44,15 @@ const TAX_BY_CATEGORY = {
   "Ghana Office":         "Cost of Goods Sold (COGS)",
 };
 
+// An unpaid bill has nothing paid on it. Bills marked Unpaid before that
+// cleared their history can still carry an old paidAmount/payments — drop
+// them so a new payment isn't added on top of one that was undone.
+function clearStalePayments(exp) {
+  if (exp.status !== "unpaid") return;
+  exp.paidAmount = 0;
+  exp.payments   = [];
+}
+
 // Vendors that are always Loaders & Warehouses, regardless of what category the
 // form/import submitted.
 const LOADER_WAREHOUSE_VENDOR_RX = /e-?z\s*cargo|savannah|i-?ship|cedars/i;
@@ -478,7 +487,8 @@ router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
     const dateObj = paidDate ? new Date(paidDate) : new Date();
 
     if (action === "unpay") {
-      await Expense.updateMany({ _id: { $in: ids } }, { $set: { status: "unpaid", paidDate: null, paymentMethod: "" } });
+      // Undo the payments too — a leftover paidAmount would be added onto the next payment
+      await Expense.updateMany({ _id: { $in: ids } }, { $set: { status: "unpaid", paidDate: null, paymentMethod: "", paidAmount: null, payments: [] } });
       return res.json({ updated: ids.length });
     }
 
@@ -503,6 +513,7 @@ router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
     // Add a payment record to each expense
     const expenses = await Expense.find({ _id: { $in: ids } });
     await Promise.all(expenses.map(exp => {
+      clearStalePayments(exp);
       const payAmt = amountOverrides[exp._id.toString()]
         ? parseFloat(amountOverrides[exp._id.toString()])
         : exp.amount;
@@ -572,6 +583,7 @@ router.patch("/:id/pay", upload.single("proof"), async (req, res) => {
     const { paidDate, paidAmount, paymentMethod, notes } = req.body;
     const expense = await Expense.findById(req.params.id);
     if (!expense) return res.status(404).json({ error: "Not found" });
+    clearStalePayments(expense);
 
     const payDate    = paidDate ? new Date(paidDate) : new Date();
     const payAmt     = paidAmount != null && paidAmount !== "" ? Number(paidAmount) : expense.amount;
@@ -2536,6 +2548,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
         const expenses = await Expense.find({ _id: { $in: row.matchedIds } });
         const bankAmt = Number(row.amount) || 0;
         for (const exp of expenses) {
+          clearStalePayments(exp);
           const prev = exp.paidAmount || 0;
           const perAmt = expenses.length > 1
             ? (row.markPartial ? bankAmt / expenses.length : Math.max(exp.amount - prev, 0))
