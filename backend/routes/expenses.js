@@ -2359,6 +2359,8 @@ router.post("/apply-misc", express.json(), async (req, res) => {
         if (m && d && y) dateObj = new Date(`${y}-${m}-${d}`);
       }
 
+      const miscVendor = await canonicalVendor(row.vendor);
+
       // Duplicate check: same order + VIN + amount, or same order + vendor + amount within 30 days
       if (orderId && row.total) {
         if (row.vin) {
@@ -2368,7 +2370,7 @@ router.post("/apply-misc", express.json(), async (req, res) => {
         const dup = await Expense.findOne({
           orderId,
           amount: row.total,
-          vendor: row.vendor || "",
+          vendor: miscVendor || "",
           date:   { $gte: new Date(dateObj - 30*24*60*60*1000), $lte: new Date(+dateObj + 30*24*60*60*1000) },
         }).lean();
         if (dup) continue;
@@ -2377,7 +2379,7 @@ router.post("/apply-misc", express.json(), async (req, res) => {
       const miscData = {
         category:      row.category || "Port / Terminal Fees",
         description:   `${row.description || row.vendor}${row.vin ? ` — VIN: ${row.vin}` : ""}`.trim(),
-        vendor:        row.vendor || "",
+        vendor:        miscVendor || "",
         amount:        row.total,
         date:          dateObj,
         orderId:       orderId || null,
@@ -2840,7 +2842,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
             const splitData = {
               category:      split.category || "Port / Terminal Fees",
               description:   split.description || row.payeeName,
-              vendor:        row.payeeName,
+              vendor:        await canonicalVendor(row.payeeName),
               amount:        Number(split.amount) || 0,
               date:          dateObj,
               orderId:       splitOrder?._id || null,
@@ -2884,7 +2886,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
         const newBillData = {
           category:      row.newCategory || "Port / Terminal Fees",
           description:   row.newDescription || row.payeeName,
-          vendor:        row.payeeName,
+          vendor:        await canonicalVendor(row.payeeName),
           amount:        row.amount,
           date:          dateObj,
           orderId:       billOrder?._id || null,
