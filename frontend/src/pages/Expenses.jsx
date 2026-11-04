@@ -2,6 +2,7 @@
 import { useNavigate } from "react-router-dom";
 import { authUrl } from "../lib/auth";
 import TruckersToPay from "../components/TruckersToPay";
+import DuplicateBills from "../components/DuplicateBills";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -572,6 +573,7 @@ export default function Expenses() {
   const [filterStatus, setFilterStatus] = useState("");
   const [filterVendor, setFilterVendor] = useState("");
   const [showToPay, setShowToPay] = useState(false); // "Truckers to Pay" list
+  const [showDupes, setShowDupes] = useState(false); // "Duplicate Bills" cleanup
   const [dateFrom, setDateFrom]     = useState("");
   const [dateTo, setDateTo]         = useState("");
   const [filterMonthYear, setFilterMonthYear] = useState(""); // "YYYY-MM" or ""
@@ -1519,6 +1521,7 @@ export default function Expenses() {
   return (
     <div style={{ padding: "28px 32px", maxWidth: 1300, margin: "0 auto", paddingBottom: selectedIds.length > 0 ? 100 : 28 }}>
       {showToPay && <TruckersToPay onClose={() => setShowToPay(false)} onPaid={fetchAll} />}
+      {showDupes && <DuplicateBills onClose={() => setShowDupes(false)} onChanged={fetchAll} />}
 
       {/* Header */}
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
@@ -1532,6 +1535,10 @@ export default function Expenses() {
           <button onClick={() => setShowToPay(true)}
             style={{ background:"#059669", color:"#fff", border:"none", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
             🚚 Truckers to Pay
+          </button>
+          <button onClick={() => setShowDupes(true)}
+            style={{ background:"var(--bg-panel)", color:"#7c3aed", border:"1px solid #7c3aed", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:700, cursor:"pointer" }}>
+            🧹 Duplicate Bills
           </button>
           <button onClick={exportCSV}
             style={{ background:"var(--bg-panel)", color:"var(--text-secondary)", border:"1px solid var(--border)", borderRadius:8, padding:"10px 16px", fontSize:13, fontWeight:600, cursor:"pointer" }}>

@@ -234,6 +234,82 @@ router.patch("/to-pay", express.json(), async (req, res) => {
   }
 });
 
+// ── Duplicate bills ───────────────────────────────────────────────────────────
+// Two bills for the same order, category and amount are almost always one bill
+// entered twice — typically a payment proof that didn't match the existing bill
+// and created a paid copy, leaving the original unpaid.
+const DUP_FIELDS = "vendor amount status paidAmount paidDate paymentMethod payments invoiceNumber vin description date createdAt " +
+  "orderRef orderId category billFileName billDriveId receiptFileName receiptDriveId";
+const vinIn = (e) => (e.vin || (e.description || "").match(/VIN:\s*([A-HJ-NPR-Z0-9]{11,17})/i)?.[1] || "").toUpperCase();
+
+// GET /api/expenses/duplicates — groups of likely-duplicate bills
+router.get("/duplicates", async (req, res) => {
+  try {
+    const [bills, orders] = await Promise.all([
+      Expense.find({}).select(DUP_FIELDS).lean(),
+      Order.find({}).select("_id refNumber vin").lean(),
+    ]);
+    const refById  = Object.fromEntries(orders.map(o => [String(o._id), o.refNumber]));
+    const refByVin = Object.fromEntries(orders.filter(o => (o.vin || "").length >= 11).map(o => [o.vin.toUpperCase(), o.refNumber]));
+    const refOf = (e) => e.orderRef || refById[String(e.orderId)] || refByVin[vinIn(e)] || "";
+
+    const groups = {};
+    for (const e of bills) {
+      const ref = refOf(e);
+      if (!ref || !e.amount) continue;
+      (groups[`${ref}|${e.category}|${Math.round(e.amount * 100)}`] ||= { orderRef: ref, category: e.category, amount: e.amount, bills: [] }).bills.push(e);
+    }
+    const out = Object.values(groups).filter(g => g.bills.length > 1).map(g => {
+      // Compare the last 8 — imported VINs are sometimes missing a leading character
+      const vins = new Set(g.bills.map(vinIn).filter(Boolean).map(v => v.slice(-8)));
+      // Keep the bill with the most detail: invoice #, bill document, VIN, then the older one
+      const score = (e) => (e.invoiceNumber ? 4 : 0) + (e.billDriveId || e.billFileName ? 2 : 0) + (vinIn(e) ? 1 : 0);
+      const suggestedKeep = [...g.bills].sort((a, b) => score(b) - score(a) || new Date(a.createdAt) - new Date(b.createdAt))[0]._id;
+      return { ...g, differentVehicles: vins.size > 1, suggestedKeep };
+    }).sort((a, b) => a.orderRef.localeCompare(b.orderRef));
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/expenses/duplicates/combine — fold one bill into another
+// Body: { keepId, removeId }. The kept bill takes over the other's payment if it
+// has none of its own, plus any document/invoice/VIN it's missing; the other is
+// deleted. When both are paid it's one payment entered twice, so the kept
+// bill's payment stands (not added together).
+router.post("/duplicates/combine", express.json(), async (req, res) => {
+  try {
+    const { keepId, removeId } = req.body;
+    if (!keepId || !removeId || keepId === removeId) return res.status(400).json({ error: "Pick two different bills." });
+    const [keep, rm] = await Promise.all([Expense.findById(keepId), Expense.findById(removeId)]);
+    if (!keep || !rm) return res.status(404).json({ error: "Bill not found — refresh the list." });
+
+    if (keep.status === "unpaid" && rm.status !== "unpaid") {
+      keep.status        = rm.status;
+      keep.paidDate      = rm.paidDate;
+      keep.paymentMethod = rm.paymentMethod;
+      keep.paidAmount    = rm.paidAmount || (rm.status === "paid" ? keep.amount : 0);
+      keep.payments      = rm.payments?.length ? rm.payments.map(p => p.toObject()) : [{
+        amount: keep.paidAmount, date: rm.paidDate || rm.date, method: rm.paymentMethod || "",
+        receiptFileName: rm.receiptFileName || "", receiptDriveId: rm.receiptDriveId || "",
+        receiptDriveUrl: rm.receiptDriveUrl || "", receiptMime: rm.receiptMime || "",
+      }];
+      if (keep.status === "paid") keep.toPay = false;
+    }
+    for (const f of ["invoiceNumber", "vin", "orderRef", "orderId",
+                     "billFileName", "billMime", "billDriveId", "billDriveUrl",
+                     "receiptFileName", "receiptMime", "receiptDriveId", "receiptDriveUrl"]) {
+      if (!keep[f] && rm[f]) keep[f] = rm[f];
+    }
+    await keep.save();
+    await Expense.deleteOne({ _id: rm._id });
+    res.json({ success: true, kept: keep });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/expenses/summary — totals ────────────────────────────────────────
 router.get("/summary", async (req, res) => {
   try {
