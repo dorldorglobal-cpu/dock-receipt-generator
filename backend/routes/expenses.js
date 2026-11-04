@@ -2482,11 +2482,13 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // The carrier/steamship booking number the bank quotes alongside the ref,
       // e.g. "BK 272951625 REF 13855" or "BK# 24597256". One booking covers a
       // whole container (all its cars), so it's the key to pulling in siblings.
-      const bkNumMatch = addenda.match(/\bBK(?:ING)?#?\.?:?\s*([A-Z]{0,4}\d{6,15})\b/i);
+      // Written as "BK 123", "BK# 123", "BKG 123" or "BOOKING 12637982".
+      const bkNumMatch = addenda.match(/\b(?:BK|BKG|BOOKING)\s*#?\.?:?\s*([A-Z]{0,4}\d{6,15})\b/i);
       const carrierBooking = bkNumMatch ? bkNumMatch[1] : "";
       // Exclude the digits already claimed by booking numbers so they don't
       // also get picked up as "plain order refs".
-      const addendaSansBookings = addenda.replace(/S3-\s*\d+/gi, " ");
+      let addendaSansBookings = addenda.replace(/S3-\s*\d+/gi, " ");
+      if (carrierBooking) addendaSansBookings = addendaSansBookings.replace(bkNumMatch[0], " ");
       const plainRefs = [...new Set((addendaSansBookings.match(/\b\d{3,8}\b/g) || []))];
       const isMultiBooking = bookingNumbers.length > 1 || plainRefs.length > 1;
       // When multiple order refs are present, show all of them upfront
@@ -2565,7 +2567,8 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // lookup can't account for the whole amount, find the container load
       // (by carrier booking number, or by the order ref belonging to a load)
       // and pull in the unpaid bills of every sibling order.
-      if ((matchType === "none" || matchType === "review") && orderRef && plainRefs.length <= 1) {
+      // A booking # alone (no order ref) is enough — "BOOKING 12637982" names the whole container.
+      if ((matchType === "none" || matchType === "review") && (orderRef || carrierBooking) && plainRefs.length <= 1) {
         const ContainerLoad = require("../models/ContainerLoad");
         const loadOr = [];
         if (carrierBooking) loadOr.push({ bookingNumber: { $regex: esc(carrierBooking), $options: "i" } });
@@ -2577,30 +2580,41 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
           if (bareBooking) loadOr.push({ bookingNumber: { $regex: esc(bareBooking[1]), $options: "i" } });
         }
         // The order ref itself may be a load member — resolve its Order _id.
-        const selfOrder = await Order.findOne({ refNumber: { $regex: `^${esc(orderRef)}$`, $options: "i" } }).select("_id bookingNumber").lean();
+        const selfOrder = orderRef ? await Order.findOne({ refNumber: { $regex: `^${esc(orderRef)}$`, $options: "i" } }).select("_id bookingNumber").lean() : null;
         if (selfOrder) {
           loadOr.push({ orderIds: selfOrder._id });
           if (selfOrder.bookingNumber) loadOr.push({ bookingNumber: { $regex: esc(selfOrder.bookingNumber), $options: "i" } });
         }
         const load = loadOr.length ? await ContainerLoad.findOne({ $or: loadOr }).select("orderIds name").lean() : null;
+        // No container load on file — the orders carrying that booking # are the container
+        const sibOrderIds = load?.orderIds?.length ? load.orderIds
+          : carrierBooking ? (await Order.find({ bookingNumber: { $regex: `(^|[^0-9])${esc(carrierBooking)}$`, $options: "i" } }).select("_id").lean()).map(o => o._id)
+          : [];
 
-        if (load && (load.orderIds || []).length) {
-          const sibOrders = await Order.find({ _id: { $in: load.orderIds } }).select("refNumber").lean();
+        if (sibOrderIds.length) {
+          const sibOrders = await Order.find({ _id: { $in: sibOrderIds } }).select("refNumber").lean();
           const sibRefs = sibOrders.map(o => o.refNumber).filter(Boolean);
           const sibExpenses = await Expense.find({
             orderRef: { $in: sibRefs.map(r => new RegExp(`^${esc(r)}$`, "i")) },
           }).select("_id description vendor amount paidAmount orderRef status paidDate receiptFileName").lean();
 
-          const unpaidSib = sibExpenses.filter(c => c.status === "unpaid" || c.status === "partial");
+          const owed = c => c.status === "partial" ? c.amount - (c.paidAmount || 0) : c.amount;
+          const sum  = (list) => list.reduce((s, c) => s + owed(c), 0);
+          const allUnpaid = sibExpenses.filter(c => c.status === "unpaid" || c.status === "partial");
+          // The payee's own bills first (iShip's loading bills, not the cars' towing bills)
+          const payeeUnpaid = allUnpaid.filter(c => sameVendor(c.vendor, payeeName));
+          const unpaidSib = payeeUnpaid.length ? payeeUnpaid : allUnpaid;
           const paidSib   = sibExpenses.filter(c => c.status === "paid");
-          const sumUnpaid = unpaidSib.reduce((s, c) => s + (c.status === "partial" ? c.amount - (c.paidAmount || 0) : c.amount), 0);
           const sumPaid   = paidSib.reduce((s, c) => s + c.amount, 0);
 
           if (unpaidSib.length) {
             candidates = unpaidSib;
-            if (Math.abs(sumUnpaid - amount) < 0.01) {
-              matchedIds = unpaidSib.map(c => c._id);
-              matchType  = unpaidSib.length === 1 ? "exact" : "combined";
+            const exactSet = Math.abs(sum(unpaidSib) - amount) < 0.01 ? unpaidSib
+              : Math.abs(sum(allUnpaid) - amount) < 0.01 ? allUnpaid : null;
+            if (exactSet) {
+              candidates = exactSet;
+              matchedIds = exactSet.map(c => c._id);
+              matchType  = exactSet.length === 1 ? "exact" : "combined";
             } else {
               matchType = "review";
             }
@@ -2617,12 +2631,16 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       if ((matchType === "none" || matchType === "review") && plainRefs.length > 1) {
         const multi = await Expense.find({
           orderRef: { $in: plainRefs.map(r => new RegExp(`^${esc(r)}$`, "i")) },
-        }).select("_id description vendor amount orderRef status paidDate receiptFileName").lean();
+        }).select("_id description vendor amount paidAmount orderRef status paidDate receiptFileName").lean();
 
         if (multi.length) {
-          const unpaidMulti = multi.filter(c => c.status === "unpaid" || c.status === "partial");
+          const allUnpaidMulti = multi.filter(c => c.status === "unpaid" || c.status === "partial");
+          // The payee's own bills on those orders first (Hey's towing bills, not the ocean freight)
+          const payeeMulti  = allUnpaidMulti.filter(c => sameVendor(c.vendor, payeeName));
+          const owedMulti   = list => list.reduce((s, c) => s + (c.status === "partial" ? c.amount - (c.paidAmount||0) : c.amount), 0);
+          const unpaidMulti = payeeMulti.length && Math.abs(owedMulti(payeeMulti) - amount) < 0.01 ? payeeMulti : allUnpaidMulti;
           const paidMulti   = multi.filter(c => c.status === "paid");
-          const sumUnpaid   = unpaidMulti.reduce((s, c) => s + (c.status === "partial" ? c.amount - (c.paidAmount||0) : c.amount), 0);
+          const sumUnpaid   = owedMulti(unpaidMulti);
           const sumPaid     = paidMulti.reduce((s, c) => s + c.amount, 0);
 
           if (unpaidMulti.length && Math.abs(sumUnpaid - amount) < 0.01) {
