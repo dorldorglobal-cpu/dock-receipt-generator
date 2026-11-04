@@ -31,6 +31,8 @@ const expenseSchema = new mongoose.Schema(
     paidDate:      { type: Date, default: null },   // date of most recent payment
     paidAmount:    { type: Number, default: null }, // cumulative total paid so far
     paymentMethod: { type: String, default: "" },
+    // Ticked on the "Truckers to Pay" list — queued for the next payment run
+    toPay:         { type: Boolean, default: false },
 
     // Full payment history
     payments: [{

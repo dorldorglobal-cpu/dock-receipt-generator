@@ -33,7 +33,10 @@ export default function TruckersToPay({ onClose, onPaid }) {
     setLoading(true);
     try {
       const data = await (await fetch(`${API}/api/expenses/to-pay`)).json();
-      setRows(Array.isArray(data) ? data : []);
+      const list = Array.isArray(data) ? data : [];
+      setRows(list);
+      // Ticks are saved on the bill (set when the dispatch bill is created), so they stick until paid
+      setPicked(Object.fromEntries(list.filter(r => r.toPay).map(r => [r._id, true])));
     } catch { setRows([]); }
     setLoading(false);
   };
@@ -67,11 +70,15 @@ export default function TruckersToPay({ onClose, onPaid }) {
   const pickedSum  = pickedRows.reduce((s, r) => s + r.owed, 0);
   const pickedVendors = new Set(pickedRows.map(r => r.vendor.toLowerCase().trim()));
 
-  const toggle      = (id) => setPicked(p => ({ ...p, [id]: !p[id] }));
-  const toggleGroup = (g) => {
-    const all = g.bills.every(b => picked[b._id]);
-    setPicked(p => { const n = { ...p }; for (const b of g.bills) n[b._id] = !all; return n; });
+  const setTicks = (ids, on) => {
+    setPicked(p => { const n = { ...p }; for (const id of ids) n[id] = on; return n; });
+    fetch(`${API}/api/expenses/to-pay`, {
+      method: "PATCH", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ids, toPay: on }),
+    }).catch(() => setMsg("❌ Couldn't save that tick — refresh and try again"));
   };
+  const toggle      = (id) => setTicks([id], !picked[id]);
+  const toggleGroup = (g) => setTicks(g.bills.map(b => b._id), !g.bills.every(b => picked[b._id]));
 
   const paySelected = async () => {
     if (!pickedRows.length) return;

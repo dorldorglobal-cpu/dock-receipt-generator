@@ -189,7 +189,7 @@ router.get("/by-ids", async (req, res) => {
 router.get("/to-pay", async (req, res) => {
   try {
     const bills = await Expense.find({ category: "Towing / Transport", status: { $in: ["unpaid", "partial"] } })
-      .select("_id vendor amount paidAmount status orderRef orderId date invoiceNumber description")
+      .select("_id vendor amount paidAmount status orderRef orderId date invoiceNumber description toPay")
       .sort({ date: 1 }).lean();
 
     const refs   = [...new Set(bills.map(b => b.orderRef).filter(Boolean))];
@@ -213,8 +213,22 @@ router.get("/to-pay", async (req, res) => {
         amount:        b.amount,
         status:        b.status,
         owed:          b.status === "partial" ? Math.max(b.amount - (b.paidAmount || 0), 0) : b.amount,
+        toPay:         !!b.toPay,
       };
     }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── PATCH /api/expenses/to-pay — tick/untick bills on the Truckers to Pay list ─
+// Body: { ids: [...], toPay: true|false }
+router.patch("/to-pay", express.json(), async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids : [];
+    if (!ids.length) return res.status(400).json({ error: "No expense IDs provided" });
+    const { modifiedCount } = await Expense.updateMany({ _id: { $in: ids } }, { $set: { toPay: !!req.body.toPay } });
+    res.json({ updated: modifiedCount });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
@@ -1316,6 +1330,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
         orderRef,
         invoiceNumber: row.loadId || "",
         status:        "unpaid",
+        toPay:         row.toPay !== false, // dispatch bills are queued to pay unless unticked
         notes:         row.notes || "",
         billFileName:  row.billFileName || "",
         billMime:      row.billMime     || "",

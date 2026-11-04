@@ -1992,7 +1992,7 @@ export default function Expenses() {
               <>
                 <div style={{ overflowX: "auto" }}>
                   <table style={{ width:"100%", borderCollapse:"collapse", fontSize:13 }}>
-                    <thead><tr>{["✓","File","Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"var(--text-muted)",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
+                    <thead><tr>{["✓","File","Load #","VIN","Vehicle","Carrier","Pickup","Order Ref","Amount","Notes","Status","To Pay"].map(h=><th key={h} style={{padding:"8px 10px",textAlign:"left",color:"var(--text-muted)",fontSize:11,fontWeight:600,borderBottom:"1px solid var(--border)",whiteSpace:"nowrap"}}>{h}</th>)}</tr></thead>
                     <tbody>
                       {dispatchRows.map((row,i)=>(
                         <React.Fragment key={i}>
@@ -2013,6 +2013,12 @@ export default function Expenses() {
                               style={{marginLeft:8,fontSize:10,padding:"1px 7px",borderRadius:5,border:"1px solid var(--border)",background:"none",color:"#34d399",cursor:"pointer"}}>
                               + Extra
                             </button>
+                          </td>
+                          <td style={{padding:"8px 10px",borderBottom:"1px solid var(--border-muted)",whiteSpace:"nowrap"}} title="Ticked on the Truckers to Pay list until it's paid">
+                            <label style={{display:"flex",alignItems:"center",gap:5,fontSize:12,color:"var(--text-secondary)",cursor:"pointer"}}>
+                              <input type="checkbox" checked={row.toPay !== false} onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,toPay:e.target.checked}:r))}/>
+                              🚚
+                            </label>
                           </td>
                         </tr>
                         {(row.lineItems||[]).map((li,li_i)=>(
