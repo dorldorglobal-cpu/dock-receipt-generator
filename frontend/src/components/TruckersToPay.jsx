@@ -106,17 +106,28 @@ export default function TruckersToPay({ onClose, onPaid }) {
   const printList = () => {
     const w = window.open("", "_blank");
     if (!w) return;
-    const body = groups.map(g => `
+    // Only the ticked units — the printout is the payment run, not the whole list
+    // (all ticked units, even ones a search is currently hiding)
+    const byVendor = new Map();
+    for (const r of pickedRows) {
+      const key = r.vendor.toLowerCase().replace(/\s+/g, " ").trim();
+      if (!byVendor.has(key)) byVendor.set(key, { vendor: r.vendor, bills: [] });
+      byVendor.get(key).bills.push(r);
+    }
+    const ticked = [...byVendor.values()].map(g => ({ ...g, owed: g.bills.reduce((s, b) => s + b.owed, 0) }));
+    const body = ticked.map(g => `
       <h3>${esc(g.vendor)} — ${esc(fmt$(g.owed))} <span>(${g.bills.length} unit${g.bills.length === 1 ? "" : "s"})</span></h3>
       <table><tr><th></th><th>Order</th><th>Vehicle</th><th>VIN</th><th>Pickup</th><th>Billed</th><th>Owed</th></tr>
       ${g.bills.map(b => `<tr><td>☐</td><td>${esc(b.orderRef)}</td><td>${esc(b.vehicle)}</td><td>${esc(b.vin.slice(-6))}</td>
         <td>${esc(b.pickup)}</td><td>${esc(fmtDate(b.date))}</td><td>${esc(fmt$(b.owed))}${b.status === "partial" ? " (bal.)" : ""}</td></tr>`).join("")}
       </table>`).join("");
+    const units = ticked.reduce((s, g) => s + g.bills.length, 0);
+    const total = ticked.reduce((s, g) => s + g.owed, 0);
     w.document.write(`<!doctype html><html><head><meta charset="utf-8"><title>Truckers to Pay</title><style>
       body{font-family:Arial,sans-serif;font-size:12px;margin:24px;color:#111}h1{font-size:18px;margin:0 0 4px}
       h3{font-size:14px;margin:18px 0 4px}h3 span{font-weight:normal;color:#555}table{border-collapse:collapse;width:100%}
       th,td{border-bottom:1px solid #ddd;padding:4px 6px;text-align:left}th{font-size:11px;color:#555}</style></head><body>
-      <h1>Truckers to Pay</h1><div>${esc(new Date().toLocaleDateString())} · ${unitCount} units · ${esc(fmt$(totalOwed))}</div>${body}
+      <h1>Truckers to Pay</h1><div>${esc(new Date().toLocaleDateString())} · ${units} unit${units === 1 ? "" : "s"} · ${ticked.length} trucker${ticked.length === 1 ? "" : "s"} · <strong>${esc(fmt$(total))}</strong></div>${body}
       <script>window.onload=()=>window.print()</script></body></html>`);
     w.document.close();
   };
@@ -139,7 +150,10 @@ export default function TruckersToPay({ onClose, onPaid }) {
             </div>
           </div>
           <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Search trucker, order #, VIN…" style={{ ...inp, width: 220 }} />
-          <button onClick={printList} disabled={!groups.length} style={{ ...inp, cursor: "pointer", fontWeight: 600 }}>🖨 Print</button>
+          <button onClick={printList} disabled={!pickedRows.length} title={pickedRows.length ? "Print the ticked units" : "Tick the units to print"}
+            style={{ ...inp, cursor: pickedRows.length ? "pointer" : "not-allowed", fontWeight: 600, opacity: pickedRows.length ? 1 : 0.5 }}>
+            🖨 Print{pickedRows.length ? ` ${pickedRows.length} ticked` : ""}
+          </button>
           <button onClick={onClose} style={{ background: "none", border: "none", color: "var(--text-secondary)", fontSize: 20, cursor: "pointer" }}>✕</button>
         </div>
 
