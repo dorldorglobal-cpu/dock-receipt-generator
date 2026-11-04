@@ -64,6 +64,44 @@ const sameVendor = (a, b) => {
   return !!x && !!y && (x === y || x.startsWith(y + " ") || y.startsWith(x + " "));
 };
 
+// Plain-text summary of an applied payment proof for the owner email:
+// each vendor with its total, the order/amount lines under it, and a grand total.
+function proofSummary(rows) {
+  const money = (n) => "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const owed  = (c) => c.status === "partial" ? c.amount - (c.paidAmount || 0) : c.amount;
+  const byVendor = new Map();
+  let total = 0, count = 0;
+  for (const row of rows.filter(r => r.selected)) {
+    const amt = Number(row.amount) || 0;
+    let lines;
+    if (row.splitBills?.length) {
+      lines = row.splitBills.filter(s => Number(s.amount)).map(s => ({ ref: s.orderRef, amt: Number(s.amount) }));
+    } else if ((row.matchedIds || []).length > 1) {
+      const ids = row.matchedIds.map(String);
+      const bills = (row.candidates || []).filter(c => ids.includes(String(c._id)));
+      lines = bills.map(c => ({ ref: c.orderRef, amt: row.markPartial ? amt / bills.length : owed(c) }));
+    } else {
+      const bill = (row.candidates || []).find(c => String(c._id) === String(row.matchedIds?.[0]));
+      lines = [{ ref: bill?.orderRef || row.orderRef, amt }];
+    }
+    const key = (row.payeeName || "—").trim();
+    if (!byVendor.has(key)) byVendor.set(key, { total: 0, lines: [] });
+    const v = byVendor.get(key);
+    v.total += amt;
+    v.lines.push(...lines);
+    total += amt;
+    count++;
+  }
+  const out = [];
+  for (const [vendor, v] of byVendor) {
+    out.push(`${vendor} — ${money(v.total)}`);
+    for (const l of v.lines) out.push(`    #${l.ref || "—"}    ${money(l.amt)}`);
+    out.push("");
+  }
+  out.push(`TOTAL: ${money(total)}  (${count} payment${count === 1 ? "" : "s"}, ${byVendor.size} vendor${byVendor.size === 1 ? "" : "s"})`);
+  return out.join("\r\n");
+}
+
 // Map a name from a dispatch sheet/proof ("Castle Auto") to the vendor name
 // already in use ("Castle Auto Transportation"), so each new bill doesn't
 // start a new vendor. With several matches, the one with the most bills wins.
@@ -2604,7 +2642,9 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
           // The payee's own bills first (iShip's loading bills, not the cars' towing bills)
           const payeeUnpaid = allUnpaid.filter(c => sameVendor(c.vendor, payeeName));
           const unpaidSib = payeeUnpaid.length ? payeeUnpaid : allUnpaid;
-          const paidSib   = sibExpenses.filter(c => c.status === "paid");
+          const allPaid   = sibExpenses.filter(c => c.status === "paid");
+          const payeePaid = allPaid.filter(c => sameVendor(c.vendor, payeeName));
+          const paidSib   = payeePaid.length ? payeePaid : allPaid;
           const sumPaid   = paidSib.reduce((s, c) => s + c.amount, 0);
 
           if (unpaidSib.length) {
@@ -2979,6 +3019,8 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`,
           ``, `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``,
           `Payment proof attached — ${subject}.`,
+          ``,
+          proofSummary(rows),
           `--${boundary}`,
           `Content-Type: application/pdf; name="${fname}"`,
           `Content-Transfer-Encoding: base64`,
