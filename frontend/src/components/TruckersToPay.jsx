@@ -26,6 +26,7 @@ export default function TruckersToPay({ onClose, onPaid }) {
   const [payDate, setPayDate]   = useState(todayISO());
   const [method, setMethod]     = useState("Zelle");
   const [proof, setProof]       = useState(null);
+  const [proofDrag, setProofDrag] = useState(false);
   const [paying, setPaying]     = useState(false);
   const [msg, setMsg]           = useState("");
 
@@ -139,7 +140,11 @@ export default function TruckersToPay({ onClose, onPaid }) {
 
   return (
     <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.6)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={e => e.stopPropagation()} style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 14, width: "100%", maxWidth: 980, maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
+      <div onClick={e => e.stopPropagation()}
+        // A file dropped anywhere on the list is the payment proof (and never opens in the tab)
+        onDragOver={e => e.preventDefault()}
+        onDrop={e => { e.preventDefault(); setProofDrag(false); const f = e.dataTransfer.files[0]; if (f) setProof(f); }}
+        style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 14, width: "100%", maxWidth: 980, maxHeight: "92vh", display: "flex", flexDirection: "column" }}>
 
         {/* Header */}
         <div style={{ padding: "18px 22px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
@@ -223,9 +228,18 @@ export default function TruckersToPay({ onClose, onPaid }) {
           <select value={method} onChange={e => setMethod(e.target.value)} style={inp}>
             {PAY_METHODS.map(m => <option key={m}>{m}</option>)}
           </select>
-          <label style={{ ...inp, cursor: "pointer", borderStyle: "dashed", color: proof ? "var(--text-primary)" : "var(--text-secondary)", maxWidth: 180, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-            {proof ? `📎 ${proof.name}` : "📎 Proof (optional)"}
-            <input type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => setProof(e.target.files[0] || null)} />
+          <label title={proof ? proof.name : "Drop the payment proof here, or click to pick a file"}
+            onDragOver={e => { e.preventDefault(); setProofDrag(true); }}
+            onDragLeave={() => setProofDrag(false)}
+            onDrop={e => { e.preventDefault(); setProofDrag(false); const f = e.dataTransfer.files[0]; if (f) setProof(f); }}
+            style={{ ...inp, cursor: "pointer", borderStyle: "dashed", borderWidth: 2, display: "flex", alignItems: "center", gap: 6,
+              borderColor: proofDrag || proof ? "#34d399" : "var(--border)", background: proofDrag ? "rgba(52,211,153,0.12)" : inp.background,
+              color: proof ? "var(--text-primary)" : "var(--text-secondary)", minWidth: 170, maxWidth: 220 }}>
+            <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+              {proofDrag ? "📥 Drop it here" : proof ? `📎 ${proof.name}` : "📎 Drop proof or click"}
+            </span>
+            {proof && <span onClick={e => { e.preventDefault(); setProof(null); }} title="Remove" style={{ color: "#f87171", fontWeight: 700 }}>✕</span>}
+            <input type="file" accept="image/*,application/pdf" style={{ display: "none" }} onChange={e => { setProof(e.target.files[0] || null); e.target.value = ""; }} />
           </label>
           <button onClick={paySelected} disabled={!pickedRows.length || paying}
             style={{ background: "#059669", color: "#fff", border: "none", borderRadius: 8, padding: "9px 20px", fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: (!pickedRows.length || paying) ? 0.5 : 1 }}>
