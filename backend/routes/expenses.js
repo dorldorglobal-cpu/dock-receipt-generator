@@ -64,6 +64,29 @@ const sameVendor = (a, b) => {
   return !!x && !!y && (x === y || x.startsWith(y + " ") || y.startsWith(x + " "));
 };
 
+// Map a name from a dispatch sheet/proof ("Castle Auto") to the vendor name
+// already in use ("Castle Auto Transportation"), so each new bill doesn't
+// start a new vendor. With several matches, the one with the most bills wins.
+async function canonicalVendor(name) {
+  name = (name || "").trim();
+  if (!name) return name;
+  const counts = await Expense.aggregate([{ $match: { vendor: { $nin: ["", null] } } }, { $group: { _id: "$vendor", n: { $sum: 1 } } }]);
+  const vendorRecs = await Vendor.find({}).select("name").lean();
+  const pool = new Map(counts.map(c => [c._id, c.n]));
+  for (const v of vendorRecs) if (!pool.has(v.name)) pool.set(v.name, 0);
+  const want = normVendorName(name);
+  // Exact match (ignoring case/punctuation/LLC) always counts; a prefix match
+  // only when the shorter name is 2+ words, so "A" doesn't grab "A TO Z"
+  const ok = (n) => {
+    const have = normVendorName(n);
+    if (have === want) return true;
+    const shorter = have.length < want.length ? have : want;
+    return shorter.split(" ").length >= 2 && sameVendor(n, name);
+  };
+  const matches = [...pool.entries()].filter(([n]) => ok(n)).sort((a, b) => b[1] - a[1]);
+  return matches[0]?.[0] || name;
+}
+
 // A proof reference is either one of our order refs ("13815") or a carrier
 // booking ("S3-29771380") — resolve either to the order it belongs to.
 async function resolveProofOrder(ref) {
@@ -1456,7 +1479,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
         category:      "Towing / Transport",
         taxCategory:   "Cost of Goods Sold (COGS)",
         description:   `Transport — ${row.ymm || ""} — VIN: ${row.vin || ""} — ${row.origin || ""}`.trim().replace(/\s*—\s*$/, ""),
-        vendor:        row.carrier || "Unknown Carrier",
+        vendor:        (await canonicalVendor(row.carrier)) || "Unknown Carrier",
         amount:        row.total + extrasTotal,
         date:          dateObj,
         orderId,
