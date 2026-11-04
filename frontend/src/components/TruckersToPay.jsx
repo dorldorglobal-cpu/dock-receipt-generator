@@ -82,6 +82,7 @@ export default function TruckersToPay({ onClose, onPaid }) {
 
   const paySelected = async () => {
     if (!pickedRows.length) return;
+    if (!window.confirm(`Mark ${pickedRows.length} unit${pickedRows.length === 1 ? "" : "s"} paid — ${fmt$(pickedSum)} by ${method} on ${payDate}?`)) return;
     setPaying(true); setMsg("");
     try {
       const fd = new FormData();
