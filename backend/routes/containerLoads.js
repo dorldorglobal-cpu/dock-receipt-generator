@@ -403,6 +403,74 @@ router.get("/:id/billing-summary", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── Container discounts ───────────────────────────────────────────────────────
+// A discount on the load is split evenly (to the cent, leftover cents on the
+// first invoices) across every open invoice as a minus line, so it shows on
+// each car's invoice and on the combined invoice, and balances/profit match
+// what the customer is billed. The load keeps a record of each one.
+const discountItemLabel = (label) => `${label} (container discount)`;
+const invoiceTotalOf = (items) => Math.round(items.reduce((s, i) => s + Number(i.amount || 0), 0) * 100) / 100;
+const invoiceStatusOf = (inv) => {
+  const paid = (inv.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+  if (paid >= (inv.total || 0) && inv.total > 0) return "paid";
+  return inv.sentAt ? "sent" : "draft";
+};
+
+// POST /api/container-loads/:id/discounts — body { label, amount }
+router.post("/:id/discounts", express.json(), async (req, res) => {
+  try {
+    const Invoice = require("../models/Invoice");
+    const label  = (req.body?.label || "Discount").trim() || "Discount";
+    const amount = Math.round(Number(req.body?.amount) * 100) / 100;
+    if (!(amount > 0)) return res.status(400).json({ error: "Enter a discount amount." });
+
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    const invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).sort({ invoiceNumber: 1 });
+    if (!invoices.length) return res.status(400).json({ error: "No open invoices on this load to discount." });
+
+    const cents = Math.round(amount * 100), n = invoices.length;
+    const perInvoice = [];
+    for (let i = 0; i < n; i++) {
+      const inv   = invoices[i];
+      const share = (Math.floor(cents / n) + (i < cents % n ? 1 : 0)) / 100;
+      inv.items.push({ description: discountItemLabel(label), amount: -share });
+      inv.subtotal = inv.total = invoiceTotalOf(inv.items);
+      inv.status = invoiceStatusOf(inv);
+      await inv.save();
+      perInvoice.push({ invoiceId: inv._id, invoiceNumber: inv.invoiceNumber, orderRef: inv.orderRef, amount: share });
+    }
+    load.discounts.push({ label, amount, perInvoice });
+    await load.save();
+    res.json({ discounts: load.discounts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// DELETE /api/container-loads/:id/discounts/:discountId — undo an applied discount
+router.delete("/:id/discounts/:discountId", async (req, res) => {
+  try {
+    const Invoice = require("../models/Invoice");
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    const disc = load.discounts.id(req.params.discountId);
+    if (!disc) return res.status(404).json({ error: "Discount not found" });
+
+    for (const p of disc.perInvoice) {
+      const inv = await Invoice.findById(p.invoiceId);
+      if (!inv) continue;
+      const idx = inv.items.findIndex(i => i.description === discountItemLabel(disc.label) && Math.abs(Number(i.amount) + p.amount) < 0.005);
+      if (idx < 0) continue;
+      inv.items.splice(idx, 1);
+      inv.subtotal = inv.total = invoiceTotalOf(inv.items);
+      inv.status = invoiceStatusOf(inv);
+      await inv.save();
+    }
+    disc.deleteOne();
+    await load.save();
+    res.json({ discounts: load.discounts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // POST /api/container-loads/:id/split-baf — divide a per-container BAF amount
 // evenly across the cars actually in the load and write it to each order's
 // charges (both the sell price and the cost). BAF is a flat per-container fee

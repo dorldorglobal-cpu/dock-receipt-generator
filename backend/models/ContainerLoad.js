@@ -32,6 +32,15 @@ const containerLoadSchema = new mongoose.Schema({
   notifyEmail:   { type: String, default: "" },
   notifyTin:     { type: String, default: "" },
 
+  // Discounts applied across the load's invoices (each split evenly as a minus
+  // line on every open invoice) — kept so they show up and can't be re-added by mistake
+  discounts: [{
+    label:      { type: String, default: "Discount" },
+    amount:     { type: Number, required: true },
+    appliedAt:  { type: Date, default: Date.now },
+    perInvoice: [{ invoiceId: mongoose.Schema.Types.ObjectId, invoiceNumber: String, orderRef: String, amount: Number }],
+  }],
+
   customsHold:            { type: Boolean, default: false },
   customsHoldDate:        { type: Date },
   customsHoldNote:        { type: String, default: "" },

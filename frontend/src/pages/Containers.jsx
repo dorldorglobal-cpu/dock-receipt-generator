@@ -194,7 +194,9 @@ export default function Containers() {
   const [billingRows,   setBillingRows]   = useState([]);
   const [billingLoading,setBillingLoading]= useState(false);
   const [extraLines,    setExtraLines]    = useState([]); // [{ label, amount, mode }]
-  const [discountLines, setDiscountLines] = useState([]); // [{ label, amount }] — negative adjustments
+  const [discountLines, setDiscountLines] = useState([]); // [{ label, amount }] — typed but not applied yet
+  const [appliedDiscounts, setAppliedDiscounts] = useState([]); // load.discounts — saved on each invoice
+  const [discountBusy, setDiscountBusy] = useState(false);
   const [sendingAll,    setSendingAll]    = useState(false);
   const [sendResults,   setSendResults]   = useState(null);
   const [sendPreview,   setSendPreview]   = useState(null); // { to, subject, body }
@@ -260,7 +262,7 @@ export default function Containers() {
     setBillingLoading(true);
     fetch(`${API}/api/container-loads/${load._id}/billing-summary`)
       .then(r => r.json())
-      .then(d => setBillingRows(d.rows || []))
+      .then(d => { setBillingRows(d.rows || []); setAppliedDiscounts(d.load?.discounts || []); })
       .catch(() => {})
       .finally(() => setBillingLoading(false));
   }, [location.search, loads]); // eslint-disable-line
@@ -325,6 +327,45 @@ export default function Containers() {
 
   // Split a flat per-container BAF amount evenly across the cars in the load
   // and write it to each order's charges. Prompts for the amount ($400 default).
+  // Container discounts — Apply splits it across each car's invoice (saved);
+  // the load keeps the record so an applied discount shows and isn't added twice.
+  const refreshBilling = async (load) => {
+    const ds = await (await fetch(`${API}/api/container-loads/${load._id}/billing-summary`)).json();
+    setBillingRows(ds.rows || []);
+    setAppliedDiscounts(ds.load?.discounts || []);
+  };
+  const applyDiscount = async (i) => {
+    const line = discountLines[i];
+    const already = appliedDiscounts.reduce((s, d) => s + Number(d.amount || 0), 0);
+    if (appliedDiscounts.length && !window.confirm(
+      `This load already has $${already.toFixed(2)} in discounts applied (${appliedDiscounts.map(d => d.label).join(", ")}).\n\nAdd another $${Number(line.amount).toFixed(2)} discount?`)) return;
+    setDiscountBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: line.label, amount: line.amount }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't apply the discount");
+      setDiscountLines(p => p.filter((_, j) => j !== i));
+      await refreshBilling(billingLoad);
+      flash(`✅ Discount of $${Number(line.amount).toFixed(2)} split across the invoices`);
+    } catch (e) { flash("❌ " + e.message); }
+    setDiscountBusy(false);
+  };
+  const removeDiscount = async (disc) => {
+    if (!window.confirm(`Remove the "${disc.label}" discount ($${Number(disc.amount).toFixed(2)}) from every invoice?`)) return;
+    setDiscountBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts/${disc._id}`, { method: "DELETE" });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't remove the discount");
+      await refreshBilling(billingLoad);
+      flash("✅ Discount removed");
+    } catch (e) { flash("❌ " + e.message); }
+    setDiscountBusy(false);
+  };
+
   const [bafBusy, setBafBusy] = useState(false);
   const splitBaf = async (load) => {
     const carCount = billingRows.length || (load.orderIds || []).length;
@@ -349,6 +390,7 @@ export default function Containers() {
       const rs = await fetch(`${API}/api/container-loads/${load._id}/billing-summary`);
       const ds = await rs.json();
       setBillingRows(ds.rows || []);
+      setAppliedDiscounts(ds.load?.discounts || []);
     } catch (e) {
       flash("❌ " + e.message);
     } finally {
@@ -388,6 +430,7 @@ export default function Containers() {
       const rs = await fetch(`${API}/api/container-loads/${load._id}/billing-summary`);
       const ds = await rs.json();
       setBillingRows(ds.rows || []);
+      setAppliedDiscounts(ds.load?.discounts || []);
     } catch (e) {
       flash("❌ " + e.message);
     } finally {
@@ -894,10 +937,12 @@ export default function Containers() {
                   </button>
                   <button onClick={async()=>{
                       setBillingLoad(l); setBillingRows([]); setSendResults(null); setBillingLoading(true);
+                      setExtraLines([]); setDiscountLines([]); setAppliedDiscounts([]);
                       try {
                         const r = await fetch(`${API}/api/container-loads/${l._id}/billing-summary`);
                         const d = await r.json();
                         setBillingRows(d.rows || []);
+                        setAppliedDiscounts(d.load?.discounts || []);
                       } catch(e) { flash("❌ "+e.message); setBillingLoad(null); }
                       setBillingLoading(false);
                     }}
@@ -1953,6 +1998,19 @@ export default function Containers() {
                             </td>
                           </tr>
                         ))}
+                        {appliedDiscounts.map(d => (
+                          <tr key={d._id} style={{ borderTop:"1px solid var(--border)", background:"rgba(248,113,113,0.08)" }}>
+                            <td colSpan={4} style={{ padding:"7px 8px", fontSize:12 }}>
+                              <strong style={{ color:"#dc2626" }}>✓ Discount applied:</strong> {d.label}
+                              <span style={{ color:"var(--text-muted)" }}> — split {(d.perInvoice || []).map(x => `#${x.orderRef} -$${Number(x.amount).toFixed(2)}`).join(", ")} · {new Date(d.appliedAt).toLocaleDateString()}</span>
+                            </td>
+                            <td style={{ padding:"7px 8px", textAlign:"right", color:"#dc2626", fontWeight:700, fontSize:12 }}>-${Number(d.amount).toFixed(2)}</td>
+                            <td colSpan={2} style={{ padding:"7px 8px", textAlign:"center" }}>
+                              <button onClick={() => removeDiscount(d)} disabled={discountBusy} title="Take this discount back off every invoice"
+                                style={{ background:"none", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-secondary)", cursor:"pointer", fontSize:11, padding:"2px 8px" }}>Remove</button>
+                            </td>
+                          </tr>
+                        ))}
                         {discountLines.map((line, i) => (
                           <tr key={`disc-${i}`} style={{ borderTop:"1px solid var(--border)", background:"rgba(248,113,113,0.05)" }}>
                             <td colSpan={3} style={{ padding:"7px 8px" }}>
@@ -1976,8 +2034,12 @@ export default function Containers() {
                                 />
                               </div>
                             </td>
-                            <td style={{ padding:"7px 8px", textAlign:"right", color:"#f87171", fontSize:12 }}>
-                              -{line.amount > 0 ? `$${line.amount.toFixed(2)}` : "—"}
+                            <td style={{ padding:"7px 8px", textAlign:"right" }}>
+                              <button onClick={() => applyDiscount(i)} disabled={discountBusy || !(line.amount > 0)}
+                                title="Split this discount across each car's invoice and save it"
+                                style={{ background:"#dc2626", color:"#fff", border:"none", borderRadius:5, fontSize:11, fontWeight:700, padding:"3px 10px", cursor:"pointer", opacity:(discountBusy || !(line.amount > 0)) ? 0.5 : 1 }}>
+                                {discountBusy ? "…" : "Apply"}
+                              </button>
                             </td>
                             <td style={{ padding:"7px 8px", textAlign:"center" }}>
                               <button onClick={() => setDiscountLines(p => p.filter((_,j) => j!==i))}
@@ -2012,11 +2074,11 @@ export default function Containers() {
                             ${billingRows.reduce((s,r)=>s+r.totalExpenses,0).toFixed(2)}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right", color:"#34d399" }}>
-                            ${(billingRows.reduce((s,r)=>s+r.invoiceTotal,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0) - discountLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
+                            ${(billingRows.reduce((s,r)=>s+r.invoiceTotal,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right",
-                            color: (billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0) - discountLines.reduce((s,l)=>s+(l.amount||0),0))>=0 ? "#34d399" : "#f87171" }}>
-                            ${(billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0) - discountLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
+                            color: (billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0))>=0 ? "#34d399" : "#f87171" }}>
+                            ${(billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
                           </td>
                           <td />
                         </tr>
@@ -2069,8 +2131,7 @@ export default function Containers() {
                   {sendPreview.combined && (
                     <button type="button" onClick={()=>{
                         const validLines = extraLines.filter(l => l.label && l.amount);
-                        const validDiscs = discountLines.filter(l => l.label && l.amount);
-                        const qsParams = [...(validLines.length?[`extraLines=${encodeURIComponent(JSON.stringify(validLines))}`]:[]), ...(validDiscs.length?[`discountLines=${encodeURIComponent(JSON.stringify(validDiscs))}`]:[])];
+                        const qsParams = [...(validLines.length?[`extraLines=${encodeURIComponent(JSON.stringify(validLines))}`]:[])];
                         const qs = qsParams.length ? `?${qsParams.join("&")}` : "";
                         const a = document.createElement("a");
                         a.href = authUrl(`/api/container-loads/${billingLoad._id}/combined-invoice-pdf${qs}`);
@@ -2140,8 +2201,7 @@ export default function Containers() {
                         const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/${endpoint}`, {
                           method:"POST", headers:{"Content-Type":"application/json"},
                           body: JSON.stringify({ to: sendPreview.to, subject: sendPreview.subject, body: sendPreview.body,
-                            extraLines: extraLines.filter(l => l.label && l.amount),
-                            discountLines: discountLines.filter(l => l.label && l.amount) }),
+                            extraLines: extraLines.filter(l => l.label && l.amount) }),
                         });
                         const d = await r.json();
                         if (!r.ok) throw new Error(d.error);
