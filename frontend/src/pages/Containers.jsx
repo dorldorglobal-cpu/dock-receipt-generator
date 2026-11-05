@@ -373,6 +373,14 @@ export default function Containers() {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Couldn't save it");
+      // Safety: while a deploy is rolling out, an older server can ignore invoiceId
+      // and split across every order — undo that right away instead of keeping it
+      const saved = (d.discounts || [])[(d.discounts || []).length - 1];
+      if (saved && ((saved.perInvoice || []).length !== 1 || String(saved.perInvoice[0].invoiceId) !== String(invoiceId))) {
+        await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts/${saved._id}`, { method: "DELETE" });
+        await refreshBilling(billingLoad);
+        throw new Error("The server is still updating and spread it across all orders — it was undone. Try again in a minute.");
+      }
       setRowAdj(null);
       await refreshBilling(billingLoad);
       flash(`✅ ${kind === "charge" ? "Line" : "Discount"} of $${Number(amount).toFixed(2)} added to #${refNumber}`);
