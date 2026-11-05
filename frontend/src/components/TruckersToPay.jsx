@@ -29,6 +29,8 @@ export default function TruckersToPay({ onClose, onPaid }) {
   const [proofDrag, setProofDrag] = useState(false);
   const [paying, setPaying]     = useState(false);
   const [msg, setMsg]           = useState("");
+  const [emailOn, setEmailOn]   = useState(true);  // email each paid trucker a receipt
+  const [emails, setEmails]     = useState({});    // trucker name → email (from their vendor record, editable)
 
   const load = async () => {
     setLoading(true);
@@ -71,6 +73,17 @@ export default function TruckersToPay({ onClose, onPaid }) {
   const pickedSum  = pickedRows.reduce((s, r) => s + r.owed, 0);
   const pickedVendors = new Set(pickedRows.map(r => r.vendor.toLowerCase().trim()));
 
+  // Truckers being paid, one entry each (name as on the bills)
+  const pickedTruckers = [...new Map(pickedRows.map(r => [r.vendor.toLowerCase().trim(), r.vendor])).values()];
+  useEffect(() => {
+    const missing = pickedTruckers.filter(n => !(n in emails));
+    if (!missing.length) return;
+    fetch(`${API}/api/expenses/vendor-emails?names=${encodeURIComponent(missing.join("|"))}`)
+      .then(r => r.json()).then(d => setEmails(e => ({ ...Object.fromEntries(missing.map(n => [n, ""])), ...d, ...e })))
+      .catch(() => {});
+  }, [pickedTruckers.join("|")]);
+  const toEmail = pickedTruckers.filter(n => (emails[n] || "").includes("@"));
+
   const setTicks = (ids, on) => {
     setPicked(p => { const n = { ...p }; for (const id of ids) n[id] = on; return n; });
     fetch(`${API}/api/expenses/to-pay`, {
@@ -83,7 +96,8 @@ export default function TruckersToPay({ onClose, onPaid }) {
 
   const paySelected = async () => {
     if (!pickedRows.length) return;
-    if (!window.confirm(`Mark ${pickedRows.length} unit${pickedRows.length === 1 ? "" : "s"} paid — ${fmt$(pickedSum)} by ${method} on ${payDate}?`)) return;
+    const emailNote = emailOn && toEmail.length ? `\n\nAnd email a receipt to ${toEmail.length} trucker${toEmail.length === 1 ? "" : "s"}: ${toEmail.join(", ")}.` : "";
+    if (!window.confirm(`Mark ${pickedRows.length} unit${pickedRows.length === 1 ? "" : "s"} paid — ${fmt$(pickedSum)} by ${method} on ${payDate}?${emailNote}`)) return;
     setPaying(true); setMsg("");
     try {
       const fd = new FormData();
@@ -97,7 +111,27 @@ export default function TruckersToPay({ onClose, onPaid }) {
       const res = await fetch(`${API}/api/expenses/bulk-pay`, { method: "POST", body: fd });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) throw new Error(data.error || "Payment failed");
-      setMsg(`✅ Paid ${pickedRows.length} unit${pickedRows.length === 1 ? "" : "s"} — ${fmt$(pickedSum)} by ${method}`);
+      let emailed = "";
+      if (emailOn && toEmail.length) {
+        // A proof covering several truckers would show each one the others' payments — only attach it for one trucker
+        const attachProof = !!proof && pickedTruckers.length === 1;
+        const rfd = new FormData();
+        rfd.append("payload", JSON.stringify({
+          paidDate: payDate, method, attachProof,
+          vendors: toEmail.map(n => ({ vendor: n, email: emails[n],
+            lines: pickedRows.filter(r => r.vendor.toLowerCase().trim() === n.toLowerCase().trim())
+              .map(r => ({ orderRef: r.orderRef, vehicle: r.vehicle, vin: r.vin, amount: r.owed })) })),
+        }));
+        if (attachProof) rfd.append("proof", proof);
+        try {
+          const rr = await (await fetch(`${API}/api/expenses/send-payment-receipts`, { method: "POST", body: rfd })).json();
+          const ok = (rr.results || []).filter(x => x.sent).length;
+          const bad = (rr.results || []).filter(x => !x.sent);
+          emailed = ` · ✉️ receipt emailed to ${ok} trucker${ok === 1 ? "" : "s"}${bad.length ? ` (failed: ${bad.map(x => x.vendor).join(", ")})` : ""}`;
+        } catch { emailed = " · ⚠️ receipts couldn't be emailed"; }
+      }
+      const noEmail = emailOn ? pickedTruckers.length - toEmail.length : 0;
+      setMsg(`✅ Paid ${pickedRows.length} unit${pickedRows.length === 1 ? "" : "s"} — ${fmt$(pickedSum)} by ${method}${emailed}${noEmail ? ` · ${noEmail} with no email` : ""}`);
       setPicked({}); setProof(null);
       await load();
       onPaid?.();
@@ -214,6 +248,30 @@ export default function TruckersToPay({ onClose, onPaid }) {
             );
           })}
         </div>
+
+        {/* Email receipts to the truckers being paid */}
+        {pickedTruckers.length > 0 && (
+          <div style={{ padding: "8px 22px", borderTop: "1px solid var(--border)", fontSize: 12 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, cursor: "pointer", marginBottom: emailOn ? 6 : 0 }}>
+              <input type="checkbox" checked={emailOn} onChange={e => setEmailOn(e.target.checked)} />
+              ✉️ Email each trucker a payment receipt
+              {emailOn && proof && pickedTruckers.length === 1 && <span style={{ fontWeight: 400, color: "var(--text-muted)" }}> — proof attached</span>}
+              {emailOn && proof && pickedTruckers.length > 1 && <span style={{ fontWeight: 400, color: "#b45309" }}> — proof not attached (it covers several truckers)</span>}
+            </label>
+            {emailOn && (
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: "4px 14px" }}>
+                {pickedTruckers.map(n => (
+                  <div key={n} style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                    <span style={{ flex: "0 0 140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={n}>{n}</span>
+                    <input value={emails[n] ?? ""} onChange={e => setEmails(m => ({ ...m, [n]: e.target.value }))}
+                      placeholder={n in emails ? "no email — type one to send" : "looking up…"}
+                      style={{ ...inp, flex: 1, padding: "4px 8px", fontSize: 12, borderColor: (emails[n] || "").includes("@") ? "var(--border)" : "#f59e0b" }} />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Pay bar */}
         <div style={{ padding: "12px 22px", borderTop: "1px solid var(--border)", display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>

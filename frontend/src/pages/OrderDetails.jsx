@@ -1790,7 +1790,8 @@ export default function OrderDetails() {
           pdfBase64: b64,
           pdfName: drSendModal.pdfName,
           truckerEmail:  truckerList[0] || "",
-          truckerVendor: order.dispatchCarrier || "",
+          // Trucker = the dispatch carrier, else whoever the order's towing bill is from
+          truckerVendor: order.dispatchCarrier || bills.find(b => /towing|transport/i.test(b.category || ""))?.vendor || "",
         }),
       })];
 

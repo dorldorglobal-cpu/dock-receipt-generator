@@ -1139,13 +1139,12 @@ app.post("/api/send-email", express.json({ limit: "20mb" }), async (req, res) =>
 
     console.log(`[Email] Sent to ${to}`);
 
-    // Save trucker email to vendor record when a DR is sent with a trucker address
+    // Save the trucker's email on their vendor record when a DR goes to them —
+    // matched loosely ("Castle Auto" → Castle Auto Transportation) and the record
+    // created if the trucker only exists on bills
     if (truckerEmail && truckerVendor) {
-      const Vendor = require("./models/Vendor");
-      Vendor.findOneAndUpdate(
-        { name: { $regex: `^${truckerVendor.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" }, email: "" },
-        { $set: { email: truckerEmail.trim().toLowerCase() } }
-      ).catch(e => console.warn("[Email] Could not save trucker email:", e.message));
+      require("./utils/vendorMatch").saveVendorEmail(truckerVendor, truckerEmail, "Towing / Transport")
+        .catch(e => console.warn("[Email] Could not save trucker email:", e.message));
     }
 
     res.json({ success: true });

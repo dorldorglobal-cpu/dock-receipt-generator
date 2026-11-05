@@ -54,15 +54,8 @@ function clearStalePayments(exp) {
 }
 
 // ── Payment-proof matching helpers ────────────────────────────────────────────
-// Payee names on bank proofs are shorter/looser than our vendor names ("ACL" vs
-// "ACL / Grimaldi", "SAVANNAH AUTO EXPORT" vs "SAVANNAH AUTO EXPORT LLC.").
-const normVendorName = (s) => (s || "").replace(/['‘’`]/g, "").replace(/\b(LLC|INC|CORP|LTD|CO)\b\.?/gi, "")
-  .replace(/\bTRANSPORTATION\b/gi, "TRANSPORT")
-  .replace(/[^A-Z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toUpperCase();
-const sameVendor = (a, b) => {
-  const x = normVendorName(a), y = normVendorName(b);
-  return !!x && !!y && (x === y || x.startsWith(y + " ") || y.startsWith(x + " "));
-};
+// Vendor-name matching lives in utils/vendorMatch (shared with DR sends and trucker emails)
+const { normVendorName, sameVendor, canonicalVendor } = require("../utils/vendorMatch");
 
 // Plain-text summary of an applied payment proof for the owner email:
 // each vendor with its total, the order/amount lines under it, and a grand total.
@@ -100,29 +93,6 @@ function proofSummary(rows) {
   }
   out.push(`TOTAL: ${money(total)}  (${count} payment${count === 1 ? "" : "s"}, ${byVendor.size} vendor${byVendor.size === 1 ? "" : "s"})`);
   return out.join("\r\n");
-}
-
-// Map a name from a dispatch sheet/proof ("Castle Auto") to the vendor name
-// already in use ("Castle Auto Transportation"), so each new bill doesn't
-// start a new vendor. With several matches, the one with the most bills wins.
-async function canonicalVendor(name) {
-  name = (name || "").trim();
-  if (!name) return name;
-  const counts = await Expense.aggregate([{ $match: { vendor: { $nin: ["", null] } } }, { $group: { _id: "$vendor", n: { $sum: 1 } } }]);
-  const vendorRecs = await Vendor.find({}).select("name").lean();
-  const pool = new Map(counts.map(c => [c._id, c.n]));
-  for (const v of vendorRecs) if (!pool.has(v.name)) pool.set(v.name, 0);
-  const want = normVendorName(name);
-  // Exact match (ignoring case/punctuation/LLC) always counts; a prefix match
-  // only when the shorter name is 2+ words, so "A" doesn't grab "A TO Z"
-  const ok = (n) => {
-    const have = normVendorName(n);
-    if (have === want) return true;
-    const shorter = have.length < want.length ? have : want;
-    return shorter.split(" ").length >= 2 && sameVendor(n, name);
-  };
-  const matches = [...pool.entries()].filter(([n]) => ok(n)).sort((a, b) => b[1] - a[1]);
-  return matches[0]?.[0] || name;
 }
 
 // A proof reference is either one of our order refs ("13815") or a carrier
@@ -2780,6 +2750,79 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
     console.error("parse-payment-proof error:", err);
     res.status(500).json({ error: err.message });
   }
+});
+
+// ── Trucker payment receipts ──────────────────────────────────────────────────
+// GET /api/expenses/vendor-emails?names=A|B — email on file for each vendor name
+router.get("/vendor-emails", async (req, res) => {
+  try {
+    const { vendorEmail } = require("../utils/vendorMatch");
+    const names = (req.query.names || "").split("|").map(n => n.trim()).filter(Boolean);
+    const out = {};
+    for (const n of names) out[n] = await vendorEmail(n);
+    res.json(out);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// POST /api/expenses/send-payment-receipts — multipart: optional "proof" file +
+// "payload" JSON { paidDate, method, attachProof, vendors: [{ vendor, email,
+// lines: [{ orderRef, vehicle, vin, amount }] }] }. One email per trucker
+// listing what was paid; the address is remembered on their vendor record.
+router.post("/send-payment-receipts", memUpload.single("proof"), async (req, res) => {
+  try {
+    const { saveVendorEmail, emailList } = require("../utils/vendorMatch");
+    const { getGmailAccessToken } = require("../utils/gmail");
+    const { b64lines } = require("../utils/mime");
+    const { paidDate, method, attachProof, vendors = [] } = JSON.parse(req.body.payload || "{}");
+    const money = (n) => "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    const d = paidDate && /^\d{4}-\d{2}-\d{2}$/.test(paidDate) ? paidDate.split("-") : null;
+    const dateStr = d ? `${+d[1]}/${+d[2]}/${d[0]}` : new Date().toLocaleDateString("en-US");
+    const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+    const token = await getGmailAccessToken();
+    const results = [];
+
+    for (const v of vendors) {
+      const to = emailList(v.email);
+      if (!to.length) { results.push({ vendor: v.vendor, sent: false, error: "no email" }); continue; }
+      const total = (v.lines || []).reduce((s, l) => s + Number(l.amount || 0), 0);
+      const subject = `Payment sent — ${money(total)} — ${dateStr}`;
+      const body = [
+        `Hello ${v.vendor},`, ``,
+        `We sent you a payment of ${money(total)}${method ? ` by ${method}` : ""} on ${dateStr} for:`, ``,
+        ...(v.lines || []).map(l => `  • #${l.orderRef || "—"}${l.vehicle ? ` ${l.vehicle}` : ""}${l.vin ? ` (VIN …${String(l.vin).slice(-6)})` : ""} — ${money(l.amount)}`),
+        ``, `Total: ${money(total)}`, ``,
+        attachProof && req.file ? `Proof of payment is attached.` : ``,
+        `Thank you,`, `Eli Levy`, `Dor Ldor Global`, `9172003998`, `DorLdorGlobal@gmail.com`,
+      ].join("\r\n");
+
+      const boundary = "DDG_RECEIPT_" + Date.now();
+      const mime = attachProof && req.file ? [
+        `From: ${from}`, `To: ${to.join(", ")}`, `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+        `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`, ``,
+        `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``, body,
+        `--${boundary}`,
+        `Content-Type: ${req.file.mimetype || "application/pdf"}; name="${req.file.originalname}"`,
+        `Content-Transfer-Encoding: base64`,
+        `Content-Disposition: attachment; filename="${req.file.originalname}"`, ``,
+        b64lines(req.file.buffer.toString("base64")), `--${boundary}--`,
+      ] : [
+        `From: ${from}`, `To: ${to.join(", ")}`, `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+        `MIME-Version: 1.0`, `Content-Type: text/plain; charset="UTF-8"`, ``, body,
+      ];
+      try {
+        const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+          method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ raw: Buffer.from(mime.join("\r\n")).toString("base64url") }),
+        });
+        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error?.message || `Gmail ${r.status}`);
+        await saveVendorEmail(v.vendor, to.join(", "), "Towing / Transport").catch(() => {});
+        results.push({ vendor: v.vendor, email: to.join(", "), sent: true });
+      } catch (e) {
+        results.push({ vendor: v.vendor, email: to.join(", "), sent: false, error: e.message });
+      }
+    }
+    res.json({ results });
+  } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 // ── POST /api/expenses/apply-payment-proof — mark the matched bills paid ──────
