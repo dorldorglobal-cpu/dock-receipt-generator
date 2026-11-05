@@ -3771,7 +3771,8 @@ export default function OrderDetails() {
         const extraTowSell = extraTows.reduce((s,t) => s + Number(t.amount||0), 0);
         const extraTowCost = extraTows.reduce((s,t) => s + Number(t.cost||0), 0);
         // Fee rows with non-zero sell values
-        const activeFeeRows = feeRows.filter(([key]) => Number(charges[key] || 0) > 0);
+        // A fee shows once it has a price or a cost (container bills set storage/title costs first)
+        const activeFeeRows = feeRows.filter(([key]) => Number(charges[key] || 0) > 0 || Number(charges[key + "Cost"] || 0) > 0);
         const feeTotal     = activeFeeRows.reduce((s,[key]) => s + Number(charges[key]||0), 0);
         const feeCostTotal = activeFeeRows.reduce((s,[key]) => s + Number(charges[key+"Cost"]||0), 0);
         // Discount — synced from the Invoices tab edit modal; stored as a negative amount

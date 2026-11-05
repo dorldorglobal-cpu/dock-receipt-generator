@@ -1960,6 +1960,8 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         const textVins = [...new Set((text.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/g) || [])
           .filter(v => /[A-Z]/.test(v) && /\d/.test(v)))];
         for (const v of textVins) if (!vinData[v]) vinData[v] = {};
+        // …and only real 17-character VINs (the LLM sometimes adds a last-6 like "014498" as its own car)
+        if (textVins.length) for (const k of Object.keys(vinData)) if (!/^[A-HJ-NPR-Z0-9]{17}$/i.test(k)) delete vinData[k];
         const vins = Object.keys(vinData);
 
         // ── Per-VIN charges, read straight from the invoice lines ────────────────
@@ -1969,6 +1971,7 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         // next line. Everything else (freight, loading, fees) is shared. Identical
         // repeated lines (the same page printed twice) are counted once.
         const vinExtras = {};
+        const vinParts  = {};  // vin → { storage, title } — the extras that get their own cost line on the order
         const seenLines = new Set();
         // The PDF text often glues the VIN to the numbers after it ("…HHF174261.00475.00"),
         // so a ref may run past the VIN — match it as a prefix too
@@ -1991,7 +1994,13 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
           seenLines.add(key);
           if (isHeading) li++;                        // the detail line is consumed
           const amt = parseFloat(amounts[amounts.length - 1].replace(/,/g, ""));
-          if (amt > 0) vinExtras[hit[0]] = (vinExtras[hit[0]] || 0) + amt;
+          if (amt > 0) {
+            vinExtras[hit[0]] = (vinExtras[hit[0]] || 0) + amt;
+            // The section label is often the line above ("DOCUMENT" over "2017 Tucson VIN: …")
+            const kind = isHeading ? lc : `${lines[li - 1] || ""} ${line}`.toLowerCase();
+            const part = /storage/.test(kind) ? "storage" : /title|document/.test(kind) ? "title" : null;
+            if (part) (vinParts[hit[0]] ||= {})[part] = ((vinParts[hit[0]] || {})[part] || 0) + amt;
+          }
         }
 
         const storageTotal = Object.values(vinExtras).reduce((sum, n) => sum + n, 0);
@@ -2033,6 +2042,8 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
             vin,
             ymm:          (order ? [order.year, order.make, order.model].filter(Boolean).join(" ") : "") || d.ymm,
             total:        rowTotal,
+            storage:      vinParts[vin]?.storage || 0,   // → order's "Storage Fee – Warehouse" cost
+            title:        vinParts[vin]?.title   || 0,   // → order's "Title Processing Fee" cost
             orderId:      order?._id || null,
             orderRef:     order?.refNumber || "",
             customerName: order?.customerName || "",
@@ -2113,13 +2124,15 @@ router.post("/apply-container", express.json(), async (req, res) => {
           billMime:      invoice.billMime     || "",
         });
 
-        // Update order's oceanCost so it appears in P&L
+        // The bill is the real cost — it replaces the pricing-table estimate. Storage and
+        // title service on the bill get their own cost lines; the rest is ocean freight.
         if (orderId && row.total) {
-          const ord = await Order.findById(orderId).select("charges").lean();
-          const existing = parseFloat(ord?.charges?.oceanCost || 0);
-          if (!existing || existing === 0) {
-            await Order.findByIdAndUpdate(orderId, { $set: { "charges.oceanCost": String(row.total) } });
-          }
+          const storage = Math.round((Number(row.storage) || 0) * 100) / 100;
+          const title   = Math.round((Number(row.title)   || 0) * 100) / 100;
+          const set = { "charges.oceanCost": String(Math.round((row.total - storage - title) * 100) / 100) };
+          if (storage > 0) set["charges.storageWarehouseFeeCost"] = String(storage);
+          if (title   > 0) set["charges.titleProcessingFeeCost"]  = String(title);
+          await Order.findByIdAndUpdate(orderId, { $set: set });
         }
         created++;
       }
