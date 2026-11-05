@@ -1955,60 +1955,49 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         const { invoiceNumber, billDate, vendor, container, booking, total, vinData } = parsedInvoice;
 
         const lines = text.split("\n");
-        const vins  = Object.keys(vinData);
+        // Every full VIN printed on the invoice counts, even ones the parser missed
+        // (the LLM sometimes drops a car from a 4-car container)
+        const textVins = [...new Set((text.toUpperCase().match(/\b[A-HJ-NPR-Z0-9]{17}\b/g) || [])
+          .filter(v => /[A-Z]/.test(v) && /\d/.test(v)))];
+        for (const v of textVins) if (!vinData[v]) vinData[v] = {};
+        const vins = Object.keys(vinData);
 
-        // ── Per-VIN storage/extra charges ────────────────────────────────────────
-        // Prefer whatever the parser (LLM, or regex as fallback) already attributed
-        // per VIN — it isn't fooled by a "Storage Fee" heading and its per-vehicle
-        // detail line landing on different pages of the extracted text. The line-
-        // adjacency scan below only fills in VINs the parser didn't already cover.
+        // ── Per-VIN charges, read straight from the invoice lines ────────────────
+        // A charge line that names one car — its full VIN or "VIN: F17426" — belongs
+        // to that car (title service, storage, detention…); its line total is the
+        // last amount on the line. A "Storage Fee" heading's detail can sit on the
+        // next line. Everything else (freight, loading, fees) is shared. Identical
+        // repeated lines (the same page printed twice) are counted once.
         const vinExtras = {};
-        for (const vin of vins) {
-          if (vinData[vin]?.extra) vinExtras[vin] = vinData[vin].extra;
-        }
-
-        // "Storage Fee" heading appears on its own line; the detail (with partial VIN + amount)
-        // is on the NEXT line. Also handle inline storage/extra charge lines.
-        const seenPartials = new Set(); // dedupe duplicate pages
-
+        const seenLines = new Set();
+        // The PDF text often glues the VIN to the numbers after it ("…HHF174261.00475.00"),
+        // so a ref may run past the VIN — match it as a prefix too
+        const vinOfRef = (ref) => vins.filter(v => { v = v.toUpperCase();
+          return v.endsWith(ref) || ref.startsWith(v) || (ref.length >= 8 && v.includes(ref)); });
         for (let li = 0; li < lines.length; li++) {
-          const lc = lines[li].toLowerCase();
-          const isHeading = lc.trim() === "storage fee" || lc.trim() === "storage"
-            || lc.trim() === "detention" || lc.trim() === "extra charges";
-          // Candidate line: either the heading's next line, or a line that mentions storage + has VIN ref
-          const candidates = isHeading && li + 1 < lines.length
-            ? [lines[li + 1]]
-            : (lc.includes("storage") || lc.includes("detention") ? [lines[li]] : []);
-
-          for (const cline of candidates) {
-            const lineNums = cline.match(/[\d,]+\.\d{2}/g);
-            if (!lineNums) continue;
-            const lineAmt = parseFloat(lineNums[lineNums.length - 1].replace(/,/g, ""));
-            if (!lineAmt) continue;
-
-            // Find partial VIN reference (after "VIN:" or standalone 6-char hex-like)
-            const pm = cline.match(/VIN[:\s#]*([A-HJ-NPR-Z0-9]{4,})/i)
-              || cline.match(/\b([A-HJ-NPR-Z0-9]{6})\b/g);
-            const partials = pm
-              ? (Array.isArray(pm) ? pm.map(m => m.replace(/VIN[:\s#]*/i, "").toUpperCase()) : [pm[1].toUpperCase()])
-              : [];
-
-            for (const partial of partials) {
-              const key = partial + lineAmt;
-              if (seenPartials.has(key)) continue; // skip duplicate page
-              const matchedVin = vins.find(v => v.toUpperCase().endsWith(partial) || v.toUpperCase().includes(partial));
-              // Skip VINs the parser already attributed an extra charge to, so this
-              // backstop scan can't double-count on top of the LLM's own answer.
-              if (matchedVin && !vinData[matchedVin]?.extra) {
-                seenPartials.add(key);
-                vinExtras[matchedVin] = (vinExtras[matchedVin] || 0) + lineAmt;
-              }
-            }
-          }
+          const lc = lines[li].trim().toLowerCase();
+          const isHeading = ["storage fee", "storage", "detention", "extra charges"].includes(lc);
+          const line = isHeading && li + 1 < lines.length ? lines[li + 1] : lines[li];
+          const amounts = line.match(/\d[\d,]*\.\d{2}/g);
+          if (!amounts) continue;
+          const refs = [
+            ...(line.toUpperCase().match(/(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}/g) || []),
+            ...[...line.matchAll(/VIN[:\s#]*([A-HJ-NPR-Z0-9]{6,})/gi)].map(m => m[1].toUpperCase()),
+          ];
+          const hit = [...new Set(refs.flatMap(vinOfRef))];
+          if (hit.length !== 1) continue;            // no car, or several cars on one line — shared
+          const key = line.trim();
+          if (seenLines.has(key)) continue;
+          seenLines.add(key);
+          if (isHeading) li++;                        // the detail line is consumed
+          const amt = parseFloat(amounts[amounts.length - 1].replace(/,/g, ""));
+          if (amt > 0) vinExtras[hit[0]] = (vinExtras[hit[0]] || 0) + amt;
         }
 
         const storageTotal = Object.values(vinExtras).reduce((sum, n) => sum + n, 0);
-        const hasPerVinPricing = vins.some(v => vinData[v].lineTotal && vinData[v].lineTotal > 0);
+        // The LLM's per-VIN prices are only trusted when they add up to the invoice total
+        const llmSum = vins.reduce((s, v) => s + (vinData[v].lineTotal || 0), 0);
+        const hasPerVinPricing = vins.every(v => vinData[v].lineTotal > 0) && Math.abs(llmSum + storageTotal - total) < 0.05;
         const baseTotal  = total - storageTotal;
         const equalSplit = vins.length > 0 ? Math.round((baseTotal / vins.length) * 100) / 100 : total;
 
