@@ -107,11 +107,10 @@ router.post("/merge", async (req, res) => {
       await AddressBook.findByIdAndUpdate(keepId, { $set: updates });
     }
 
-    // Re-point all orders that used the deleted customer's name
-    await Order.updateMany(
-      { customerName: { $regex: `^${esc(del.companyName)}$`, $options: "i" } },
-      { $set: { customerName: keep.companyName } }
-    );
+    // Re-point all orders and invoices that used the deleted customer's name
+    const sameName = { customerName: { $regex: `^${esc(del.companyName)}$`, $options: "i" } };
+    await Order.updateMany(sameName, { $set: { customerName: keep.companyName } });
+    await require("../models/Invoice").updateMany(sameName, { $set: { customerName: keep.companyName } });
 
     await AddressBook.findByIdAndDelete(deleteId);
     res.json({ success: true });
@@ -128,13 +127,10 @@ router.post("/", async (req, res) => {
     if (!companyName || !companyName.trim()) {
       return res.status(400).json({ error: "Company name is required." });
     }
-    // Check for duplicate
-    const exists = await AddressBook.findOne({
-      companyName: { $regex: `^${esc(companyName.trim())}$`, $options: "i" },
-      type: "customer",
-    });
+    // Check for duplicate — also catches the same name with/without LTD, CO, INC…
+    const exists = await require("../utils/customerMatch").findSimilarCustomer(companyName);
     if (exists) {
-      return res.status(400).json({ error: `A customer named "${companyName}" already exists.` });
+      return res.status(400).json({ error: `This customer already exists as "${exists.companyName}".` });
     }
     const customer = await AddressBook.create({ ...req.body, type: "customer" });
     res.status(201).json(customer);

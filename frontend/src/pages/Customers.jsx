@@ -367,14 +367,11 @@ export default function Customers() {
   };
 
   // ── Duplicate detection ──────────────────────────────────────────────────────
-  // Normalize name: lowercase, collapse spaces, expand common abbreviations
-  const normName = (s) => (s || "").trim().toLowerCase()
-    .replace(/\blimited\b/g, "ltd")
-    .replace(/\bincorporated\b/g, "inc")
-    .replace(/\bcompany\b/g, "co")
-    .replace(/[-_.]/g, " ")
-    .replace(/\s+/g, " ")
-    .trim();
+  // Same name apart from LTD/CO/INC/punctuation = same customer (matches backend/utils/customerMatch.js)
+  const normName = (s) => (s || "").toUpperCase()
+    .replace(/['‘’`]/g, "")
+    .replace(/\b(LTD|LIMITED|CO|COMPANY|INC|INCORPORATED|LLC|CORP|CORPORATION|PLC)\b\.?/g, " ")
+    .replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
 
   const nameCount = {};
   customers.forEach(c => {

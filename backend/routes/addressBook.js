@@ -67,6 +67,18 @@ router.get("/", async (req, res) => {
 // CREATE ADDRESS BOOK ENTRY
 router.post("/", async (req, res) => {
   try {
+    // A customer that already exists under a near-identical name ("… LTD") is
+    // reused — its blank fields filled in — instead of becoming a duplicate
+    if (/^customer$/i.test(req.body?.type || "") && req.body?.companyName) {
+      const existing = await require("../utils/customerMatch").findSimilarCustomer(req.body.companyName);
+      if (existing) {
+        for (const f of ["contactName", "phone", "email", "address", "city", "state", "postalCode", "country", "defaultPod", "consignee"]) {
+          if (!existing[f] && req.body[f]) existing[f] = req.body[f];
+        }
+        await existing.save();
+        return res.status(200).json({ ...existing.toObject(), existing: true });
+      }
+    }
     const entry = await AddressBook.create(req.body);
     res.status(201).json(entry);
   } catch (err) {
