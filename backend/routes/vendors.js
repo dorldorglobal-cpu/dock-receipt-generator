@@ -2,6 +2,7 @@ const express = require("express");
 const router  = express.Router();
 const Vendor  = require("../models/Vendor");
 const Expense = require("../models/Expense");
+const Order   = require("../models/Order");
 
 const esc = (s) => (s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -246,6 +247,71 @@ router.post("/", async (req, res) => {
   } catch (err) {
     console.error("Vendor create error:", err);
     res.status(500).json({ error: "Failed to create vendor" });
+  }
+});
+
+// ── GET /api/vendors/email-suggestions — trucker emails recoverable from DRs
+// already sent ("DR Sent — Driver: x@y" on the order timeline), for truckers
+// with no email on file. Each comes with flags so doubtful ones get a look:
+// shared (same email turned up for another trucker), multiple (more than one
+// address), odd (doesn't end like a normal address, e.g. "gmail.comg").
+router.get("/email-suggestions", async (req, res) => {
+  try {
+    const { makeCanonicalizer, emailList } = require("../utils/vendorMatch");
+    const canon = await makeCanonicalizer();
+    const [orders, towing, vendors] = await Promise.all([
+      Order.find({ "timeline.action": "DR Sent" }).select("refNumber dispatchCarrier timeline").lean(),
+      Expense.find({ category: "Towing / Transport", orderRef: { $nin: ["", null] } }).select("orderRef vendor").lean(),
+      Vendor.find({}).select("name email").lean(),
+    ]);
+    const towByRef = Object.fromEntries(towing.map(e => [e.orderRef, e.vendor]));
+    const hasEmail = new Set(vendors.filter(v => emailList(v.email).length).map(v => v.name.toLowerCase().trim()));
+
+    const byVendor = new Map();   // trucker → { emails: Map(email → count), orders: Set }
+    const byEmail  = new Map();   // email → Set(trucker)
+    for (const o of orders) {
+      const emails = o.timeline.filter(t => t.action === "DR Sent")
+        .flatMap(t => emailList((t.details || "").match(/Driver:\s*([^|]+)/i)?.[1] || ""));
+      if (!emails.length) continue;
+      const name = canon(o.dispatchCarrier || towByRef[o.refNumber] || "");
+      if (!name || hasEmail.has(name.toLowerCase().trim())) continue;
+      if (!byVendor.has(name)) byVendor.set(name, { emails: new Map(), orders: new Set() });
+      const v = byVendor.get(name);
+      v.orders.add(o.refNumber);
+      for (const e of emails) {
+        v.emails.set(e, (v.emails.get(e) || 0) + 1);
+        (byEmail.get(e) || byEmail.set(e, new Set()).get(e)).add(name);
+      }
+    }
+
+    const okEnding = /\.(com|net|org|us|biz|info|co|io|me|edu|gov|ca|mx)$/i;
+    const out = [...byVendor.entries()].map(([vendor, v]) => {
+      const ranked = [...v.emails.entries()].sort((a, b) => b[1] - a[1]);
+      const email = ranked[0][0];
+      const sharedWith = [...(byEmail.get(email) || [])].filter(n => n !== vendor);
+      const flags = [];
+      if (sharedWith.length) flags.push(`also used for ${sharedWith.slice(0, 2).join(", ")}${sharedWith.length > 2 ? "…" : ""}`);
+      if (ranked.length > 1) flags.push(`${ranked.length} different addresses`);
+      if (!okEnding.test(email)) flags.push("address looks mistyped");
+      return { vendor, email, others: ranked.slice(1).map(r => r[0]), drCount: v.orders.size, orders: [...v.orders].slice(-3), flags };
+    }).sort((a, b) => a.flags.length - b.flags.length || a.vendor.localeCompare(b.vendor));
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── POST /api/vendors/save-emails — body { items: [{ vendor, email }] }
+router.post("/save-emails", async (req, res) => {
+  try {
+    const { saveVendorEmail } = require("../utils/vendorMatch");
+    let saved = 0;
+    for (const { vendor, email } of (req.body?.items || [])) {
+      if (vendor && email && await saveVendorEmail(vendor, email, "Towing / Transport")) saved++;
+    }
+    res.json({ saved });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
   }
 });
 

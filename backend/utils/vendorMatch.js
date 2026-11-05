@@ -18,25 +18,32 @@ const sameVendor = (a, b) => {
 
 // Map a name ("Castle Auto") to the vendor name already in use ("Castle Auto
 // Transportation"), so each new bill doesn't start a new vendor. With several
-// matches, the one with the most bills wins.
-async function canonicalVendor(name) {
-  name = (name || "").trim();
-  if (!name) return name;
+// matches, the one with the most bills wins. makeCanonicalizer loads the
+// vendor list once for matching many names in a row.
+async function makeCanonicalizer() {
   const counts = await Expense.aggregate([{ $match: { vendor: { $nin: ["", null] } } }, { $group: { _id: "$vendor", n: { $sum: 1 } } }]);
   const vendorRecs = await Vendor.find({}).select("name").lean();
   const pool = new Map(counts.map(c => [c._id, c.n]));
   for (const v of vendorRecs) if (!pool.has(v.name)) pool.set(v.name, 0);
-  const want = normVendorName(name);
-  // Exact match (ignoring case/punctuation/LLC) always counts; a prefix match
-  // only when the shorter name is 2+ words, so "A" doesn't grab "A TO Z"
-  const ok = (n) => {
-    const have = normVendorName(n);
-    if (have === want) return true;
-    const shorter = have.length < want.length ? have : want;
-    return shorter.split(" ").length >= 2 && sameVendor(n, name);
+  const entries = [...pool.entries()];
+  return (name) => {
+    name = (name || "").trim();
+    if (!name) return name;
+    const want = normVendorName(name);
+    // Exact match (ignoring case/punctuation/LLC) always counts; a prefix match
+    // only when the shorter name is 2+ words, so "A" doesn't grab "A TO Z"
+    const ok = (n) => {
+      const have = normVendorName(n);
+      if (have === want) return true;
+      const shorter = have.length < want.length ? have : want;
+      return shorter.split(" ").length >= 2 && sameVendor(n, name);
+    };
+    const matches = entries.filter(([n]) => ok(n)).sort((a, b) => b[1] - a[1]);
+    return matches[0]?.[0] || name;
   };
-  const matches = [...pool.entries()].filter(([n]) => ok(n)).sort((a, b) => b[1] - a[1]);
-  return matches[0]?.[0] || name;
+}
+async function canonicalVendor(name) {
+  return (await makeCanonicalizer())(name);
 }
 
 const exactName = (n) => ({ $regex: `^${n.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`, $options: "i" });
@@ -68,4 +75,4 @@ async function saveVendorEmail(name, email, category = "") {
   return rec.save();
 }
 
-module.exports = { normVendorName, sameVendor, canonicalVendor, vendorEmail, saveVendorEmail, emailList };
+module.exports = { normVendorName, sameVendor, makeCanonicalizer, canonicalVendor, vendorEmail, saveVendorEmail, emailList };

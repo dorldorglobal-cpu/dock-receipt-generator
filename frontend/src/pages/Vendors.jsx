@@ -195,6 +195,36 @@ export default function Vendors() {
   const [detailVendor, setDetailVendor] = useState(null);
   const [confirmDelete, setConfirmDelete] = useState(null);
 
+  // Recover trucker emails from DRs already sent — reviewed before saving
+  const [emailReview, setEmailReview] = useState(null); // null = closed; [] = loaded; "loading"
+  const [emailPick, setEmailPick]     = useState({});   // vendor → { on, email }
+  const [emailSaving, setEmailSaving] = useState(false);
+  const [emailMsg, setEmailMsg]       = useState("");
+  const openEmailReview = async () => {
+    setEmailReview("loading"); setEmailMsg("");
+    try {
+      const data = await (await fetch(`${API}/api/vendors/email-suggestions`)).json();
+      const list = Array.isArray(data) ? data : [];
+      setEmailReview(list);
+      // Clean suggestions are pre-ticked; flagged ones wait for a look
+      setEmailPick(Object.fromEntries(list.map(x => [x.vendor, { on: !x.flags.length, email: x.email }])));
+    } catch (e) { setEmailReview([]); setEmailMsg("❌ " + e.message); }
+  };
+  const saveEmails = async () => {
+    const items = Object.entries(emailPick).filter(([, v]) => v.on && v.email.includes("@")).map(([vendor, v]) => ({ vendor, email: v.email }));
+    if (!items.length) return;
+    setEmailSaving(true); setEmailMsg("");
+    try {
+      const r = await fetch(`${API}/api/vendors/save-emails`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ items }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Save failed");
+      setEmailMsg(`✅ Saved emails for ${d.saved} trucker${d.saved === 1 ? "" : "s"}`);
+      fetchVendors();
+      await openEmailReview();
+    } catch (e) { setEmailMsg("❌ " + e.message); }
+    setEmailSaving(false);
+  };
+
   // Merge a duplicate vendor into another
   const [mergeFrom, setMergeFrom]   = useState(null); // vendor row being merged away
   const [mergeInto, setMergeInto]   = useState("");
@@ -383,6 +413,9 @@ export default function Vendors() {
           </p>
         </div>
         <div style={{ display:"flex",gap:10 }}>
+          <button onClick={openEmailReview} title="Find trucker emails from DRs you've already sent" style={{ background:"var(--bg-panel)",color:"var(--text-secondary)",border:"1px solid var(--border)",borderRadius:8,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer" }}>
+            📧 Recover trucker emails
+          </button>
           <button onClick={() => { setParseStep("paste"); setShowDoc(true); }} style={{ background:"#7c3aed",color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer" }}>
             📄 Add from Invoice / Dispatch
           </button>
@@ -591,6 +624,68 @@ export default function Vendors() {
               <button onClick={closeWave} style={{ background:"#3b82f6",color:"#fff",border:"none",borderRadius:7,padding:"10px 28px",fontSize:14,fontWeight:600,cursor:"pointer" }}>Done</button>
             </div>
           )}
+        </Modal>
+      )}
+
+      {/* ── Recover trucker emails ───────────────────────────────────────────── */}
+      {emailReview && (
+        <Modal title="📧 Recover trucker emails" onClose={() => setEmailReview(null)} wide>
+          {emailReview === "loading" ? (
+            <p style={{ color:"var(--text-muted)" }}>Looking through DRs you've sent…</p>
+          ) : (() => {
+            const list = emailReview;
+            const onCount = list.filter(x => emailPick[x.vendor]?.on && (emailPick[x.vendor]?.email || "").includes("@")).length;
+            const flagged = list.filter(x => x.flags.length).length;
+            const setAll = (fn) => setEmailPick(p => Object.fromEntries(list.map(x => [x.vendor, { ...p[x.vendor], on: fn(x) }])));
+            return (<>
+              <p style={{ margin:"0 0 10px",fontSize:13,color:"var(--text-secondary)" }}>
+                Emails found on DRs already sent, for <strong>{list.length}</strong> trucker{list.length === 1 ? "" : "s"} with none on file.
+                {flagged > 0 && <> <strong style={{ color:"#b45309" }}>{flagged} flagged</strong> — check those before ticking.</>} You can edit any address.
+              </p>
+              <div style={{ display:"flex",gap:8,marginBottom:10,flexWrap:"wrap" }}>
+                <button onClick={() => setAll(x => !x.flags.length)} style={{ background:"none",border:"1px solid var(--border)",borderRadius:6,padding:"4px 10px",fontSize:12,cursor:"pointer",color:"var(--text-secondary)" }}>Tick clean only</button>
+                <button onClick={() => setAll(() => true)} style={{ background:"none",border:"1px solid var(--border)",borderRadius:6,padding:"4px 10px",fontSize:12,cursor:"pointer",color:"var(--text-secondary)" }}>Tick all</button>
+                <button onClick={() => setAll(() => false)} style={{ background:"none",border:"1px solid var(--border)",borderRadius:6,padding:"4px 10px",fontSize:12,cursor:"pointer",color:"var(--text-secondary)" }}>Untick all</button>
+              </div>
+              <div style={{ maxHeight:"55vh",overflowY:"auto",border:"1px solid var(--border)",borderRadius:8 }}>
+                <table style={{ width:"100%",borderCollapse:"collapse",fontSize:12 }}>
+                  <thead><tr style={{ background:"var(--bg-hover)",position:"sticky",top:0 }}>
+                    {["", "Trucker", "Email", "DRs", "Check"].map(h => <th key={h} style={{ textAlign:"left",padding:"6px 8px",fontSize:11,color:"var(--text-muted)" }}>{h}</th>)}
+                  </tr></thead>
+                  <tbody>
+                    {list.map(x => {
+                      const pick = emailPick[x.vendor] || { on:false, email:x.email };
+                      return (
+                        <tr key={x.vendor} style={{ borderTop:"1px solid var(--border-muted)", background: x.flags.length ? "rgba(251,191,36,0.06)" : "transparent" }}>
+                          <td style={{ padding:"5px 8px" }}><input type="checkbox" checked={!!pick.on} onChange={e => setEmailPick(p => ({ ...p, [x.vendor]: { ...pick, on: e.target.checked } }))} /></td>
+                          <td style={{ padding:"5px 8px",fontWeight:600 }}>{x.vendor}</td>
+                          <td style={{ padding:"5px 8px" }}>
+                            <input list={`em-${x.vendor}`} value={pick.email} onChange={e => setEmailPick(p => ({ ...p, [x.vendor]: { ...pick, email: e.target.value } }))}
+                              style={{ width:"100%",boxSizing:"border-box",background:"var(--bg-base)",border:"1px solid var(--border)",borderRadius:5,padding:"3px 7px",fontSize:12,color:"var(--text-primary)" }} />
+                            {x.others.length > 0 && <datalist id={`em-${x.vendor}`}>{[x.email, ...x.others].map(o => <option key={o} value={o} />)}</datalist>}
+                          </td>
+                          <td style={{ padding:"5px 8px",color:"var(--text-muted)",whiteSpace:"nowrap" }} title={`e.g. orders ${x.orders.join(", ")}`}>{x.drCount}</td>
+                          <td style={{ padding:"5px 8px",color:"#b45309" }}>
+                            {x.flags.join(" · ")}
+                            {x.others.length > 0 && <div style={{ color:"var(--text-muted)" }}>also: {x.others.join(", ")}</div>}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {!list.length && <tr><td colSpan={5} style={{ padding:20,textAlign:"center",color:"var(--text-muted)" }}>Every trucker with a DR on file already has an email. 🎉</td></tr>}
+                  </tbody>
+                </table>
+              </div>
+              <div style={{ display:"flex",alignItems:"center",gap:10,justifyContent:"flex-end",marginTop:12 }}>
+                {emailMsg && <span style={{ fontSize:12,marginRight:"auto" }}>{emailMsg}</span>}
+                <button onClick={() => setEmailReview(null)} style={{ background:"var(--border)",color:"var(--text-secondary)",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,cursor:"pointer" }}>Close</button>
+                <button onClick={saveEmails} disabled={emailSaving || !onCount}
+                  style={{ background:"#2563eb",color:"#fff",border:"none",borderRadius:7,padding:"8px 18px",fontSize:13,fontWeight:600,cursor:"pointer",opacity:(emailSaving || !onCount) ? 0.5 : 1 }}>
+                  {emailSaving ? "Saving…" : `Save ${onCount} email${onCount === 1 ? "" : "s"}`}
+                </button>
+              </div>
+            </>);
+          })()}
         </Modal>
       )}
 
