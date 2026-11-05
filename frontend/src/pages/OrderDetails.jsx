@@ -462,6 +462,12 @@ export default function OrderDetails() {
   const [invoiceNotes,   setInvoiceNotes]   = useState("");
   const [invoiceSaving,  setInvoiceSaving]  = useState(false);
   const [orderInvoices,  setOrderInvoices]  = useState([]);  // invoices created for this order
+  // When an invoice was paid: its latest payment date, else when it was marked paid
+  const invPaidDate = (inv) => {
+    const dates = (inv.payments || []).map(p => p.date && new Date(p.date)).filter(d => d && !isNaN(d));
+    if (dates.length) return new Date(Math.max(...dates));
+    return inv.paidAt ? new Date(inv.paidAt) : null;
+  };
 
   // ── Bills ────────────────────────────────────────────────────────────────────
   const [bills, setBills]                     = useState([]);
@@ -2589,10 +2595,14 @@ export default function OrderDetails() {
             ✅ {label} {new Date(entry.createdAt).toLocaleDateString("en-US",{month:"short",day:"numeric"})}
           </span>
         ) : null;
+        // Paid date = the last payment recorded on the order's invoices (or when it was marked paid)
+        const lastPaid = orderInvoices.length && orderInvoices.every(i => i.status === "paid")
+          ? orderInvoices.map(invPaidDate).filter(Boolean).sort((a, b) => b - a)[0] : null;
         return (
           <div style={{ display:"flex", gap:8, marginBottom:6, flexWrap:"wrap", alignItems:"center" }}>
             {sentBadge(drSentEntry, "DR Sent")}
             {sentBadge(invSentEntry, "Invoice Sent")}
+            {lastPaid && sentBadge({ createdAt: lastPaid }, "Invoice Paid")}
           </div>
         );
       })()}
@@ -2611,7 +2621,12 @@ export default function OrderDetails() {
               {anyPaid && !allPaid && (
                 <span style={{ fontSize:12, color:"#34d399", fontWeight:600 }}>· {fmt(paidTotal)} paid</span>
               )}
-              {allPaid && <span style={{ fontSize:12, color:"#34d399", fontWeight:700 }}>✓ PAID</span>}
+              {allPaid && (() => {
+                const paidOn = orderInvoices.map(invPaidDate).filter(Boolean).sort((a, b) => b - a)[0];
+                return <span style={{ fontSize:12, color:"#34d399", fontWeight:700 }}>
+                  ✓ PAID{paidOn ? ` ${paidOn.toLocaleDateString("en-US", { month:"short", day:"numeric", year:"numeric" })}` : ""}
+                </span>;
+              })()}
             </div>
             {(order.voyage || order.arrivalDate) && (
               <div style={{ display:"flex", alignItems:"center", gap:10, background:"rgba(107,114,128,0.08)", border:"1px solid var(--border)", borderRadius:10, padding:"7px 16px" }}>
