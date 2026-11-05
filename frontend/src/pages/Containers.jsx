@@ -358,9 +358,13 @@ export default function Containers() {
   const rowDiscount = (row) => (row.invoice?.items || []).reduce((s, i) => s + (Number(i.amount) < 0 ? -Number(i.amount) : 0), 0);
   const applyRowAdj = async () => {
     const { invoiceId, refNumber, kind, label, amount } = rowAdj;
-    const existing = appliedDiscounts.filter(d => (d.kind || "discount") === kind && (d.perInvoice || []).some(x => String(x.invoiceId) === String(invoiceId)));
+    // Only this order's own adjustments count here — a container-wide split is separate
+    const existing = appliedDiscounts.filter(d => (d.kind || "discount") === kind && (d.perInvoice || []).length === 1
+      && String(d.perInvoice[0].invoiceId) === String(invoiceId));
+    const what = kind === "charge" ? "line" : "discount";
     if (existing.length && !window.confirm(
-      `#${refNumber} already has ${kind === "charge" ? "an extra line" : "a discount"} (${existing.map(d => d.label).join(", ")}).\n\nAdd another?`)) return;
+      `#${refNumber} already has its own ${what}: ${existing.map(d => `${d.label} $${Number(d.amount).toFixed(2)}`).join(", ")}.\n\n` +
+      `Add another $${Number(amount).toFixed(2)} ${what} to #${refNumber} only?`)) return;
     setDiscountBusy(true);
     try {
       const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts`, {
