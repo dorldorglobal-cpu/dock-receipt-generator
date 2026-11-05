@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { useNavigate, useLocation } from "react-router-dom";
 import { authUrl } from "../lib/auth";
 
@@ -197,6 +197,7 @@ export default function Containers() {
   const [discountLines, setDiscountLines] = useState([]); // [{ label, amount }] — typed but not applied yet
   const [appliedDiscounts, setAppliedDiscounts] = useState([]); // load.discounts — saved on each invoice
   const [discountBusy, setDiscountBusy] = useState(false);
+  const [rowAdj, setRowAdj] = useState(null); // { orderId, invoiceId, refNumber, kind, label, amount } — + line / + discount on one order
   const [sendingAll,    setSendingAll]    = useState(false);
   const [sendResults,   setSendResults]   = useState(null);
   const [sendPreview,   setSendPreview]   = useState(null); // { to, subject, body }
@@ -353,15 +354,36 @@ export default function Containers() {
     } catch (e) { flash("❌ " + e.message); }
     setDiscountBusy(false);
   };
+  // Discount on one billing row = the minus lines on its invoice (container or per-order)
+  const rowDiscount = (row) => (row.invoice?.items || []).reduce((s, i) => s + (Number(i.amount) < 0 ? -Number(i.amount) : 0), 0);
+  const applyRowAdj = async () => {
+    const { invoiceId, refNumber, kind, label, amount } = rowAdj;
+    const existing = appliedDiscounts.filter(d => (d.kind || "discount") === kind && (d.perInvoice || []).some(x => String(x.invoiceId) === String(invoiceId)));
+    if (existing.length && !window.confirm(
+      `#${refNumber} already has ${kind === "charge" ? "an extra line" : "a discount"} (${existing.map(d => d.label).join(", ")}).\n\nAdd another?`)) return;
+    setDiscountBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ kind, label, amount, invoiceId }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't save it");
+      setRowAdj(null);
+      await refreshBilling(billingLoad);
+      flash(`✅ ${kind === "charge" ? "Line" : "Discount"} of $${Number(amount).toFixed(2)} added to #${refNumber}`);
+    } catch (e) { flash("❌ " + e.message); }
+    setDiscountBusy(false);
+  };
   const removeDiscount = async (disc) => {
-    if (!window.confirm(`Remove the "${disc.label}" discount ($${Number(disc.amount).toFixed(2)}) from every invoice?`)) return;
+    if (!window.confirm(`Remove "${disc.label}" ($${Number(disc.amount).toFixed(2)}) from ${(disc.perInvoice || []).length > 1 ? "every invoice" : "the invoice"}?`)) return;
     setDiscountBusy(true);
     try {
       const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts/${disc._id}`, { method: "DELETE" });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Couldn't remove the discount");
       await refreshBilling(billingLoad);
-      flash("✅ Discount removed");
+      flash("✅ Removed");
     } catch (e) { flash("❌ " + e.message); }
     setDiscountBusy(false);
   };
@@ -1894,6 +1916,7 @@ export default function Containers() {
                         <th style={{ padding:"6px 8px" }}>Customer</th>
                         <th style={{ padding:"6px 8px", textAlign:"right" }}>Expenses</th>
                         <th style={{ padding:"6px 8px", textAlign:"right" }}>Invoice</th>
+                        <th style={{ padding:"6px 8px", textAlign:"right" }}>Discount</th>
                         <th style={{ padding:"6px 8px", textAlign:"right" }}>Profit</th>
                         <th style={{ padding:"6px 8px", textAlign:"center" }}>Status</th>
                       </tr>
@@ -1902,12 +1925,34 @@ export default function Containers() {
                       {billingRows.map(row => {
                         const hasInvoice = !!row.invoice;
                         const returnUrl = `/orders/${row.orderId}?returnTo=billing&loadId=${billingLoad._id}`;
+                        const rowAdjs = hasInvoice ? appliedDiscounts.flatMap(d => (d.perInvoice || [])
+                          .filter(x => String(x.invoiceId) === String(row.invoice._id))
+                          .map(x => ({ ...x, label: d.label, kind: d.kind || "discount" }))) : [];
+                        const openAdj = rowAdj?.orderId === row.orderId;
                         return (
-                        <tr key={row.refNumber} style={{ borderBottom:"1px solid var(--border)",
+                        <Fragment key={row.refNumber}>
+                        <tr style={{ borderBottom: openAdj ? "none" : "1px solid var(--border)",
                           background: hasInvoice ? "rgba(52,211,153,0.07)" : "rgba(251,191,36,0.06)" }}>
                           <td style={{ padding:"10px 8px", fontWeight:600 }}>
                             <a href={returnUrl}
                               style={{ color:"#60a5fa", textDecoration:"none" }}>#{row.refNumber}</a>
+                            {rowAdjs.map((x, i) => (
+                              <div key={i} style={{ fontSize:10, fontWeight:500, color: x.kind === "charge" ? "#15803d" : "#dc2626", marginTop:2 }}>
+                                {x.kind === "charge" ? "+" : "−"}${Number(x.amount).toFixed(2)} {x.label}
+                              </div>
+                            ))}
+                            {hasInvoice && row.invoice.status !== "paid" && (
+                              <div style={{ display:"flex", gap:4, marginTop:4 }}>
+                                {[["charge", "+ line"], ["discount", "+ discount"]].map(([kind, txt]) => (
+                                  <button key={kind} title={kind === "charge" ? "Add a charge to this order's invoice only" : "Discount this order's invoice only"}
+                                    onClick={() => setRowAdj({ orderId: row.orderId, invoiceId: row.invoice._id, refNumber: row.refNumber, kind, label: kind === "charge" ? "" : "Discount", amount: "" })}
+                                    style={{ background:"none", border:`1px dashed ${kind === "charge" ? "var(--border)" : "#f87171"}`, borderRadius:4,
+                                      color: kind === "charge" ? "var(--text-muted)" : "#f87171", fontSize:10, cursor:"pointer", padding:"1px 5px", whiteSpace:"nowrap" }}>
+                                    {txt}
+                                  </button>
+                                ))}
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding:"10px 8px" }}>
                             <div style={{ fontWeight:600 }}>{row.vehicle}</div>
@@ -1934,6 +1979,10 @@ export default function Containers() {
                               </a>
                             )}
                           </td>
+                          <td style={{ padding:"10px 8px", textAlign:"right", fontWeight:600,
+                            color: rowDiscount(row) > 0 ? "#dc2626" : "var(--text-muted)" }}>
+                            {hasInvoice ? `$${rowDiscount(row).toFixed(2)}` : "—"}
+                          </td>
                           <td style={{ padding:"10px 8px", textAlign:"right", fontWeight:700,
                             color: row.profit > 0 ? "#34d399" : row.profit < 0 ? "#f87171" : "var(--text-muted)" }}>
                             {hasInvoice ? `$${row.profit.toFixed(2)}` : "—"}
@@ -1953,6 +2002,31 @@ export default function Containers() {
                             )}
                           </td>
                         </tr>
+                        {openAdj && (
+                          <tr style={{ borderBottom:"1px solid var(--border)", background: rowAdj.kind === "charge" ? "rgba(251,191,36,0.06)" : "rgba(248,113,113,0.06)" }}>
+                            <td colSpan={8} style={{ padding:"6px 8px" }}>
+                              <div style={{ display:"flex", alignItems:"center", gap:8, flexWrap:"wrap", fontSize:12 }}>
+                                <strong style={{ color: rowAdj.kind === "charge" ? "var(--text-primary)" : "#dc2626" }}>
+                                  {rowAdj.kind === "charge" ? "+ Line" : "+ Discount"} on #{row.refNumber} only:
+                                </strong>
+                                <input value={rowAdj.label} autoFocus onChange={e => setRowAdj(a => ({ ...a, label: e.target.value }))}
+                                  placeholder={rowAdj.kind === "charge" ? "e.g. Storage, Amendment Fee" : "e.g. Loyalty Discount"}
+                                  style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4, padding:"3px 7px", fontSize:12, color:"var(--text-primary)", width:200 }} />
+                                <span style={{ color: rowAdj.kind === "charge" ? "var(--text-muted)" : "#f87171" }}>{rowAdj.kind === "charge" ? "$" : "-$"}</span>
+                                <input type="number" min="0" step="0.01" value={rowAdj.amount} onChange={e => setRowAdj(a => ({ ...a, amount: e.target.value }))}
+                                  style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4, padding:"3px 7px", fontSize:12, width:90, textAlign:"right",
+                                    color: rowAdj.kind === "charge" ? "#15803d" : "#dc2626" }} />
+                                <button onClick={applyRowAdj} disabled={discountBusy || !(Number(rowAdj.amount) > 0) || !rowAdj.label.trim()}
+                                  style={{ background: rowAdj.kind === "charge" ? "#059669" : "#dc2626", color:"#fff", border:"none", borderRadius:5, fontSize:11, fontWeight:700, padding:"4px 12px", cursor:"pointer",
+                                    opacity: (discountBusy || !(Number(rowAdj.amount) > 0) || !rowAdj.label.trim()) ? 0.5 : 1 }}>
+                                  {discountBusy ? "…" : "Apply"}
+                                </button>
+                                <button onClick={() => setRowAdj(null)} style={{ background:"none", border:"none", color:"var(--text-muted)", cursor:"pointer", fontSize:13 }}>✕</button>
+                              </div>
+                            </td>
+                          </tr>
+                        )}
+                        </Fragment>
                         );
                       })}
                     </tbody>
@@ -1991,6 +2065,7 @@ export default function Containers() {
                                 />
                               </div>
                             </td>
+                            <td />
                             <td style={{ padding:"7px 8px", textAlign:"right", color:"var(--text-muted)", fontSize:12 }}>—</td>
                             <td style={{ padding:"7px 8px", textAlign:"center" }}>
                               <button onClick={() => setExtraLines(p => p.filter((_,j) => j!==i))}
@@ -2001,12 +2076,12 @@ export default function Containers() {
                         {appliedDiscounts.map(d => (
                           <tr key={d._id} style={{ borderTop:"1px solid var(--border)", background:"rgba(248,113,113,0.08)" }}>
                             <td colSpan={4} style={{ padding:"7px 8px", fontSize:12 }}>
-                              <strong style={{ color:"#dc2626" }}>✓ Discount applied:</strong> {d.label}
-                              <span style={{ color:"var(--text-muted)" }}> — split {(d.perInvoice || []).map(x => `#${x.orderRef} -$${Number(x.amount).toFixed(2)}`).join(", ")} · {new Date(d.appliedAt).toLocaleDateString()}</span>
+                              <strong style={{ color: d.kind === "charge" ? "#15803d" : "#dc2626" }}>✓ {d.kind === "charge" ? "Line added" : "Discount applied"}:</strong> {d.label}
+                              <span style={{ color:"var(--text-muted)" }}> — {(d.perInvoice || []).length > 1 ? "split " : ""}{(d.perInvoice || []).map(x => `#${x.orderRef} ${d.kind === "charge" ? "+" : "-"}$${Number(x.amount).toFixed(2)}`).join(", ")}{(d.perInvoice || []).length === 1 ? " only" : ""} · {new Date(d.appliedAt).toLocaleDateString()}</span>
                             </td>
-                            <td style={{ padding:"7px 8px", textAlign:"right", color:"#dc2626", fontWeight:700, fontSize:12 }}>-${Number(d.amount).toFixed(2)}</td>
-                            <td colSpan={2} style={{ padding:"7px 8px", textAlign:"center" }}>
-                              <button onClick={() => removeDiscount(d)} disabled={discountBusy} title="Take this discount back off every invoice"
+                            <td style={{ padding:"7px 8px", textAlign:"right", color: d.kind === "charge" ? "#15803d" : "#dc2626", fontWeight:700, fontSize:12 }}>{d.kind === "charge" ? "+" : "-"}${Number(d.amount).toFixed(2)}</td>
+                            <td colSpan={3} style={{ padding:"7px 8px", textAlign:"center" }}>
+                              <button onClick={() => removeDiscount(d)} disabled={discountBusy} title="Take it back off the invoice(s)"
                                 style={{ background:"none", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-secondary)", cursor:"pointer", fontSize:11, padding:"2px 8px" }}>Remove</button>
                             </td>
                           </tr>
@@ -2045,10 +2120,11 @@ export default function Containers() {
                               <button onClick={() => setDiscountLines(p => p.filter((_,j) => j!==i))}
                                 style={{ background:"none", border:"none", color:"#f87171", cursor:"pointer", fontSize:14 }}>✕</button>
                             </td>
+                            <td />
                           </tr>
                         ))}
                         <tr>
-                          <td colSpan={7} style={{ padding:"6px 8px", display:"flex", gap:8 }}>
+                          <td colSpan={8} style={{ padding:"6px 8px", display:"flex", gap:8 }}>
                             <button onClick={() => {
                                 const mode = window.confirm(
                                   "Is this charge tied to one unit/vehicle, or a shared cost?\n\n" +
@@ -2075,6 +2151,9 @@ export default function Containers() {
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right", color:"#34d399" }}>
                             ${(billingRows.reduce((s,r)=>s+r.invoiceTotal,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
+                          </td>
+                          <td style={{ padding:"10px 8px", textAlign:"right", color: billingRows.some(r => rowDiscount(r) > 0) ? "#dc2626" : "var(--text-muted)" }}>
+                            ${billingRows.reduce((s,r)=>s+rowDiscount(r),0).toFixed(2)}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"right",
                             color: (billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0))>=0 ? "#34d399" : "#f87171" }}>

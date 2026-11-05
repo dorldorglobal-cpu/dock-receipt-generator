@@ -403,12 +403,14 @@ router.get("/:id/billing-summary", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// ── Container discounts ───────────────────────────────────────────────────────
-// A discount on the load is split evenly (to the cent, leftover cents on the
-// first invoices) across every open invoice as a minus line, so it shows on
-// each car's invoice and on the combined invoice, and balances/profit match
-// what the customer is billed. The load keeps a record of each one.
-const discountItemLabel = (label) => `${label} (container discount)`;
+// ── Container discounts & extra charges ───────────────────────────────────────
+// A discount (minus line) or extra charge is either split evenly (to the cent,
+// leftover cents on the first invoices) across every open invoice, or put on
+// one car's invoice. Either way it's a real invoice line, so it shows on each
+// car's invoice and on the combined invoice, and balances/profit match what
+// the customer is billed. The load keeps a record of each one (load.discounts).
+const adjItemLabel = (rec) => rec.kind === "charge" ? rec.label : `${rec.label} (container discount)`;
+const adjSign      = (rec) => rec.kind === "charge" ? 1 : -1;
 const invoiceTotalOf = (items) => Math.round(items.reduce((s, i) => s + Number(i.amount || 0), 0) * 100) / 100;
 const invoiceStatusOf = (inv) => {
   const paid = (inv.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
@@ -416,31 +418,37 @@ const invoiceStatusOf = (inv) => {
   return inv.sentAt ? "sent" : "draft";
 };
 
-// POST /api/container-loads/:id/discounts — body { label, amount }
+// POST /api/container-loads/:id/discounts — body { label, amount, kind?, invoiceId? }
+// kind "discount" (default) or "charge"; invoiceId = just that car's invoice.
 router.post("/:id/discounts", express.json(), async (req, res) => {
   try {
     const Invoice = require("../models/Invoice");
-    const label  = (req.body?.label || "Discount").trim() || "Discount";
+    const kind   = req.body?.kind === "charge" ? "charge" : "discount";
+    const label  = (req.body?.label || (kind === "charge" ? "Extra charge" : "Discount")).trim() || "Discount";
     const amount = Math.round(Number(req.body?.amount) * 100) / 100;
-    if (!(amount > 0)) return res.status(400).json({ error: "Enter a discount amount." });
+    if (!(amount > 0)) return res.status(400).json({ error: "Enter an amount." });
 
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
-    const invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).sort({ invoiceNumber: 1 });
-    if (!invoices.length) return res.status(400).json({ error: "No open invoices on this load to discount." });
+    const scope = { orderId: { $in: load.orderIds } };
+    if (req.body?.invoiceId) scope._id = req.body.invoiceId;
+    else scope.status = { $ne: "paid" };
+    const invoices = await Invoice.find(scope).sort({ invoiceNumber: 1 });
+    if (!invoices.length) return res.status(400).json({ error: req.body?.invoiceId ? "That invoice isn't on this load." : "No open invoices on this load." });
+    const rec = { kind, label };
 
     const cents = Math.round(amount * 100), n = invoices.length;
     const perInvoice = [];
     for (let i = 0; i < n; i++) {
       const inv   = invoices[i];
       const share = (Math.floor(cents / n) + (i < cents % n ? 1 : 0)) / 100;
-      inv.items.push({ description: discountItemLabel(label), amount: -share });
+      inv.items.push({ description: adjItemLabel(rec), amount: adjSign(rec) * share });
       inv.subtotal = inv.total = invoiceTotalOf(inv.items);
       inv.status = invoiceStatusOf(inv);
       await inv.save();
       perInvoice.push({ invoiceId: inv._id, invoiceNumber: inv.invoiceNumber, orderRef: inv.orderRef, amount: share });
     }
-    load.discounts.push({ label, amount, perInvoice });
+    load.discounts.push({ kind, label, amount, perInvoice });
     await load.save();
     res.json({ discounts: load.discounts });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -458,7 +466,7 @@ router.delete("/:id/discounts/:discountId", async (req, res) => {
     for (const p of disc.perInvoice) {
       const inv = await Invoice.findById(p.invoiceId);
       if (!inv) continue;
-      const idx = inv.items.findIndex(i => i.description === discountItemLabel(disc.label) && Math.abs(Number(i.amount) + p.amount) < 0.005);
+      const idx = inv.items.findIndex(i => i.description === adjItemLabel(disc) && Math.abs(Number(i.amount) - adjSign(disc) * p.amount) < 0.005);
       if (idx < 0) continue;
       inv.items.splice(idx, 1);
       inv.subtotal = inv.total = invoiceTotalOf(inv.items);
