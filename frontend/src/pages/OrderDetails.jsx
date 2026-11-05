@@ -278,6 +278,7 @@ export default function OrderDetails() {
   const [uploadingLabels,   setUploadingLabels]   = useState({});   // { AES: 1, Dispatch: 0, ... }
   const [draggingLabel,     setDraggingLabel]     = useState(null);
   const [docPreview,        setDocPreview]        = useState(null); // { name, url }
+  const [picIndex,          setPicIndex]          = useState(null); // open photo in the Vehicle Pics viewer
   const [previewZoom,       setPreviewZoom]       = useState(1);
   const [previewPan,        setPreviewPan]        = useState({ x: 0, y: 0 });
   const previewDragRef = useRef(null); // { startX, startY, panX, panY } while dragging
@@ -3392,6 +3393,7 @@ export default function OrderDetails() {
             { label:"Rated Draft",        icon:"🧮" },
             { label:"Storage Paid",       icon:"🏬" },
             { label:"FedEx/Mailing",      icon:"📦" },
+            { label:"Vehicle Pics",       icon:"📸" },
             { label:"Other",              icon:"📎" },
           ].map(({ label, icon }) => {
             const busy = (uploadingLabels[label] || 0) > 0;
@@ -3412,7 +3414,7 @@ export default function OrderDetails() {
                   transition:"all 0.15s", minHeight:70,
                   display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", gap:4,
                 }}>
-                <input id={`zone-${label}`} type="file" multiple hidden
+                <input id={`zone-${label}`} type="file" multiple hidden accept={label === "Vehicle Pics" ? "image/*" : undefined}
                   onChange={e => {
                     handleLabelFiles(e.target.files, label);
                     e.target.value = "";
@@ -3543,7 +3545,7 @@ export default function OrderDetails() {
                         color:      isRatedDraft ? "#fbbf24"              : "var(--text-secondary)",
                         border:`1px solid ${isRatedDraft ? "rgba(251,191,36,0.3)" : "var(--border)"}` }}>
                       {["Invoice","Buyer Receipt","Email","Order Request Form","Dispatch","Title","AES",
-                        "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","FedEx/Mailing","Other","Document"]
+                        "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","FedEx/Mailing","Vehicle Pics","Other","Document"]
                         .map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </td>
@@ -4541,6 +4543,58 @@ export default function OrderDetails() {
           </table>
         )}
       </section>
+
+      {/* ── Vehicle Pics ─────────────────────────────── */}
+      {(() => {
+        const labelOf = (f) => (order.files || []).find(of => of.driveFileId === f.id || of.filename === f.name || of.originalName === f.name)?.label || "Document";
+        // Only photos filed as Vehicle Pics (other images are often photos of documents)
+        const pics = driveFiles.filter(f => /^image\//.test(f.mimeType || "") && labelOf(f) === "Vehicle Pics");
+        const imgUrl = (f, thumb) => authUrl(`/api/orders/${id}/drive-image/${f.id}${thumb ? "?thumb=1" : ""}`);
+        const cur = picIndex != null ? pics[picIndex] : null;
+        const go = (d) => setPicIndex(i => (i + d + pics.length) % pics.length);
+        return (
+          <section className="form-section">
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+              <h2 style={{ margin:0, borderBottom:"none", paddingBottom:0 }}>📸 Vehicle Pics{pics.length ? ` (${pics.length})` : ""}</h2>
+              <button onClick={() => document.getElementById("zone-Vehicle Pics")?.click()}
+                style={{ padding:"6px 12px", borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer", fontSize:12 }}>
+                {(uploadingLabels["Vehicle Pics"] || 0) > 0 ? "⏳ Uploading…" : "+ Add photos"}
+              </button>
+            </div>
+            {pics.length === 0 ? (
+              <div style={{ fontSize:13, color:"var(--text-muted)" }}>No vehicle photos yet — use + Add photos, or set an existing photo's Type to Vehicle Pics in Documents.</div>
+            ) : (
+              <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(120px, 1fr))", gap:10 }}>
+                {pics.map((f, i) => (
+                  <button key={f.id} onClick={() => setPicIndex(i)} title={f.name}
+                    style={{ padding:0, border:"1px solid var(--border)", borderRadius:8, overflow:"hidden", background:"var(--bg-elevated)", cursor:"zoom-in", aspectRatio:"4 / 3" }}>
+                    <img src={imgUrl(f, true)} alt={f.name} style={{ width:"100%", height:"100%", objectFit:"cover", display:"block" }} />
+                  </button>
+                ))}
+              </div>
+            )}
+            {cur && (
+              <div onClick={() => setPicIndex(null)} tabIndex={-1} ref={el => el && el.focus()}
+                onKeyDown={e => { if (e.key === "Escape") setPicIndex(null); if (e.key === "ArrowLeft") go(-1); if (e.key === "ArrowRight") go(1); }}
+                style={{ position:"fixed", inset:0, background:"rgba(0,0,0,0.88)", zIndex:3000, display:"flex", flexDirection:"column", alignItems:"center", justifyContent:"center", padding:20, outline:"none" }}>
+                <img src={imgUrl(cur, false)} alt={cur.name} onClick={e => e.stopPropagation()}
+                  style={{ maxWidth:"92vw", maxHeight:"82vh", objectFit:"contain", borderRadius:6, boxShadow:"0 10px 40px rgba(0,0,0,0.5)", background:"#111" }} />
+                <div onClick={e => e.stopPropagation()} style={{ marginTop:12, display:"flex", alignItems:"center", gap:14, color:"#e5e7eb", fontSize:13 }}>
+                  <span>{picIndex + 1} / {pics.length} · {cur.name}</span>
+                  {cur.webViewLink && <a href={cur.webViewLink} target="_blank" rel="noreferrer" style={{ color:"#93c5fd" }}>Open in Drive ↗</a>}
+                </div>
+                {pics.length > 1 && ["‹", "›"].map((ch, k) => (
+                  <button key={ch} onClick={e => { e.stopPropagation(); go(k ? 1 : -1); }} aria-label={k ? "Next photo" : "Previous photo"}
+                    style={{ position:"absolute", top:"50%", [k ? "right" : "left"]:16, transform:"translateY(-50%)", width:48, height:48, borderRadius:"50%",
+                      border:"none", background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:28, cursor:"pointer" }}>{ch}</button>
+                ))}
+                <button onClick={() => setPicIndex(null)} aria-label="Close"
+                  style={{ position:"absolute", top:16, right:16, width:40, height:40, borderRadius:"50%", border:"none", background:"rgba(255,255,255,0.15)", color:"#fff", fontSize:20, cursor:"pointer" }}>✕</button>
+              </div>
+            )}
+          </section>
+        );
+      })()}
 
       {/* ── Notes ───────────────────────────────────── */}
       <section className="form-section">

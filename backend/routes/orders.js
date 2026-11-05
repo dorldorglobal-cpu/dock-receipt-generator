@@ -2048,6 +2048,37 @@ router.post("/:id/timeline", express.json(), async (req, res) => {
   }
 });
 
+// GET /:id/drive-image/:fileId[?thumb=1] — an image from the order's Drive
+// folder (vehicle pics). thumb=1 returns Drive's ~400px thumbnail so the
+// gallery doesn't download full-size phone photos.
+router.get("/:id/drive-image/:fileId", async (req, res) => {
+  try {
+    const { drive, oauth2Client } = require("../googleDrive");
+    const order = await Order.findById(req.params.id).select("driveFolderId files").lean();
+    if (!order) return res.status(404).json({ error: "Not found" });
+    const meta = (await drive.files.get({ fileId: req.params.fileId, fields: "id, mimeType, parents, thumbnailLink" })).data;
+    const ours = (meta.parents || []).includes(order.driveFolderId)
+      || (order.files || []).some(f => f.driveFileId === meta.id);
+    if (!ours) return res.status(403).json({ error: "Not this order's file" });
+    if (!/^image\//.test(meta.mimeType || "")) return res.status(415).json({ error: "Not an image" });
+    res.setHeader("Cache-Control", "private, max-age=86400");
+
+    if (req.query.thumb && meta.thumbnailLink) {
+      const { token } = await oauth2Client.getAccessToken();
+      const r = await fetch(meta.thumbnailLink.replace(/=s\d+$/, "=s400"), { headers: { Authorization: `Bearer ${token}` } });
+      if (r.ok) {
+        res.setHeader("Content-Type", r.headers.get("content-type") || "image/jpeg");
+        return res.send(Buffer.from(await r.arrayBuffer()));
+      }
+    }
+    const stream = await drive.files.get({ fileId: meta.id, alt: "media" }, { responseType: "stream" });
+    res.setHeader("Content-Type", meta.mimeType);
+    stream.data.on("error", () => res.end()).pipe(res);
+  } catch (err) {
+    res.status(err.code === 404 ? 404 : 500).json({ error: err.message });
+  }
+});
+
 // GET /:id/buyer-receipt — the order's Buyer Receipt file, fetched from Drive
 // (attached to the warehouse delivery-appointment email)
 router.get("/:id/buyer-receipt", async (req, res) => {
