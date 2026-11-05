@@ -503,6 +503,20 @@ export default function OrderDetails() {
   const [drSendModal,  setDrSendModal]  = useState(null); // { pdfBase64, pdfName }
   const [drSendTo,     setDrSendTo]     = useState("");
   const [drSendTrucker,setDrSendTrucker]= useState("");
+  const [drTruckerFrom, setDrTruckerFrom] = useState(null); // { vendor, email } the trucker email was filled from
+  // Fill the trucker email from the trucker's vendor record (dispatch carrier, else the towing bill's vendor)
+  const prefillDrTrucker = async () => {
+    setDrTruckerFrom(null);
+    const trucker = order.dispatchCarrier || bills.find(b => /towing|transport/i.test(b.category || ""))?.vendor || "";
+    if (!trucker) return;
+    try {
+      const d = await (await fetch(`${API}/api/expenses/vendor-emails?names=${encodeURIComponent(trucker)}`)).json();
+      const email = d?.[trucker] || "";
+      if (!email) return;
+      setDrSendTrucker(cur => cur || email);
+      setDrTruckerFrom({ vendor: trucker, email });
+    } catch {}
+  };
   const [drSendSubject,setDrSendSubject]= useState("");
   const [drSendBody,   setDrSendBody]   = useState("");
   const [drSending,    setDrSending]    = useState(false);
@@ -1667,6 +1681,7 @@ export default function OrderDetails() {
     }
     setDrSendTo(freshEmail);
     setDrSendTrucker("");
+    prefillDrTrucker();
     setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${payload.vehicleYearMakeModel || ""} VIN: ${(payload.vin || order.vin || "").slice(-6)}`);
     setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${payload.vin || order.vin || ""}\nVessel: ${payload.vessel || ""} | Voyage: ${payload.voyage || ""}\nPort of Loading: ${payload.portOfLoading || ""}\n\nRegards,\nDDG OPS`);
 
@@ -2710,6 +2725,7 @@ export default function OrderDetails() {
           }
           setDrSendTo(freshEmail2);
           setDrSendTrucker("");
+          prefillDrTrucker();
           setDrSendSubject(`${(order.refNumber || "").replace(/^DDG-/i, "")} Dock Receipt ${ymm} VIN: ${vin.slice(-6)}`);
           setDrSendBody(`Please find your Dock Receipt attached.\n\nVIN: ${vin}\nVessel: ${base.vessel||""} | Voyage: ${base.voyage||""}\nPort of Loading: ${base.pol||base.portOfLoading||""}\n\nRegards,\nDor Ldor Global`);
           // Sallaum non-runner/forklift/no-title notify
@@ -6278,6 +6294,11 @@ export default function OrderDetails() {
                   style={{ display:"block", width:"100%", marginTop:4, padding:"8px 10px", background:"var(--bg-base)", border:"1px solid var(--border)", borderRadius:6, color:"var(--text-primary)", fontSize:13, boxSizing:"border-box" }} />
               </label>
             ))}
+            {drTruckerFrom && drSendTrucker.trim() === drTruckerFrom.email && (
+              <p style={{ margin:"-6px 0 12px", fontSize:11, color:"#b45309" }}>
+                📇 Trucker email filled from Vendors — <strong>{drTruckerFrom.vendor}</strong>. Double-check it's this load's driver.
+              </p>
+            )}
             <label style={{ display:"block", marginBottom:18, fontSize:12, color:"var(--text-secondary)" }}>
               Message
               <textarea value={drSendBody} onChange={e => setDrSendBody(e.target.value)} rows={5}
