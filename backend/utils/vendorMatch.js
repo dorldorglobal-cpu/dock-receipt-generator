@@ -60,11 +60,11 @@ async function vendorEmail(name) {
 /**
  * Remember an email for a vendor: added to the vendor record (created if the
  * vendor only exists on bills). Existing addresses are kept; a new one is
- * appended, up to 3.
+ * appended, up to 3. Pass canonFn (from makeCanonicalizer) when saving many.
  */
-async function saveVendorEmail(name, email, category = "") {
+async function saveVendorEmail(name, email, category = "", canonFn = null) {
   const add = emailList(email);
-  const canon = await canonicalVendor(name);
+  const canon = canonFn ? canonFn(name) : await canonicalVendor(name);
   if (!canon || !add.length) return null;
   const rec = await Vendor.findOne({ name: exactName(canon) });
   if (!rec) return Vendor.create({ name: canon, email: add.slice(0, 3).join(", "), category });

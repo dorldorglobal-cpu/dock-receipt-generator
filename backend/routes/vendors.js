@@ -304,10 +304,11 @@ router.get("/email-suggestions", async (req, res) => {
 // ── POST /api/vendors/save-emails — body { items: [{ vendor, email }] }
 router.post("/save-emails", async (req, res) => {
   try {
-    const { saveVendorEmail } = require("../utils/vendorMatch");
+    const { saveVendorEmail, makeCanonicalizer } = require("../utils/vendorMatch");
+    const canon = await makeCanonicalizer(); // one vendor-list load for the whole batch
     let saved = 0;
     for (const { vendor, email } of (req.body?.items || [])) {
-      if (vendor && email && await saveVendorEmail(vendor, email, "Towing / Transport")) saved++;
+      if (vendor && email && await saveVendorEmail(vendor, email, "Towing / Transport", canon)) saved++;
     }
     res.json({ saved });
   } catch (err) {
