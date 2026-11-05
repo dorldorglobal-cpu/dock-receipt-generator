@@ -2424,3 +2424,4 @@ router.post("/:id/send-draft-bl", express.json(), async (req, res) => {
 });
 
 module.exports = router;
+module.exports.folderForStatus = folderForStatus;

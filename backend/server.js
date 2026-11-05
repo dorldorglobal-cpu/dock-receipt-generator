@@ -1360,6 +1360,15 @@ mongoose
       checkArrivals(); // run once on startup
       setInterval(checkArrivals, 60 * 60 * 1000); // then every hour
 
+      // ── Cars follow their container: in a container → Delivered, booked → Waiting
+      // to Sail, sailed (or cutoff passed) → Sailed. Hourly so cutoffs are caught.
+      const { syncAllLoads } = require("./utils/loadStatus");
+      const runLoadSync = () => syncAllLoads()
+        .then(n => { if (n) console.log(`[loadStatus] ${n} order(s) advanced to match their container`); })
+        .catch(e => console.warn("[loadStatus] sync failed:", e.message));
+      runLoadSync();
+      setInterval(runLoadSync, 60 * 60 * 1000);
+
       // ── Daily "New Order" alert — fires every day at 8:00 AM Eastern ──────
       const sendNewOrderAlert = async () => {
         try {

@@ -9,6 +9,7 @@ const AddressBook   = require("../models/AddressBook");
 const { getGmailAccessToken } = require("../utils/gmail");
 const { WAREHOUSES, findWarehouse } = require("../utils/warehouses");
 const { b64lines } = require("../utils/mime");
+const { syncLoadOrders } = require("../utils/loadStatus");
 const {
   drive,
   createDriveFolder,
@@ -122,6 +123,7 @@ router.post("/", express.json(), async (req, res) => {
     });
 
     await upsertConsignee(load);
+    await syncLoadOrders(load).catch(e => console.warn("[ContainerLoad] status sync:", e.message));
 
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
     res.json(populated);
@@ -166,6 +168,7 @@ router.patch("/:id", express.json(), async (req, res) => {
 
     await load.save();
     await upsertConsignee(load);
+    await syncLoadOrders(load).catch(e => console.warn("[ContainerLoad] status sync:", e.message));
 
     if (req.body.bookingNumber || req.body.shippingLine || req.body.pol || req.body.pod || load.shippingLine) {
       const orderFields = {};
@@ -221,6 +224,7 @@ router.post("/:id/add-order", express.json(), async (req, res) => {
       load.orderIds.push(orderId);
       await load.save();
     }
+    await syncLoadOrders(load).catch(e => console.warn("[ContainerLoad] status sync:", e.message));
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
     res.json(populated);
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -1017,6 +1021,7 @@ router.post("/:id/upload", upload.single("file"), async (req, res) => {
     }
 
     await load.save();
+    await syncLoadOrders(load).catch(e => console.warn("[ContainerLoad] status sync:", e.message));
 
     const populated = await ContainerLoad.findById(load._id).populate("orderIds").lean();
     res.json({ ...populated, parsed });
