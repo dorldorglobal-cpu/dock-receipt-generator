@@ -1056,13 +1056,35 @@ router.post(
         }
       }
 
+      // Rated BL → read its charge lines before the temp file goes away
+      let ratedLines = [];
+      if (label === "Rated Draft" && /\.pdf$/i.test(req.file.originalname || req.file.path || "")) {
+        try {
+          const { parseAclChargeLines } = require("../utils/ratedBl");
+          ratedLines = parseAclChargeLines((await require("pdf-parse")(fs.readFileSync(req.file.path))).text);
+        } catch (e) { console.warn("[Rated Draft upload] parse failed:", e.message); }
+      }
+
       // Clean up temp file
       try { fs.unlinkSync(req.file.path); } catch (_) {}
 
       await order.save();
 
+      // Cross-check the rated BL's charges (storage, forklift, non-runner…) against
+      // the order's charges + invoice and fill in what's missing.
+      let ratedCheck = null;
+      let fresh = order;
+      if (ratedLines.length) {
+        try {
+          const { applyRatedBl } = require("../utils/ratedBl");
+          const r = await applyRatedBl(order._id, ratedLines, { source: "Rated BL" });
+          if (r.changed) { ratedCheck = r; fresh = (await Order.findById(order._id)) || order; }
+        } catch (e) { console.warn("[Rated Draft upload] rated BL check failed:", e.message); }
+      }
+
       res.json({
-        ...order.toObject(),
+        ...fresh.toObject(),
+        ratedCheck,
         towingCostVerification: req._towingCostVerification || null,
         dispatchWarnings: req._dispatchWarnings || null,
       });

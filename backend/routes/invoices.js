@@ -1157,4 +1157,4 @@ router.post("/:id/send", memUploadInv.array("extraFiles"), async (req, res) => {
 
 module.exports = router;
 module.exports.generateInvoicePdf = generateInvoicePdf;
-module.exports.generateCombinedInvoicePdf = generateCombinedInvoicePdf;
+module.exports.generateCombinedInvoicePdf = generateCombinedInvoicePdf;module.exports.replaceInvoiceFileOnOrder = replaceInvoiceFileOnOrder;

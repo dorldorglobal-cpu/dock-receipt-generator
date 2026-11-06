@@ -56,6 +56,7 @@ function clearStalePayments(exp) {
 // ── Payment-proof matching helpers ────────────────────────────────────────────
 // Vendor-name matching lives in utils/vendorMatch (shared with DR sends and trucker emails)
 const { normVendorName, sameVendor, canonicalVendor } = require("../utils/vendorMatch");
+const { parseAclChargeLines, applyRatedBl } = require("../utils/ratedBl");
 
 // Plain-text summary of an applied payment proof for the owner email:
 // each vendor with its total, the order/amount lines under it, and a grand total.
@@ -1564,15 +1565,7 @@ router.post("/parse-acl", memUpload.array("invoices", 50), async (req, res) => {
         const pod = (podMatch?.[1]?.trim() || "").replace(/\s+\d.*$/, "");
 
         // Individual charge line items (Basic Frt, BAF, Emergency Bunker, MDR, Low Sulphur, etc.)
-        const chargeLines = [];
-        const chargeRe = /^\s*([A-Za-z][A-Za-z /().-]{2,35?})\s+([\d,]+\.\d{2})\s+USD/gm;
-        let cm;
-        while ((cm = chargeRe.exec(text)) !== null) {
-          const label = cm[1].trim();
-          const amt   = parseFloat(cm[2].replace(/,/g, ""));
-          if (/TOTAL/i.test(label)) continue; // skip the total summary line
-          chargeLines.push({ label, amount: amt });
-        }
+        const chargeLines = parseAclChargeLines(text);
 
         // YMM
         const vehicleLineMatch = text.match(/\d USED UNPACKED VEHICLE.*?\n(.+?)\nModel Year (\d{4})/is);
@@ -1681,7 +1674,7 @@ router.post("/parse-acl-url", express.json(), async (req, res) => {
     const row = {
       fileName: filename || driveFileId,
       vin, total, refNo, bookingNo, vessel, voyage, pol, pod, ymm, billDate: "",
-      chargeLines: [],
+      chargeLines: parseAclChargeLines(text),
       billFileName: filename || "", billDriveId: driveFileId, billDriveUrl: "", billMime: "application/pdf",
       orderId: order?._id || orderId || null,
       orderRef: order?.refNumber || orderRef || "",
@@ -1705,6 +1698,7 @@ router.post("/apply-acl", express.json(), async (req, res) => {
     if (!rows || !rows.length) return res.status(400).json({ error: "No rows provided" });
 
     const created = [];
+    const ratedChecks = [];
     for (const row of rows) {
       if (row.skip || !row.total) continue;
 
@@ -1720,6 +1714,15 @@ router.post("/apply-acl", express.json(), async (req, res) => {
       if (row.billDate) {
         const [m, d, y] = row.billDate.split("/");
         if (m && d && y) dateObj = new Date(`${y}-${m}-${d}`);
+      }
+
+      // Cross-check the rated BL's charge lines against the order + invoice (storage,
+      // forklift, non-runner… become billed lines). Runs even when the bill is a dup.
+      if (orderId && row.chargeLines?.length) {
+        try {
+          const r = await applyRatedBl(orderId, row.chargeLines, { source: `Rated BL ${row.bookingNo || ""}`.trim() });
+          if (r.changed) ratedChecks.push({ orderRef, ...r });
+        } catch (e) { console.warn("[apply-acl] rated BL check failed:", e.message); }
       }
 
       // Duplicate check — multiple layers so neither VIN nor orderId being missing lets a dup slip through
@@ -1764,8 +1767,9 @@ router.post("/apply-acl", express.json(), async (req, res) => {
       });
       created.push(expense._id);
 
-      // Update order's oceanCost so it shows in the order P&L
-      if (orderId && row.total) {
+      // Update order's oceanCost so it shows in the order P&L (when the charge lines
+      // weren't readable — otherwise applyRatedBl already set the split costs)
+      if (orderId && row.total && !row.chargeLines?.length) {
         const ord = await Order.findById(orderId).select("charges").lean();
         const existing = parseFloat(ord?.charges?.oceanCost || 0);
         if (!existing || existing === 0) {
@@ -1774,7 +1778,7 @@ router.post("/apply-acl", express.json(), async (req, res) => {
       }
     }
 
-    res.json({ created: created.length });
+    res.json({ created: created.length, ratedChecks });
   } catch (err) {
     console.error("apply-acl error:", err);
     res.status(500).json({ error: err.message });

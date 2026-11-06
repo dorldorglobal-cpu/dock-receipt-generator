@@ -364,6 +364,12 @@ export default function BlSeparator() {
                           <span style={{ color: "#34d399", fontSize: 12 }}>
                             ✓ Uploaded
                             {result.expenseId && <span style={{ color: "#f59e0b", marginLeft: 6 }}>+ expense</span>}
+                            {result.ratedCheck?.log?.length > 0 && (
+                              <div style={{ color: "#f59e0b", marginTop: 4, whiteSpace: "normal" }}>
+                                🧮 {result.ratedCheck.log.join(" · ")}
+                                {result.ratedCheck.invoice?.status === "sent" && " — invoice was already sent: resend it"}
+                              </div>
+                            )}
                           </span>
                         ) : (
                           <span style={{ color: "#ef4444", fontSize: 12 }}>✗ {result.error}</span>

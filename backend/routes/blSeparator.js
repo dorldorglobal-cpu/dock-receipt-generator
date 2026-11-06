@@ -349,6 +349,18 @@ router.post("/attach", async (req, res) => {
 
         await order.save();
 
+        // Rated BL → cross-check its charge lines (storage, forklift, non-runner…)
+        // against the order's charges + invoice, and fill in what's missing.
+        let ratedCheck = null;
+        if (bl.type === "rated") {
+          try {
+            const { parseAclChargeLines, applyRatedBl } = require("../utils/ratedBl");
+            const lines = parseAclChargeLines((await pdfParse(blBytes)).text);
+            const r = await applyRatedBl(order._id, lines, { source: `Rated BL ${bl.blNumber || ""}`.trim() });
+            if (r.changed) ratedCheck = r;
+          } catch (e) { console.warn("[BL attach] rated BL check failed:", e.message); }
+        }
+
         // Auto-send Draft BL email to customer (non-fatal)
         if (bl.type === "draft" && order.customerEmail) {
           try {
@@ -418,6 +430,7 @@ router.post("/attach", async (req, res) => {
           success: true,
           driveLink: uploaded.webViewLink,
           expenseId,
+          ratedCheck,
         });
       } catch (err) {
         results.push({ blNumber: bl.blNumber, refNumber: bl.refNumber, error: err.message });

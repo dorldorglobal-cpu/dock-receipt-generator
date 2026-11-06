@@ -1222,7 +1222,12 @@ export default function OrderDetails() {
       if (data.dispatchWarnings?.length) setDispatchWarnings(data.dispatchWarnings);
       try { await fetchDriveFiles(); } catch {}
       const refreshed = await fetchOrder();
-      setMessage(`✅ ${file.name} uploaded`);
+      if (data.ratedCheck?.log?.length) {
+        try { fetchOrderInvoices(); } catch {}
+        setMessage(`✅ ${file.name} uploaded — 🧮 Rated BL checked: ${data.ratedCheck.log.join(" · ")}${data.ratedCheck.invoice?.status === "sent" ? " — the invoice was already sent, resend it" : ""}`);
+      } else {
+        setMessage(`✅ ${file.name} uploaded`);
+      }
 
       // ── If Draft uploaded, auto-fire schedule lookup to populate sail/arrival dates ──
       if (label === "Draft") {

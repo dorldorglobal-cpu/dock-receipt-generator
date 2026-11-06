@@ -1237,7 +1237,9 @@ export default function Expenses() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Apply failed");
-      setAclMsg(`✅ ${data.created} expense(s) created!`);
+      const rated = (data.ratedChecks || []).filter(r => r.log?.length)
+        .map(r => `#${r.orderRef}: ${r.log.join(" · ")}${r.invoice?.status === "sent" ? " (invoice already sent — resend it)" : ""}`);
+      setAclMsg(`✅ ${data.created} expense(s) created!${rated.length ? ` 🧮 Rated BL charges checked — ${rated.join(" | ")}` : ""}`);
       setAclRows([]);
       setAclFiles([]);
       fetchAll();
