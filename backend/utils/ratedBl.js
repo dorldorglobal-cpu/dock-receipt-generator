@@ -30,12 +30,24 @@ const FEES = {
 
 // "Storage(POL)             279.00 USD         Virginia Beach"
 function parseAclChargeLines(text) {
+  // ACL invoice layout: "Basic Frt.   Per Unit   780.00 USD   1.000   780.00 USD   1.00000   780.00 USD"
+  // → label + the line total (rate × factor); skips the "Vol:… CuFt" summary row.
+  const inv = [];
+  const invRe = /^[ \t]*([A-Za-z][^\n]*?)[ \t]+(?:Per[ \t]+[A-Za-z]+|Lump[ \t]*sum)[ \t]+[\d,]+\.\d{2}[ \t]+USD[ \t]+[\d.]+[ \t]+([\d,]+\.\d{2})[ \t]+USD/gim;
+  let im;
+  while ((im = invRe.exec(text || "")) !== null) {
+    const label = im[1].trim();
+    if (/total|vol:|cuft|cbm/i.test(label)) continue;
+    inv.push({ label, amount: parseFloat(im[2].replace(/,/g, "")) });
+  }
+  if (inv.length) return inv;
+
   const out = [];
   const re = /^[ \t]*([A-Za-z][^\n]*?)[ \t]{2,}([\d,]+\.\d{2})[ \t]+USD\b/gm;
   let m;
   while ((m = re.exec(text || "")) !== null) {
     const label = m[1].trim();
-    if (/total/i.test(label)) continue;
+    if (/total|vol:|cuft/i.test(label)) continue;
     out.push({ label, amount: parseFloat(m[2].replace(/,/g, "")) });
   }
   return out;
@@ -62,12 +74,30 @@ function parseSallaumTariffs(text) {
 
 const isEBS = t => /\bEBS\b|emergency/i.test(t);
 
+// Sallaum's non-runner / forklift price per port of loading, before the $100 BAF
+// increase they add to the same line. Confirmed by Eli 2026-11-06. Providence
+// (Davisville) has no forklift service.
+const SALLAUM_NRFK = {
+  BAL: { nr: 400, fk: 500 },
+  FPO: { nr: 350, fk: 450 },
+  JAX: { nr: 350, fk: 450 },
+  PVD: { nr: 350 },
+};
+function sallaumPort(pol) {
+  const p = String(pol || "").toUpperCase();
+  if (/BAL/.test(p)) return "BAL";
+  if (/FREEPORT|FPO/.test(p)) return "FPO";
+  if (/JACKSON|JAX/.test(p)) return "JAX";
+  if (/PROVIDENCE|DAVISVILLE|DVV|PVD/.test(p)) return "PVD";
+  return "";
+}
+
 /**
  * One car row → charge lines in the same shape as parseAclChargeLines.
  * row: { freight, baf, thc, storage, other, total }  tariffs: parseSallaumTariffs()
- * condition: order condition ("Runner" / "Nonrunner" / "Forklift")
+ * pol: port of loading (name or Sallaum code, e.g. "BALTIMORE" / "USBAL") — picks the port's NR/FK prices
  */
-function sallaumChargeLines(row, tariffs = {}, condition = "") {
+function sallaumChargeLines(row, tariffs = {}, pol = "") {
   const lines = [];
   const add = (label, amount) => { if (amount > 0) lines.push({ label, amount: r2(amount) }); };
   const ebsRates = Object.entries(tariffs).filter(([t]) => isEBS(t)).flatMap(([, r]) => r);
@@ -84,7 +114,10 @@ function sallaumChargeLines(row, tariffs = {}, condition = "") {
   const nrRates = Object.entries(tariffs).filter(([t]) => /non\s*-?\s*run/i.test(t)).flatMap(([, r]) => r);
   const fkRates = Object.entries(tariffs).filter(([t]) => /fork/i.test(t)).flatMap(([, r]) => r);
   // Same rate listed under both names (older bills) → non-runner; the forklift is always the higher price
-  const typeOf  = a => nrRates.includes(a) ? "Non Runner" : fkRates.includes(a) ? "Forklift" : null;
+  const port = SALLAUM_NRFK[sallaumPort(pol)];
+  const typeOf  = a => port
+    ? (a === port.nr ? "Non Runner" : a === port.fk ? "Forklift" : null)
+    : (nrRates.includes(a) ? "Non Runner" : fkRates.includes(a) ? "Forklift" : null);
 
   let baf = r2(row.baf || 0);
   const bafRaised = bafRates.length > 1 && ebsRates.includes(r2(baf - Math.min(...bafRates)));
@@ -111,7 +144,7 @@ function sallaumChargeLines(row, tariffs = {}, condition = "") {
 }
 
 // Find one car's row on a Sallaum invoice by VIN → charge lines
-function parseSallaumChargeLines(text, vin, condition = "") {
+function parseSallaumChargeLines(text, vin, pol = "") {
   if (!vin) return [];
   const line = String(text || "").split("\n").find(l => l.toUpperCase().includes(String(vin).toUpperCase()));
   if (!line) return [];
@@ -119,12 +152,13 @@ function parseSallaumChargeLines(text, vin, condition = "") {
   const nums = (after.match(/[\d,]+\.\d{2}/g) || []).map(s => parseFloat(s.replace(/,/g, "")));
   if (nums.length < 7) return [];
   const [freight, baf, thc, storage, other, total] = nums.slice(-6);
-  return sallaumChargeLines({ freight, baf, thc, storage, other, total }, parseSallaumTariffs(text), condition);
+  const rowPol = (line.match(/^s*(US[A-Z]{3})/) || [])[1] || pol;
+  return sallaumChargeLines({ freight, baf, thc, storage, other, total }, parseSallaumTariffs(text), rowPol);
 }
 
 // Any rated BL / carrier bill text → charge lines (ACL layout, or Sallaum by VIN)
-function parseRatedChargeLines(text, { vin = "", condition = "" } = {}) {
-  if (/sallaum/i.test(text || "")) return parseSallaumChargeLines(text, vin, condition);
+function parseRatedChargeLines(text, { vin = "", pol = "" } = {}) {
+  if (/sallaum/i.test(text || "")) return parseSallaumChargeLines(text, vin, pol);
   return parseAclChargeLines(text);
 }
 

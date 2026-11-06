@@ -1172,8 +1172,8 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
         let ratedLines = [];
         if (orderId) {
           try {
-            const ord = await Order.findById(orderId).select("condition").lean();
-            ratedLines = sallaumChargeLines(row, tariffs || {}, ord?.condition || "");
+            const ord = await Order.findById(orderId).select("pol").lean();
+            ratedLines = sallaumChargeLines(row, tariffs || {}, pol || ord?.pol || "");
             if (ratedLines.length) {
               const r = await applyRatedBl(orderId, ratedLines, { source: `Sallaum ${invoiceNumber || ""}`.trim() });
               if (r.changed) ratedChecks.push({ orderRef, ...r });

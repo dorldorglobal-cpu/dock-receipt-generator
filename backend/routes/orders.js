@@ -1062,7 +1062,7 @@ router.post(
         try {
           const { parseRatedChargeLines } = require("../utils/ratedBl");
           ratedLines = parseRatedChargeLines((await require("pdf-parse")(fs.readFileSync(req.file.path))).text,
-            { vin: order.vin, condition: order.condition });
+            { vin: order.vin, pol: order.pol });
         } catch (e) { console.warn("[Rated Draft upload] parse failed:", e.message); }
       }
 
