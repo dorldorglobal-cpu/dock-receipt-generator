@@ -46,7 +46,7 @@ function classifyCharge(label) {
   const l = String(label || "");
   if (/stor/i.test(l))                                         return "storagePortFee";
   if (/fork\s*-?\s*lift/i.test(l))                             return "forkliftFee";
-  if (/non\s*-?\s*run|not\s*self/i.test(l))                    return "nonRunnerFee";
+  if (/non\s*-?\s*run|not\s*self|tow(ing)?\s*s\s*\/?\s*c/i.test(l)) return "nonRunnerFee"; // ACL "Towing S/C - POL" = non-runner handling
   if (/emergency\s*(bunker|baf)|\bEB[SC]\b/i.test(l))          return "emergencyBafFee";
   if (/roll\s*-?\s*over/i.test(l))                             return "vesselRolloverFee";
   if (/demurrage|detention/i.test(l))                          return "customsDemurrageFee";
@@ -99,9 +99,14 @@ async function applyRatedBl(orderId, chargeLines, { source = "Rated BL", dryRun 
     chargesChanged = true;
   }
 
+  // Forklift and non-runner are the same service (a unit that can't drive on) —
+  // whichever one the order already bills covers the other, so never bill both.
+  const SIBLING = { forkliftFee: "nonRunnerFee", nonRunnerFee: "forkliftFee" };
   const extras = [];
-  for (const [key, costRaw] of Object.entries(extraCost)) {
+  for (const [rawKey, costRaw] of Object.entries(extraCost)) {
     const cost = r2(costRaw);
+    const sib = SIBLING[rawKey];
+    const key = sib && !num(charges[rawKey]) && num(charges[sib]) > 0 ? sib : rawKey;
     const { label, defaultSell = 0 } = FEES[key];
     if (num(charges[key + "Cost"]) !== cost) {
       charges[key + "Cost"] = String(cost);
@@ -125,7 +130,8 @@ async function applyRatedBl(orderId, chargeLines, { source = "Rated BL", dryRun 
     const items = (inv.items || []).map(i => ({ description: i.description, amount: Number(i.amount || 0) }));
     const fixes = [];
     for (const x of extras) {
-      const idx = items.findIndex(i => norm(i.description).startsWith(norm(x.label)));
+      const labels = [x.label, ...(SIBLING[x.key] ? [FEES[SIBLING[x.key]].label] : [])].map(norm);
+      const idx = items.findIndex(i => labels.some(l => norm(i.description).startsWith(l)));
       if (idx === -1) {
         items.push({ description: x.label, amount: x.sell });
         fixes.push(`added ${x.label} ${usd(x.sell)}`);
