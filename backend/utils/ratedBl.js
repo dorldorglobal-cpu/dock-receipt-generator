@@ -45,10 +45,8 @@ function parseAclChargeLines(text) {
 // Page 1 lists the tariff lines ("05-10-2026BAF3 u450.00 USD1,350.00 USD",
 // "09-04-2026EBS11 u100.00 USD…", "27-03-2023Non Runner4 u350.00 USD…").
 // Page 2 has one row per car: Volume, Freight, BAF, THC, Storage, Other(NR/FK etc.), Total.
-// "Other" lumps together the emergency bunker (EBS) and the non-runner/forklift
-// charge — e.g. 450 = NR 350 + EBS 100, 550 = FK 450 + EBS 100. On the newer
-// BAF rate the EBS is folded into the BAF instead (BAF 450 = 350 + 100, Other 0
-// for a runner). The split uses this invoice's own tariff rates.
+// "Other" is the non-runner/forklift price + the BAF increase on one line (see
+// sallaumChargeLines). We already bill the BAF increase as "Emergency BAF".
 function parseSallaumTariffs(text) {
   const out = {};
   const re = /\d{2}-\d{2}-\d{4}\s*([A-Za-z][A-Za-z /().&-]*?)\s*(\d+)\s*u\s*([\d,]+\.\d{2})\s*USD/g;
@@ -62,10 +60,7 @@ function parseSallaumTariffs(text) {
   return out;
 }
 
-const isNR  = t => /non\s*-?\s*run/i.test(t);
-const isFK  = t => /fork/i.test(t);
 const isEBS = t => /\bEBS\b|emergency/i.test(t);
-const BASE_SALLAUM = t => /^(freight|baf|thc|storage)$/i.test(t.trim());
 
 /**
  * One car row → charge lines in the same shape as parseAclChargeLines.
@@ -78,39 +73,32 @@ function sallaumChargeLines(row, tariffs = {}, condition = "") {
   const ebsRates = Object.entries(tariffs).filter(([t]) => isEBS(t)).flatMap(([, r]) => r);
   const bafRates = Object.entries(tariffs).filter(([t]) => /^baf$/i.test(t)).flatMap(([, r]) => r);
 
-  // Split "Other" into this invoice's extra tariff types (EBS, Non Runner, Forklift, …)
+  // "Other" = the non-runner/forklift price + the BAF increase (EBS, $100) on the
+  // same line — e.g. Baltimore non-runner 500 = 400 + 100, forklift 600 = 500 + 100.
+  // Which one it is comes from the AMOUNT (matched to this invoice's own Non Runner /
+  // Forklift tariff rates) — never the order's condition, which the port often changes
+  // after the DR. On the newer BAF rate the increase sits in the BAF column instead
+  // (BAF 450 = 350 + 100), and then "Other" is the non-runner/forklift price alone.
   const other = r2(row.other || 0);
-  const options = Object.entries(tariffs).filter(([t]) => !BASE_SALLAUM(t));
-  const cond = String(condition || "");
-  let best = null;
-  const score = (combo) => combo.reduce((s, [t]) =>
-    s + ((isNR(t) && /fork/i.test(cond)) || (isFK(t) && /non/i.test(cond)) ? 5 : 0)
-      - ((isNR(t) && /non/i.test(cond)) || (isFK(t) && /fork/i.test(cond)) ? 1 : 0), 0) + combo.length * 0.1;
-  const walk = (i, combo, sum) => {
-    if (Math.abs(sum - other) < 0.01) { if (!best || score(combo) < score(best)) best = [...combo]; }
-    if (i >= options.length || sum > other + 0.01) return;
-    walk(i + 1, combo, sum);                                    // skip this type
-    for (const rate of options[i][1]) walk(i + 1, [...combo, [options[i][0], rate]], sum + rate);
-  };
-  if (other > 0) walk(0, [], 0);
+  const inc = ebsRates[0] || 100;
+  const nrRates = Object.entries(tariffs).filter(([t]) => /non\s*-?\s*run/i.test(t)).flatMap(([, r]) => r);
+  const fkRates = Object.entries(tariffs).filter(([t]) => /fork/i.test(t)).flatMap(([, r]) => r);
+  // Same rate listed under both names (older bills) → non-runner; the forklift is always the higher price
+  const typeOf  = a => nrRates.includes(a) ? "Non Runner" : fkRates.includes(a) ? "Forklift" : null;
 
-  let hasEbs = false;
-  if (best) {
-    for (const [t, rate] of best) { add(isEBS(t) ? "Emergency Bunker (EBS)" : t, rate); if (isEBS(t)) hasEbs = true; }
-  } else if (other > 0) {
-    // No exact match: an EBS-rate chunk + the rest as the car's NR/FK, else unrecognised
-    const e = ebsRates[0] || 0;
-    const nrfk = /fork/i.test(cond) ? "Forklift" : /non/i.test(cond) ? "Non Runner" : "";
-    if (nrfk && e && other > e) { add("Emergency Bunker (EBS)", e); add(nrfk, other - e); hasEbs = true; }
-    else if (nrfk) add(nrfk, other);
-    else add("Other (NR/FK etc.)", other);
-  }
-
-  // Newer BAF has the EBS folded in: BAF above the invoice's base BAF by the EBS rate
   let baf = r2(row.baf || 0);
-  if (!hasEbs && ebsRates.length && bafRates.length > 1) {
-    const diff = r2(baf - Math.min(...bafRates));
-    if (ebsRates.includes(diff)) { add("Emergency Bunker (EBS in BAF)", diff); baf = r2(baf - diff); }
+  const bafRaised = bafRates.length > 1 && ebsRates.includes(r2(baf - Math.min(...bafRates)));
+  const options = bafRaised
+    ? [{ ebs: r2(baf - Math.min(...bafRates)), inBaf: true, nrfk: other }]
+    : [...(other >= inc ? [{ ebs: inc, nrfk: r2(other - inc) }] : []), { ebs: 0, nrfk: other }];
+  const pick = options.find(o => o.nrfk === 0 || typeOf(o.nrfk)) || null;
+
+  if (pick) {
+    if (pick.inBaf) baf = r2(baf - pick.ebs);
+    add("Emergency Bunker (EBS / BAF increase)", pick.ebs);
+    if (pick.nrfk > 0) add(typeOf(pick.nrfk), pick.nrfk);
+  } else if (other > 0) {
+    add("Other (NR/FK etc.)", other); // amount isn't a non-runner/forklift rate on this bill → hold for review
   }
   add("Freight", row.freight || 0);
   add("BAF", baf);
@@ -198,15 +186,27 @@ async function applyRatedBl(orderId, chargeLines, { source = "Rated BL", dryRun 
     chargesChanged = true;
   }
 
-  // Forklift and non-runner are the same service (a unit that can't drive on) —
-  // whichever one the order already bills covers the other, so never bill both.
+  // Non-runner vs forklift: the carrier's charge decides (the port often re-marks a
+  // unit after the DR). If the order bills the other one, move it over — the
+  // other line is cleared, the invoice line is renamed, and the condition follows.
   const SIBLING = { forkliftFee: "nonRunnerFee", nonRunnerFee: "forkliftFee" };
+  const COND = { forkliftFee: "Forklift", nonRunnerFee: "Nonrunner" };
   const extras = [];
-  for (const [rawKey, costRaw] of Object.entries(extraCost)) {
+  for (const [key, costRaw] of Object.entries(extraCost)) {
     const cost = r2(costRaw);
-    const sib = SIBLING[rawKey];
-    const key = sib && !num(charges[rawKey]) && num(charges[sib]) > 0 ? sib : rawKey;
+    const sib = SIBLING[key];
     const { label, defaultSell = 0 } = FEES[key];
+    let replaces = null;
+    if (sib && (num(charges[sib]) > 0 || num(charges[sib + "Cost"]) > 0)) {
+      replaces = FEES[sib].label;
+      log.push(`carrier charged ${label.replace(/ Fee$/, "")}, not ${replaces.replace(/ Fee$/, "")} — moved ${usd(num(charges[sib]))} ${replaces} to ${label}`);
+      charges[sib] = "0.00"; delete charges[sib + "Cost"];
+      chargesChanged = true;
+    }
+    if (COND[key] && order.condition !== COND[key]) {
+      log.push(`condition ${order.condition || "—"} → ${COND[key]}`);
+      order.condition = COND[key];
+    }
     if (num(charges[key + "Cost"]) !== cost) {
       charges[key + "Cost"] = String(cost);
       chargesChanged = true;
@@ -218,7 +218,7 @@ async function applyRatedBl(orderId, chargeLines, { source = "Rated BL", dryRun 
       chargesChanged = true;
       log.push(`${label}: cost ${usd(cost)}, billed ${usd(curSell)} → ${usd(sell)}`);
     }
-    extras.push({ key, label, cost, sell, previousSell: curSell });
+    extras.push({ key, label, cost, sell, previousSell: curSell, replaces });
   }
 
   // ── Cross-check the invoice ─────────────────────────────────────────────
@@ -229,8 +229,15 @@ async function applyRatedBl(orderId, chargeLines, { source = "Rated BL", dryRun 
     const items = (inv.items || []).map(i => ({ description: i.description, amount: Number(i.amount || 0) }));
     const fixes = [];
     for (const x of extras) {
-      const labels = [x.label, ...(SIBLING[x.key] ? [FEES[SIBLING[x.key]].label] : [])].map(norm);
-      const idx = items.findIndex(i => labels.some(l => norm(i.description).startsWith(l)));
+      // A line for the other one (NR ↔ FK) becomes this one
+      const sibLabel = SIBLING[x.key] ? norm(FEES[SIBLING[x.key]].label) : null;
+      const sIdx = sibLabel ? items.findIndex(i => norm(i.description).startsWith(sibLabel)) : -1;
+      if (sIdx !== -1) {
+        fixes.push(`${items[sIdx].description} ${usd(items[sIdx].amount)} → ${x.label} ${usd(x.sell)}`);
+        items[sIdx] = { description: x.label, amount: x.sell };
+        continue;
+      }
+      const idx = items.findIndex(i => norm(i.description).startsWith(norm(x.label)));
       if (idx === -1) {
         items.push({ description: x.label, amount: x.sell });
         fixes.push(`added ${x.label} ${usd(x.sell)}`);
@@ -260,7 +267,8 @@ async function applyRatedBl(orderId, chargeLines, { source = "Rated BL", dryRun 
   if (unknown.length)
     addHoldOnce(order, `${source}: charge(s) not recognised — ${unknown.map(u => `${u.label} ${usd(u.amount)}`).join(", ")}. Counted in ocean cost; check if the customer should be billed.`);
 
-  const changed = chargesChanged || !!invoiceSummary || unknown.length > 0;
+  // A hold only counts as a change the first time it's opened (re-runs stay quiet)
+  const changed = chargesChanged || !!invoiceSummary || order.isModified("holds") || order.isModified("condition");
   if (!changed) return { changed: false, extras, invoice: null, unknown };
   if (dryRun) return { changed: true, dryRun: true, extras, invoice: invoiceSummary, unknown, log, holds: order.holds.filter(h => !h.resolvedAt).map(h => h.note) };
 
