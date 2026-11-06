@@ -2443,9 +2443,13 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       .replace(/https?:\/\/mcbankny\.com\/?/gi, " ")
       .replace(/^Operation Proof\s*$/gim, " ");
 
-    // Payment date for the whole batch (used as default paidDate)
+    // Paid date for the whole batch = the day the payment was created/sent ("Created by … on MM/DD/YYYY").
+    // The bank's "Payment Date" is the ACH settlement day (usually the next business day); it is kept
+    // separately for the ACH PAYMENTS sheet, which derives its processing date from it.
     const payDateMatch = text.match(/Payment\s*Date\s*([\d]{1,2}\/[\d]{1,2}\/[\d]{4})/i);
-    const batchPaidDate = payDateMatch?.[1] || "";
+    const createdMatch = text.match(/Created\s*by\s*\S*?\s*on\s*(\d{1,2}\/\d{1,2}\/\d{4})/i);
+    const bankPaymentDate = payDateMatch?.[1] || "";
+    const batchPaidDate = createdMatch?.[1] || bankPaymentDate;
 
     const FIELD_BOUNDARY = "(?=Payee Name|Account Number|Amount|Destination Bank Name|Routing Number|Addenda|Recurrence|Payment Date|Total Payments|Authorizations|$)";
     const grab = (str, label) => {
@@ -2736,6 +2740,7 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         orderRef,
         note,
         batchPaidDate,
+        bankPaymentDate,
         candidates,
         alreadyPaid,
         matchedIds,
@@ -3012,7 +3017,9 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       const achEntries = [];
       for (const row of rows) {
         if (!row.selected) continue;
-        const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
+        // Sheet keeps the bank's settlement date (processing date = that − 1 day)
+        const sheetDate = row.bankPaymentDate || row.batchPaidDate;
+        const dateObj = sheetDate ? new Date(sheetDate) : new Date();
         if (row.splitBills?.length) {
           for (const split of row.splitBills) {
             if (!split.amount) continue;
