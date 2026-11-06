@@ -41,6 +41,105 @@ function parseAclChargeLines(text) {
   return out;
 }
 
+// ── Sallaum ────────────────────────────────────────────────────────────────
+// Page 1 lists the tariff lines ("05-10-2026BAF3 u450.00 USD1,350.00 USD",
+// "09-04-2026EBS11 u100.00 USD…", "27-03-2023Non Runner4 u350.00 USD…").
+// Page 2 has one row per car: Volume, Freight, BAF, THC, Storage, Other(NR/FK etc.), Total.
+// "Other" lumps together the emergency bunker (EBS) and the non-runner/forklift
+// charge — e.g. 450 = NR 350 + EBS 100, 550 = FK 450 + EBS 100. On the newer
+// BAF rate the EBS is folded into the BAF instead (BAF 450 = 350 + 100, Other 0
+// for a runner). The split uses this invoice's own tariff rates.
+function parseSallaumTariffs(text) {
+  const out = {};
+  const re = /\d{2}-\d{2}-\d{4}\s*([A-Za-z][A-Za-z /().&-]*?)\s*(\d+)\s*u\s*([\d,]+\.\d{2})\s*USD/g;
+  let m;
+  while ((m = re.exec(text || "")) !== null) {
+    const type = m[1].trim();
+    const rate = parseFloat(m[3].replace(/,/g, ""));
+    (out[type] = out[type] || []);
+    if (!out[type].includes(rate)) out[type].push(rate);
+  }
+  return out;
+}
+
+const isNR  = t => /non\s*-?\s*run/i.test(t);
+const isFK  = t => /fork/i.test(t);
+const isEBS = t => /\bEBS\b|emergency/i.test(t);
+const BASE_SALLAUM = t => /^(freight|baf|thc|storage)$/i.test(t.trim());
+
+/**
+ * One car row → charge lines in the same shape as parseAclChargeLines.
+ * row: { freight, baf, thc, storage, other, total }  tariffs: parseSallaumTariffs()
+ * condition: order condition ("Runner" / "Nonrunner" / "Forklift")
+ */
+function sallaumChargeLines(row, tariffs = {}, condition = "") {
+  const lines = [];
+  const add = (label, amount) => { if (amount > 0) lines.push({ label, amount: r2(amount) }); };
+  const ebsRates = Object.entries(tariffs).filter(([t]) => isEBS(t)).flatMap(([, r]) => r);
+  const bafRates = Object.entries(tariffs).filter(([t]) => /^baf$/i.test(t)).flatMap(([, r]) => r);
+
+  // Split "Other" into this invoice's extra tariff types (EBS, Non Runner, Forklift, …)
+  const other = r2(row.other || 0);
+  const options = Object.entries(tariffs).filter(([t]) => !BASE_SALLAUM(t));
+  const cond = String(condition || "");
+  let best = null;
+  const score = (combo) => combo.reduce((s, [t]) =>
+    s + ((isNR(t) && /fork/i.test(cond)) || (isFK(t) && /non/i.test(cond)) ? 5 : 0)
+      - ((isNR(t) && /non/i.test(cond)) || (isFK(t) && /fork/i.test(cond)) ? 1 : 0), 0) + combo.length * 0.1;
+  const walk = (i, combo, sum) => {
+    if (Math.abs(sum - other) < 0.01) { if (!best || score(combo) < score(best)) best = [...combo]; }
+    if (i >= options.length || sum > other + 0.01) return;
+    walk(i + 1, combo, sum);                                    // skip this type
+    for (const rate of options[i][1]) walk(i + 1, [...combo, [options[i][0], rate]], sum + rate);
+  };
+  if (other > 0) walk(0, [], 0);
+
+  let hasEbs = false;
+  if (best) {
+    for (const [t, rate] of best) { add(isEBS(t) ? "Emergency Bunker (EBS)" : t, rate); if (isEBS(t)) hasEbs = true; }
+  } else if (other > 0) {
+    // No exact match: an EBS-rate chunk + the rest as the car's NR/FK, else unrecognised
+    const e = ebsRates[0] || 0;
+    const nrfk = /fork/i.test(cond) ? "Forklift" : /non/i.test(cond) ? "Non Runner" : "";
+    if (nrfk && e && other > e) { add("Emergency Bunker (EBS)", e); add(nrfk, other - e); hasEbs = true; }
+    else if (nrfk) add(nrfk, other);
+    else add("Other (NR/FK etc.)", other);
+  }
+
+  // Newer BAF has the EBS folded in: BAF above the invoice's base BAF by the EBS rate
+  let baf = r2(row.baf || 0);
+  if (!hasEbs && ebsRates.length && bafRates.length > 1) {
+    const diff = r2(baf - Math.min(...bafRates));
+    if (ebsRates.includes(diff)) { add("Emergency Bunker (EBS in BAF)", diff); baf = r2(baf - diff); }
+  }
+  add("Freight", row.freight || 0);
+  add("BAF", baf);
+  add("THC", row.thc || 0);
+  add("Storage", row.storage || 0);
+
+  const sum = r2(lines.reduce((s, l) => s + l.amount, 0));
+  if (row.total && Math.abs(sum - r2(row.total)) > 0.01) return []; // row didn't read cleanly — don't guess
+  return lines;
+}
+
+// Find one car's row on a Sallaum invoice by VIN → charge lines
+function parseSallaumChargeLines(text, vin, condition = "") {
+  if (!vin) return [];
+  const line = String(text || "").split("\n").find(l => l.toUpperCase().includes(String(vin).toUpperCase()));
+  if (!line) return [];
+  const after = line.substring(line.toUpperCase().indexOf(String(vin).toUpperCase()) + 17);
+  const nums = (after.match(/[\d,]+\.\d{2}/g) || []).map(s => parseFloat(s.replace(/,/g, "")));
+  if (nums.length < 7) return [];
+  const [freight, baf, thc, storage, other, total] = nums.slice(-6);
+  return sallaumChargeLines({ freight, baf, thc, storage, other, total }, parseSallaumTariffs(text), condition);
+}
+
+// Any rated BL / carrier bill text → charge lines (ACL layout, or Sallaum by VIN)
+function parseRatedChargeLines(text, { vin = "", condition = "" } = {}) {
+  if (/sallaum/i.test(text || "")) return parseSallaumChargeLines(text, vin, condition);
+  return parseAclChargeLines(text);
+}
+
 // → a FEES key, "ocean" (part of the base freight cost), or "unknown"
 function classifyCharge(label) {
   const l = String(label || "");
@@ -189,4 +288,7 @@ async function applyRatedBl(orderId, chargeLines, { source = "Rated BL", dryRun 
   return { changed: true, extras, invoice: invoiceSummary, unknown, log };
 }
 
-module.exports = { parseAclChargeLines, classifyCharge, applyRatedBl, FEES };
+module.exports = {
+  parseAclChargeLines, parseSallaumTariffs, sallaumChargeLines, parseSallaumChargeLines, parseRatedChargeLines,
+  classifyCharge, applyRatedBl, FEES,
+};

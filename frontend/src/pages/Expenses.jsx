@@ -1038,7 +1038,9 @@ export default function Expenses() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Apply failed");
-      setSallaumMsg(`✅ ${data.created} expense(s) created successfully!`);
+      const rated = (data.ratedChecks || []).filter(r => r.log?.length)
+        .map(r => `#${r.orderRef}: ${r.log.join(" · ")}${r.invoice?.status === "sent" ? " (invoice already sent — resend it)" : ""}`);
+      setSallaumMsg(`✅ ${data.created} expense(s) created successfully!${rated.length ? ` 🧮 Charges checked — ${rated.join(" | ")}` : ""}`);
       setSallaumParsed(null);
       setSallaumRows([]);
       setSallaumFile(null);

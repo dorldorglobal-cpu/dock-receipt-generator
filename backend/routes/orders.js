@@ -1060,8 +1060,9 @@ router.post(
       let ratedLines = [];
       if (label === "Rated Draft" && /\.pdf$/i.test(req.file.originalname || req.file.path || "")) {
         try {
-          const { parseAclChargeLines } = require("../utils/ratedBl");
-          ratedLines = parseAclChargeLines((await require("pdf-parse")(fs.readFileSync(req.file.path))).text);
+          const { parseRatedChargeLines } = require("../utils/ratedBl");
+          ratedLines = parseRatedChargeLines((await require("pdf-parse")(fs.readFileSync(req.file.path))).text,
+            { vin: order.vin, condition: order.condition });
         } catch (e) { console.warn("[Rated Draft upload] parse failed:", e.message); }
       }
 

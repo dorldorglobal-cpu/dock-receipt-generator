@@ -56,7 +56,7 @@ function clearStalePayments(exp) {
 // ── Payment-proof matching helpers ────────────────────────────────────────────
 // Vendor-name matching lives in utils/vendorMatch (shared with DR sends and trucker emails)
 const { normVendorName, sameVendor, canonicalVendor } = require("../utils/vendorMatch");
-const { parseAclChargeLines, applyRatedBl } = require("../utils/ratedBl");
+const { parseAclChargeLines, parseSallaumTariffs, sallaumChargeLines, applyRatedBl } = require("../utils/ratedBl");
 
 // Plain-text summary of an applied payment proof for the owner email:
 // each vendor with its total, the order/amount lines under it, and a grand total.
@@ -1136,7 +1136,7 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       };
     });
 
-    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf", sessionId });
+    res.json({ invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows: result, tariffs: parseSallaumTariffs(text), billFileName: savedFile.fname, billDriveId: savedFile.driveId, billDriveUrl: savedFile.driveUrl, billMime: "application/pdf", sessionId });
   } catch (err) {
     console.error("parse-sallaum error:", err);
     res.status(500).json({ error: err.message });
@@ -1146,8 +1146,9 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
 // ── POST /api/expenses/apply-sallaum — bulk create expenses from parsed bill ──
 router.post("/apply-sallaum", express.json(), async (req, res) => {
   try {
-    const { invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows,
+    const { invoiceNumber, invoiceDate, voyage, vessel, pol, pod, rows, tariffs,
             billFileName, billMime, billDriveId, billDriveUrl, sessionId } = req.body;
+    const ratedChecks = [];
     if (!rows || !rows.length) return res.status(400).json({ error: "No rows provided" });
 
     const dateObj = invoiceDate
@@ -1163,6 +1164,21 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           const o = await Order.findOne({ refNumber: { $regex: `^${orderRef}$`, $options: "i" } })
             .select("_id refNumber").lean();
           if (o) { orderId = o._id; orderRef = o.refNumber; }
+        }
+
+        // Split this car's charges (EBS + NR/FK lumped in "Other", EBS folded into a
+        // newer BAF) and cross-check them against the order's charges + invoice.
+        // Runs even when the expense is a duplicate.
+        let ratedLines = [];
+        if (orderId) {
+          try {
+            const ord = await Order.findById(orderId).select("condition").lean();
+            ratedLines = sallaumChargeLines(row, tariffs || {}, ord?.condition || "");
+            if (ratedLines.length) {
+              const r = await applyRatedBl(orderId, ratedLines, { source: `Sallaum ${invoiceNumber || ""}`.trim() });
+              if (r.changed) ratedChecks.push({ orderRef, ...r });
+            }
+          } catch (e) { console.warn("[apply-sallaum] rated check failed:", e.message); }
         }
 
         // Skip creating a duplicate expense — check multiple signals
@@ -1202,8 +1218,8 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
         });
         if (!duplicate) {
           created.push(true);
-          // Update order's oceanCost so it appears in P&L
-          if (orderId && row.total) {
+          // Update order's oceanCost so it appears in P&L (only when the row couldn't be split)
+          if (orderId && row.total && !ratedLines.length) {
             const ord = await Order.findById(orderId).select("charges").lean();
             const existing = parseFloat(ord?.charges?.oceanCost || 0);
             if (!existing || existing === 0) {
@@ -1273,7 +1289,7 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
       try { fs.unlinkSync(path.join(TEMP_DIR, `sallaum-${sessionId}.pdf`)); } catch {}
     }
 
-    res.json({ created: created.length });
+    res.json({ created: created.length, ratedChecks });
   } catch (err) {
     console.error("apply-sallaum error:", err);
     res.status(500).json({ error: err.message });
