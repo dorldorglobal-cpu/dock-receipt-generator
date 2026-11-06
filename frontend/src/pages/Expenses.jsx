@@ -404,12 +404,14 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
           {form.copartFundsApplied > 0 ? "Receipt Total ($) *" : "Amount ($) *"}
           <input
             type="number" min="0" step="0.01" required
-            value={form.receiptTotal ?? form.amount ?? ""}
+            value={(Number(form.copartFundsApplied) > 0 && form.receiptTotal !== "" && form.receiptTotal != null)
+              ? form.receiptTotal
+              : (form.amount ?? "")}
             onChange={e => {
               const receiptTotal = e.target.value;
               const funds = Number(form.copartFundsApplied || 0);
-              const net = funds > 0 ? Math.max(0, Number(receiptTotal) - funds) : Number(receiptTotal);
-              setForm(f => ({ ...f, receiptTotal, amount: String(net) }));
+              const amount = funds > 0 ? String(Math.max(0, Number(receiptTotal) - funds)) : receiptTotal;
+              setForm(f => ({ ...f, receiptTotal, amount }));
             }}
             style={inputStyle} placeholder="0.00"
           />
@@ -424,16 +426,18 @@ function ExpenseForm({ form, setForm, onSubmit, saving,
               value={form.copartFundsApplied ?? ""}
               onChange={e => {
                 const funds = Number(e.target.value || 0);
-                const total = Number(form.receiptTotal ?? form.amount ?? 0);
-                const net = Math.max(0, total - funds);
-                setForm(f => ({ ...f, copartFundsApplied: e.target.value, amount: String(net) }));
+                // Lock in the receipt total (the gross) the first time funds are entered,
+                // so later keystrokes subtract from the gross, not from the running net.
+                const gross = form.receiptTotal !== "" && form.receiptTotal != null ? form.receiptTotal : (form.amount || "0");
+                const net = Math.max(0, Number(gross) - funds);
+                setForm(f => ({ ...f, receiptTotal: gross, copartFundsApplied: e.target.value, amount: String(net) }));
               }}
               style={{ ...inputStyle, color: "#a78bfa" }}
               placeholder="0.00 (leave blank if none)"
             />
             {Number(form.copartFundsApplied || 0) > 0 && (
               <span style={{ fontSize: 11, color: "#a78bfa", marginTop: 3, display: "block" }}>
-                Out of pocket: <strong>${Math.max(0, Number(form.receiptTotal ?? form.amount ?? 0) - Number(form.copartFundsApplied)).toFixed(2)}</strong>
+                Out of pocket: <strong>${Math.max(0, Number((form.receiptTotal !== "" && form.receiptTotal != null) ? form.receiptTotal : (form.amount || 0)) - Number(form.copartFundsApplied)).toFixed(2)}</strong>
               </span>
             )}
           </label>
