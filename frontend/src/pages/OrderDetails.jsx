@@ -1,6 +1,7 @@
 ﻿import React, { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { authUrl } from "../lib/auth";
+import { findTowRate } from "../lib/towRates";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -71,12 +72,7 @@ function TowingVerifyForm({ verify, orderId, deliveryLocation, onDone }) {
     if (!verify.pickupCity) return;
     fetch(`${API}/api/pricing?type=towing`).then(r => r.json()).then(rates => {
       if (!Array.isArray(rates)) return;
-      const normCity = s => (s || "").replace(/[^A-Z0-9 ]/gi, "").trim().toUpperCase();
-      const rate = rates.find(r =>
-          normCity(r.city) === normCity(verify.pickupCity) &&
-          (r.port || "").toUpperCase() === (verify.pol || "").toUpperCase()
-        ) || rates.find(r => normCity(r.city) === normCity(verify.pickupCity) && !r.port)
-          || rates.find(r => normCity(r.city) === normCity(verify.pickupCity));
+      const rate = findTowRate(rates, { city: verify.pickupCity, state: verify.pickupState, pickupName: verify.pickupName || verify.pickupLocation, pol: verify.pol });
       if (!rate) return;
       const deliv = (deliveryLocation || "").toUpperCase();
       setIsWarehouse(/WAREHOUSE/i.test(deliv) || (rate.warehouse && deliv.includes((rate.warehouse || "").toUpperCase())));
@@ -689,27 +685,12 @@ export default function OrderDetails() {
       const updates = {};
 
       if ((needsTowing || needsTowingCost) && towingRates.length) {
-        const normCity = s => {
-          if (!s) return "";
-          let c = s.toUpperCase().replace(/[^A-Z0-9\s]/g, "").trim().replace(/\s+/g, " ");
-          c = c.replace(/\bFT\b/g, "FORT").replace(/\bST\b/g, "SAINT").replace(/\bMT\b/g, "MOUNT");
-          return c;
-        };
-        const match =
-          // 1. Exact: city + port both match
-          towingRates.find(r =>
-            normCity(r.city) === normCity(pickupCity) &&
-            (r.port || "").toUpperCase() === pol
-          ) ||
-          // 2. City match where rate has no port assigned (port-agnostic entry)
-          towingRates.find(r =>
-            normCity(r.city) === normCity(pickupCity) &&
-            !r.port
-          ) ||
-          // 3. City match regardless of port (closest we can get)
-          towingRates.find(r =>
-            normCity(r.city) === normCity(pickupCity)
-          );
+        // City + state (+ Copart/IAAI, + this order's port) — city names repeat
+        // across states, so a city-only match can price the wrong yard.
+        const match = findTowRate(towingRates, {
+          city: pickupCity, state: data.pickupState,
+          pickupName: data.pickupName || data.pickupLocation, pol,
+        });
         if (match) {
           const deliv = (data.deliveryLocation || "").toUpperCase();
           const isWarehouse = /WAREHOUSE/i.test(deliv) ||

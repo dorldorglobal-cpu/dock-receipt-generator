@@ -996,6 +996,8 @@ router.post(
                 dispatchCost: parsed.dispatchTowingCost,
                 currentCost:  storedCost || storedCharge,
                 pickupCity:   order.pickupCity || (order.pickupLocation || "").replace(/^COPART[\s\-–,]+/i,"").split(/[\s,]+/)[0] || "",
+                pickupState:  order.pickupState || "",
+                pickupName:   order.pickupName || order.pickupLocation || "",
                 pol:          order.pol || "",
               };
             }
@@ -1247,17 +1249,14 @@ router.post("/:id/confirm-towing-cost", async (req, res) => {
 
     // Optionally update pricing table
     if (updatePricingTable && pickupCity) {
-      const normCity = s => (s || "").replace(/[^A-Z0-9 ]/gi, "").trim().toUpperCase();
       const all = await Pricing.find({ type: "towing" });
-      // Find best match: city+port, then city-only
-      const rate = all.find(r =>
-          normCity(r.city) === normCity(pickupCity) &&
-          (r.port || "").toUpperCase() === (pol || "").toUpperCase()
-        ) || all.find(r =>
-          normCity(r.city) === normCity(pickupCity) && !r.port
-        ) || all.find(r =>
-          normCity(r.city) === normCity(pickupCity)
-        );
+      // City + state (+ Copart/IAAI, + port) — never write a cost onto a same-named
+      // city in another state (Lexington SC vs KY).
+      const { findTowRate } = require("../utils/towRate");
+      const rate = findTowRate(all, {
+        city: pickupCity, state: order.pickupState,
+        pickupName: order.pickupName || order.pickupLocation, pol,
+      });
 
       if (rate) {
         // Same lane check used when pulling a rate INTO an order (see

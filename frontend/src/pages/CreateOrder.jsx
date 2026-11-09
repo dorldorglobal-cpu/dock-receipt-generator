@@ -1,6 +1,7 @@
 ﻿import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AddressSearch from "../components/AddressSearch";
+import { findTowRate } from "../lib/towRates";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -444,16 +445,13 @@ export default function CreateOrder() {
     return "";
   };
 
-  const suggestDeliveryFromPickupCity = async (city, shippingLineHint, state, podOverride) => {
+  const suggestDeliveryFromPickupCity = async (city, shippingLineHint, state, podOverride, pickupName) => {
     if (!city && !state) return;
     try {
       const res = await fetch(`${API}/api/pricing?type=towing`);
       const rates = await res.json();
-      const cityNorm = normCity(city || "");
-      const match =
-        rates.find((r) => normCity(r.city) === cityNorm && r.port) ||
-        rates.find((r) => normCity(r.city) === cityNorm) ||
-        rates.find((r) => r.port && r.name && cityNorm && normCity(r.name).includes(cityNorm));
+      // City + state (+ Copart/IAAI) — city names repeat across states (Lexington SC vs KY)
+      const match = findTowRate(rates, { city, state, pickupName: pickupName || form.pickupName || form.pickupLocation, requirePort: true });
 
       const port = match?.port || (state && stateToPort[state.toUpperCase()]);
       if (port) {
@@ -653,7 +651,7 @@ export default function CreateOrder() {
 
     if (data.vin && data.vin.length === 17) decodeVin(data.vin);
     if (type !== "Container" && (data.pickupCity || data.pickupState)) {
-      suggestDeliveryFromPickupCity(data.pickupCity, effectiveLine, data.pickupState, effectivePod);
+      suggestDeliveryFromPickupCity(data.pickupCity, effectiveLine, data.pickupState, effectivePod, data.pickupName || data.pickupLocation);
     }
   };
 
@@ -1932,9 +1930,7 @@ export default function CreateOrder() {
                           if (pod) {
                             try {
                               const rates = await fetch(`${API}/api/pricing?type=towing`).then(r => r.json());
-                              const cityN = normCity(form.pickupCity || "");
-                              const match = rates.find(r => r.port && normCity(r.city) === cityN) ||
-                                rates.find(r => r.port && r.name && cityN && normCity(r.name).includes(cityN));
+                              const match = findTowRate(rates, { city: form.pickupCity, state: form.pickupState, pickupName: form.pickupName || form.pickupLocation, requirePort: true });
                               const port = match?.port || (form.pickupState && stateToPort[form.pickupState.toUpperCase()]);
                               if (port) await handlePolChange(port.toUpperCase(), line);
                             } catch {}
@@ -2045,9 +2041,7 @@ export default function CreateOrder() {
                 if (pod) {
                   try {
                     const rates = await fetch(`${API}/api/pricing?type=towing`).then(r => r.json());
-                    const cityN = normCity(form.pickupCity || "");
-                    const match = rates.find(r => r.port && normCity(r.city) === cityN) ||
-                      rates.find(r => r.port && r.name && cityN && normCity(r.name).includes(cityN));
+                    const match = findTowRate(rates, { city: form.pickupCity, state: form.pickupState, pickupName: form.pickupName || form.pickupLocation, requirePort: true });
                     const port = match?.port || (form.pickupState && stateToPort[form.pickupState.toUpperCase()]);
                     if (port) await handlePolChange(port.toUpperCase(), line);
                   } catch (e) { console.error("Delivery lookup failed", e); }
