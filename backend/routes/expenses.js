@@ -2003,6 +2003,9 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
           const line = isHeading && li + 1 < lines.length ? lines[li + 1] : lines[li];
           const amounts = line.match(/\d[\d,]*\.\d{2}/g);
           if (!amounts) continue;
+          // A car's own row in the vehicle table (iShip: "…VIN$0.00$1,175.00$1,175.00") is its
+          // base price, not an extra charge — skip it
+          if (/[A-HJ-NPR-Z0-9]{17}\s*\$/i.test(line)) continue;
           const refs = [
             ...(line.toUpperCase().match(/(?<![A-Z0-9])[A-HJ-NPR-Z0-9]{17}/g) || []),
             ...[...line.matchAll(/VIN[:\s#]*([A-HJ-NPR-Z0-9]{6,})/gi)].map(m => m[1].toUpperCase()),
