@@ -71,9 +71,24 @@ export default function Orders() {
     }
   };
 
+  // Business name → the people on that customer's record (contact name, consignee,
+  // auction buyer accounts), so searching a person's name finds their orders too.
+  const [customerPeople, setCustomerPeople] = useState({});
+  const custKey = (s) => String(s || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+
   useEffect(() => {
     fetch(`${API}/api/orders/auto-advance-arrived`, { method: "POST" }).catch(() => {});
     fetchOrders();
+    fetch(`${API}/api/customers`).then(r => r.json()).then(list => {
+      if (!Array.isArray(list)) return;
+      const map = {};
+      for (const c of list) {
+        const k = custKey(c.companyName);
+        if (!k) continue;
+        map[k] = [map[k], c.contactName, c.consignee, ...(c.buyerAccounts || [])].filter(Boolean).join(" ");
+      }
+      setCustomerPeople(map);
+    }).catch(() => {});
   }, []);
 
   const fetchOrders = async () => {
@@ -107,8 +122,13 @@ export default function Orders() {
   }
 
   const filtered = orders.filter(o => {
-    const text = `${o.refNumber} ${o.customerName} ${o.vin} ${o.make} ${o.model} ${o.lotNumber || ""}`.toLowerCase();
-    const matchSearch  = text.includes(search.toLowerCase());
+    const text = [
+      o.refNumber, o.customerName, o.vin, o.make, o.model, o.lotNumber,
+      o.buyerName, o.consigneeName, customerPeople[custKey(o.customerName)],
+    ].filter(Boolean).join(" ").toLowerCase();
+    // Every word typed must appear somewhere (so "john mensah" or "mensah john" both work)
+    const words = search.toLowerCase().split(/\s+/).filter(Boolean);
+    const matchSearch  = words.every(w => text.includes(w));
     const matchTab     = activeTab === "all"
       ? true
       : activeTab === "active"
@@ -189,7 +209,7 @@ export default function Orders() {
 
       {/* Toolbar */}
       <div className="orders-toolbar">
-        <input placeholder="Search ref, VIN, customer, lot#…" value={search}
+        <input placeholder="Search ref, VIN, business or contact name, lot#…" value={search}
           onChange={e => setSearch(e.target.value)} />
 
         {/* Shipment type filter */}
