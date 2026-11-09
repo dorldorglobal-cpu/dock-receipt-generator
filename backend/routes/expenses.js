@@ -2798,68 +2798,143 @@ router.get("/vendor-emails", async (req, res) => {
 // "payload" JSON { paidDate, method, attachProof, vendors: [{ vendor, email,
 // lines: [{ orderRef, vehicle, vin, amount }] }] }. One email per trucker
 // listing what was paid; the address is remembered on their vendor record.
+// One "Payment sent" email per vendor listing what was paid. Shared by Truckers to
+// Pay and the bank payment-proof import.
+//   dateStr: "11/5/2026"   vendors: [{ vendor, email, lines: [{ orderRef, vehicle, vin, amount }] }]
+//   proof:   { buffer, name, mime } — attached to every email sent (caller decides when that's safe)
+async function sendVendorReceipts({ dateStr, method, vendors = [], proof = null }) {
+  const { saveVendorEmail, emailList } = require("../utils/vendorMatch");
+  const { getGmailAccessToken } = require("../utils/gmail");
+  const { b64lines } = require("../utils/mime");
+  const money = (n) => "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
+  const token = await getGmailAccessToken();
+  const results = [];
+
+  for (const v of vendors) {
+    const to = emailList(v.email);
+    if (!to.length) { results.push({ vendor: v.vendor, sent: false, error: "no email" }); continue; }
+    const total = (v.lines || []).reduce((s, l) => s + Number(l.amount || 0), 0);
+    const subject = `Payment sent — ${money(total)} — ${dateStr}`;
+    const body = [
+      `Hello ${v.vendor},`, ``,
+      `We sent you a payment of ${money(total)}${method ? ` by ${method}` : ""} on ${dateStr} for:`, ``,
+      ...(v.lines || []).map(l => `  • #${l.orderRef || "—"}${l.vehicle ? ` ${l.vehicle}` : ""}${l.vin ? ` (VIN …${String(l.vin).slice(-6)})` : ""} — ${money(l.amount)}`),
+      ``, `Total: ${money(total)}`, ``,
+      proof ? `Proof of payment is attached.` : ``,
+      `Thank you,`, `Eli Levy`, `Dor Ldor Global`, `9172003998`, `DorLdorGlobal@gmail.com`,
+    ].join("\r\n");
+
+    const boundary = "DDG_RECEIPT_" + Date.now();
+    const mime = proof ? [
+      `From: ${from}`, `To: ${to.join(", ")}`, `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+      `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`, ``,
+      `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``, body,
+      `--${boundary}`,
+      `Content-Type: ${proof.mime || "application/pdf"}; name="${proof.name}"`,
+      `Content-Transfer-Encoding: base64`,
+      `Content-Disposition: attachment; filename="${proof.name}"`, ``,
+      b64lines(proof.buffer.toString("base64")), `--${boundary}--`,
+    ] : [
+      `From: ${from}`, `To: ${to.join(", ")}`, `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
+      `MIME-Version: 1.0`, `Content-Type: text/plain; charset="UTF-8"`, ``, body,
+    ];
+    try {
+      const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
+        method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ raw: Buffer.from(mime.join("\r\n")).toString("base64url") }),
+      });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error?.message || `Gmail ${r.status}`);
+      await saveVendorEmail(v.vendor, to.join(", "), v.category || "Towing / Transport").catch(() => {});
+      results.push({ vendor: v.vendor, email: to.join(", "), sent: true });
+    } catch (e) {
+      results.push({ vendor: v.vendor, email: to.join(", "), sent: false, error: e.message });
+    }
+  }
+  return results;
+}
+
 router.post("/send-payment-receipts", memUpload.single("proof"), async (req, res) => {
   try {
-    const { saveVendorEmail, emailList } = require("../utils/vendorMatch");
-    const { getGmailAccessToken } = require("../utils/gmail");
-    const { b64lines } = require("../utils/mime");
     const { paidDate, method, attachProof, vendors = [] } = JSON.parse(req.body.payload || "{}");
-    const money = (n) => "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     const d = paidDate && /^\d{4}-\d{2}-\d{2}$/.test(paidDate) ? paidDate.split("-") : null;
     const dateStr = d ? `${+d[1]}/${+d[2]}/${d[0]}` : new Date().toLocaleDateString("en-US");
-    const from = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
-    const token = await getGmailAccessToken();
-    const results = [];
-
-    for (const v of vendors) {
-      const to = emailList(v.email);
-      if (!to.length) { results.push({ vendor: v.vendor, sent: false, error: "no email" }); continue; }
-      const total = (v.lines || []).reduce((s, l) => s + Number(l.amount || 0), 0);
-      const subject = `Payment sent — ${money(total)} — ${dateStr}`;
-      const body = [
-        `Hello ${v.vendor},`, ``,
-        `We sent you a payment of ${money(total)}${method ? ` by ${method}` : ""} on ${dateStr} for:`, ``,
-        ...(v.lines || []).map(l => `  • #${l.orderRef || "—"}${l.vehicle ? ` ${l.vehicle}` : ""}${l.vin ? ` (VIN …${String(l.vin).slice(-6)})` : ""} — ${money(l.amount)}`),
-        ``, `Total: ${money(total)}`, ``,
-        attachProof && req.file ? `Proof of payment is attached.` : ``,
-        `Thank you,`, `Eli Levy`, `Dor Ldor Global`, `9172003998`, `DorLdorGlobal@gmail.com`,
-      ].join("\r\n");
-
-      const boundary = "DDG_RECEIPT_" + Date.now();
-      const mime = attachProof && req.file ? [
-        `From: ${from}`, `To: ${to.join(", ")}`, `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-        `MIME-Version: 1.0`, `Content-Type: multipart/mixed; boundary="${boundary}"`, ``,
-        `--${boundary}`, `Content-Type: text/plain; charset="UTF-8"`, ``, body,
-        `--${boundary}`,
-        `Content-Type: ${req.file.mimetype || "application/pdf"}; name="${req.file.originalname}"`,
-        `Content-Transfer-Encoding: base64`,
-        `Content-Disposition: attachment; filename="${req.file.originalname}"`, ``,
-        b64lines(req.file.buffer.toString("base64")), `--${boundary}--`,
-      ] : [
-        `From: ${from}`, `To: ${to.join(", ")}`, `Subject: =?UTF-8?B?${Buffer.from(subject).toString("base64")}?=`,
-        `MIME-Version: 1.0`, `Content-Type: text/plain; charset="UTF-8"`, ``, body,
-      ];
-      try {
-        const r = await fetch("https://gmail.googleapis.com/gmail/v1/users/me/messages/send", {
-          method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
-          body: JSON.stringify({ raw: Buffer.from(mime.join("\r\n")).toString("base64url") }),
-        });
-        if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error?.message || `Gmail ${r.status}`);
-        await saveVendorEmail(v.vendor, to.join(", "), "Towing / Transport").catch(() => {});
-        results.push({ vendor: v.vendor, email: to.join(", "), sent: true });
-      } catch (e) {
-        results.push({ vendor: v.vendor, email: to.join(", "), sent: false, error: e.message });
-      }
-    }
-    res.json({ results });
+    const proof = attachProof && req.file
+      ? { buffer: req.file.buffer, name: req.file.originalname, mime: req.file.mimetype }
+      : null;
+    res.json({ results: await sendVendorReceipts({ dateStr, method, vendors, proof }) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
+
+// Group a payment-proof import's paid bills by vendor and email each one a receipt.
+// The bank proof lists every payee in the batch, so it's attached only when the
+// whole batch went to one vendor.
+async function emailProofVendors({ paidLog, rows, proofFile, method }) {
+  const { vendorEmail } = require("../utils/vendorMatch");
+  const groups = new Map();
+  for (const p of paidLog) {
+    const k = normVendorName(p.vendor);
+    if (!k) continue;
+    if (!groups.has(k)) groups.set(k, { vendor: p.vendor, category: p.category, lines: [] });
+    groups.get(k).lines.push(p);
+  }
+  if (!groups.size) return [];
+
+  // Vehicle for each line, from its order
+  const refs = [...new Set(paidLog.map(p => p.orderRef).filter(Boolean))];
+  const orders = refs.length ? await Order.find({ refNumber: { $in: refs } }).select("refNumber year make model vin").lean() : [];
+  const byRef = Object.fromEntries(orders.map(o => [o.refNumber, o]));
+
+  const vendors = [];
+  for (const g of groups.values()) {
+    const email = await vendorEmail(g.vendor);
+    vendors.push({
+      vendor: g.vendor, category: g.category, email,
+      lines: g.lines.map(l => {
+        const o = byRef[l.orderRef];
+        return { orderRef: l.orderRef, vehicle: o ? [o.year, o.make, o.model].filter(Boolean).join(" ") : "",
+                 vin: l.vin || o?.vin || "", amount: l.amount };
+      }),
+    });
+  }
+
+  const pd = rows.find(r => r.selected && r.batchPaidDate)?.batchPaidDate;
+  const d = pd ? new Date(pd) : new Date();
+  const dateStr = (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
+
+  let proof = null;
+  if (groups.size === 1 && proofFile?.driveId) {
+    try {
+      const { downloadDriveFile } = require("../googleDrive");
+      const tmp = path.join(require("os").tmpdir(), "proof-vendor-" + Date.now() + ".pdf");
+      await downloadDriveFile(proofFile.driveId, tmp);
+      proof = { buffer: fs.readFileSync(tmp), name: proofFile.fname || "payment-proof.pdf", mime: "application/pdf" };
+      try { fs.unlinkSync(tmp); } catch {}
+    } catch (e) { console.warn("[emailProofVendors] proof download failed:", e.message); }
+  }
+
+  const withEmail = vendors.filter(v => (v.email || "").includes("@"));
+  const sent = withEmail.length ? await sendVendorReceipts({ dateStr, method, vendors: withEmail, proof }) : [];
+  return [...sent, ...vendors.filter(v => !(v.email || "").includes("@")).map(v => ({ vendor: v.vendor, sent: false, error: "no email" }))];
+}
 
 // ── POST /api/expenses/apply-payment-proof — mark the matched bills paid ──────
 router.post("/apply-payment-proof", express.json(), async (req, res) => {
   try {
-    const { rows, paymentMethod, proofFile } = req.body;
+    const { rows, paymentMethod, proofFile, emailVendors } = req.body;
     if (!rows?.length) return res.status(400).json({ error: "No rows provided" });
+
+    // What this import actually paid, per bill — for the vendors' payment receipts
+    const paidLog = [];
+    const logPaid = (bill, amount) => {
+      if (!bill || !(Number(amount) > 0)) return;
+      paidLog.push({ vendor: bill.vendor || "", category: bill.category || "", orderRef: bill.orderRef || "",
+        vin: bill.vin || "", amount: Number(amount) });
+    };
+    const logPaidId = async (id, amount) => {
+      const b = await Expense.findById(id).select("vendor category orderRef vin").lean().catch(() => null);
+      logPaid(b, amount);
+    };
 
     const receiptFields = proofFile?.driveId ? {
       receiptFileName: proofFile.fname || "",
@@ -2907,6 +2982,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           exp.status        = fullyPaid ? "paid" : "partial";
           if (receiptFields.receiptDriveId) Object.assign(exp, receiptFields);
           await exp.save();
+          logPaid(exp, perAmt);
           updated++;
         }
         continue;
@@ -2943,6 +3019,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
               { _id: split.existingExpenseId },
               { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
             );
+            await logPaidId(split.existingExpenseId, split.amount);
             updated++;
             continue;
           }
@@ -2955,6 +3032,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
               { _id: candidateMap[refKey] },
               { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
             );
+            await logPaidId(candidateMap[refKey], split.amount);
             updated++;
             continue;
           }
@@ -2966,6 +3044,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           if (existing) {
             if (existing.status !== "paid") {
               await payFromProof(existing, { date: dateObj, method: paymentMethod || "Bank ACH", receiptFields });
+              logPaid(existing, split.amount);
             }
             updated++;
           } else {
@@ -2985,6 +3064,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
             };
             enforceVendorCategory(splitData);
             await Expense.create(splitData);
+            logPaid(splitData, splitData.amount);
             created++;
           }
         }
@@ -2998,6 +3078,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
           { _id: row.existingExpenseId },
           { $set: { status: "paid", paidDate: dateObj, paymentMethod: paymentMethod || "Bank ACH", ...receiptFields } }
         );
+        await logPaidId(row.existingExpenseId, row.amount);
         updated++;
         continue;
       }
@@ -3010,6 +3091,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
         if (existing) {
           if (existing.status !== "paid") {
             await payFromProof(existing, { amount: row.amount, date: dateObj, method: paymentMethod || "Bank ACH", receiptFields });
+            logPaid(existing, row.amount);
           }
           updated++;
           continue;
@@ -3029,11 +3111,23 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
         };
         enforceVendorCategory(newBillData);
         await Expense.create(newBillData);
+        logPaid(newBillData, newBillData.amount);
         created++;
       }
     }
 
-    res.json({ updated, created, attached });
+    // Email each paid vendor a receipt (only vendors with an email on file)
+    let vendorEmails = [];
+    if (emailVendors && paidLog.length) {
+      try {
+        vendorEmails = await emailProofVendors({ paidLog, rows, proofFile, method: paymentMethod || "Bank ACH" });
+      } catch (e) {
+        console.warn("[apply-payment-proof] vendor receipts failed:", e.message);
+        vendorEmails = [{ vendor: "—", sent: false, error: e.message }];
+      }
+    }
+
+    res.json({ updated, created, attached, vendorEmails });
 
     // Append all approved rows to ACH PAYMENTS Google Sheet
     try {

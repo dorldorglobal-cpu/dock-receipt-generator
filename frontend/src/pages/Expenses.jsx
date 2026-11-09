@@ -882,6 +882,8 @@ export default function Expenses() {
   const [proofFile,        setProofFile]        = useState(null); // the dropped File object
   const [proofDriveFile,   setProofDriveFile]    = useState(null); // { fname, driveId, driveUrl } once uploaded
   const [proofRows,        setProofRows]         = useState([]);
+  const [proofEmailVendors, setProofEmailVendors] = useState(true);  // email each paid vendor a receipt
+  const [proofVendorEmails, setProofVendorEmails] = useState({});    // vendor name → email on file ("" = none)
   const [proofLoading,     setProofLoading]      = useState(false);
   const [proofMsg,         setProofMsg]          = useState("");
   // picker: { rowIdx, splitIdx (null=whole row), results, search }
@@ -977,12 +979,28 @@ export default function Expenses() {
     finally { setProofLoading(false); }
   };
 
+  // Vendors this import will pay — the matched bills' vendor, else the bank payee name
+  const proofVendors = [...new Set(proofRows.filter(r => r.selected && !r.attachOnly).flatMap(r => {
+    const ids = new Set((r.matchedIds || []).map(String));
+    const matched = (r.candidates || []).filter(c => ids.has(String(c._id))).map(c => c.vendor).filter(Boolean);
+    return matched.length ? matched : [r.payeeName].filter(Boolean);
+  }))];
+  useEffect(() => {
+    const missing = proofVendors.filter(n => !(n in proofVendorEmails));
+    if (!missing.length) return;
+    fetch(`${API}/api/expenses/vendor-emails?names=${encodeURIComponent(missing.join("|"))}`)
+      .then(r => r.json())
+      .then(d => setProofVendorEmails(e => ({ ...Object.fromEntries(missing.map(n => [n, ""])), ...d, ...e })))
+      .catch(() => {});
+  }, [proofVendors.join("|")]);
+  const proofWithEmail = proofVendors.filter(n => (proofVendorEmails[n] || "").includes("@"));
+
   const applyProofRows = async () => {
     setProofLoading(true);
     try {
       const res = await fetch(`${API}/api/expenses/apply-payment-proof`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rows: proofRows, paymentMethod: "Bank ACH", proofFile: proofDriveFile }),
+        body: JSON.stringify({ rows: proofRows, paymentMethod: "Bank ACH", proofFile: proofDriveFile, emailVendors: proofEmailVendors }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -990,6 +1008,13 @@ export default function Expenses() {
       if (data.updated)  parts.push(`${data.updated} bill(s) marked paid`);
       if (data.created)  parts.push(`${data.created} new bill(s) created`);
       if (data.attached) parts.push(`proof attached to ${data.attached} bill(s)`);
+      const ve = data.vendorEmails || [];
+      const sent = ve.filter(v => v.sent);
+      const failed = ve.filter(v => !v.sent && v.error !== "no email");
+      const noEmail = ve.filter(v => v.error === "no email");
+      if (sent.length)    parts.push(`✉️ receipt emailed to ${sent.length} vendor(s)`);
+      if (failed.length)  parts.push(`⚠️ email failed: ${failed.map(v => v.vendor).join(", ")}`);
+      if (noEmail.length) parts.push(`no email on file: ${noEmail.map(v => v.vendor).join(", ")}`);
       setProofMsg(`✅ ${parts.join(", ")}!`);
       setProofRows([]); setProofFile(null); setProofDriveFile(null); fetchAll();
     } catch (err) { setProofMsg("❌ " + err.message); }
@@ -2652,6 +2677,26 @@ export default function Expenses() {
                     </tbody>
                   </table>
                 </div>
+                {proofVendors.length > 0 && (
+                  <div style={{ marginTop:14, fontSize:12, color:"var(--text-secondary)" }}>
+                    <label style={{ display:"flex", alignItems:"center", gap:6, fontWeight:600, color:"var(--text-primary)", cursor:"pointer" }}>
+                      <input type="checkbox" checked={proofEmailVendors} onChange={e => setProofEmailVendors(e.target.checked)} />
+                      ✉️ Email each vendor a payment receipt
+                    </label>
+                    {proofEmailVendors && (
+                      <div style={{ marginTop:4, marginLeft:22 }}>
+                        {proofWithEmail.length
+                          ? <>Will email: {proofWithEmail.map(n => `${n} (${proofVendorEmails[n]})`).join(" · ")}</>
+                          : <>None of these vendors has an email on file.</>}
+                        {proofVendors.length > proofWithEmail.length && (
+                          <div style={{ color:"var(--warning)" }}>
+                            No email on file (skipped): {proofVendors.filter(n => !proofWithEmail.includes(n)).join(", ")}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
                 <div style={{marginTop:14,display:"flex",alignItems:"center",gap:16}}>
                   <button onClick={applyProofRows} disabled={proofLoading}
                     style={{background:"#059669",color:"#fff",border:"none",borderRadius:8,padding:"10px 20px",fontSize:14,fontWeight:600,cursor:"pointer"}}>
