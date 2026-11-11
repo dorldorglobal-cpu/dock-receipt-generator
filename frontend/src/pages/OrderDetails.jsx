@@ -4,6 +4,12 @@ import { authUrl } from "../lib/auth";
 import { findTowRate } from "../lib/towRates";
 import { portLineFromDelivery, lineFromText, polFromText } from "../lib/ports";
 
+// Today as YYYY-MM-DD in the user's own time zone (for comparing date-only values)
+const todayLocalISO = () => {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
 // ── DR field option lists ─────────────────────────────────────────────────────
@@ -457,6 +463,7 @@ export default function OrderDetails() {
     { description: "Ocean Freight", amount: "0.00" },
   ]);
   const [invoiceDueDate, setInvoiceDueDate] = useState("");
+  const [invoiceDueSource, setInvoiceDueSource] = useState(""); // "arrival" | "schedule" | "manual" | ""
   const [invoiceNotes,   setInvoiceNotes]   = useState("");
   const [invoiceSaving,  setInvoiceSaving]  = useState(false);
   const [orderInvoices,  setOrderInvoices]  = useState([]);  // invoices created for this order
@@ -1038,8 +1045,22 @@ export default function OrderDetails() {
       items.length ? items : [{ description: "", amount: "0.00" }]
     );
 
-    // Pre-fill due date from order arrivalDate; schedule lookup happens later in generateInvoicePdf
-    setInvoiceDueDate(order?.arrivalDate ? order.arrivalDate.slice(0, 10) : "");
+    // Due date the invoice will be saved with: the order's arrival date, else the
+    // vessel schedule's arrival (same fallback the invoice email uses)
+    const arr = order?.arrivalDate ? String(order.arrivalDate).slice(0, 10) : "";
+    setInvoiceDueDate(arr);
+    setInvoiceDueSource(arr ? "arrival" : "");
+    if (!arr && order?.vessel) {
+      const qs = new URLSearchParams({ vessel: order.vessel, ...(order.voyage ? { voyageName: order.voyage } : {}),
+        ...(order.pol ? { pol: order.pol } : {}), ...(order.pod ? { pod: order.pod } : {}) });
+      fetch(`${API}/api/schedule/lookup?${qs}`).then(r => r.json()).then(s => {
+        if (s.found && s.arrivalDate) {
+          const d = String(s.arrivalDate).slice(0, 10);
+          setInvoiceDueDate(cur => cur || d);
+          setInvoiceDueSource(cur => cur || "schedule");
+        }
+      }).catch(() => {});
+    }
     setInvoiceNotes("");
     setShowInvoice(true);
   };
@@ -6027,10 +6048,30 @@ export default function OrderDetails() {
             {/* Due date + notes */}
             <div style={{ display: "grid", gridTemplateColumns: "200px 1fr", gap: 12, marginBottom: 18 }}>
               <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
-                Due Date (optional)
+                Due Date
                 <input type="date" value={invoiceDueDate}
-                  onChange={e => setInvoiceDueDate(e.target.value)}
-                  style={{ display: "block", width: "100%", marginTop: 4 }} />
+                  onChange={e => { setInvoiceDueDate(e.target.value); setInvoiceDueSource(e.target.value ? "manual" : ""); }}
+                  style={{ display: "block", width: "100%", marginTop: 4,
+                    ...(invoiceDueDate && invoiceDueDate < todayLocalISO() ? { borderColor: "#dc2626" } : {}) }} />
+                {(() => {
+                  if (!invoiceDueDate)
+                    return <div style={{ marginTop: 4, fontSize: 11, color: "var(--warning)" }}>No arrival date found — the invoice will have no due date</div>;
+                  const shown = new Date(invoiceDueDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+                  const src = invoiceDueSource === "arrival" ? "order's arrival date"
+                            : invoiceDueSource === "schedule" ? "vessel schedule arrival"
+                            : invoiceDueSource === "manual" ? "entered by you" : "";
+                  const past = invoiceDueDate < todayLocalISO();
+                  return (
+                    <div style={{ marginTop: 4, fontSize: 11, lineHeight: 1.35 }}>
+                      <div style={{ color: "var(--text-secondary)" }}>Invoice will be due <strong>{shown}</strong>{src ? ` (${src})` : ""}</div>
+                      {past && (
+                        <div style={{ color: "#dc2626", fontWeight: 600 }}>
+                          ⚠ That date has already passed — the invoice will be overdue as soon as it's sent
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
               </label>
               <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>
                 Notes (optional)
