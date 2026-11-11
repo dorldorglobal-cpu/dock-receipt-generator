@@ -1,7 +1,8 @@
 ﻿import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import AddressSearch from "../components/AddressSearch";
-import { findTowRate } from "../lib/towRates";
+import { findTowRate, portForState } from "../lib/towRates";
+import { polFromText } from "../lib/ports";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -453,7 +454,7 @@ export default function CreateOrder() {
       // City + state (+ Copart/IAAI) — city names repeat across states (Lexington SC vs KY)
       const match = findTowRate(rates, { city, state, pickupName: pickupName || form.pickupName || form.pickupLocation, requirePort: true });
 
-      const port = match?.port || (state && stateToPort[state.toUpperCase()]);
+      const port = match?.port || portForState(rates, state) || (state && stateToPort[state.toUpperCase()]);
       if (port) {
         const pod = podOverride || form.pod;
         const lineHint = shippingLineHint || getShippingLineForPort(port, pod);
@@ -493,12 +494,15 @@ export default function CreateOrder() {
           `${API}/api/address-book?search=${encodeURIComponent(line)}&type=port`
         ).then(r => r.json());
         if (Array.isArray(r1) && r1.length) {
-          // If multiple results for this line, prefer one whose name/city mentions the port
-          const portMatch = r1.find(e =>
-            (e.companyName || "").toUpperCase().includes(polValue.toUpperCase()) ||
-            (e.city        || "").toUpperCase().includes(polValue.toUpperCase())
-          );
-          picked = portMatch || r1[0];
+          // Only a terminal that's actually at this port — never another port's
+          // terminal just because it's the same line (Sallaum has no Newark terminal)
+          const P = polValue.toUpperCase();
+          picked = r1.find(e => polFromText(e.companyName) === P || polFromText(e.city) === P) || null;
+          if (!picked) {
+            setMessage(`⚠ ${line.toUpperCase()} has no terminal at ${P} in the address book — pick the port / delivery terminal by hand.`);
+            setForm(prev => ({ ...prev, deliveryLocation: "", deliveryName: "", deliveryAddress: "", deliveryCity: "", deliveryState: "", deliveryZip: "" }));
+            return;
+          }
         }
       }
 
@@ -1931,7 +1935,7 @@ export default function CreateOrder() {
                             try {
                               const rates = await fetch(`${API}/api/pricing?type=towing`).then(r => r.json());
                               const match = findTowRate(rates, { city: form.pickupCity, state: form.pickupState, pickupName: form.pickupName || form.pickupLocation, requirePort: true });
-                              const port = match?.port || (form.pickupState && stateToPort[form.pickupState.toUpperCase()]);
+                              const port = match?.port || portForState(rates, form.pickupState) || (form.pickupState && stateToPort[form.pickupState.toUpperCase()]);
                               if (port) await handlePolChange(port.toUpperCase(), line);
                             } catch {}
                           }
@@ -2042,7 +2046,7 @@ export default function CreateOrder() {
                   try {
                     const rates = await fetch(`${API}/api/pricing?type=towing`).then(r => r.json());
                     const match = findTowRate(rates, { city: form.pickupCity, state: form.pickupState, pickupName: form.pickupName || form.pickupLocation, requirePort: true });
-                    const port = match?.port || (form.pickupState && stateToPort[form.pickupState.toUpperCase()]);
+                    const port = match?.port || portForState(rates, form.pickupState) || (form.pickupState && stateToPort[form.pickupState.toUpperCase()]);
                     if (port) await handlePolChange(port.toUpperCase(), line);
                   } catch (e) { console.error("Delivery lookup failed", e); }
                 }

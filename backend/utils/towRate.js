@@ -36,7 +36,9 @@ function findTowRate(rates, { city, state, pickupName, pol, requirePort = false 
   if (!Array.isArray(rates)) return null;
   const c = normCity(city);
   if (!c) return null;
-  let pool = rates.filter(r => normCity(r.city) === c && (!requirePort || r.port));
+  // Spaces ignored: "LEROY" = "LE ROY", "DESOTO" = "DE SOTO"
+  const flat = (s) => normCity(s).replace(/ /g, "");
+  let pool = rates.filter(r => flat(r.city) === flat(city) && (!requirePort || r.port));
   if (!pool.length) return null;
   const st = normState(state);
   if (st) {

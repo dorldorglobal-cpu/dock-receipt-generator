@@ -44,11 +44,23 @@ const auctionOf = (s) => {
  * @param {{city:string, state?:string, pickupName?:string, pol?:string, requirePort?:boolean}} q
  * @returns the best row, or null when it can't be told apart safely
  */
+// The port your own rate table uses most for pickups in a state — the fallback when
+// a pickup city has no rate of its own (better than a fixed state → port list).
+export function portForState(rates, state) {
+  const st = normState(state);
+  if (!st || !Array.isArray(rates)) return "";
+  const count = {};
+  for (const r of rates) if (r.port && normState(r.state) === st) count[r.port] = (count[r.port] || 0) + 1;
+  return Object.entries(count).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+}
+
 export function findTowRate(rates, { city, state, pickupName, pol, requirePort = false } = {}) {
   if (!Array.isArray(rates)) return null;
   const c = normCity(city);
   if (!c) return null;
-  let pool = rates.filter(r => normCity(r.city) === c && (!requirePort || r.port));
+  // Spaces ignored: "LEROY" = "LE ROY", "DESOTO" = "DE SOTO"
+  const flat = (s) => normCity(s).replace(/ /g, "");
+  let pool = rates.filter(r => flat(r.city) === flat(city) && (!requirePort || r.port));
   if (!pool.length) return null;
 
   const st = normState(state);
