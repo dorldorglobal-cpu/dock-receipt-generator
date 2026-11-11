@@ -953,6 +953,25 @@ app.post("/generate-pdf", async (req, res) => {
     );
 
     res.send(Buffer.from(pdfBytes));
+
+    // Remember what this DR said on its order, so the order page can check the
+    // order's port / line against the DR that was actually issued (non-fatal).
+    try {
+      const Order = require("./models/Order");
+      const { lineFromText, polFromText } = require("./utils/ports");
+      const terminal = safeVal(d.deliveryName || d.deliveryLocation);
+      const booking  = safeVal(d.bookingNumber).toUpperCase();
+      const line = lineFromText(terminal)
+        || (/^SLS/.test(booking) ? "SALLAUM" : /^S3/.test(booking) ? "ACL" : "")
+        || cleanUpper(d.shippingLine);
+      const drIssued = {
+        pol: cleanUpper(d.portOfLoading || d.pol) || polFromText(terminal) || polFromText(d.deliveryCity),
+        line, terminal, terminalCity: safeVal(d.deliveryCity), booking, at: new Date(),
+      };
+      const q = d._id && /^[a-f0-9]{24}$/i.test(String(d._id)) ? { _id: d._id }
+              : safeVal(d.referenceNumber || d.refNumber) ? { refNumber: safeVal(d.referenceNumber || d.refNumber) } : null;
+      if (q) await Order.updateOne(q, { $set: { drIssued } });
+    } catch (e) { console.warn("[generate-pdf] drIssued save failed:", e.message); }
   } catch (err) {
     console.error("PDF TEMPLATE ERROR:", err);
     res.status(500).json({ error: err.message });

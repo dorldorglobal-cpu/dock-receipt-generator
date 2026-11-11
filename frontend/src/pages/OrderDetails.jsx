@@ -2,6 +2,7 @@
 import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { authUrl } from "../lib/auth";
 import { findTowRate } from "../lib/towRates";
+import { portLineFromDelivery, lineFromText, polFromText } from "../lib/ports";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -1583,6 +1584,18 @@ export default function OrderDetails() {
     if (drPod && ordPod && drPod !== ordPod)
       drWarnings.push(`⚠️ Port of Discharge mismatch: DR="${drPod}" vs Order="${ordPod}"`);
 
+    // The delivery terminal printed on the DR must be at the same port, and on the
+    // same line as the booking (e.g. "SALLAUM – BALTIMORE" terminal with a PROVIDENCE POL)
+    const termName = payload.deliveryName || payload.deliveryLocation || "";
+    const termPol  = polFromText(termName) || polFromText(payload.deliveryCity);
+    const termLine = lineFromText(termName);
+    const bkUp     = String(payload.bookingNumber || "").toUpperCase();
+    const bkLine   = /^SLS/.test(bkUp) ? "SALLAUM" : /^S3/.test(bkUp) ? "ACL" : "";
+    if (termPol && drPol && termPol !== drPol)
+      drWarnings.push(`⚠️ Terminal / port mismatch: delivery terminal "${termName}" is in ${termPol}, but Port of Loading is ${drPol}`);
+    if (termLine && bkLine && termLine !== bkLine)
+      drWarnings.push(`⚠️ Shipping line mismatch: delivery terminal is ${termLine}, booking ${payload.bookingNumber} is ${bkLine}`);
+
     // Consignee mismatch between DR payload and order
     const drConsignee  = (payload.consigneeName || "").toUpperCase().trim();
     const ordConsignee = (order.consigneeName   || "").toUpperCase().trim();
@@ -2499,6 +2512,73 @@ export default function OrderDetails() {
           )}
         </div>
       </div>
+
+      {/* ── Port / shipping line check: order vs delivery terminal vs dock receipt vs booking ── */}
+      {order.requestType !== "Container" && (() => {
+        const normLine = (s) => lineFromText(s) || String(s || "").toUpperCase().trim();
+        const bk = String(order.bookingNumber || "").toUpperCase();
+        const dlvName = order.deliveryName || order.deliveryLocation || "";
+        const dlv = portLineFromDelivery(dlvName, order.deliveryCity);
+        const dr  = order.drIssued?.at ? order.drIssued : null;
+        const sources = [
+          { key: "order",    label: "Order",             pol: String(order.pol || "").toUpperCase(), line: normLine(order.shippingLine) },
+          { key: "delivery", label: "Delivery terminal", pol: dlv.pol, line: dlv.line, note: dlvName },
+          ...(dr ? [{ key: "dr", label: "Dock receipt", pol: String(dr.pol || "").toUpperCase(), line: normLine(dr.line),
+                      note: `${dr.terminal || ""}${dr.at ? ` · issued ${new Date(dr.at).toLocaleDateString("en-US")}` : ""}` }] : []),
+          { key: "booking",  label: "Booking #",         pol: "", line: /^SLS/.test(bk) ? "SALLAUM" : /^S3/.test(bk) ? "ACL" : "", note: order.bookingNumber || "" },
+        ];
+        const pols  = [...new Set(sources.map(s => s.pol).filter(Boolean))];
+        const lines = [...new Set(sources.map(s => s.line).filter(Boolean))];
+        if (pols.length <= 1 && lines.length <= 1) return null;
+
+        // The value most sources agree on, ignoring the order itself
+        const majority = (field) => {
+          const c = {};
+          for (const s of sources) if (s.key !== "order" && s[field]) c[s[field]] = (c[s[field]] || 0) + 1;
+          return Object.entries(c).sort((a, b) => b[1] - a[1])[0]?.[0] || "";
+        };
+        const fixPol = majority("pol"), fixLine = majority("line");
+        const odd = (s, field) => s[field] && ((field === "pol" ? pols : lines).length > 1) && s[field] !== (field === "pol" ? fixPol : fixLine);
+        const applyFix = async (pol, line) => {
+          const body = {};
+          if (pol && pol !== String(order.pol || "").toUpperCase()) body.pol = pol;
+          if (line && line !== normLine(order.shippingLine)) body.shippingLine = line;
+          if (!Object.keys(body).length) return;
+          const res = await fetch(`${API}/api/orders/${id}`, { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok) { setMessage(data.error || "Couldn't update the order"); return; }
+          setOrder(data);
+          setMessage(`✅ Order set to ${[body.pol, body.shippingLine].filter(Boolean).join(" · ")}`);
+        };
+        const orderOff = odd(sources[0], "pol") || odd(sources[0], "line");
+        return (
+          <div style={{ marginBottom:16, borderRadius:10, border:"1px solid rgba(245,158,11,0.45)",
+            background:"rgba(245,158,11,0.08)", padding:"12px 16px", fontSize:13 }}>
+            <div style={{ fontWeight:700, color:"#d97706", marginBottom:6 }}>
+              ⚠ Port / shipping line mismatch{pols.length > 1 ? ` — port: ${pols.join(" vs ")}` : ""}{lines.length > 1 ? ` — line: ${lines.join(" vs ")}` : ""}
+            </div>
+            <table style={{ borderCollapse:"collapse", fontSize:12 }}>
+              <tbody>
+                {sources.map(s => (
+                  <tr key={s.key}>
+                    <td style={{ padding:"2px 12px 2px 0", color:"var(--text-secondary)", whiteSpace:"nowrap" }}>{s.label}</td>
+                    <td style={{ padding:"2px 12px 2px 0", fontWeight:600, color: odd(s, "pol") ? "#dc2626" : "var(--text-primary)" }}>{s.pol || "—"}</td>
+                    <td style={{ padding:"2px 12px 2px 0", fontWeight:600, color: odd(s, "line") ? "#dc2626" : "var(--text-primary)" }}>{s.line || "—"}</td>
+                    <td style={{ padding:"2px 0", color:"var(--text-muted)" }}>{s.note || ""}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+            {!dr && <div style={{ marginTop:6, color:"var(--text-muted)", fontSize:11 }}>No dock receipt generated in the app yet — it'll be checked once one is.</div>}
+            {orderOff && (fixPol || fixLine) && (
+              <button onClick={() => applyFix(fixPol, fixLine)}
+                style={{ marginTop:8, padding:"5px 12px", borderRadius:6, border:"none", background:"#d97706", color:"#fff", fontWeight:600, fontSize:12, cursor:"pointer" }}>
+                Set order to {[fixPol, fixLine].filter(Boolean).join(" · ")}
+              </button>
+            )}
+          </div>
+        );
+      })()}
 
       {/* ── Problem / Hold overlay — independent of order.status ─────── */}
       {(() => {
@@ -4996,19 +5076,20 @@ export default function OrderDetails() {
                   onChange={v => {
                     const extra = {};
                     if (field === "deliveryLocation") {
-                      const up = (v || "").toUpperCase();
-                      if (up.includes("ACL"))     extra.shippingLine = "ACL";
-                      else if (up.includes("SALLAUM")) extra.shippingLine = "SALLAUM";
+                      // The terminal names the line and the port — keep both in step with it
+                      const { line, pol } = portLineFromDelivery(v);
+                      if (line) extra.shippingLine = line;
+                      if (pol && line) extra.pol = pol;   // only a carrier terminal (not a container warehouse) sets the port
                     }
-                    setEditForm(f=>({...f,[field]:v,...extra}));
+                    setEditForm(f=>({...f,[field]:v,...(f.requestType === "Container" ? {} : extra)}));
                   }}
                   onSelect={item => {
                     const name = item.companyName||"";
                     const extra = {};
                     if (field === "deliveryLocation") {
-                      const up = name.toUpperCase();
-                      if (up.includes("ACL"))     extra.shippingLine = "ACL";
-                      else if (up.includes("SALLAUM")) extra.shippingLine = "SALLAUM";
+                      const { line, pol } = portLineFromDelivery(name, item.city);
+                      if (line) extra.shippingLine = line;
+                      if (pol && line) extra.pol = pol;   // only a carrier terminal (not a container warehouse) sets the port
                     }
                     setEditForm(f=>({
                       ...f,
@@ -5018,7 +5099,7 @@ export default function OrderDetails() {
                       [addrFields.city]:    item.city||"",
                       [addrFields.state]:   item.state||"",
                       [addrFields.zip]:     item.postalCode||"",
-                      ...extra,
+                      ...(f.requestType === "Container" ? {} : extra),
                     }));
                   }}
                 />

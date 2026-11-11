@@ -65,6 +65,16 @@ const orderSchema = new mongoose.Schema(
     sailDate:    String,
     arrivalDate: String,
     aesItn: String,
+    // What the last dock receipt generated for this order actually said — the
+    // order page checks the order's port/line against it.
+    drIssued: {
+      pol:      { type: String, default: "" },
+      line:     { type: String, default: "" },
+      terminal: { type: String, default: "" },
+      terminalCity: { type: String, default: "" },
+      booking:  { type: String, default: "" },
+      at:       { type: Date },
+    },
     weightKgs: String,
     value: String,
     vehicleYearMakeModel: String,
