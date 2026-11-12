@@ -116,4 +116,41 @@ async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber
   }
 }
 
-module.exports = { upsertAclRow };
+/**
+ * Write ACL's charge for a booking into AMOUNT (col I) once it's known — from the
+ * rated BL (BL Separator) or the ACL bill import. Finds the row by BOOKING# or
+ * REFERENCE; does nothing if the booking has no row yet (DR / BL attach make it).
+ * Leaves the cell alone if it already holds the same amount; never touches J/K.
+ */
+async function setAclAmount({ bookingNumber, refNumber, amount }) {
+  const amt = Math.round(Number(amount) * 100) / 100;
+  if (!(amt > 0)) return { written: false, reason: "no amount" };
+  try {
+    const getRes = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A:I` });
+    const rows = getRes.data.values || [];
+    let bn = String(bookingNumber || "").trim().toUpperCase();
+    if (/^S3\d{8}$/.test(bn)) bn = "S3-" + bn.slice(2);
+    let idx = -1;
+    for (let i = HEADER_ROW; i < rows.length; i++) {
+      const rowBooking = String(rows[i][0] || "").trim().toUpperCase();
+      const rowRef     = String(rows[i][6] || "").trim();
+      if (bn && rowBooking === bn) { idx = i; break; }
+      if (refNumber && rowRef === String(refNumber)) { idx = i; break; }
+    }
+    if (idx < 0) return { written: false, reason: "no row" };
+    const cur = Number(String(rows[idx][8] || "").replace(/[$,]/g, ""));
+    if (cur === amt) return { written: false, reason: "same", row: idx + 1 };
+    await sheets.spreadsheets.values.update({
+      spreadsheetId: SHEET_ID,
+      range: `${TAB}!I${idx + 1}`,
+      valueInputOption: "USER_ENTERED",
+      requestBody: { values: [[amt]] },
+    });
+    return { written: true, row: idx + 1, from: rows[idx][8] || "" };
+  } catch (err) {
+    console.warn("[aclSheet] Failed to write AMOUNT:", err.message);
+    return { written: false, reason: err.message };
+  }
+}
+
+module.exports = { upsertAclRow, setAclAmount };

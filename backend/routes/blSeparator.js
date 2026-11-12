@@ -9,7 +9,7 @@ const { execFile } = require("child_process");
 const Order = require("../models/Order");
 const Expense = require("../models/Expense");
 const { uploadBufferToDrive } = require("../googleDrive");
-const { upsertAclRow } = require("../utils/aclSheet");
+const { upsertAclRow, setAclAmount } = require("../utils/aclSheet");
 
 const upload = multer({ storage: multer.memoryStorage() });
 const TEMP_DIR = path.join(__dirname, "..", "temp");
@@ -431,7 +431,7 @@ router.post("/attach", async (req, res) => {
         const isAcl = (order.shippingLine || "").toUpperCase() !== "SALLAUM";
         if (isAcl && !aclSheetUpdated.has(String(order._id))) {
           aclSheetUpdated.add(String(order._id));
-          upsertAclRow({
+          await upsertAclRow({
             bookingNumber: bl.blNumber || "",
             vin:           bl.vin || order.vin || "",
             consignee:     order.customerName || "",
@@ -443,6 +443,10 @@ router.post("/attach", async (req, res) => {
               sailDate: scheduleSailDate || order.sailDate,
             },
           });
+        }
+        // Rated BL → ACL's charge for this booking goes in the sheet's AMOUNT column
+        if (isAcl && bl.type === "rated" && Number(bl.charges) > 0) {
+          await setAclAmount({ bookingNumber: bl.blNumber || order.bookingNumber, refNumber: order.refNumber, amount: bl.charges });
         }
 
         results.push({

@@ -1732,6 +1732,14 @@ router.post("/apply-acl", express.json(), async (req, res) => {
         if (m && d && y) dateObj = new Date(`${y}-${m}-${d}`);
       }
 
+      // ACL's charge for this booking → the ACL BOOKED sheet's AMOUNT column (even on a re-import)
+      if (row.total > 0 && (row.bookingNo || orderRef)) {
+        try {
+          const { setAclAmount } = require("../utils/aclSheet");
+          await setAclAmount({ bookingNumber: row.bookingNo, refNumber: orderRef, amount: row.total });
+        } catch (e) { console.warn("[apply-acl] sheet AMOUNT failed:", e.message); }
+      }
+
       // Cross-check the rated BL's charge lines against the order + invoice (storage,
       // forklift, non-runner… become billed lines). Runs even when the bill is a dup.
       if (orderId && row.chargeLines?.length) {
