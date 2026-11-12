@@ -1,4 +1,8 @@
 require("dns").setDefaultResultOrder("ipv4first");
+// Python helpers (PDF redaction / splitting) load packages installed into ./.pydeps at build time
+// (scripts/install-pydeps.js) — every child python process inherits this
+process.env.PYTHONPATH = [require("path").join(__dirname, ".pydeps"), process.env.PYTHONPATH]
+  .filter(Boolean).join(require("path").delimiter);
 const express = require("express");
 const mongoose = require("mongoose");
 const multer = require("multer");
