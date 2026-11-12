@@ -37,6 +37,18 @@ app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 
 // ── Health check (used by keep-alive self-ping) ──
 app.get("/api/health", (req, res) => res.json({ status: "ok" }));
+// Are the PDF tools the server shells out to installed? (payment-proof redaction, PDF splits)
+app.get("/api/health/pdf-tools", (req, res) => {
+  const py = process.env.PYTHON || (process.platform === "win32" ? "python" : "python3");
+  require("child_process").execFile(py, ["-c",
+    "import json\nout={}\nfor m in ('pymupdf','pypdf','pdfplumber'):\n  try:\n    mod=__import__(m); out[m]=getattr(mod,'__version__',None) or getattr(mod,'VersionBind','ok')\n  except Exception as e:\n    out[m]=None\nprint(json.dumps(out))"],
+    { timeout: 20000 }, (err, stdout, stderr) => {
+      if (err) return res.status(500).json({ ok: false, python: py, error: (stderr || err.message).trim().split("\n").pop() });
+      let mods = {};
+      try { mods = JSON.parse(String(stdout).trim()); } catch {}
+      res.json({ ok: !!mods.pymupdf, python: py, modules: mods });
+    });
+});
 
 // ── Admin Gmail read-auth URL (open — no token needed to start the OAuth flow) ──
 app.get("/api/admin/gmail-read-auth-url", (req, res) => {
