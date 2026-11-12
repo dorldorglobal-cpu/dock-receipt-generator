@@ -970,7 +970,21 @@ app.post("/generate-pdf", async (req, res) => {
       };
       const q = d._id && /^[a-f0-9]{24}$/i.test(String(d._id)) ? { _id: d._id }
               : safeVal(d.referenceNumber || d.refNumber) ? { refNumber: safeVal(d.referenceNumber || d.refNumber) } : null;
-      if (q) await Order.updateOne(q, { $set: { drIssued } });
+      if (q) {
+        // A DR made with a different booking # is the newer booking (e.g. moved from
+        // Sallaum to ACL) — the order takes it, so the two don't disagree afterwards
+        const ord = await Order.findOne(q).select("bookingNumber").lean();
+        const set = { drIssued };
+        const push = {};
+        if (ord && booking && booking !== String(ord.bookingNumber || "").toUpperCase()) {
+          set.bookingNumber = safeVal(d.bookingNumber);
+          if (line) set.shippingLine = line;
+          push.timeline = { action: "Booking Updated",
+            details: `Booking ${ord.bookingNumber || "—"} → ${safeVal(d.bookingNumber)} (from the new dock receipt${line ? `, ${line}` : ""})`,
+            createdAt: new Date() };
+        }
+        await Order.updateOne(q, { $set: set, ...(push.timeline ? { $push: push } : {}) });
+      }
     } catch (e) { console.warn("[generate-pdf] drIssued save failed:", e.message); }
   } catch (err) {
     console.error("PDF TEMPLATE ERROR:", err);
