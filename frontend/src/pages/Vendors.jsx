@@ -368,8 +368,9 @@ export default function Vendors() {
   const saveVendor = async (e) => {
     e.preventDefault(); setVSaving(true);
     try {
-      const url    = editVendor ? `${API}/api/vendors/${editVendor._id}` : `${API}/api/vendors`;
-      const method = editVendor ? "PUT" : "POST";
+      // A vendor that only exists on bills has no record (_id null) yet — saving creates it
+      const url    = editVendor?._id ? `${API}/api/vendors/${editVendor._id}` : `${API}/api/vendors`;
+      const method = editVendor?._id ? "PUT" : "POST";
       const res    = await fetch(url, { method, headers:{"Content-Type":"application/json"}, body: JSON.stringify(vForm) });
       if (!res.ok) { const err=await res.json(); alert(err.error||"Save failed"); setVSaving(false); return; }
       setShowAdd(false); setEditVendor(null); fetchVendors();

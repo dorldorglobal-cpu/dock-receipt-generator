@@ -394,13 +394,25 @@ router.post("/parse-document", (req, res) => {
 // ── PUT /api/vendors/:id ──────────────────────────────────────────────────────
 router.put("/:id", async (req, res) => {
   try {
+    const { _id, createdAt, updatedAt, __v, ...body } = req.body || {};
+    // A vendor that only exists on bills has no record yet (the list sends id "null") —
+    // save it as a new record, or onto an existing one with the same name
+    if (!require("mongoose").isValidObjectId(req.params.id)) {
+      if (!body.name?.trim()) return res.status(400).json({ error: "Vendor name is required." });
+      const existing = await Vendor.findOne({ name: { $regex: `^${esc(body.name.trim())}$`, $options: "i" } });
+      const saved = existing
+        ? await Vendor.findByIdAndUpdate(existing._id, { $set: body }, { new: true, runValidators: true })
+        : await Vendor.create(body);
+      return res.json(saved);
+    }
     const updated = await Vendor.findByIdAndUpdate(
-      req.params.id, { $set: req.body }, { new: true, runValidators: true }
+      req.params.id, { $set: body }, { new: true, runValidators: true }
     );
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
   } catch (err) {
-    res.status(500).json({ error: "Failed to update vendor" });
+    console.error("Vendor update error:", err);
+    res.status(500).json({ error: `Failed to update vendor: ${err.message}` });
   }
 });
 
