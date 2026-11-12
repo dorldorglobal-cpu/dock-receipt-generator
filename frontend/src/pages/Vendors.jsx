@@ -463,7 +463,7 @@ export default function Vendors() {
                   <tr style={{ background:"var(--bg-hover)" }}>
                     <th style={th}>Vendor</th>
                     <th style={th}>Category</th>
-                    <th style={th}>Contact</th>
+                    <th style={th}>Email</th>
                     <th style={th}>Phone</th>
                     <th style={{ ...th,textAlign:"right" }}>Total Spent</th>
                     <th style={{ ...th,textAlign:"right" }}>Unpaid</th>
@@ -488,7 +488,7 @@ export default function Vendors() {
                           </span>
                         ) : <span style={{ color:"#4b5563",fontSize:12 }}>—</span>}
                       </td>
-                      <td style={{ ...td,color:"var(--text-secondary)" }}>{v.contactName||"—"}</td>
+                      <td style={{ ...td, color: v.email ? "var(--text-primary)" : "var(--text-muted)", wordBreak:"break-all" }}>{v.email||"—"}</td>
                       <td style={{ ...td,color:"var(--text-secondary)" }}>{v.phone||"—"}</td>
                       <td style={{ ...td,textAlign:"right",fontWeight:600,color:"var(--text-primary)" }}>{fmt$(v.totalPaid)}</td>
                       <td style={{ ...td,textAlign:"right" }}>
