@@ -720,11 +720,11 @@ export default function Invoices() {
                       ) : "—"}
                     </td>
                     <td style={{ fontWeight: 600 }}>{inv.customerName || "—"}</td>
-                    <td style={{ fontSize: 12, color: "var(--text-secondary)" }}>
+                    <td style={{ fontSize: 14, fontWeight: 600, color: "var(--text-primary)" }}>
                       {inv.vehicle || "—"}
                       {inv.vin && (
-                        <div style={{ fontFamily: "monospace", fontSize: 11, color: "var(--text-muted)", marginTop: 1 }}>
-                          ···{inv.vin.slice(-6).toUpperCase()}
+                        <div style={{ fontFamily: "monospace", fontSize: 14, fontWeight: 700, color: "var(--text-primary)", marginTop: 2, letterSpacing: "0.04em" }}>
+                          {inv.vin.slice(-6).toUpperCase()}
                         </div>
                       )}
                     </td>
