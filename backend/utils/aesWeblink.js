@@ -253,7 +253,10 @@ function applyItn(order, rawItn, source) {
     }
     return "confirmed";
   }
-  addTimelineSafe(order, "AES ITN Mismatch",
+  // Log a given mismatch once — the email check re-reads the same AES every pass
+  const already = (order.timeline || []).some(t => t.action === "AES ITN Mismatch" &&
+    String(t.details || "").includes(`returned ${itn} but the order already has ${order.aesItn}`));
+  if (!already) addTimelineSafe(order, "AES ITN Mismatch",
     `${source || "unknown"} returned ${itn} but the order already has ${order.aesItn}. Kept the existing ITN.`);
   return "mismatch";
 }

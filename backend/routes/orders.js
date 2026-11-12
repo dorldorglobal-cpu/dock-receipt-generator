@@ -632,6 +632,7 @@ router.put("/:id", async (req, res) => {
     const oldStatus      = order.status;
     const oldTitleStatus = order.titleStatus;
     const oldArrival     = order.arrivalDate;
+    const oldSail        = { vessel: order.vessel, voyage: order.voyage, pol: order.pol, pod: order.pod };
 
     // Never let an empty string from the frontend clobber a value already in the DB.
     // Fields that are set by automated processes (AES upload, DR generation) and are
@@ -680,10 +681,34 @@ router.put("/:id", async (req, res) => {
       );
     }
 
+    // Vessel / voyage / ports changed and no dates were sent with it → fill cutoff,
+    // sail and arrival from the master schedule (no need to click Lookup)
+    const sailChanged = ["vessel", "voyage", "pol", "pod"].some(f =>
+      f in safeBody && String(order[f] || "").toUpperCase() !== String(oldSail[f] || "").toUpperCase());
+    const datesSent = ["cutoffDate", "sailDate", "arrivalDate"].some(f => f in req.body);
+    if (sailChanged && !datesSent && order.vessel && order.pol && order.pod && order.requestType !== "Container") {
+      try {
+        const { lookupSchedule } = require("./scheduleRoutes");
+        const vesselChanged = String(order.vessel || "").toUpperCase() !== String(oldSail.vessel || "").toUpperCase();
+        const s = await lookupSchedule({
+          voyageName: vesselChanged && !("voyage" in safeBody) ? "" : (order.voyage || ""),
+          vessel: order.vessel, pol: order.pol, pod: order.pod,
+        });
+        if (s.found) {
+          if (s.voyage && (vesselChanged || !order.voyage)) order.voyage = s.voyage;
+          order.cutoffDate  = s.cutoffDate  || order.cutoffDate;
+          order.sailDate    = s.sailDate    || order.sailDate;
+          order.arrivalDate = s.arrivalDate || order.arrivalDate;
+          addTimeline(order, "Schedule Updated",
+            `${order.vessel} V:${order.voyage || "—"} — cutoff ${order.cutoffDate || "—"}, sail ${order.sailDate || "—"}, arrival ${order.arrivalDate || "—"} (auto, from the vessel schedule)`);
+        }
+      } catch (e) { console.warn("[PUT order] schedule auto-lookup failed:", e.message); }
+    }
+
     // If arrivalDate is being pushed to a future date on an already-"Arrived" order,
     // the vessel hasn't actually arrived yet — revert to Sailed automatically.
-    if (req.body.arrivalDate && order.status === "Arrived") {
-      const newArrival = new Date(req.body.arrivalDate);
+    if (order.arrivalDate && String(order.arrivalDate) !== String(oldArrival || "") && order.status === "Arrived") {
+      const newArrival = new Date(order.arrivalDate);
       const todayMidnight = new Date(); todayMidnight.setHours(0,0,0,0);
       if (!isNaN(newArrival.getTime())) {
         newArrival.setHours(0,0,0,0);
@@ -692,7 +717,7 @@ router.put("/:id", async (req, res) => {
           if (order.driveFolderId) {
             try { await moveDriveFolder(order.driveFolderId, folderForStatus("Sailed")); } catch {}
           }
-          addTimeline(order, "Status Changed", `Reverted from Arrived to Sailed — arrival date updated to ${req.body.arrivalDate} (still in the future).`);
+          addTimeline(order, "Status Changed", `Reverted from Arrived to Sailed — arrival date updated to ${order.arrivalDate} (still in the future).`);
           await order.save();
         }
       }
@@ -701,7 +726,7 @@ router.put("/:id", async (req, res) => {
     await order.save();
 
     // Arrival date changed → the invoice's due date follows it (unless set by hand / paid)
-    if ("arrivalDate" in req.body && String(req.body.arrivalDate || "") !== String(oldArrival || "")) {
+    if (String(order.arrivalDate || "") !== String(oldArrival || "")) {
       try {
         const { syncInvoiceDueToArrival } = require("../utils/invoiceDue");
         await syncInvoiceDueToArrival(order, oldArrival);
@@ -825,63 +850,38 @@ router.post(
       try {
         if (label === "AES") {
           const parsed = await parseAES(req.file.path);
-          const updates = [];
-
-          // AES is the authoritative source for consignee data (field 4a is a labeled box).
-          // consigneeAddress/City/Country always overwrite — AES wins over buyer-receipt values.
-          const aesFields = [
-            "bookingNumber","vin","year","make","model","pol","pod",
-            "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
-            "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
-          ];
-          for (const field of aesFields) {
-            if (parsed[field] && !order[field]) {
-              order[field] = parsed[field];
-              updates.push(field);
-            }
-          }
-          // Consignee fields: AES field 4a always overwrites (more reliable than buyer receipt)
-          for (const field of ["consigneeName","consigneeAddress","consigneeCity","consigneeCountry"]) {
-            if (parsed[field]) {
-              order[field] = parsed[field];
-              updates.push(field);
-            }
-          }
-          // ITN: never silently clobber a WebLink-captured ITN; warn on mismatch.
-          if (parsed.aesItn) {
-            const r = applyItn(order, parsed.aesItn, "AES PDF upload");
-            if (r === "set") updates.push("aesItn");
-          }
-
-          // Fill voyage / cutoff / sail / arrival straight from the master
-          // schedule now, so they don't have to be looked up by hand later.
-          if (order.vessel && order.pol && order.pod &&
-              (!order.cutoffDate || !order.sailDate || !order.arrivalDate)) {
-            try {
-              const { lookupSchedule } = require("./scheduleRoutes");
-              const s = await lookupSchedule({
-                voyageName: order.voyageFolderName || "",
-                vessel: order.vessel, pol: order.pol, pod: order.pod,
-              });
-              if (s.found) {
-                if (!order.voyage)      order.voyage      = s.voyage;
-                if (!order.cutoffDate)  order.cutoffDate  = s.cutoffDate;
-                if (!order.sailDate)    order.sailDate    = s.sailDate;
-                if (!order.arrivalDate) order.arrivalDate = s.arrivalDate;
-                updates.push("schedule");
+          const { applyAesToOrder } = require("../utils/applyAes");
+          const r = applyAesToOrder(order, parsed, { source: "AES PDF upload", fileName: req.file.originalname });
+          if (r.rejected) {
+            req._dispatchWarnings = [...(req._dispatchWarnings || []),
+              { field: "AES VIN", severity: "error", dispatch: String(parsed.vin || ""), order: order.vin || "", message: r.warning }];
+          } else {
+            const updates = r.updates;
+            // Voyage / cutoff / sail / arrival from the master schedule — refreshed whenever
+            // the AES changed the vessel, otherwise only filled when missing
+            if (order.vessel && order.pol && order.pod &&
+                (r.vesselChanged || !order.cutoffDate || !order.sailDate || !order.arrivalDate)) {
+              try {
+                const { lookupSchedule } = require("./scheduleRoutes");
+                const s = await lookupSchedule({
+                  voyageName: r.vesselChanged ? "" : (order.voyage || order.voyageFolderName || ""),
+                  vessel: order.vessel, pol: order.pol, pod: order.pod,
+                });
+                if (s.found) {
+                  if (r.vesselChanged) req._oldArrival = order.arrivalDate;
+                  if (r.vesselChanged || !order.voyage)      order.voyage      = s.voyage;
+                  if (r.vesselChanged || !order.cutoffDate)  order.cutoffDate  = s.cutoffDate;
+                  if (r.vesselChanged || !order.sailDate)    order.sailDate    = s.sailDate;
+                  if (r.vesselChanged || !order.arrivalDate) order.arrivalDate = s.arrivalDate;
+                  updates.push("schedule");
+                }
+              } catch (schErr) {
+                console.warn("[AES upload] schedule lookup failed:", schErr.message);
               }
-            } catch (schErr) {
-              console.warn("[AES upload] schedule lookup failed:", schErr.message);
             }
+            addTimeline(order, "AES Parsed",
+              updates.length ? `AES parsed and updated: ${updates.join(", ")}.` : "AES parsed — nothing on the order needed changing.");
           }
-
-          addTimeline(
-            order,
-            "AES Parsed",
-            updates.length
-              ? `AES parsed and updated: ${updates.join(", ")}.`
-              : "AES parsed but no empty order fields needed updating."
-          );
         }
 
         if (label === "Dispatch") {
@@ -1143,25 +1143,15 @@ router.post("/:id/parse-drive-files", async (req, res) => {
 
       if (name.includes("aes")) {
         const parsed  = await parseAES(tempPath);
-        const updates = [];
-        const aesFields = [
-          "bookingNumber","vin","year","make","model","pol","pod",
-          "exporterName","exporterAddress","exporterCity","exporterState","exporterZip","exporterCountry","usppiEin",
-          "vessel","weightKgs","value","vehicleYearMakeModel","titleNumber","titleState",
-        ];
-        for (const field of aesFields) {
-          if (parsed[field] && !order[field]) { order[field] = parsed[field]; updates.push(field); }
+        const { applyAesToOrder } = require("../utils/applyAes");
+        const r = applyAesToOrder(order, parsed, { source: "AES PDF (Drive)", fileName: file.name });
+        if (!r.rejected) {
+          addTimeline(order, "AES Parsed",
+            r.updates.length
+              ? `Drive AES parsed and updated: ${r.updates.join(", ")}.`
+              : `Drive AES parsed from ${file.name} — nothing on the order needed changing.`
+          );
         }
-        // Consignee fields: AES field 4a always overwrites (more reliable than buyer receipt)
-        for (const field of ["consigneeName","consigneeAddress","consigneeCity","consigneeCountry"]) {
-          if (parsed[field]) { order[field] = parsed[field]; updates.push(field); }
-        }
-        if (parsed.aesItn && applyItn(order, parsed.aesItn, "AES PDF (Drive)") === "set") updates.push("aesItn");
-        addTimeline(order, "AES Parsed",
-          updates.length
-            ? `Drive AES parsed and updated: ${updates.join(", ")}.`
-            : `Drive AES parsed from ${file.name} — no empty fields needed updating.`
-        );
         parsedSomething = true;
       }
 
