@@ -200,14 +200,12 @@ router.get("/", async (req, res) => {
     }
 
     if (search) {
-      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const re = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      // Anything printed on the invoice: booking, voyage, line, ports, contact, line items, notes…
       q.$or = [
-        { customerName:  re },
-        { invoiceNumber: re },
-        { orderRef:      re },
-        { vehicle:       re },
-        { vin:           re },
-      ];
+        "customerName", "invoiceNumber", "orderRef", "vehicle", "vin", "bookingNumber", "voyage",
+        "shippingLine", "pol", "pod", "customerEmail", "customerPhone", "notes", "items.description",
+      ].map(f => ({ [f]: re }));
     }
 
     let invoices = await Invoice.find(q).sort({ createdAt: -1 }).lean();
@@ -215,21 +213,25 @@ router.get("/", async (req, res) => {
     // Also search orders by customerName/customerPhone/customerEmail so invoices
     // remain findable even if the order's customer was edited after invoice creation
     if (search) {
-      const re = new RegExp(search.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
+      const re = new RegExp(search.trim().replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i");
       const Order = require("../models/Order");
+      // …anything on the order (booking, lot #, vessel, voyage, carrier, consignee…)
       const matchingOrders = await Order.find({
         $or: [
-          { customerName:  re },
-          { customerPhone: re },
-          { customerEmail: re },
-          { consigneeName: re },
-          { buyerName:     re },
-          { vin:           re },
-        ],
+          "customerName", "customerPhone", "customerEmail", "consigneeName", "buyerName", "vin",
+          "bookingNumber", "lotNumber", "vessel", "voyage", "dispatchCarrier", "refNumber",
+          "pickupLocation", "deliveryLocation", "aesItn", "titleNumber",
+        ].map(f => ({ [f]: re })),
       }).select("_id").lean();
+      // …or on its container load (booking, container #, seal, name, vessel)
+      const ContainerLoad = require("../models/ContainerLoad");
+      const loads = await ContainerLoad.find({
+        $or: ["bookingNumber", "containerNumber", "sealNumber", "name", "vessel"].map(f => ({ [f]: re })),
+      }).select("orderIds").lean();
+      const loadOrderIds = loads.flatMap(l => l.orderIds || []);
 
-      if (matchingOrders.length) {
-        const orderIds = matchingOrders.map(o => o._id);
+      if (matchingOrders.length || loadOrderIds.length) {
+        const orderIds = [...matchingOrders.map(o => o._id), ...loadOrderIds];
         const existingIds = new Set(invoices.map(i => String(i._id)));
         const extra = await Invoice.find({ orderId: { $in: orderIds } })
           .sort({ createdAt: -1 }).lean();
