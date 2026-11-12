@@ -985,14 +985,23 @@ export default function Expenses() {
     const matched = (r.candidates || []).filter(c => ids.has(String(c._id))).map(c => c.vendor).filter(Boolean);
     return matched.length ? matched : [r.payeeName].filter(Boolean);
   }))];
+  // "loading" while the lookup runs, "failed" if it didn't come back — never shown as "no email"
+  const [proofEmailState, setProofEmailState] = useState("idle");
+  const [proofEmailRetry, setProofEmailRetry] = useState(0);
   useEffect(() => {
     const missing = proofVendors.filter(n => !(n in proofVendorEmails));
     if (!missing.length) return;
+    setProofEmailState("loading");
     fetch(`${API}/api/expenses/vendor-emails?names=${encodeURIComponent(missing.join("|"))}`)
-      .then(r => r.json())
-      .then(d => setProofVendorEmails(e => ({ ...Object.fromEntries(missing.map(n => [n, ""])), ...d, ...e })))
-      .catch(() => {});
-  }, [proofVendors.join("|")]);
+      .then(r => r.ok ? r.json() : Promise.reject(new Error(`HTTP ${r.status}`)))
+      .then(d => {
+        if (!d || typeof d !== "object" || d.error) throw new Error(d?.error || "bad reply");
+        // Only names the server actually answered for are stored; the rest get asked again
+        setProofVendorEmails(e => ({ ...e, ...Object.fromEntries(missing.filter(n => n in d).map(n => [n, d[n] || ""])) }));
+        setProofEmailState("done");
+      })
+      .catch(() => setProofEmailState("failed"));
+  }, [proofVendors.join("|"), proofEmailRetry]);
   const proofWithEmail = proofVendors.filter(n => (proofVendorEmails[n] || "").includes("@"));
 
   const applyProofRows = async () => {
@@ -2695,14 +2704,26 @@ export default function Expenses() {
                     </label>
                     {proofEmailVendors && (
                       <div style={{ marginTop:4, marginLeft:22 }}>
-                        {proofWithEmail.length
-                          ? <>Will email: {proofWithEmail.map(n => `${n} (${proofVendorEmails[n]})`).join(" · ")}</>
-                          : <>None of these vendors has an email on file.</>}
-                        {proofVendors.length > proofWithEmail.length && (
-                          <div style={{ color:"var(--warning)" }}>
-                            No email on file (skipped): {proofVendors.filter(n => !proofWithEmail.includes(n)).join(", ")}
-                          </div>
-                        )}
+                        {(() => {
+                          const unknown = proofVendors.filter(n => !(n in proofVendorEmails));
+                          const noEmail = proofVendors.filter(n => (n in proofVendorEmails) && !proofWithEmail.includes(n));
+                          return (
+                            <>
+                              {proofWithEmail.length > 0 && <div>Will email: {proofWithEmail.map(n => `${n} (${proofVendorEmails[n]})`).join(" · ")}</div>}
+                              {unknown.length > 0 && proofEmailState !== "failed" && <div>Checking emails on file…</div>}
+                              {unknown.length > 0 && proofEmailState === "failed" && (
+                                <div style={{ color:"#dc2626" }}>
+                                  Couldn't check the vendors' emails.{" "}
+                                  <button onClick={() => setProofEmailRetry(x => x + 1)}
+                                    style={{ background:"none", border:"none", color:"#2563eb", fontWeight:700, cursor:"pointer", padding:0, fontSize:12 }}>Retry</button>
+                                </div>
+                              )}
+                              {noEmail.length > 0 && (
+                                <div style={{ color:"var(--warning)" }}>No email on file (skipped): {noEmail.join(", ")}</div>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
                     )}
                   </div>

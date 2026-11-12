@@ -2528,7 +2528,10 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
       // e.g. "BK 272951625 REF 13855" or "BK# 24597256". One booking covers a
       // whole container (all its cars), so it's the key to pulling in siblings.
       // Written as "BK 123", "BK# 123", "BKG 123" or "BOOKING 12637982".
-      const bkNumMatch = addenda.match(/\b(?:BK|BKG|BOOKING)\s*#?\.?:?\s*([A-Z]{0,4}\d{6,15})\b/i);
+      const bkNumMatch = addenda.match(/\b(?:BK|BKG|BOOKING)\s*#?\.?:?\s*([A-Z]{0,4}\d{6,15})\b/i)
+        // …or a bare 9-15 digit number with no label (E-Z Cargo: "2334908730") — too long
+        // to be one of our order refs, so it's the container's booking
+        || addenda.match(/(?:^|\s)(\d{9,15})(?=\s|$)/);
       const carrierBooking = bkNumMatch ? bkNumMatch[1] : "";
       // Exclude the digits already claimed by booking numbers so they don't
       // also get picked up as "plain order refs".
@@ -2632,9 +2635,15 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
         }
         const load = loadOr.length ? await ContainerLoad.findOne({ $or: loadOr }).select("orderIds name").lean() : null;
         // No container load on file — the orders carrying that booking # are the container
-        const sibOrderIds = load?.orderIds?.length ? load.orderIds
+        let sibOrderIds = load?.orderIds?.length ? load.orderIds
           : carrierBooking ? (await Order.find({ bookingNumber: { $regex: `(^|[^0-9])${esc(carrierBooking)}$`, $options: "i" } }).select("_id").lean()).map(o => o._id)
           : [];
+        // Neither a container load nor an order carries the booking — the container
+        // bills themselves do ("Container: … | Booking: 2334908730" in their notes)
+        if (!sibOrderIds.length && carrierBooking) {
+          const billRefs = await Expense.distinct("orderRef", { notes: { $regex: `Booking:\\s*${esc(carrierBooking)}\\b`, $options: "i" } });
+          if (billRefs.length) sibOrderIds = (await Order.find({ refNumber: { $in: billRefs } }).select("_id").lean()).map(o => o._id);
+        }
 
         if (sibOrderIds.length) {
           const sibOrders = await Order.find({ _id: { $in: sibOrderIds } }).select("refNumber").lean();
@@ -2794,11 +2803,9 @@ router.post("/parse-payment-proof", memUpload.single("proof"), async (req, res) 
 // GET /api/expenses/vendor-emails?names=A|B — email on file for each vendor name
 router.get("/vendor-emails", async (req, res) => {
   try {
-    const { vendorEmail } = require("../utils/vendorMatch");
+    const { vendorEmails } = require("../utils/vendorMatch");
     const names = (req.query.names || "").split("|").map(n => n.trim()).filter(Boolean);
-    const out = {};
-    for (const n of names) out[n] = await vendorEmail(n);
-    res.json(out);
+    res.json(await vendorEmails(names));
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

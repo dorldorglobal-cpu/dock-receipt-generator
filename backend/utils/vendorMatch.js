@@ -9,7 +9,9 @@ const Vendor  = require("../models/Vendor");
 
 const normVendorName = (s) => (s || "").replace(/['‘’`]/g, "").replace(/\b(LLC|INC|CORP|LTD|CO)\b\.?/gi, "")
   .replace(/\bTRANSPORTATION\b/gi, "TRANSPORT")
-  .replace(/[^A-Z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toUpperCase();
+  .replace(/[^A-Z0-9 ]/gi, " ").replace(/\s+/g, " ").trim().toUpperCase()
+  // Single letters split by a dash/dot are one word: "E-Z CARGO" = "EZ CARGO", "J.B. HUNT" = "JB HUNT"
+  .replace(/\b([A-Z0-9]) (?=[A-Z0-9]\b)/g, "$1");
 
 const sameVendor = (a, b) => {
   const x = normVendorName(a), y = normVendorName(b);
@@ -57,6 +59,16 @@ async function vendorEmail(name) {
   return rec?.email || "";
 }
 
+/** Emails for many names at once — one vendor scan instead of one per name. → { name: email } */
+async function vendorEmails(names) {
+  const canon = await makeCanonicalizer();
+  const recs = await Vendor.find({ email: { $nin: ["", null] } }).select("name email").lean();
+  const byName = new Map(recs.map(r => [String(r.name).toLowerCase().trim(), r.email]));
+  const out = {};
+  for (const n of names) out[n] = byName.get(String(canon(n) || "").toLowerCase().trim()) || "";
+  return out;
+}
+
 /**
  * Remember an email for a vendor: added to the vendor record (created if the
  * vendor only exists on bills). Existing addresses are kept; a new one is
@@ -75,4 +87,4 @@ async function saveVendorEmail(name, email, category = "", canonFn = null) {
   return rec.save();
 }
 
-module.exports = { normVendorName, sameVendor, makeCanonicalizer, canonicalVendor, vendorEmail, saveVendorEmail, emailList };
+module.exports = { normVendorName, sameVendor, makeCanonicalizer, canonicalVendor, vendorEmail, vendorEmails, saveVendorEmail, emailList };
