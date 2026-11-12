@@ -1111,13 +1111,20 @@ export default function OrderDetails() {
     setShowInvoice(true);
   };
 
-  // Arrived from the To Invoice list with ?invoice=1 → open Generate Invoice once, as soon as
-  // the order (and its charges) have loaded
+  // Arrived from the To Invoice list with ?invoice=1 → scroll to the Internal (sell / cost)
+  // section and flash it, so every charge can be checked before clicking Generate Invoice
   useEffect(() => {
     if (autoInvoiceOpened.current || !order?._id) return;
     if (new URLSearchParams(location.search).get("invoice") !== "1") return;
     autoInvoiceOpened.current = true;
-    openInvoiceModal();
+    setTimeout(() => {
+      const el = document.getElementById("internal-charges");
+      if (!el) return;
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+      el.style.transition = "box-shadow 0.4s";
+      el.style.boxShadow = "0 0 0 3px rgba(37,99,235,0.55)";
+      setTimeout(() => { el.style.boxShadow = ""; }, 2200);
+    }, 350);
   }, [order?._id, charges]);
 
   const updateInvoiceItem = (index, key, value) => {
@@ -3958,7 +3965,7 @@ export default function OrderDetails() {
         const totCost   = towCost + extraTowCost + ocnCost + feeCostTotal;
         const totProfit = totSell - totCost;
         return (
-          <section className="form-section" style={{ borderColor:"rgba(251,191,36,0.2)", background:"rgba(251,191,36,0.03)" }}>
+          <section id="internal-charges" className="form-section" style={{ borderColor:"rgba(251,191,36,0.2)", background:"rgba(251,191,36,0.03)", scrollMarginTop:16 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
               <span style={{ fontSize:10, fontWeight:800, letterSpacing:1.5, textTransform:"uppercase",
                 color:"#fbbf24", background:"rgba(251,191,36,0.15)", border:"1px solid rgba(251,191,36,0.3)",

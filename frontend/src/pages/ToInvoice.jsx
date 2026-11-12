@@ -67,7 +67,8 @@ export default function ToInvoice() {
       </div>
       <p style={{ margin: "0 0 16px", color: "var(--text-secondary)", fontSize: 13 }}>
         Every car on a Sallaum bill (Expenses import) or an ACL rated BL (BL Separator), grouped by the bill it came in on.
-        Click <strong>Invoice</strong> — after you send it, the next car in that bill opens.
+        Click <strong>Invoice</strong> to open the order at its sell / cost lines — check them, then Generate Invoice.
+        After you send it, the next car in that bill opens.
       </p>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
