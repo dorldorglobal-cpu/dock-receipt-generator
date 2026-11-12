@@ -295,6 +295,7 @@ router.post("/attach", async (req, res) => {
         // vessel/voyage so they reflect the real sailing, not a stale guess
         // from before the Draft BL confirmed which vessel it actually shipped on.
         let scheduleSailDate = null;
+        let oldArrival; // set when the Draft refreshed a stale arrival date
         if (order.vessel && order.pol && order.pod) {
           try {
             const { lookupSchedule } = require("./scheduleRoutes");
@@ -303,8 +304,20 @@ router.post("/attach", async (req, res) => {
               scheduleSailDate = s.sailDate; // authoritative date for the sheet
               if (!order.voyage)      order.voyage      = s.voyage;
               if (!order.cutoffDate)  order.cutoffDate  = s.cutoffDate;
-              if (!order.sailDate)    order.sailDate    = s.sailDate;
-              if (!order.arrivalDate) order.arrivalDate = s.arrivalDate;
+              // A unit never arrives on/before the day its Draft comes in — a missing or
+              // already-past arrival date is stale, so take the schedule's sail/arrival
+              const { parseDay } = require("../utils/invoiceDue");
+              const arr = parseDay(order.arrivalDate);
+              const today = parseDay(new Date().toISOString().slice(0, 10));
+              const stale = !arr || arr <= today;
+              if (bl.type === "draft" && stale && s.arrivalDate) {
+                oldArrival = order.arrivalDate;
+                order.sailDate    = s.sailDate || order.sailDate;
+                order.arrivalDate = s.arrivalDate;
+              } else {
+                if (!order.sailDate)    order.sailDate    = s.sailDate;
+                if (!order.arrivalDate) order.arrivalDate = s.arrivalDate;
+              }
             }
           } catch (schErr) {
             console.warn("[BL attach] schedule lookup failed:", schErr.message);
@@ -348,6 +361,14 @@ router.post("/attach", async (req, res) => {
         }
 
         await order.save();
+
+        // Arrival date refreshed → the invoice due date follows it
+        if (oldArrival !== undefined && String(oldArrival || "") !== String(order.arrivalDate || "")) {
+          try {
+            const { syncInvoiceDueToArrival } = require("../utils/invoiceDue");
+            await syncInvoiceDueToArrival(order, oldArrival);
+          } catch (e) { console.warn("[BL attach] invoice due sync failed:", e.message); }
+        }
 
         // Rated BL → cross-check its charge lines (storage, forklift, non-runner…)
         // against the order's charges + invoice, and fill in what's missing.

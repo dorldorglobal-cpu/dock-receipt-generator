@@ -631,6 +631,7 @@ router.put("/:id", async (req, res) => {
 
     const oldStatus      = order.status;
     const oldTitleStatus = order.titleStatus;
+    const oldArrival     = order.arrivalDate;
 
     // Never let an empty string from the frontend clobber a value already in the DB.
     // Fields that are set by automated processes (AES upload, DR generation) and are
@@ -698,6 +699,15 @@ router.put("/:id", async (req, res) => {
     }
 
     await order.save();
+
+    // Arrival date changed → the invoice's due date follows it (unless set by hand / paid)
+    if ("arrivalDate" in req.body && String(req.body.arrivalDate || "") !== String(oldArrival || "")) {
+      try {
+        const { syncInvoiceDueToArrival } = require("../utils/invoiceDue");
+        await syncInvoiceDueToArrival(order, oldArrival);
+      } catch (e) { console.warn("[PUT order] invoice due sync failed:", e.message); }
+    }
+
     autoLinkExpenses(order); // non-blocking
     // Sync customerName to any invoices on this order
     if (req.body.customerName) {
@@ -1047,6 +1057,7 @@ router.post(
           const s = await lookupSchedule({ voyageName: order.voyage || "", vessel: order.vessel, pol: order.pol, pod: order.pod });
           if (s.found) {
             if (!order.voyage) order.voyage = s.voyage;
+            req._oldArrival   = order.arrivalDate;
             order.cutoffDate  = s.cutoffDate;
             order.sailDate    = s.sailDate;
             order.arrivalDate = s.arrivalDate;
@@ -1072,6 +1083,14 @@ router.post(
       try { fs.unlinkSync(req.file.path); } catch (_) {}
 
       await order.save();
+
+      // Draft BL refreshed the arrival date → the invoice due date follows it
+      if (req._oldArrival !== undefined && String(req._oldArrival || "") !== String(order.arrivalDate || "")) {
+        try {
+          const { syncInvoiceDueToArrival } = require("../utils/invoiceDue");
+          await syncInvoiceDueToArrival(order, req._oldArrival);
+        } catch (e) { console.warn("[Draft upload] invoice due sync failed:", e.message); }
+      }
 
       // Cross-check the rated BL's charges (storage, forklift, non-runner…) against
       // the order's charges + invoice and fill in what's missing.
@@ -2199,7 +2218,7 @@ router.post("/auto-advance-arrived", async (req, res) => {
     const candidates = await Order.find({
       status: "Sailed",
       arrivalDate: { $exists: true, $nin: ["", null] },
-    }).select("_id refNumber arrivalDate customerName").lean();
+    }).select("_id refNumber arrivalDate customerName timeline.action timeline.details timeline.createdAt").lean();
 
     const updated = [];
     for (const o of candidates) {
@@ -2207,6 +2226,12 @@ router.post("/auto-advance-arrived", async (req, res) => {
       if (isNaN(parsed.getTime())) continue; // unparseable — skip
       parsed.setHours(0, 0, 0, 0);
       if (parsed > today) continue; // arrival date is still in the future — leave as Sailed
+      // A unit never arrives on/before the day its Draft BL came in — that arrival date is
+      // stale (from before the real sailing), so don't call it Arrived; it needs a schedule check
+      const draftAt = (o.timeline || [])
+        .filter(t => /Draft/i.test(t.details || "") && /BL Attached|File Uploaded|Status Changed/.test(t.action || ""))
+        .map(t => new Date(t.createdAt)).sort((a, b) => b - a)[0];
+      if (draftAt) { const dd = new Date(draftAt); dd.setHours(0, 0, 0, 0); if (parsed <= dd) continue; }
       await Order.findByIdAndUpdate(o._id, {
         $set:  { status: "Arrived" },
         $push: { timeline: { action: "Status Changed", details: `Auto-advanced to Arrived (arrival date: ${o.arrivalDate})`, createdAt: new Date() } },

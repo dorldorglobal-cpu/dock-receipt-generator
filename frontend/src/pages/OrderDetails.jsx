@@ -4,6 +4,23 @@ import { authUrl } from "../lib/auth";
 import { findTowRate } from "../lib/towRates";
 import { portLineFromDelivery, lineFromText, polFromText } from "../lib/ports";
 
+// Order dates are stored as "11/30/2026" (M/D/YYYY); date inputs need "2026-11-30".
+const toISODate = (s) => {
+  const v = String(s || "").trim();
+  if (!v) return "";
+  if (/^\d{4}-\d{2}-\d{2}/.test(v)) return v.slice(0, 10);
+  const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (m) return `${m[3]}-${m[1].padStart(2, "0")}-${m[2].padStart(2, "0")}`;
+  const d = new Date(v);
+  return isNaN(d) ? "" : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+};
+
+// …and back: "2026-11-30" → "11/30/2026" (the format orders store)
+const fromISODate = (iso) => {
+  const m = String(iso || "").match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  return m ? `${+m[2]}/${+m[3]}/${m[1]}` : "";
+};
+
 // Today as YYYY-MM-DD in the user's own time zone (for comparing date-only values)
 const todayLocalISO = () => {
   const d = new Date();
@@ -360,6 +377,21 @@ export default function OrderDetails() {
   }, []);
 
   // Core: hit the schedule API with any combo of voyageName / vessel params
+  // Confirm-sailing popup shown after a Draft / Rated Draft upload
+  const [sailConfirm, setSailConfirm] = useState(null);
+  // Vessel schedule lookup → { vessel, voyage, sailDate, arrivalDate (YYYY-MM-DD), cutoffDate } or null
+  const lookupSailing = async ({ vessel, voyage, pol, pod } = {}) => {
+    const P = pol || order?.pol, D = pod || order?.pod;
+    if (!vessel || !P || !D) return null;
+    try {
+      const qs = new URLSearchParams({ vessel, pol: P, pod: D, ...(voyage ? { voyageName: voyage } : {}) });
+      const s = await fetch(`${API}/api/schedule/lookup?${qs}`).then(r => r.json());
+      if (!s?.found) return null;
+      return { vessel: s.vessel || vessel, voyage: s.voyage || voyage || "", sailDate: toISODate(s.sailDate),
+               arrivalDate: toISODate(s.arrivalDate), cutoffDate: s.cutoffDate || "" };
+    } catch { return null; }
+  };
+
   const applyScheduleResult = async (params, { silent = false } = {}) => {
     const qs = new URLSearchParams(params).toString();
     const res  = await fetch(`${API}/api/schedule/lookup?${qs}`);
@@ -1047,7 +1079,7 @@ export default function OrderDetails() {
 
     // Due date the invoice will be saved with: the order's arrival date, else the
     // vessel schedule's arrival (same fallback the invoice email uses)
-    const arr = order?.arrivalDate ? String(order.arrivalDate).slice(0, 10) : "";
+    const arr = toISODate(order?.arrivalDate);
     setInvoiceDueDate(arr);
     setInvoiceDueSource(arr ? "arrival" : "");
     if (!arr && order?.vessel) {
@@ -1055,8 +1087,8 @@ export default function OrderDetails() {
         ...(order.pol ? { pol: order.pol } : {}), ...(order.pod ? { pod: order.pod } : {}) });
       fetch(`${API}/api/schedule/lookup?${qs}`).then(r => r.json()).then(s => {
         if (s.found && s.arrivalDate) {
-          const d = String(s.arrivalDate).slice(0, 10);
-          setInvoiceDueDate(cur => cur || d);
+          const d = toISODate(s.arrivalDate);
+          if (d) setInvoiceDueDate(cur => cur || d);
           setInvoiceDueSource(cur => cur || "schedule");
         }
       }).catch(() => {});
@@ -1233,14 +1265,19 @@ export default function OrderDetails() {
       }
 
       // ── If Draft uploaded, auto-fire schedule lookup to populate sail/arrival dates ──
-      if (label === "Draft") {
-        const vessel = refreshed?.vessel || order?.vessel || "";
-        const pol    = refreshed?.pol    || order?.pol    || "";
-        const pod    = refreshed?.pod    || order?.pod    || "";
-        if (vessel && pol && pod) {
-          setMessage(`✅ ${file.name} uploaded — looking up schedule…`);
-          await applyScheduleResult({ vessel, pol, pod });
-        }
+      // ── Draft / Rated Draft: confirm vessel, voyage and dates (the arrival is the invoice due date) ──
+      if (label === "Draft" || label === "Rated Draft") {
+        const o = refreshed || order || {};
+        const s = await lookupSailing({ vessel: o.vessel, voyage: o.voyage, pol: o.pol, pod: o.pod });
+        setSailConfirm({
+          docLabel: label,
+          vessel:      s?.vessel      || o.vessel  || "",
+          voyage:      s?.voyage      || o.voyage  || "",
+          sailDate:    s?.sailDate    || toISODate(o.sailDate),
+          arrivalDate: s?.arrivalDate || toISODate(o.arrivalDate),
+          cutoffDate:  s?.cutoffDate  || "",
+          source: s ? "schedule" : "order",
+        });
       }
 
       // ── If Email doc, parse for PIN and auto-update order ────────────
@@ -5718,6 +5755,68 @@ export default function OrderDetails() {
         </div>
       )}
 
+      {/* ── Confirm sailing (after a Draft / Rated Draft upload) ──────────── */}
+      {sailConfirm && (() => {
+        const sc = sailConfirm;
+        const today = todayLocalISO();
+        const arrPast  = sc.arrivalDate && sc.arrivalDate <= today;
+        const arrBeforeSail = sc.arrivalDate && sc.sailDate && sc.arrivalDate <= sc.sailDate;
+        const set = (k, v) => setSailConfirm(p => ({ ...p, [k]: v }));
+        const fld = { display:"block", width:"100%", marginTop:4 };
+        return (
+          <div className="modal-backdrop" onClick={() => setSailConfirm(null)}>
+            <div className="modal-card" onClick={e => e.stopPropagation()} style={{ width: 480 }}>
+              <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:6 }}>
+                <span style={{ fontSize:22 }}>🚢</span>
+                <h2 style={{ margin:0 }}>Confirm sailing</h2>
+              </div>
+              <p style={{ fontSize:12, color:"var(--text-secondary)", margin:"0 0 14px" }}>
+                {sc.docLabel} uploaded. Check the vessel, voyage and dates — the arrival date is the invoice due date.
+                {sc.source === "schedule" ? " Filled from the vessel schedule." : sc.source === "order" ? " Filled from the order (no schedule match)." : ""}
+              </p>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+                <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Vessel
+                  <input value={sc.vessel} onChange={e => set("vessel", e.target.value.toUpperCase())} style={fld} /></label>
+                <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Voyage
+                  <input value={sc.voyage} onChange={e => set("voyage", e.target.value.toUpperCase())} style={fld} /></label>
+                <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Sail date
+                  <input type="date" value={sc.sailDate} onChange={e => set("sailDate", e.target.value)} style={fld} /></label>
+                <label style={{ fontSize:12, color:"var(--text-secondary)" }}>Arrival date
+                  <input type="date" value={sc.arrivalDate} onChange={e => set("arrivalDate", e.target.value)}
+                    style={{ ...fld, ...(arrPast || arrBeforeSail || !sc.arrivalDate ? { borderColor:"#dc2626" } : {}) }} /></label>
+              </div>
+              {!sc.arrivalDate && <div style={{ marginTop:8, fontSize:12, color:"#dc2626", fontWeight:600 }}>⚠ No arrival date — the invoice will have no due date.</div>}
+              {arrPast && <div style={{ marginTop:8, fontSize:12, color:"#dc2626", fontWeight:600 }}>⚠ Arrival is today or already past — a unit never arrives the day its draft comes in. Look up the schedule or fix it.</div>}
+              {!arrPast && arrBeforeSail && <div style={{ marginTop:8, fontSize:12, color:"#dc2626", fontWeight:600 }}>⚠ Arrival is on or before the sail date.</div>}
+              {sc.lookupMsg && <div style={{ marginTop:8, fontSize:12, color:"var(--text-secondary)" }}>{sc.lookupMsg}</div>}
+              <div style={{ display:"flex", gap:8, marginTop:16, flexWrap:"wrap" }}>
+                <button style={{ padding:"8px 16px", borderRadius:8, border:"none", background:"#2563eb", color:"#fff", fontWeight:700, fontSize:13, cursor:"pointer" }} disabled={sc.saving} onClick={async () => {
+                  set("saving", true);
+                  const body = {
+                    vessel: sc.vessel, voyage: sc.voyage,
+                    sailDate: fromISODate(sc.sailDate), arrivalDate: fromISODate(sc.arrivalDate),
+                    ...(sc.cutoffDate ? { cutoffDate: sc.cutoffDate } : {}),
+                  };
+                  const res = await fetch(`${API}/api/orders/${id}`, { method:"PUT", headers:{ "Content-Type":"application/json" }, body: JSON.stringify(body) });
+                  const data = await res.json().catch(() => ({}));
+                  if (!res.ok) { set("saving", false); set("lookupMsg", "❌ " + (data.error || "Couldn't save")); return; }
+                  setOrder(data); setSailConfirm(null);
+                  try { fetchOrderInvoices(); } catch {}
+                  setMessage(`✅ Sailing confirmed — ${body.vessel} V:${body.voyage}, arrives ${body.arrivalDate || "—"}`);
+                }}>{sc.saving ? "Saving…" : "✓ Confirm"}</button>
+                <button style={{ padding:"8px 14px", borderRadius:8, border:"1px solid var(--border)", background:"transparent", color:"var(--text-primary)", fontWeight:600, fontSize:13, cursor:"pointer" }} onClick={async () => {
+                  set("lookupMsg", "Looking up schedule…");
+                  const s = await lookupSailing({ vessel: sc.vessel, voyage: sc.voyage });
+                  if (s) setSailConfirm(p => ({ ...p, ...s, source: "schedule", lookupMsg: "✓ Updated from the vessel schedule" }));
+                  else set("lookupMsg", "No schedule match for that vessel / voyage.");
+                }}>🔎 Look up schedule</button>
+                <button style={{ padding:"8px 14px", borderRadius:8, border:"1px solid var(--border)", background:"transparent", color:"var(--text-primary)", fontWeight:600, fontSize:13, cursor:"pointer" }} onClick={() => setSailConfirm(null)}>Skip</button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
       {/* ── Towing Cost Verification Modal ──────────── */}
       {towingVerify && (
         <div className="modal-backdrop" onClick={() => setTowingVerify(null)}>
@@ -5801,7 +5900,7 @@ export default function OrderDetails() {
               ))}
             </div>
             <div style={{ display:"flex", justifyContent:"flex-end", gap:10 }}>
-              <button className="btn-secondary" onClick={() => setDispatchWarnings(null)}>
+              <button style={{ padding:"8px 14px", borderRadius:8, border:"1px solid var(--border)", background:"transparent", color:"var(--text-primary)", fontWeight:600, fontSize:13, cursor:"pointer" }} onClick={() => setDispatchWarnings(null)}>
                 Acknowledged
               </button>
             </div>
