@@ -685,10 +685,10 @@ export default function Invoices() {
                 </th>
                 <th>Customer</th>
                 <th>Vehicle</th>
+                <th>Sailed</th>
                 <th style={{ textAlign: "right" }}>Amount</th>
                 <th>Status / Payments</th>
-                <th>Created</th>
-                <th>Due</th>
+                <th style={{ whiteSpace: "nowrap" }}>Created / Due</th>
                 <th></th>
               </tr>
             </thead>
@@ -728,6 +728,23 @@ export default function Invoices() {
                         </div>
                       )}
                     </td>
+                    <td style={{ fontSize: 13 }}>
+                      {inv.sail?.vessel ? (() => {
+                        const d = inv.sail.sailDate ? new Date(inv.sail.sailDate) : null;
+                        const future = d && !isNaN(d) && d > new Date();
+                        return (
+                          <>
+                            <div style={{ fontWeight: 700, color: "var(--text-primary)" }}>{inv.sail.vessel}</div>
+                            {inv.sail.voyage && <div style={{ fontFamily: "monospace", fontSize: 12, color: "var(--text-secondary)" }}>{inv.sail.voyage}</div>}
+                            {d && !isNaN(d) && (
+                              <div style={{ fontSize: 12, color: future ? "#d97706" : "var(--text-secondary)" }}>
+                                {future ? "Sails" : "Sailed"} {d.toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                              </div>
+                            )}
+                          </>
+                        );
+                      })() : <span style={{ color: "var(--text-muted)" }}>—</span>}
+                    </td>
                     <td style={{ textAlign: "right", fontWeight: 700, fontFamily: "monospace" }}>
                       {f$(inv.total)}
                       {payments.length > 0 && remaining > 0 && (
@@ -760,10 +777,14 @@ export default function Invoices() {
                         </div>
                       )}
                     </td>
-                    <td style={{ fontSize: 12, color: "var(--text-muted)" }}>{fD(inv.createdAt)}</td>
-                    <td style={{ fontSize: 12, color: isOverdue ? "#f87171" : "var(--text-muted)" }}>{fD(inv.dueDate)}</td>
-                    <td>
-                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center" }}>
+                    <td style={{ fontSize: 12, whiteSpace: "nowrap" }}>
+                      <div style={{ color: "var(--text-muted)" }}>{fD(inv.createdAt)}</div>
+                      <div style={{ color: isOverdue ? "#f87171" : "var(--text-secondary)", fontWeight: isOverdue ? 600 : 400 }}>
+                        Due {inv.dueDate ? fD(inv.dueDate) : "—"}
+                      </div>
+                    </td>
+                    <td style={{ width: 200 }}>
+                      <div style={{ display: "flex", gap: 5, flexWrap: "wrap", alignItems: "center", maxWidth: 200 }}>
                         <button onClick={() => setPreviewInv(inv)} title="Preview invoice"
                           style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6,
                             border: "1px solid var(--border)", background: "var(--bg-panel)",

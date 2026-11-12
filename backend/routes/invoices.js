@@ -240,6 +240,18 @@ router.get("/", async (req, res) => {
       }
     }
 
+    // Vessel / voyage / sail date from each invoice's order, for the "Sailed" column
+    const OrderM = require("../models/Order");
+    const oIds = [...new Set(invoices.map(i => i.orderId).filter(Boolean).map(String))];
+    if (oIds.length) {
+      const os = await OrderM.find({ _id: { $in: oIds } }).select("vessel voyage sailDate status").lean();
+      const byId = new Map(os.map(o => [String(o._id), o]));
+      for (const inv of invoices) {
+        const o = inv.orderId && byId.get(String(inv.orderId));
+        if (o) inv.sail = { vessel: o.vessel || "", voyage: o.voyage || "", sailDate: o.sailDate || "", status: o.status || "" };
+      }
+    }
+
     res.json(invoices);
   } catch (e) {
     res.status(500).json({ error: e.message });
