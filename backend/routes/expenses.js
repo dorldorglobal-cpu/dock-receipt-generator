@@ -2817,7 +2817,7 @@ router.get("/vendor-emails", async (req, res) => {
 // Pay and the bank payment-proof import.
 //   dateStr: "11/5/2026"   vendors: [{ vendor, email, lines: [{ orderRef, vehicle, vin, amount }] }]
 //   proof:   { buffer, name, mime } — attached to every email sent (caller decides when that's safe)
-async function sendVendorReceipts({ dateStr, method, vendors = [], proof = null }) {
+async function sendVendorReceipts({ dateStr, method, vendors = [], proof: sharedProof = null, proofFor = null }) {
   const { saveVendorEmail, emailList } = require("../utils/vendorMatch");
   const { getGmailAccessToken } = require("../utils/gmail");
   const { b64lines } = require("../utils/mime");
@@ -2830,6 +2830,8 @@ async function sendVendorReceipts({ dateStr, method, vendors = [], proof = null 
     const to = emailList(v.email);
     if (!to.length) { results.push({ vendor: v.vendor, sent: false, error: "no email" }); continue; }
     const total = (v.lines || []).reduce((s, l) => s + Number(l.amount || 0), 0);
+    // This vendor's own (redacted) copy of the proof when a per-vendor builder is given
+    const proof = proofFor ? await proofFor(v).catch(() => null) : sharedProof;
     const subject = `Payment sent — ${money(total)} — ${dateStr}`;
     const body = [
       `Hello ${v.vendor},`, ``,
@@ -2861,7 +2863,7 @@ async function sendVendorReceipts({ dateStr, method, vendors = [], proof = null 
       });
       if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error?.message || `Gmail ${r.status}`);
       await saveVendorEmail(v.vendor, to.join(", "), v.category || "Towing / Transport").catch(() => {});
-      results.push({ vendor: v.vendor, email: to.join(", "), sent: true });
+      results.push({ vendor: v.vendor, email: to.join(", "), sent: true, proofAttached: !!proof });
     } catch (e) {
       results.push({ vendor: v.vendor, email: to.join(", "), sent: false, error: e.message });
     }
@@ -2874,10 +2876,21 @@ router.post("/send-payment-receipts", memUpload.single("proof"), async (req, res
     const { paidDate, method, attachProof, vendors = [] } = JSON.parse(req.body.payload || "{}");
     const d = paidDate && /^\d{4}-\d{2}-\d{2}$/.test(paidDate) ? paidDate.split("-") : null;
     const dateStr = d ? `${+d[1]}/${+d[2]}/${d[0]}` : new Date().toLocaleDateString("en-US");
-    const proof = attachProof && req.file
-      ? { buffer: req.file.buffer, name: req.file.originalname, mime: req.file.mimetype }
-      : null;
-    res.json({ results: await sendVendorReceipts({ dateStr, method, vendors, proof }) });
+    // Each trucker gets their own copy of the bank proof, redacted to just their payment.
+    // A file that isn't a multi-payee bank proof (no block for that trucker) only goes
+    // along when it's a single trucker being paid — never someone else's payments.
+    const file = req.file ? { buffer: req.file.buffer, name: req.file.originalname, mime: req.file.mimetype } : null;
+    const proofFor = file ? async (v) => {
+      if (/pdf/i.test(file.mime || "") || /\.pdf$/i.test(file.name)) {
+        try {
+          const { redactProof } = require("../utils/releaseEmails");
+          const { buffer } = await redactProof(file.buffer, [v.vendor]);
+          return { buffer, name: file.name, mime: "application/pdf" };
+        } catch { /* not a bank proof, or no payment to this trucker in it */ }
+      }
+      return vendors.length === 1 ? file : null;
+    } : null;
+    res.json({ results: await sendVendorReceipts({ dateStr, method, vendors, proofFor }) });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -2886,12 +2899,16 @@ router.post("/send-payment-receipts", memUpload.single("proof"), async (req, res
 // whole batch went to one vendor.
 async function emailProofVendors({ paidLog, rows, proofFile, method }) {
   const { vendorEmail } = require("../utils/vendorMatch");
+  const { releaseVendorFor, redactProof } = require("../utils/releaseEmails");
   const groups = new Map();
   for (const p of paidLog) {
+    // Carriers / container loaders get a "PAYMENT FOR RELEASES" email instead
+    if (releaseVendorFor(p.vendor) || releaseVendorFor(p.payee)) continue;
     const k = normVendorName(p.vendor);
     if (!k) continue;
-    if (!groups.has(k)) groups.set(k, { vendor: p.vendor, category: p.category, lines: [] });
+    if (!groups.has(k)) groups.set(k, { vendor: p.vendor, category: p.category, lines: [], payees: new Set() });
     groups.get(k).lines.push(p);
+    if (p.payee) groups.get(k).payees.add(p.payee);
   }
   if (!groups.size) return [];
 
@@ -2904,7 +2921,7 @@ async function emailProofVendors({ paidLog, rows, proofFile, method }) {
   for (const g of groups.values()) {
     const email = await vendorEmail(g.vendor);
     vendors.push({
-      vendor: g.vendor, category: g.category, email,
+      vendor: g.vendor, category: g.category, email, payees: [...g.payees],
       lines: g.lines.map(l => {
         const o = byRef[l.orderRef];
         return { orderRef: l.orderRef, vehicle: o ? [o.year, o.make, o.model].filter(Boolean).join(" ") : "",
@@ -2917,21 +2934,74 @@ async function emailProofVendors({ paidLog, rows, proofFile, method }) {
   const d = pd ? new Date(pd) : new Date();
   const dateStr = (d.getMonth() + 1) + "/" + d.getDate() + "/" + d.getFullYear();
 
-  let proof = null;
-  if (groups.size === 1 && proofFile?.driveId) {
+  // The bank proof lists every payee — each vendor gets a copy redacted to just their
+  // own payment (never the whole proof; no copy if it can't be redacted)
+  let full = null;
+  const withEmail = vendors.filter(v => (v.email || "").includes("@"));
+  if (withEmail.length && proofFile?.driveId) {
     try {
       const { downloadDriveFile } = require("../googleDrive");
       const tmp = path.join(require("os").tmpdir(), "proof-vendor-" + Date.now() + ".pdf");
       await downloadDriveFile(proofFile.driveId, tmp);
-      proof = { buffer: fs.readFileSync(tmp), name: proofFile.fname || "payment-proof.pdf", mime: "application/pdf" };
+      full = fs.readFileSync(tmp);
       try { fs.unlinkSync(tmp); } catch {}
     } catch (e) { console.warn("[emailProofVendors] proof download failed:", e.message); }
   }
+  const proofFor = full ? async (v) => {
+    const { buffer } = await redactProof(full, v.payees?.length ? v.payees : [v.vendor]);
+    return { buffer, name: proofFile.fname || "payment-proof.pdf", mime: "application/pdf" };
+  } : null;
 
-  const withEmail = vendors.filter(v => (v.email || "").includes("@"));
-  const sent = withEmail.length ? await sendVendorReceipts({ dateStr, method, vendors: withEmail, proof }) : [];
+  const sent = withEmail.length ? await sendVendorReceipts({ dateStr, method, vendors: withEmail, proofFor }) : [];
   return [...sent, ...vendors.filter(v => !(v.email || "").includes("@")).map(v => ({ vendor: v.vendor, sent: false, error: "no email" }))];
 }
+
+// ── Release requests (carriers / container loaders) ───────────────────────────
+// Download the bank proof from Drive into memory
+async function proofBuffer(driveId) {
+  const { downloadDriveFile } = require("../googleDrive");
+  const tmp = path.join(require("os").tmpdir(), "proof-rel-" + Date.now() + "-" + Math.random().toString(36).slice(2) + ".pdf");
+  await downloadDriveFile(driveId, tmp);
+  const buf = fs.readFileSync(tmp);
+  try { fs.unlinkSync(tmp); } catch {}
+  return buf;
+}
+
+// GET /api/expenses/release-proof?driveId=…&payees=A|B — the redacted proof one company would get
+router.get("/release-proof", async (req, res) => {
+  try {
+    const { redactProof } = require("../utils/releaseEmails");
+    const payees = String(req.query.payees || "").split("|").map(s => s.trim()).filter(Boolean);
+    if (!req.query.driveId || !payees.length) return res.status(400).json({ error: "driveId and payees required" });
+    const { buffer } = await redactProof(await proofBuffer(req.query.driveId), payees);
+    res.setHeader("Content-Type", "application/pdf");
+    res.setHeader("Content-Disposition", `inline; filename="proof-${payees[0].replace(/[^A-Za-z0-9]+/g, "-")}.pdf"`);
+    res.send(buffer);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/expenses/send-release-emails — { proofFile: { driveId, fname }, drafts: [{ key, company, to, subject, html, text, payees }] }
+// Each company's email goes with its own redacted copy of the proof; nothing goes if it can't be redacted.
+router.post("/send-release-emails", express.json({ limit: "2mb" }), async (req, res) => {
+  try {
+    const { redactProof, sendReleaseEmail } = require("../utils/releaseEmails");
+    const { proofFile, drafts = [] } = req.body || {};
+    if (!proofFile?.driveId) return res.status(400).json({ error: "No payment proof on file to attach" });
+    const full = await proofBuffer(proofFile.driveId);
+    const results = [];
+    for (const d of drafts) {
+      try {
+        if (!d.to?.length) throw new Error("no release emails set on this vendor");
+        const { buffer } = await redactProof(full, d.payees || []);
+        await sendReleaseEmail(d, { buffer, name: proofFile.fname || "payment-proof.pdf" });
+        results.push({ key: d.key, company: d.company, sent: true });
+      } catch (e) {
+        results.push({ key: d.key, company: d.company, sent: false, error: e.message });
+      }
+    }
+    res.json({ results });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // ── POST /api/expenses/apply-payment-proof — mark the matched bills paid ──────
 router.post("/apply-payment-proof", express.json(), async (req, res) => {
@@ -2941,10 +3011,11 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
 
     // What this import actually paid, per bill — for the vendors' payment receipts
     const paidLog = [];
+    let curPayee = "";   // the bank's payee name for the row being applied (used to redact the proof)
     const logPaid = (bill, amount) => {
       if (!bill || !(Number(amount) > 0)) return;
       paidLog.push({ vendor: bill.vendor || "", category: bill.category || "", orderRef: bill.orderRef || "",
-        vin: bill.vin || "", amount: Number(amount) });
+        vin: bill.vin || "", amount: Number(amount), payee: curPayee });
     };
     const logPaidId = async (id, amount) => {
       const b = await Expense.findById(id).select("vendor category orderRef vin").lean().catch(() => null);
@@ -2963,6 +3034,7 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
     let attached = 0;
     for (const row of rows) {
       if (!row.selected) continue;
+      curPayee = row.payeeName || "";
       const dateObj = row.batchPaidDate ? new Date(row.batchPaidDate) : new Date();
 
       if (row.matchedIds?.length) {
@@ -3142,7 +3214,20 @@ router.post("/apply-payment-proof", express.json(), async (req, res) => {
       }
     }
 
-    res.json({ updated, created, attached, vendorEmails });
+    // "PAYMENT FOR RELEASES" drafts for the carriers / container loaders paid here —
+    // returned for review; sent from the screen with /send-release-emails
+    let releaseDrafts = [];
+    try {
+      const { buildReleaseDrafts, releaseVendorFor } = require("../utils/releaseEmails");
+      const relLog = paidLog.filter(p => releaseVendorFor(p.vendor) || releaseVendorFor(p.payee));
+      if (relLog.length) {
+        const pd = rows.find(r => r.selected && r.batchPaidDate)?.batchPaidDate;
+        const d = pd ? new Date(pd) : new Date();
+        releaseDrafts = await buildReleaseDrafts(relLog, `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`);
+      }
+    } catch (e) { console.warn("[apply-payment-proof] release drafts failed:", e.message); }
+
+    res.json({ updated, created, attached, vendorEmails, releaseDrafts });
 
     // Append all approved rows to ACH PAYMENTS Google Sheet
     try {

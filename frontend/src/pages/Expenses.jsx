@@ -979,12 +979,38 @@ export default function Expenses() {
     finally { setProofLoading(false); }
   };
 
+  // Carriers / container loaders get a "PAYMENT FOR RELEASES" email instead of a receipt
+  const RELEASE_RX = /\bACL\b|GRIMALDI|ATLANTIC CONTAINER|E\s*-?\s*Z\s*CARGO|\bISHIP\b|SAVANNAH|CEDARS/i;
   // Vendors this import will pay — the matched bills' vendor, else the bank payee name
-  const proofVendors = [...new Set(proofRows.filter(r => r.selected && !r.attachOnly).flatMap(r => {
+  const proofVendors = [...new Set(proofRows.filter(r => r.selected && !r.attachOnly && !RELEASE_RX.test(r.payeeName || "")).flatMap(r => {
     const ids = new Set((r.matchedIds || []).map(String));
     const matched = (r.candidates || []).filter(c => ids.has(String(c._id))).map(c => c.vendor).filter(Boolean);
     return matched.length ? matched : [r.payeeName].filter(Boolean);
-  }))];
+  }))].filter(n => !RELEASE_RX.test(n));
+  // Release requests built after the payment is applied, and the proof they go out with
+  const [releaseDrafts, setReleaseDrafts] = useState([]);
+  const [releaseProof, setReleaseProof]   = useState(null);
+  const [releaseSending, setReleaseSending] = useState(false);
+  const [releaseMsg, setReleaseMsg]       = useState("");
+  const sendReleaseEmails = async () => {
+    const ready = releaseDrafts.filter(d => d.to?.length && d.send !== false);
+    if (!ready.length) return;
+    if (!window.confirm(`Send ${ready.length} release request(s): ${ready.map(d => d.company).join(", ")}?`)) return;
+    setReleaseSending(true); setReleaseMsg("");
+    try {
+      const res = await fetch(`${API}/api/expenses/send-release-emails`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ proofFile: releaseProof, drafts: ready }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Send failed");
+      const ok = (data.results || []).filter(r => r.sent);
+      const bad = (data.results || []).filter(r => !r.sent);
+      setReleaseMsg(`${ok.length ? `✅ Release request sent to ${ok.map(r => r.company).join(", ")}` : ""}${bad.length ? `${ok.length ? " · " : ""}❌ ${bad.map(r => `${r.company}: ${r.error}`).join("; ")}` : ""}`);
+      setReleaseDrafts(ds => ds.map(d => ok.some(r => r.key === d.key) ? { ...d, sentOk: true, send: false } : d));
+    } catch (e) { setReleaseMsg("❌ " + e.message); }
+    setReleaseSending(false);
+  };
   // "loading" while the lookup runs, "failed" if it didn't come back — never shown as "no email"
   const [proofEmailState, setProofEmailState] = useState("idle");
   const [proofEmailRetry, setProofEmailRetry] = useState(0);
@@ -1025,6 +1051,10 @@ export default function Expenses() {
       if (failed.length)  parts.push(`⚠️ email failed: ${failed.map(v => v.vendor).join(", ")}`);
       if (noEmail.length) parts.push(`no email on file: ${noEmail.map(v => v.vendor).join(", ")}`);
       setProofMsg(`✅ ${parts.join(", ")}!`);
+      // Release requests to review and send (they stay after the rows clear)
+      setReleaseDrafts(data.releaseDrafts || []);
+      setReleaseProof(proofDriveFile);
+      setReleaseMsg("");
       setProofRows([]); setProofFile(null); setProofDriveFile(null); fetchAll();
     } catch (err) { setProofMsg("❌ " + err.message); }
     finally { setProofLoading(false); }
@@ -2263,6 +2293,45 @@ export default function Expenses() {
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#06b6d4", marginBottom: 10 }}>🏦 Payment Proof Results</div>
             {proofMsg && <div style={{ marginBottom: 10, fontSize: 13, color: proofMsg.startsWith("✅") ? "#34d399" : proofMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{proofMsg}</div>}
+
+            {/* ── Release requests to carriers / container loaders paid in this import ── */}
+            {releaseDrafts.length > 0 && (
+              <div style={{ marginBottom: 14, border: "1px solid rgba(37,99,235,0.35)", borderRadius: 10, padding: "12px 14px", background: "rgba(37,99,235,0.05)" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+                  <strong style={{ fontSize: 14 }}>📨 Release requests</strong>
+                  <span style={{ fontSize: 12, color: "var(--text-secondary)" }}>Each goes with the bank proof showing only that company's payment.</span>
+                  <button onClick={() => setReleaseDrafts([])} style={{ marginLeft: "auto", background: "none", border: "none", color: "var(--text-muted)", cursor: "pointer", fontSize: 12 }}>Dismiss</button>
+                </div>
+                {releaseDrafts.map((d, i) => (
+                  <div key={d.key} style={{ border: "1px solid var(--border)", borderRadius: 8, padding: "10px 12px", marginBottom: 8, background: "var(--bg-panel)", opacity: d.sentOk ? 0.6 : 1 }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 8, flexWrap: "wrap", fontSize: 13 }}>
+                      <input type="checkbox" disabled={!d.to?.length || d.sentOk} checked={!!d.to?.length && d.send !== false && !d.sentOk}
+                        onChange={e => setReleaseDrafts(ds => ds.map((x, j) => j === i ? { ...x, send: e.target.checked } : x))} />
+                      <strong>{d.company}</strong>
+                      <span style={{ color: "var(--text-secondary)" }}>· {d.subject}</span>
+                      {d.sentOk && <span style={{ color: "#16a34a", fontWeight: 600 }}>✓ Sent</span>}
+                      {releaseProof?.driveId && (
+                        <a href={authUrl(`${API}/api/expenses/release-proof?driveId=${encodeURIComponent(releaseProof.driveId)}&payees=${encodeURIComponent((d.payees || []).join("|"))}`)}
+                          target="_blank" rel="noreferrer" style={{ marginLeft: "auto", fontSize: 12, color: "#2563eb", fontWeight: 600 }}>View redacted proof</a>
+                      )}
+                    </div>
+                    <div style={{ fontSize: 12, marginTop: 4, color: d.to?.length ? "var(--text-secondary)" : "#dc2626" }}>
+                      To: {d.to?.length ? d.to.join(", ") : `no release emails set — add them on the vendor (Vendors → ${d.vendorName} → Edit → Release emails)`}
+                    </div>
+                    <div style={{ marginTop: 8, padding: "8px 10px", background: "#fff", color: "#222", borderRadius: 6, fontSize: 13, overflowX: "auto" }}
+                      dangerouslySetInnerHTML={{ __html: d.html }} />
+                  </div>
+                ))}
+                <div style={{ display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+                  <button onClick={sendReleaseEmails} disabled={releaseSending || !releaseDrafts.some(d => d.to?.length && d.send !== false && !d.sentOk)}
+                    style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: 8, padding: "8px 18px", fontSize: 13, fontWeight: 700, cursor: "pointer",
+                      opacity: releaseSending || !releaseDrafts.some(d => d.to?.length && d.send !== false && !d.sentOk) ? 0.5 : 1 }}>
+                    {releaseSending ? "Sending…" : `Send ${releaseDrafts.filter(d => d.to?.length && d.send !== false && !d.sentOk).length} release request(s)`}
+                  </button>
+                  {releaseMsg && <span style={{ fontSize: 13, color: releaseMsg.startsWith("❌") ? "#dc2626" : "#16a34a" }}>{releaseMsg}</span>}
+                </div>
+              </div>
+            )}
             {proofRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>

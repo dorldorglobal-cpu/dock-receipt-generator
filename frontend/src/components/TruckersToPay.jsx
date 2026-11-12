@@ -113,8 +113,8 @@ export default function TruckersToPay({ onClose, onPaid }) {
       if (!res.ok) throw new Error(data.error || "Payment failed");
       let emailed = "";
       if (emailOn && toEmail.length) {
-        // A proof covering several truckers would show each one the others' payments — only attach it for one trucker
-        const attachProof = !!proof && pickedTruckers.length === 1;
+        // The server gives each trucker their own copy of the bank proof, redacted to just their payment
+        const attachProof = !!proof;
         const rfd = new FormData();
         rfd.append("payload", JSON.stringify({
           paidDate: payDate, method, attachProof,
@@ -255,7 +255,7 @@ export default function TruckersToPay({ onClose, onPaid }) {
             <label style={{ display: "flex", alignItems: "center", gap: 6, fontWeight: 600, cursor: "pointer", marginBottom: emailOn ? 6 : 0 }}>
               <input type="checkbox" checked={emailOn} onChange={e => setEmailOn(e.target.checked)} />
               ✉️ Email each trucker a payment receipt
-              {emailOn && proof && pickedTruckers.length === 1 && <span style={{ fontWeight: 400, color: "var(--text-muted)" }}> — proof attached</span>}
+              {emailOn && proof && <span style={{ fontWeight: 400, color: "var(--text-muted)" }}> — each gets the proof showing only their payment</span>}
               {emailOn && proof && pickedTruckers.length > 1 && <span style={{ fontWeight: 400, color: "#b45309" }}> — proof not attached (it covers several truckers)</span>}
             </label>
             {emailOn && (
