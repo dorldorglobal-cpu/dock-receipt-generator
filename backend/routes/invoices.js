@@ -246,9 +246,24 @@ router.get("/", async (req, res) => {
     if (oIds.length) {
       const os = await OrderM.find({ _id: { $in: oIds } }).select("vessel voyage sailDate status").lean();
       const byId = new Map(os.map(o => [String(o._id), o]));
+      // Container cars keep the vessel on their container load, not on the order
+      const noVessel = os.filter(o => !o.vessel).map(o => o._id);
+      const loadByOrder = new Map();
+      if (noVessel.length) {
+        const ContainerLoad = require("../models/ContainerLoad");
+        const loads = await ContainerLoad.find({ orderIds: { $in: noVessel } }).select("orderIds vessel voyage sailDate").lean();
+        for (const l of loads) for (const id of (l.orderIds || [])) loadByOrder.set(String(id), l);
+      }
       for (const inv of invoices) {
         const o = inv.orderId && byId.get(String(inv.orderId));
-        if (o) inv.sail = { vessel: o.vessel || "", voyage: o.voyage || "", sailDate: o.sailDate || "", status: o.status || "" };
+        if (!o) continue;
+        const l = !o.vessel ? loadByOrder.get(String(o._id)) : null;
+        inv.sail = {
+          vessel:   o.vessel   || l?.vessel   || "",
+          voyage:   o.voyage   || l?.voyage   || "",
+          sailDate: o.sailDate || l?.sailDate || "",
+          status:   o.status   || "",
+        };
       }
     }
 
