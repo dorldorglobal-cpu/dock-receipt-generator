@@ -285,6 +285,91 @@ router.post("/run-reminders", express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// ── GET /api/invoices/to-invoice — carrier-billed cars and their invoice status ──
+// Built from the carrier bills themselves, so no car is left off: every RORO order
+// with a Sallaum bill (Expenses import) or an ACL rated BL / ocean-freight bill
+// (BL Separator / ACL import). Grouped by the bill it came in on — Sallaum invoice #,
+// or ACL vessel + voyage — newest first. ?days=60 limits to recent bills.
+router.get("/to-invoice", async (req, res) => {
+  try {
+    const Expense = require("../models/Expense");
+    const days  = Math.min(Math.max(parseInt(req.query.days, 10) || 60, 1), 3650);
+    const since = new Date(Date.now() - days * 86400000);
+
+    const bills = await Expense.find({
+      category: "Ocean Freight", orderId: { $ne: null }, createdAt: { $gte: since },
+      vendor: { $regex: /sallaum|acl|grimaldi/i },
+    }).select("orderId vendor amount invoiceNumber notes createdAt").sort({ createdAt: -1 }).lean();
+    const rated = await Order.find({
+      requestType: { $ne: "Container" }, status: { $ne: "Canceled" },
+      files: { $elemMatch: { label: "Rated Draft", uploadedAt: { $gte: since } } },
+    }).select("_id").lean();
+
+    const billByOrder = new Map();
+    for (const b of bills) if (!billByOrder.has(String(b.orderId))) billByOrder.set(String(b.orderId), b);
+    const ids = [...new Set([...billByOrder.keys(), ...rated.map(r => String(r._id))])];
+    const orders = await Order.find({ _id: { $in: ids }, requestType: { $ne: "Container" }, status: { $ne: "Canceled" } })
+      .select("refNumber customerName year make model vin bookingNumber shippingLine vessel voyage pol pod status arrivalDate holds files charges")
+      .lean();
+    const invs = await Invoice.find({ orderId: { $in: orders.map(o => o._id) } })
+      .select("orderId invoiceNumber status total sentAt createdAt").sort({ createdAt: 1 }).lean();
+    const invByOrder = new Map();
+    for (const i of invs) if (!invByOrder.has(String(i.orderId))) invByOrder.set(String(i.orderId), i);
+
+    // "Freight: $900.00, BAF: $350.00, Other/NR/FK: $450.00" → [{ label, amount }]
+    const breakdown = (notes) => [...String(notes || "").matchAll(/([A-Za-z][A-Za-z ./()-]*?):\s*\$([\d,]+\.\d{2})/g)]
+      .map(m => ({ label: m[1].trim(), amount: parseFloat(m[2].replace(/,/g, "")) }))
+      .filter(x => !/^(voyage|pol|pod|booking)$/i.test(x.label));
+
+    const groups = new Map();
+    for (const o of orders) {
+      const bill = billByOrder.get(String(o._id));
+      const isSallaum = /sallaum/i.test(bill?.vendor || o.shippingLine || "");
+      const ratedFile = (o.files || []).filter(f => f.label === "Rated Draft").sort((a, b) => new Date(b.uploadedAt) - new Date(a.uploadedAt))[0];
+      const when = new Date(Math.max(+(bill ? new Date(bill.createdAt) : 0), +(ratedFile ? new Date(ratedFile.uploadedAt) : 0)));
+      const key = isSallaum && /^SLSE-SL/i.test(bill?.invoiceNumber || "")
+        ? `SAL:${bill.invoiceNumber}`
+        : `${isSallaum ? "SAL" : "ACL"}:${o.vessel || "?"}|${o.voyage || ""}`;
+      const label = key.startsWith("SAL:SLSE")
+        ? `Sallaum invoice ${bill.invoiceNumber}`
+        : `${isSallaum ? "Sallaum" : "ACL / Grimaldi"} · ${o.vessel || "vessel ?"}${o.voyage ? ` ${o.voyage}` : ""}`;
+      if (!groups.has(key)) groups.set(key, { key, label, line: isSallaum ? "SALLAUM" : "ACL", date: when, rows: [] });
+      const g = groups.get(key);
+      if (when > g.date) g.date = when;
+
+      const inv = invByOrder.get(String(o._id));
+      const st  = String(inv?.status || "").toLowerCase();
+      // Bill notes carry the split for Sallaum; otherwise show the order's recorded costs
+      let parts = breakdown(bill?.notes);
+      if (!parts.length) {
+        const c = o.charges || {};
+        const COSTS = [["oceanCost", "Ocean"], ["emergencyBafFeeCost", "EBAF"], ["nonRunnerFeeCost", "Non-runner"],
+                       ["forkliftFeeCost", "Forklift"], ["storagePortFeeCost", "Port storage"]];
+        parts = COSTS.map(([k, label]) => ({ label, amount: parseFloat(c[k]) || 0 })).filter(p => p.amount > 0);
+      }
+      const carrierCost = bill?.amount || parts.reduce((s, p) => s + p.amount, 0);
+      g.rows.push({
+        orderId: o._id, refNumber: o.refNumber, customerName: o.customerName,
+        vehicle: [o.year, o.make, o.model].filter(Boolean).join(" "), vin: o.vin || "",
+        booking: o.bookingNumber || "", pol: o.pol || "", pod: o.pod || "", arrivalDate: o.arrivalDate || "",
+        carrierCost, breakdown: parts,
+        flags: (o.holds || []).filter(h => !h.resolvedAt).map(h => h.note || h.holdType),
+        invoice: inv ? { id: inv._id, number: inv.invoiceNumber, total: inv.total, sentAt: inv.sentAt || null } : null,
+        invoiceStatus: !inv ? "none" : st === "paid" ? "paid" : st === "sent" ? "sent" : "draft",
+      });
+    }
+
+    const out = [...groups.values()]
+      .map(g => ({ ...g, rows: g.rows.sort((a, b) => String(a.refNumber).localeCompare(String(b.refNumber))),
+        counts: g.rows.reduce((c, r) => { c[r.invoiceStatus] = (c[r.invoiceStatus] || 0) + 1; return c; }, {}) }))
+      .sort((a, b) => b.date - a.date);
+    res.json({ days, groups: out });
+  } catch (e) {
+    console.error("to-invoice error:", e);
+    res.status(500).json({ error: e.message });
+  }
+});
+
 // ── GET /api/invoices/:id — single invoice ────────────────────────────────────
 router.get("/:id", async (req, res) => {
   try {

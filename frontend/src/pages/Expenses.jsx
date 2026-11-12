@@ -1923,7 +1923,12 @@ export default function Expenses() {
         {(sallaumMsg || (sallaumParsed && sallaumRows.length > 0)) && (
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#60a5fa", marginBottom: 10 }}>🚢 Sallaum Results</div>
-            {sallaumMsg && <div style={{ marginBottom: 10, fontSize: 13, color: sallaumMsg.startsWith("✅") ? "#34d399" : sallaumMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{sallaumMsg}</div>}
+            {sallaumMsg && <div style={{ marginBottom: 10, fontSize: 13, color: sallaumMsg.startsWith("✅") ? "#34d399" : sallaumMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>
+              {sallaumMsg}
+              {sallaumMsg.startsWith("✅") && (
+                <a href="/to-invoice" style={{ marginLeft: 10, fontWeight: 700, color: "#2563eb" }}>→ Invoice these cars (To Invoice)</a>
+              )}
+            </div>}
             {sallaumParsed && sallaumRows.length > 0 && (
               <>
                 <div style={{ fontSize: 12, color: "var(--text-secondary)", marginBottom: 10, display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: 8 }}>
@@ -1988,7 +1993,12 @@ export default function Expenses() {
         {(aclMsg || aclRows.length > 0) && (
           <div id="acl-section" style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#8b5cf6", marginBottom: 10 }}>⚓ ACL / Grimaldi Results</div>
-            {aclMsg && <div style={{ marginBottom: 10, fontSize: 13, color: aclMsg.startsWith("✅") ? "#34d399" : aclMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{aclMsg}</div>}
+            {aclMsg && <div style={{ marginBottom: 10, fontSize: 13, color: aclMsg.startsWith("✅") ? "#34d399" : aclMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>
+              {aclMsg}
+              {aclMsg.startsWith("✅") && (
+                <a href="/to-invoice" style={{ marginLeft: 10, fontWeight: 700, color: "#2563eb" }}>→ Invoice these cars (To Invoice)</a>
+              )}
+            </div>}
             {aclRows.length > 0 && (
               <>
                 <div style={{ overflowX: "auto" }}>

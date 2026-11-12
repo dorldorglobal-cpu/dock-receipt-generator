@@ -225,6 +225,16 @@ export default function BlSeparator() {
         </div>
       )}
 
+      {/* Rated BLs attached → they're on the To Invoice list now */}
+      {parsed && Object.values(rowResults).some(r => r?.success) &&
+        parsed.bls.some((bl, i) => bl.type === "rated" && rowResults[blKey(bl, i)]?.success) && (
+        <div style={{ marginTop: 12, marginBottom: 8, padding: "10px 16px", borderRadius: 8, fontSize: 14,
+          background: "rgba(37,99,235,0.08)", border: "1px solid rgba(37,99,235,0.3)" }}>
+          ✅ Rated BLs attached — these cars are on the To Invoice list.
+          <a href="/to-invoice" style={{ marginLeft: 10, fontWeight: 700, color: "#2563eb" }}>→ Invoice them</a>
+        </div>
+      )}
+
       {parsed && (
         <div>
           {/* Action bar */}

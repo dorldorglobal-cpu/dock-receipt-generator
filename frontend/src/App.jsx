@@ -1,4 +1,4 @@
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, useParams } from "react-router-dom";
 import { useState } from "react";
 import Login from "./components/Login";
 import Layout from "./components/Layout";
@@ -29,6 +29,14 @@ import EmailOrders from "./pages/EmailOrders";
 import SignDocuments from "./pages/SignDocuments";
 import AesSettings from "./pages/AesSettings";
 import AesFiling from "./pages/AesFiling";
+import ToInvoice from "./pages/ToInvoice";
+
+// Order page starts fresh for each order — moving straight from one order to the
+// next (To Invoice "next car") reloads everything instead of reusing the last one's data
+function OrderDetailsKeyed() {
+  const { id } = useParams();
+  return <OrderDetails key={id} />;
+}
 
 import "./App.css";
 
@@ -72,8 +80,9 @@ export default function App() {
 
           <Route
             path="/orders/:id"
-            element={<OrderDetails />}
+            element={<OrderDetailsKeyed />}
           />
+          <Route path="/to-invoice" element={<ToInvoice />} />
 
           <Route path="/orders/:id/aes" element={<AesFiling />} />
 

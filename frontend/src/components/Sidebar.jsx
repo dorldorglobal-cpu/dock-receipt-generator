@@ -127,6 +127,7 @@ export default function Sidebar() {
 
       {!isMobile && <div className="sidebar-section-label">Finance</div>}
       <nav className="sidebar-nav">
+        <NavItem to="/to-invoice" iconKey="invoices" label="To Invoice" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/invoices" iconKey="invoices" label="Invoices" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/expenses" iconKey="expenses" label="Expenses" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/vendors"  iconKey="vendors"  label="Vendors"  collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />

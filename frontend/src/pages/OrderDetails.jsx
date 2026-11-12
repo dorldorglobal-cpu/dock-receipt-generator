@@ -377,6 +377,20 @@ export default function OrderDetails() {
   }, []);
 
   // Core: hit the schedule API with any combo of voyageName / vessel params
+  // ── To Invoice list: queue of cars on the same bill, walked in order ──
+  const fromToInvoice = new URLSearchParams(location.search).get("returnTo") === "to-invoice";
+  const readQueue = () => { try { return JSON.parse(sessionStorage.getItem("toInvoiceQueue") || "null"); } catch { return null; } };
+  // Drop this order from the queue and return the next one (or null)
+  const toInvoiceNext = () => {
+    const q = readQueue();
+    if (!q?.ids) return null;
+    const ids = q.ids.filter(x => String(x) !== String(id));
+    try { sessionStorage.setItem("toInvoiceQueue", JSON.stringify({ ...q, ids })); } catch {}
+    return ids[0] || null;
+  };
+  // Opened from the list with ?invoice=1 → open Generate Invoice once the order has loaded
+  const autoInvoiceOpened = useRef(false);
+
   // Confirm-sailing popup shown after a Draft / Rated Draft upload
   const [sailConfirm, setSailConfirm] = useState(null);
   // Vessel schedule lookup → { vessel, voyage, sailDate, arrivalDate (YYYY-MM-DD), cutoffDate } or null
@@ -1096,6 +1110,15 @@ export default function OrderDetails() {
     setInvoiceNotes("");
     setShowInvoice(true);
   };
+
+  // Arrived from the To Invoice list with ?invoice=1 → open Generate Invoice once, as soon as
+  // the order (and its charges) have loaded
+  useEffect(() => {
+    if (autoInvoiceOpened.current || !order?._id) return;
+    if (new URLSearchParams(location.search).get("invoice") !== "1") return;
+    autoInvoiceOpened.current = true;
+    openInvoiceModal();
+  }, [order?._id, charges]);
 
   const updateInvoiceItem = (index, key, value) => {
     setInvoiceItems((prev) =>
@@ -2381,6 +2404,12 @@ export default function OrderDetails() {
       if (params.get("returnTo") === "billing" && loadId) {
         setTimeout(() => navigate(`/containers?billing=${loadId}`), 1200);
       }
+      // From the To Invoice list → straight on to the next car on the same bill
+      if (params.get("returnTo") === "to-invoice") {
+        const next = toInvoiceNext();
+        setMessage(`✅ Invoice sent to ${to}${next ? " — opening the next car…" : " — that was the last one on this bill"}`);
+        setTimeout(() => navigate(next ? `/orders/${next}?invoice=1&returnTo=to-invoice` : "/to-invoice"), 1200);
+      }
     } catch (e) {
       setMessage(`❌ Failed to send invoice: ${e.message}`);
     }
@@ -2461,6 +2490,30 @@ export default function OrderDetails() {
 
   return (
     <div>
+      {/* ── To Invoice list bar: where this car sits on its bill, and a way to move on ── */}
+      {fromToInvoice && (() => {
+        const q = readQueue();
+        const left = (q?.ids || []).filter(x => String(x) !== String(id)).length;
+        return (
+          <div style={{ display:"flex", alignItems:"center", gap:12, flexWrap:"wrap", marginBottom:12, padding:"8px 14px",
+            borderRadius:10, background:"rgba(37,99,235,0.08)", border:"1px solid rgba(37,99,235,0.3)", fontSize:13 }}>
+            <button onClick={() => navigate("/to-invoice")}
+              style={{ background:"none", border:"none", color:"#2563eb", fontWeight:700, cursor:"pointer", padding:0, fontSize:13 }}>
+              ← To Invoice
+            </button>
+            <span style={{ color:"var(--text-secondary)" }}>
+              {q?.label || "Invoicing"} · {left ? `${left} more after this one` : "last one on this bill"}
+            </span>
+            {left > 0 && (
+              <button onClick={() => { const n = toInvoiceNext(); navigate(n ? `/orders/${n}?invoice=1&returnTo=to-invoice` : "/to-invoice"); }}
+                style={{ marginLeft:"auto", padding:"4px 12px", borderRadius:7, border:"1px solid var(--border)", background:"transparent", color:"var(--text-primary)", cursor:"pointer", fontSize:12 }}>
+                Skip to next →
+              </button>
+            )}
+          </div>
+        );
+      })()}
+
       {/* ── Page Header ─────────────────────────────── */}
       <div className="page-header">
         <div>
@@ -7066,6 +7119,8 @@ export default function OrderDetails() {
                   if (params.get("returnTo") === "billing" && loadId) {
                     navigate(`/containers?billing=${loadId}`);
                   }
+                  // Not sending now — back to the list; this car stays "not sent"
+                  if (params.get("returnTo") === "to-invoice") navigate("/to-invoice");
                 }} style={{ padding:"8px 18px", background:"none", border:"1px solid var(--border)", borderRadius:8, color:"var(--text-secondary)", cursor:"pointer" }}>Skip</button>
                 <button onClick={sendInvoiceEmail} disabled={invSending} style={{ padding:"8px 20px", background:"#059669", color:"#fff", border:"none", borderRadius:8, cursor:"pointer", fontWeight:600 }}>
                   {invSending ? "Sending…" : "Send Invoice"}
