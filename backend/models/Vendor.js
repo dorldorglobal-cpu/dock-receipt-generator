@@ -13,6 +13,9 @@ const vendorSchema = new mongoose.Schema(
     // What they primarily supply
     category:    { type: String, default: "" },
     notes:       { type: String, default: "" },
+    // Who gets the "PAYMENT FOR RELEASES" email after we pay this vendor (carriers /
+    // container loaders). One address per line, e.g. "Name <a@b.com>". Empty = none sent.
+    releaseEmails: { type: String, default: "" },
     active:      { type: Boolean, default: true },
   },
   { timestamps: true }

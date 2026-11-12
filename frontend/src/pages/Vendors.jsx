@@ -60,7 +60,7 @@ const inputStyle = { width:"100%",padding:"8px 10px",background:"var(--bg-elevat
 const labelStyle = { display:"block",fontSize:12,color:"var(--text-secondary)",marginBottom:2 };
 
 // ── Vendor Form ───────────────────────────────────────────────────────────────
-const EMPTY_VENDOR = { name:"",contactName:"",phone:"",email:"",address:"",city:"",state:"",zip:"",category:"",notes:"" };
+const EMPTY_VENDOR = { name:"",contactName:"",phone:"",email:"",address:"",city:"",state:"",zip:"",category:"",notes:"",releaseEmails:"" };
 
 function VendorForm({ form, setForm, onSubmit, saving, submitLabel="Save Vendor" }) {
   const inp = k => ({ value: form[k]||"", onChange: e => setForm(f=>({...f,[k]:e.target.value})) });
@@ -100,6 +100,11 @@ function VendorForm({ form, setForm, onSubmit, saving, submitLabel="Save Vendor"
         <label style={{ ...labelStyle, gridColumn:"1/-1" }}>
           Notes
           <textarea {...inp("notes")} rows={2} style={{ ...inputStyle,resize:"vertical" }} />
+        </label>
+        <label style={{ ...labelStyle, gridColumn:"1/-1" }}>
+          Release emails <span style={{ fontWeight:400, color:"var(--text-muted)" }}>— who gets "PAYMENT FOR RELEASES" after we pay them (carriers / container loaders). One per line.</span>
+          <textarea {...inp("releaseEmails")} rows={3} style={{ ...inputStyle,resize:"vertical", fontFamily:"monospace", fontSize:12 }}
+            placeholder={'Name <name@company.com>\naccounting@company.com'} />
         </label>
       </div>
       <div style={{ display:"flex",justifyContent:"flex-end",marginTop:20 }}>
@@ -363,7 +368,7 @@ export default function Vendors() {
 
   // ── Add / Edit vendor ───────────────────────────────────────────────────────
   const openAdd = () => { setVForm(EMPTY_VENDOR); setShowAdd(true); };
-  const openEdit = (v) => { setEditVendor(v); setVForm({ name:v.name||"",contactName:v.contactName||"",phone:v.phone||"",email:v.email||"",address:v.address||"",city:v.city||"",state:v.state||"",zip:v.zip||"",category:v.category||"",notes:v.notes||"" }); };
+  const openEdit = (v) => { setEditVendor(v); setVForm({ name:v.name||"",contactName:v.contactName||"",phone:v.phone||"",email:v.email||"",address:v.address||"",city:v.city||"",state:v.state||"",zip:v.zip||"",category:v.category||"",notes:v.notes||"",releaseEmails:v.releaseEmails||"" }); };
 
   const saveVendor = async (e) => {
     e.preventDefault(); setVSaving(true);
