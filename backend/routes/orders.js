@@ -850,8 +850,14 @@ router.post(
       try {
         if (label === "AES") {
           const parsed = await parseAES(req.file.path);
+          if (parsed.unreadable) {
+            const msg = `Couldn't read anything from ${req.file.originalname} — it looks like a picture-only PDF (${parsed.unreadable}). Upload the AES PDF downloaded from ACE, or fill the fields by hand.`;
+            req._dispatchWarnings = [...(req._dispatchWarnings || []),
+              { field: "AES", severity: "error", dispatch: "", order: "", message: msg }];
+            addTimeline(order, "AES Unreadable", msg);
+          }
           const { applyAesToOrder } = require("../utils/applyAes");
-          const r = applyAesToOrder(order, parsed, { source: "AES PDF upload", fileName: req.file.originalname });
+          const r = applyAesToOrder(order, parsed, { source: parsed.readFromImage ? "AES PDF (read from image)" : "AES PDF upload", fileName: req.file.originalname });
           if (r.rejected) {
             req._dispatchWarnings = [...(req._dispatchWarnings || []),
               { field: "AES VIN", severity: "error", dispatch: String(parsed.vin || ""), order: order.vin || "", message: r.warning }];

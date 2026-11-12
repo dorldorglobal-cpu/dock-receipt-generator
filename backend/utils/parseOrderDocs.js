@@ -570,7 +570,14 @@ function findAesVessel(text) {
 // Prompt validated against real production AES filings; see
 // backend/utils/llmExtract.js and backend/scripts/try-llm-extraction.js.
 async function parseAESWithLLM(filePath) {
-  const text = await parsePdfFile(filePath);
+  let text = await parsePdfFile(filePath);
+  // A picture-only PDF (AES page printed from the CBP site) has no text — read it with Claude first
+  let ocr = false;
+  if (text.replace(/\s/g, "").length < 40) {
+    const { ocrPdfText } = require("./pdfOcr");
+    text = await ocrPdfText(fs.readFileSync(filePath));
+    ocr = true;
+  }
   const r = await extractAESFields(text);
 
   const pol = normalizePort(r.portOfLoading || "");
@@ -612,6 +619,7 @@ async function parseAESWithLLM(filePath) {
     value: (r.value || "").toString().replace(/,/g, ""),
     aesItn,
     ...findVehicleTitle(text, (r.vin || "").toUpperCase()),
+    ...(ocr ? { readFromImage: true } : {}),
   };
 }
 
@@ -624,7 +632,10 @@ async function parseAES(filePath) {
     return await parseAESWithLLM(filePath);
   } catch (e) {
     console.warn("[parseAES] LLM extraction failed, falling back to regex:", e.message);
-    return parseAESRegex(filePath);
+    const r = await parseAESRegex(filePath);
+    // Nothing readable at all (picture-only PDF and it couldn't be read) → say so
+    if (!r.vin && !r.aesItn && !r.bookingNumber) r.unreadable = e.message;
+    return r;
   }
 }
 
