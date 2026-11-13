@@ -10,27 +10,45 @@ const lineOf = (s) => {
   return v.startsWith("SALLAUM") ? "SALLAUM" : v === "ACL" || v.startsWith("ACL") ? "ACL" : v;
 };
 
-// GET /api/releases/pending — paid orders whose release hasn't gone to the customer yet
+const FIELDS = "refNumber vin year make model customerName customerEmail shippingLine voyage bookingNumber release arrivalDate status";
+
+async function withInvoices(orders) {
+  const invs = await Invoice.find({ orderId: { $in: orders.map((o) => o._id) } })
+    .select("orderId invoiceNumber status paidAt total payments").lean();
+  const invBy = new Map(invs.map((i) => [String(i.orderId), i]));
+  return orders.map((o) => {
+    const inv = invBy.get(String(o._id));
+    const paidSoFar = (inv?.payments || []).reduce((s, p) => s + (p.amount || 0), 0);
+    return {
+      _id: o._id, refNumber: o.refNumber, vin: o.vin, last6: last6(o.vin), status: o.status,
+      vehicle: [o.year, o.make, o.model].filter(Boolean).join(" "),
+      customerName: o.customerName, customerEmail: o.customerEmail || "",
+      line: lineOf(o.shippingLine), voyage: String(o.voyage || "").trim().toUpperCase(), booking: o.bookingNumber || "",
+      requestedAt: o.release?.requestedAt || null, arrivalDate: o.arrivalDate || "",
+      held: !!o.release?.heldGmailId, heldReason: o.release?.heldReason || "",
+      forwardedAt: o.release?.forwardedAt || null, forwardedTo: o.release?.forwardedTo || "",
+      invoiceNumber: inv?.invoiceNumber || "", invoicePaid: inv?.status === "paid", paidAt: inv?.paidAt || null,
+      balance: inv ? Math.max(0, (inv.total || 0) - paidSoFar) : null,
+    };
+  });
+}
+
+// GET /api/releases/pending
+//   rows        — paid orders whose release hasn't gone out, plus releases held (invoice not paid / no email)
+//   sentNotPaid — release already sent but the invoice isn't paid (early release for a good customer).
+//                 Dor Ldor Global Ghana is left out: its invoices are always settled later.
 router.get("/pending", async (req, res) => {
   try {
-    const orders = await Order.find({ status: "Paid", "release.forwardedAt": null })
-      .select("refNumber vin year make model customerName customerEmail shippingLine voyage bookingNumber release arrivalDate")
-      .lean();
-    const invs = await Invoice.find({ orderId: { $in: orders.map((o) => o._id) } })
-      .select("orderId invoiceNumber status paidAt").lean();
-    const invBy = new Map(invs.map((i) => [String(i.orderId), i]));
-    const rows = orders.map((o) => {
-      const inv = invBy.get(String(o._id));
-      return {
-        _id: o._id, refNumber: o.refNumber, vin: o.vin, last6: last6(o.vin),
-        vehicle: [o.year, o.make, o.model].filter(Boolean).join(" "),
-        customerName: o.customerName, customerEmail: o.customerEmail || "",
-        line: lineOf(o.shippingLine), voyage: String(o.voyage || "").trim().toUpperCase(), booking: o.bookingNumber || "",
-        requestedAt: o.release?.requestedAt || null, arrivalDate: o.arrivalDate || "",
-        invoiceNumber: inv?.invoiceNumber || "", invoicePaid: inv?.status === "paid", paidAt: inv?.paidAt || null,
-      };
-    });
-    res.json(rows);
+    const { isGhanaOffice } = require("../utils/releaseWatch");
+    const waiting = await Order.find({
+      "release.forwardedAt": null, status: { $ne: "Canceled" },
+      $or: [{ status: "Paid" }, { "release.heldGmailId": { $nin: ["", null] } }],
+    }).select(FIELDS).lean();
+    const sent = await Order.find({
+      "release.forwardedAt": { $ne: null }, status: { $nin: ["Completed", "Canceled"] },
+    }).select(FIELDS).lean();
+    const sentRows = (await withInvoices(sent.filter((o) => !isGhanaOffice(o)))).filter((r) => !r.invoicePaid);
+    res.json({ rows: await withInvoices(waiting), sentNotPaid: sentRows });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

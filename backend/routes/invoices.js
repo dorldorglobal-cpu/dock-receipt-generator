@@ -554,8 +554,9 @@ router.patch("/:id/status", async (req, res) => {
       if (status === "paid") orderUpdate.$set = { status: "Paid" };
       await Order.findByIdAndUpdate(inv.orderId, orderUpdate);
       if (status === "paid") {
-        const { completeIfReady } = require("../utils/releaseWatch");
-        await completeIfReady(await Order.findById(inv.orderId)).catch(() => {});
+        // A release held for payment goes out now, then the order completes
+        const { releaseOnPayment } = require("../utils/releaseWatch");
+        releaseOnPayment(inv.orderId).catch((e) => console.warn("[releases] on payment:", e.message));
       }
     }
 
@@ -586,6 +587,11 @@ async function syncOrderStatus(inv) {
       $set: { status: released ? "Completed" : "Paid" },
       $push: { timeline: { action: "Invoice Paid", details: `Invoice ${inv.invoiceNumber} fully paid — order marked ${released ? "Completed (release already sent)" : "Paid, waiting on the release"}`, createdAt: new Date() } },
     });
+    // A release held for payment goes out now, then the order completes
+    if (!released && order.release?.heldGmailId) {
+      const { releaseOnPayment } = require("../utils/releaseWatch");
+      releaseOnPayment(inv.orderId).catch((e) => console.warn("[releases] on payment:", e.message));
+    }
   }
 }
 

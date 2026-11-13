@@ -115,6 +115,43 @@ async function forwardMessage(gmail, msg, to) {
   return sendRaw(lines);
 }
 
+// Dor Ldor Global Ghana (the Ghana office) — the only customer whose releases go out before payment
+const isGhanaOffice = (order) => /DOR\s*L'?\s*DOR\s*GLOBAL\s*GHANA/i.test(String(order?.customerName || ""));
+const invoicePaid = async (orderId) => !!(await Invoice.exists({ orderId, status: "paid" }));
+
+async function holdRelease(order, gmailId, reason, line) {
+  await Order.updateOne({ _id: order._id }, {
+    $set: { "release.heldGmailId": gmailId, "release.heldReason": reason },
+    $push: { timeline: { action: "Release Held", details: `${line} release came in but was not sent — ${reason}. It sends when the invoice is paid, or use Send release on the Releases page.`, createdAt: new Date() } },
+  });
+}
+
+/** Forward a specific release email to the order's customer and record it. */
+async function sendReleaseFor(order, gmailId, how) {
+  const to = emailsOf(order.customerEmail);
+  if (!to.length) throw new Error(`#${order.refNumber} has no customer email`);
+  const gmail = readClient();
+  const full = (await gmailCall(() => gmail.users.messages.get({ userId: "me", id: gmailId, format: "full" }))).data;
+  await forwardMessage(gmail, full, to);
+  await Order.updateOne({ _id: order._id }, {
+    $set: { "release.forwardedAt": new Date(), "release.forwardedTo": to.join(", "), "release.gmailId": gmailId, "release.how": how,
+            "release.heldGmailId": "", "release.heldReason": "" },
+    $push: { timeline: { action: "Release Sent", details: `Release forwarded to ${to.join(", ")}${how === "on-payment" ? " (held until the invoice was paid)" : ""}`, createdAt: new Date() } },
+  });
+  return { to: to.join(", "), subject: hdr(full.payload.headers, "subject") };
+}
+
+/** Invoice just got paid: send a release that was held for payment, then complete. */
+async function releaseOnPayment(orderId) {
+  const order = await Order.findById(orderId);
+  if (!order) return null;
+  if (order.release?.heldGmailId && !order.release?.forwardedAt && order.release.heldReason === "invoice not paid") {
+    try { await sendReleaseFor(order, order.release.heldGmailId, "on-payment"); }
+    catch (e) { console.warn("[releases] send on payment failed:", e.message); return null; }
+  }
+  return completeIfReady(await Order.findById(orderId));
+}
+
 /** Paid invoice + forwarded release → Completed. Returns true when it completed the order. */
 async function completeIfReady(order) {
   if (!order?.release?.forwardedAt || order.status === "Completed" || order.status === "Canceled") return false;
@@ -160,8 +197,9 @@ async function scanReleases({ days = 3, dryRun = false, recordOnly = false } = {
     pageToken = list.data.nextPageToken;
   } while (pageToken && ids.length < 600);
   // Emails already tied to an order were handled on an earlier run — don't touch Gmail for them
-  const known = new Set((await Order.find({ "release.gmailId": { $in: ids.map((m) => m.id) } })
-    .select("release.gmailId").lean()).map((o) => o.release.gmailId));
+  const idList = ids.map((m) => m.id);
+  const known = new Set((await Order.find({ $or: [{ "release.gmailId": { $in: idList } }, { "release.heldGmailId": { $in: idList } }] })
+    .select("release.gmailId release.heldGmailId").lean()).flatMap((o) => [o.release.gmailId, o.release.heldGmailId]));
   const results = [];
   for (const { id } of ids) {
     if (known.has(id)) continue;
@@ -194,8 +232,16 @@ async function scanReleases({ days = 3, dryRun = false, recordOnly = false } = {
       }
 
       const to = emailsOf(order.customerEmail);
-      if (!to.length) { r.result = "order has no customer email — forward it yourself"; continue; }
       r.to = to.join(", ");
+      // Hold it on the Releases list instead of sending: no email on the order, or the invoice isn't paid
+      // (Dor Ldor Global Ghana is the one customer whose releases go out before payment).
+      const holdReason = !to.length ? "no customer email on the order"
+        : (!isGhanaOffice(order) && !(await invoicePaid(order._id))) ? "invoice not paid" : "";
+      if (holdReason) {
+        r.result = `held — ${holdReason}`;
+        if (!dryRun && !recordOnly) await holdRelease(order, id, holdReason, r.line);
+        continue;
+      }
       if (dryRun || recordOnly) { r.result = recordOnly ? "not forwarded yet (record-only run, nothing sent)" : "would forward"; continue; }
 
       const full = (await gmailCall(() => gmail.users.messages.get({ userId: "me", id, format: "full" }))).data;
@@ -291,17 +337,21 @@ async function resendRelease(vin) {
   const to = emailsOf(order.customerEmail);
   if (!to.length) throw new Error(`#${order.refNumber} has no customer email`);
   const gmail = readClient();
-  const found = await gmailCall(() => gmail.users.messages.list({ userId: "me", maxResults: 1, q: `${RELEASE_QUERY} subject:${vin}` }));
-  const id = found.data.messages?.[0]?.id;
+  let id = order.release?.heldGmailId || "";
+  if (!id) {
+    const found = await gmailCall(() => gmail.users.messages.list({ userId: "me", maxResults: 1, q: `${RELEASE_QUERY} subject:${vin}` }));
+    id = found.data.messages?.[0]?.id;
+  }
   if (!id) throw new Error("no Sallaum TELEX RELEASE / ACL PRINT AT DESTINATION email found for this VIN");
   const full = (await gmailCall(() => gmail.users.messages.get({ userId: "me", id, format: "full" }))).data;
   await forwardMessage(gmail, full, to);
   await Order.updateOne({ _id: order._id }, {
-    $set: { "release.forwardedAt": order.release?.forwardedAt || new Date(), "release.forwardedTo": to.join(", "), "release.gmailId": id },
+    $set: { "release.forwardedAt": order.release?.forwardedAt || new Date(), "release.forwardedTo": to.join(", "), "release.gmailId": id,
+            "release.how": order.release?.how || "manual-send", "release.heldGmailId": "", "release.heldReason": "" },
     $push: { timeline: { action: "Release Sent", details: `Release re-sent to ${to.join(", ")}`, createdAt: new Date() } },
   });
   const completed = await completeIfReady(await Order.findById(order._id));
   return { orderRef: order.refNumber, to: to.join(", "), subject: hdr(full.payload.headers, "subject"), completed };
 }
 
-module.exports = { scanReleases, requestSallaumReleases, markRequestedByBookings, completeIfReady, last6, forwardMessage, readClient, resendRelease };
+module.exports = { releaseOnPayment, isGhanaOffice, invoicePaid, scanReleases, requestSallaumReleases, markRequestedByBookings, completeIfReady, last6, forwardMessage, readClient, resendRelease };

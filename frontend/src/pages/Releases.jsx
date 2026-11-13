@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
+const fmt$ = (n) => "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { timeZone: "America/New_York" }) : "";
 
 // Paid orders waiting on their shipping-line release. Sallaum: request it here (replies on the
@@ -9,6 +10,7 @@ const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { timeZone: "
 // release email comes in, the server forwards it to the customer and the order goes Completed.
 export default function Releases() {
   const [rows, setRows]       = useState(null);
+  const [sentNotPaid, setSentNotPaid] = useState([]);
   const [error, setError]     = useState("");
   const [search, setSearch]   = useState("");
   const [sel, setSel]         = useState({});         // orderId -> true
@@ -21,7 +23,7 @@ export default function Releases() {
   const load = () => {
     setError("");
     fetch(`${API}/api/releases/pending`).then(r => r.json())
-      .then(d => { if (d.error) setError(d.error); else setRows(d); })
+      .then(d => { if (d.error) setError(d.error); else { setRows(d.rows || []); setSentNotPaid(d.sentNotPaid || []); } })
       .catch(e => setError(e.message));
   };
   useEffect(() => { document.title = "Releases"; load(); }, []);
@@ -76,9 +78,12 @@ export default function Releases() {
     load();
   };
 
-  const resend = async (vinArg) => {
+  const resend = async (vinArg, row) => {
     const vin = String(typeof vinArg === "string" ? vinArg : resendVin).trim();
-    if (typeof vinArg === "string" && !window.confirm(`Send the release for ${vin} to the customer now?`)) return;
+    const unpaidNote = row && !row.invoicePaid
+      ? `#${row.refNumber}: invoice ${row.invoiceNumber || ""} is NOT paid${row.balance ? ` (${fmt$(row.balance)} due)` : ""}.\n\nSend the release to ${row.customerName} anyway?`
+      : `Send the release for ${vin} to the customer now?`;
+    if (typeof vinArg === "string" && !window.confirm(unpaidNote)) return;
     setBusy("resend"); setMsg("");
     try {
       const r = await fetch(`${API}/api/releases/resend`, {
@@ -114,7 +119,7 @@ export default function Releases() {
       <div style={{ display: "flex", alignItems: "baseline", gap: 14, flexWrap: "wrap", marginBottom: 6 }}>
         <h1 style={{ margin: 0 }}>Releases</h1>
         <span style={{ color: "var(--text-secondary)", fontSize: 14 }}>
-          {rows ? (rows.length ? `${rows.length} paid car${rows.length === 1 ? "" : "s"} waiting on a release` : "All caught up") : ""}
+          {rows ? (rows.length ? `${rows.length} car${rows.length === 1 ? "" : "s"} waiting on a release` : "All caught up") : ""}
         </span>
       </div>
       <p style={{ margin: "0 0 16px", color: "var(--text-secondary)", fontSize: 13, maxWidth: 900 }}>
@@ -123,6 +128,9 @@ export default function Releases() {
         {" "}<strong>ACL:</strong> the PAYMENT FOR RELEASE email is the request.
         When Sallaum's TELEX RELEASE or ACL's PRINT AT DESTINATION email arrives, the app forwards it to the
         customer's email on the order (checked every 15 minutes), and the order goes to <strong>Completed</strong>.
+        {" "}If the invoice isn't paid yet, the release is <strong>held</strong> here and goes out by itself once the payment is recorded.
+        To release early for a good customer, click <strong>Send release</strong>: it moves to <em>Sent, not paid yet</em> below.
+        Dor Ldor Global Ghana releases always go out right away.
       </p>
 
       <div style={{ display: "flex", gap: 12, alignItems: "center", flexWrap: "wrap", marginBottom: 16 }}>
@@ -203,10 +211,14 @@ export default function Releases() {
                     <td style={td}>{r.customerName}<div style={{ fontSize: 12, color: r.customerEmail ? "var(--text-muted)" : "#dc2626" }}>{r.customerEmail || "no email: the release can't be forwarded"}</div></td>
                     <td style={td}>{r.vehicle}</td>
                     <td style={{ ...td, fontFamily: "monospace" }}>{r.last6}</td>
-                    <td style={td}>{r.invoiceNumber}{r.paidAt ? <div style={{ fontSize: 12, color: "#16a34a" }}>paid {fmtDate(r.paidAt)}</div> : null}</td>
-                    <td style={td}>{r.requestedAt ? fmtDate(r.requestedAt) : <span style={{ color: "var(--text-muted)" }}>—</span>}</td>
+                    <td style={td}>{r.invoiceNumber || <span style={{ color: "var(--text-muted)" }}>no invoice</span>}{r.invoicePaid
+                      ? <div style={{ fontSize: 12, color: "#16a34a" }}>paid {fmtDate(r.paidAt)}</div>
+                      : <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 600 }}>not paid{r.balance ? ` · ${fmt$(r.balance)} due` : ""}</div>}</td>
+                    <td style={td}>{r.held
+                      ? <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309", background: "rgba(245,158,11,0.15)", padding: "2px 7px", borderRadius: 5 }}>Release in · held: {r.heldReason}</span>
+                      : r.requestedAt ? fmtDate(r.requestedAt) : <span style={{ color: "var(--text-muted)" }}>—</span>}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
-                      <button onClick={() => resend(r.vin)} disabled={busy === "resend"} title="Forward the line's release email (if it has come in) to the customer" style={{ ...btn("#16a34a"), padding: "4px 10px", fontSize: 12, marginRight: 6 }}>Send release</button>
+                      <button onClick={() => resend(r.vin, r)} disabled={busy === "resend"} title="Forward the line's release email (if it has come in) to the customer" style={{ ...btn("#16a34a"), padding: "4px 10px", fontSize: 12, marginRight: 6 }}>Send release</button>
                       <button onClick={() => markSent(r)} style={{ ...btn("#6b7280"), padding: "4px 10px", fontSize: 12 }}>Already sent</button>
                     </td>
                   </tr>
@@ -216,6 +228,35 @@ export default function Releases() {
           </div>
         );
       })}
+
+      {sentNotPaid.length > 0 && (
+        <div style={{ border: "1px solid #fca5a5", borderRadius: 8, marginTop: 28, overflow: "hidden" }}>
+          <div style={{ padding: "10px 12px", background: "rgba(239,68,68,0.08)" }}>
+            <strong>Sent, not paid yet</strong>
+            <span style={{ color: "var(--text-secondary)", fontSize: 13, marginLeft: 10 }}>
+              Release already with the customer, invoice still open. Completed once the payment is recorded.
+            </span>
+          </div>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead><tr>
+              <th style={th}>Order</th><th style={th}>Customer</th><th style={th}>Vehicle</th>
+              <th style={th}>Invoice</th><th style={th}>Due</th><th style={th}>Release sent</th>
+            </tr></thead>
+            <tbody>
+              {sentNotPaid.map(r => (
+                <tr key={r._id}>
+                  <td style={td}><Link to={`/orders/${r._id}`}>#{r.refNumber}</Link></td>
+                  <td style={td}>{r.customerName}</td>
+                  <td style={td}>{r.vehicle}<div style={{ fontSize: 12, color: "var(--text-muted)", fontFamily: "monospace" }}>{r.last6}</div></td>
+                  <td style={td}>{r.invoiceNumber || <span style={{ color: "var(--text-muted)" }}>no invoice</span>}</td>
+                  <td style={{ ...td, color: "#dc2626", fontWeight: 600 }}>{r.balance != null ? fmt$(r.balance) : "—"}</td>
+                  <td style={td}>{fmtDate(r.forwardedAt)}<div style={{ fontSize: 12, color: "var(--text-muted)" }}>{r.forwardedTo}</div></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 }

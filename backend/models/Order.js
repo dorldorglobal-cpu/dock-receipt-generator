@@ -193,7 +193,9 @@ const orderSchema = new mongoose.Schema(
       forwardedAt:  { type: Date, default: null },
       forwardedTo:  { type: String, default: "" },
       gmailId:      { type: String, default: "" },   // the line's release email
-      how:          { type: String, default: "" },   // "auto" | "manual" (you forwarded it yourself) | "marked"
+      how:          { type: String, default: "" },   // "auto" | "manual" (you forwarded it yourself) | "marked" | "manual-send" | "on-payment"
+      heldGmailId:  { type: String, default: "" },   // release came in but held (invoice not paid / no email)
+      heldReason:   { type: String, default: "" },
     },
     emailNote: { type: String, default: "" }, // copy of buyer receipt email
     source: { type: String, default: "" }, // e.g. "GHANA OFFICE", "DIRECT"
