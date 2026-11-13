@@ -20,6 +20,11 @@ const sheets = google.sheets({ version: "v4", auth: oauth2Client });
 // Abbreviation: first letter of first word + first 2 letters of second word
 // e.g. "GRANDE TEMA" → GTE, "GRANDE PORTO" → GPO
 function buildStatus(order) {
+  // ACL's own voyage code (e.g. "GDK0826" = Grande Dakar, voyage 08 of 2026) is the right
+  // one — the abbreviation below guesses letters (GRANDE DAKAR -> "GDA", not "GDK") and
+  // uses the sail month instead of the voyage number, so it's only a last resort.
+  const voy = String(order.voyage || "").trim().toUpperCase();
+  if (/^[A-Z]{3}\d{4}$/.test(voy)) return `SAILED ${voy}`;
   if (!order.vessel) return "SAILED";
   const words = order.vessel.trim().toUpperCase().split(/\s+/).filter(Boolean);
   let abbr = "";

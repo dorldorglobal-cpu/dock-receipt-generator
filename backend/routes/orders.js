@@ -2407,7 +2407,7 @@ router.post("/:id/acl-sheet-upsert", express.json(), async (req, res) => {
       pod:           pod          || order.pod           || "",
       refNumber:     order.refNumber || "",
       statusOverride: statusOverride || null,
-      order: { vessel: vessel || order.vessel, sailDate: sailDate || order.sailDate },
+      order: { vessel: vessel || order.vessel, voyage: req.body.voyage || order.voyage, sailDate: sailDate || order.sailDate },
     }).catch(e => console.warn("[acl-sheet-upsert]", e.message));
 
     res.json({ ok: true });

@@ -440,6 +440,7 @@ router.post("/attach", async (req, res) => {
             refNumber:     order.refNumber || "",
             order: {
               vessel:   order.vessel,
+              voyage:   bl.voyage || order.voyage,
               sailDate: scheduleSailDate || order.sailDate,
             },
           });
