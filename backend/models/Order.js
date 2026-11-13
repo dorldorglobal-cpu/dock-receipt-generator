@@ -186,6 +186,15 @@ const orderSchema = new mongoose.Schema(
       createdAt:  { type: Date, default: Date.now },
       resolvedAt: { type: Date, default: null },
     }],
+    // Shipping-line release: requested from the line after payment, then the line's
+    // release email (Sallaum TELEX RELEASE / ACL PRINT AT DESTINATION) is forwarded to the customer.
+    release: {
+      requestedAt:  { type: Date, default: null },
+      forwardedAt:  { type: Date, default: null },
+      forwardedTo:  { type: String, default: "" },
+      gmailId:      { type: String, default: "" },   // the line's release email
+      how:          { type: String, default: "" },   // "auto" | "manual" (you forwarded it yourself) | "marked"
+    },
     emailNote: { type: String, default: "" }, // copy of buyer receipt email
     source: { type: String, default: "" }, // e.g. "GHANA OFFICE", "DIRECT"
 

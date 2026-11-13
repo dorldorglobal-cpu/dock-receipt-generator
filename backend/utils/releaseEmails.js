@@ -190,4 +190,4 @@ async function sendReleaseEmail(draft, proof /* { buffer, name } */) {
   return true;
 }
 
-module.exports = { RELEASE_VENDORS, releaseVendorFor, buildReleaseDrafts, redactProof, sendReleaseEmail, releaseRecipients };
+module.exports = { RELEASE_VENDORS, releaseVendorFor, buildReleaseDrafts, redactProof, sendReleaseEmail, releaseRecipients, signature };

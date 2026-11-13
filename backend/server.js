@@ -258,6 +258,7 @@ app.post("/api/expenses/parse-dispatch-url", async (req, res) => {
 app.use("/api/expenses", require("./routes/expenses"));
 app.use("/api/vendors",  require("./routes/vendors"));
 app.use("/api/invoices", require("./routes/invoices"));
+app.use("/api/releases", require("./routes/releases"));
 app.use("/api/claude",   require("./routes/claude"));
 app.use("/api/bl-separator", require("./routes/blSeparator"));
 app.use("/api/container-loads", require("./routes/containerLoads"));
@@ -1417,6 +1418,21 @@ mongoose
         .catch(e => console.warn("[loadStatus] sync failed:", e.message));
       runLoadSync();
       setInterval(runLoadSync, 60 * 60 * 1000);
+
+      // ── Shipping-line releases: forward Sallaum TELEX / ACL PRINT AT DESTINATION
+      // emails to the customer and complete paid orders. Every 15 min.
+      // RELEASE_WATCH=off disables it without a code change.
+      if (process.env.GMAIL_READ_REFRESH_TOKEN && process.env.RELEASE_WATCH !== "off") {
+        const { scanReleases } = require("./utils/releaseWatch");
+        const runReleaseScan = () => scanReleases({ days: 2 })
+          .then(rs => {
+            const done = rs.filter(r => r.result === "forwarded" || /already forwarded/.test(r.result || ""));
+            if (done.length) console.log(`[releases] ${done.map(r => `#${r.orderRef} ${r.result}`).join(" | ")}`);
+          })
+          .catch(e => console.warn("[releases] scan failed:", e.message));
+        setTimeout(runReleaseScan, 60 * 1000);
+        setInterval(runReleaseScan, 15 * 60 * 1000);
+      }
 
       // ── Daily "New Order" alert — fires every day at 8:00 AM Eastern ──────
       const sendNewOrderAlert = async () => {

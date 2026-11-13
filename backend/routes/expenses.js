@@ -3002,6 +3002,8 @@ router.post("/send-release-emails", express.json({ limit: "2mb" }), async (req, 
             const date = d.paidDate || (String(d.subject || "").match(/(\d{1,2}\/\d{1,2}\/\d{4})/) || [])[1];
             sheet = await setAclPaymentDate(d.bookings, date);
           } catch (e) { sheet = [{ written: false, reason: e.message }]; }
+          // The payment email is ACL's release request
+          try { await require("../utils/releaseWatch").markRequestedByBookings(d.bookings); } catch {}
         }
         results.push({ key: d.key, company: d.company, sent: true, sheet });
       } catch (e) {

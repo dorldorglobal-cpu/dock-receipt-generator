@@ -553,6 +553,10 @@ router.patch("/:id/status", async (req, res) => {
       };
       if (status === "paid") orderUpdate.$set = { status: "Paid" };
       await Order.findByIdAndUpdate(inv.orderId, orderUpdate);
+      if (status === "paid") {
+        const { completeIfReady } = require("../utils/releaseWatch");
+        await completeIfReady(await Order.findById(inv.orderId)).catch(() => {});
+      }
     }
 
     res.json(inv);
@@ -573,9 +577,14 @@ function recalcStatus(inv) {
 async function syncOrderStatus(inv) {
   if (!inv.orderId) return;
   if (inv.status === "paid") {
+    // Completed only once the shipping line's release has also gone to the customer
+    // (utils/releaseWatch.js); until then the order waits at Paid.
+    const order = await Order.findById(inv.orderId).select("status release").lean();
+    if (!order || order.status === "Completed") return;
+    const released = !!order.release?.forwardedAt;
     await Order.findByIdAndUpdate(inv.orderId, {
-      $set: { status: "Completed" },
-      $push: { timeline: { action: "Invoice Paid", details: `Invoice ${inv.invoiceNumber} fully paid — order marked Completed`, createdAt: new Date() } },
+      $set: { status: released ? "Completed" : "Paid" },
+      $push: { timeline: { action: "Invoice Paid", details: `Invoice ${inv.invoiceNumber} fully paid — order marked ${released ? "Completed (release already sent)" : "Paid, waiting on the release"}`, createdAt: new Date() } },
     });
   }
 }
