@@ -345,7 +345,15 @@ router.post("/attach", async (req, res) => {
         });
 
         let expenseId = null;
-        if (bl.type === "rated" && bl.createExpense && bl.charges) {
+        // Re-uploading the same rated BL must not add a second ACL bill for the order
+        const existingOcean = bl.type === "rated" && bl.createExpense && bl.charges
+          ? await Expense.findOne({
+              orderRef: order.refNumber, category: "Ocean Freight",
+              amount: bl.charges, vendor: /^\s*acl/i,
+            }).select("_id").lean()
+          : null;
+        if (existingOcean) expenseId = String(existingOcean._id);
+        else if (bl.type === "rated" && bl.createExpense && bl.charges) {
           const expense = await Expense.create({
             category: "Ocean Freight",
             description: `ACL Ocean Freight - BL ${bl.blNumber} (${bl.vehicle || bl.vin || ""})`,
