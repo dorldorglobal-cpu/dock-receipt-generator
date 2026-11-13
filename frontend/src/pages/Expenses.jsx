@@ -1006,7 +1006,10 @@ export default function Expenses() {
       if (!res.ok) throw new Error(data.error || "Send failed");
       const ok = (data.results || []).filter(r => r.sent);
       const bad = (data.results || []).filter(r => !r.sent);
-      setReleaseMsg(`${ok.length ? `✅ Release request sent to ${ok.map(r => r.company).join(", ")}` : ""}${bad.length ? `${ok.length ? " · " : ""}❌ ${bad.map(r => `${r.company}: ${r.error}`).join("; ")}` : ""}`);
+      const marked = ok.flatMap(r => r.sheet || []).filter(s => s.written).map(s => s.booking);
+      setReleaseMsg(`${ok.length ? `✅ Release request sent to ${ok.map(r => r.company).join(", ")}` : ""}` +
+        `${marked.length ? ` · ACL sheet dated: ${marked.join(", ")}` : ""}` +
+        `${bad.length ? `${ok.length ? " · " : ""}❌ ${bad.map(r => `${r.company}: ${r.error}`).join("; ")}` : ""}`);
       setReleaseDrafts(ds => ds.map(d => ok.some(r => r.key === d.key) ? { ...d, sentOk: true, send: false } : d));
     } catch (e) { setReleaseMsg("❌ " + e.message); }
     setReleaseSending(false);

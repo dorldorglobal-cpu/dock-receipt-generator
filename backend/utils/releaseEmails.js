@@ -103,9 +103,9 @@ async function buildReleaseDrafts(paidLog, dateStr) {
     const refs = [...new Set(lines.map(l => l.orderRef).filter(Boolean))];
     const orders = await Order.find({ refNumber: { $in: refs } }).select("_id refNumber bookingNumber").lean();
     const byRef = new Map(orders.map(o => [o.refNumber, o]));
-    let tableHtml, textRows;
+    let tableHtml, textRows, bookings = [];
     if (rv.style === "acl") {
-      const bookings = [...new Set(refs.map(r => byRef.get(r)?.bookingNumber).filter(Boolean))].sort();
+      bookings = [...new Set(refs.map(r => byRef.get(r)?.bookingNumber).filter(Boolean))].sort();
       tableHtml = aclTableHtml(bookings);
       textRows = bookings.map(b => `${b} PAD`);
     } else {
@@ -135,6 +135,7 @@ async function buildReleaseDrafts(paidLog, dateStr) {
     drafts.push({
       key: rv.key, company: rv.company, to: await releaseRecipients([...vendors, ...payees]),
       subject: `PAYMENT FOR RELEASES ${dateStr}`, html, text, total, payees: [...payees], orderRefs: refs,
+      bookings, paidDate: dateStr, style: rv.style,
       vendorName: [...vendors][0] || rv.company,
     });
   }

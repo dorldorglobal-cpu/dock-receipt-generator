@@ -2994,7 +2994,16 @@ router.post("/send-release-emails", express.json({ limit: "2mb" }), async (req, 
         if (!d.to?.length) throw new Error("no release emails set on this vendor");
         const { buffer } = await redactProof(full, d.payees || []);
         await sendReleaseEmail(d, { buffer, name: proofFile.fname || "payment-proof.pdf" });
-        results.push({ key: d.key, company: d.company, sent: true });
+        // ACL: the payment date goes in the ACL BOOKED sheet's PAYMENT STATUS for these bookings
+        let sheet = null;
+        if (d.style === "acl" && d.bookings?.length) {
+          try {
+            const { setAclPaymentDate } = require("../utils/aclSheet");
+            const date = d.paidDate || (String(d.subject || "").match(/(\d{1,2}\/\d{1,2}\/\d{4})/) || [])[1];
+            sheet = await setAclPaymentDate(d.bookings, date);
+          } catch (e) { sheet = [{ written: false, reason: e.message }]; }
+        }
+        results.push({ key: d.key, company: d.company, sent: true, sheet });
       } catch (e) {
         results.push({ key: d.key, company: d.company, sent: false, error: e.message });
       }

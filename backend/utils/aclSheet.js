@@ -153,4 +153,35 @@ async function setAclAmount({ bookingNumber, refNumber, amount }) {
   }
 }
 
-module.exports = { upsertAclRow, setAclAmount };
+/**
+ * Write the payment date into PAYMENT STATUS (col J) for these bookings — done when
+ * the ACL "PAYMENT FOR RELEASES" email goes out. Col K (TELEX "SENT") is left for
+ * when the release goes to the customer. A booking without a row is skipped.
+ * @returns [{ booking, row, written, from }]
+ */
+async function setAclPaymentDate(bookings, dateStr) {
+  const want = [...new Set((bookings || []).map(b => {
+    let bn = String(b || "").trim().toUpperCase();
+    if (/^S3\d{8}$/.test(bn)) bn = "S3-" + bn.slice(2);
+    return bn;
+  }).filter(Boolean))];
+  if (!want.length || !dateStr) return [];
+  const getRes = await sheets.spreadsheets.values.get({ spreadsheetId: SHEET_ID, range: `${TAB}!A:J` });
+  const rows = getRes.data.values || [];
+  const out = [], data = [];
+  for (const bn of want) {
+    let idx = -1;
+    for (let i = HEADER_ROW; i < rows.length; i++) if (String(rows[i][0] || "").trim().toUpperCase() === bn) { idx = i; break; }
+    if (idx < 0) { out.push({ booking: bn, written: false, reason: "no row" }); continue; }
+    const cur = String(rows[idx][9] || "").trim();
+    if (cur === dateStr) { out.push({ booking: bn, row: idx + 1, written: false, reason: "same" }); continue; }
+    data.push({ range: `${TAB}!J${idx + 1}`, values: [[dateStr]] });
+    out.push({ booking: bn, row: idx + 1, written: true, from: cur });
+  }
+  if (data.length) {
+    await sheets.spreadsheets.values.batchUpdate({ spreadsheetId: SHEET_ID, requestBody: { valueInputOption: "USER_ENTERED", data } });
+  }
+  return out;
+}
+
+module.exports = { upsertAclRow, setAclAmount, setAclPaymentDate };
