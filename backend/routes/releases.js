@@ -50,6 +50,14 @@ router.post("/scan", express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/releases/resend { vin } — forward the line's release to the customer again
+router.post("/resend", express.json(), async (req, res) => {
+  try {
+    const { resendRelease } = require("../utils/releaseWatch");
+    res.json(await resendRelease(req.body?.vin));
+  } catch (e) { res.status(400).json({ error: e.message }); }
+});
+
 // POST /api/releases/:id/mark-sent — release went to the customer some other way
 router.post("/:id/mark-sent", async (req, res) => {
   try {

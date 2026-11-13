@@ -16,6 +16,7 @@ export default function Releases() {
   const [busy, setBusy]       = useState("");
   const [msg, setMsg]         = useState("");
   const [scan, setScan]       = useState(null);
+  const [resendVin, setResendVin] = useState("");
 
   const load = () => {
     setError("");
@@ -75,6 +76,21 @@ export default function Releases() {
     load();
   };
 
+  const resend = async () => {
+    const vin = resendVin.trim();
+    setBusy("resend"); setMsg("");
+    try {
+      const r = await fetch(`${API}/api/releases/resend`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ vin }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error);
+      setMsg(`✅ #${d.orderRef}: release re-sent to ${d.to}`);
+      setResendVin("");
+    } catch (e) { setMsg("❌ " + e.message); }
+    setBusy("");
+  };
+
   const runScan = async () => {
     setBusy("scan"); setScan(null);
     try {
@@ -113,6 +129,12 @@ export default function Releases() {
           style={{ fontSize: 13, padding: "6px 10px", minWidth: 280 }} />
         <button onClick={runScan} disabled={busy === "scan"} style={btn("#2563eb")}>
           {busy === "scan" ? "Checking inbox…" : "Check inbox for releases now"}
+        </button>
+        <span style={{ flex: 1 }} />
+        <input placeholder="Full VIN to resend its release" value={resendVin} onChange={e => setResendVin(e.target.value.toUpperCase())}
+          style={{ fontSize: 13, padding: "6px 10px", width: 230, fontFamily: "monospace" }} />
+        <button onClick={resend} disabled={busy === "resend" || resendVin.trim().length !== 17} style={{ ...btn("#6b7280"), opacity: resendVin.trim().length === 17 ? 1 : 0.5 }}>
+          {busy === "resend" ? "Sending…" : "Resend release"}
         </button>
       </div>
 

@@ -282,4 +282,25 @@ async function markRequestedByBookings(bookings) {
   return r.modifiedCount || 0;
 }
 
-module.exports = { scanReleases, requestSallaumReleases, markRequestedByBookings, completeIfReady, last6, forwardMessage, readClient };
+/** Send a car's release to its customer again (customer says they never got it). */
+async function resendRelease(vin) {
+  vin = String(vin || "").trim().toUpperCase();
+  if (!VIN_RX.test(vin)) throw new Error("enter the full 17-character VIN");
+  const order = await findOrderByVin(vin);
+  if (!order) throw new Error("no order for this VIN");
+  const to = emailsOf(order.customerEmail);
+  if (!to.length) throw new Error(`#${order.refNumber} has no customer email`);
+  const gmail = readClient();
+  const found = await gmailCall(() => gmail.users.messages.list({ userId: "me", maxResults: 1, q: `${RELEASE_QUERY} subject:${vin}` }));
+  const id = found.data.messages?.[0]?.id;
+  if (!id) throw new Error("no Sallaum TELEX RELEASE / ACL PRINT AT DESTINATION email found for this VIN");
+  const full = (await gmailCall(() => gmail.users.messages.get({ userId: "me", id, format: "full" }))).data;
+  await forwardMessage(gmail, full, to);
+  await Order.updateOne({ _id: order._id }, {
+    $set: { "release.forwardedAt": order.release?.forwardedAt || new Date(), "release.forwardedTo": to.join(", "), "release.gmailId": id },
+    $push: { timeline: { action: "Release Sent", details: `Release re-sent to ${to.join(", ")}`, createdAt: new Date() } },
+  });
+  return { orderRef: order.refNumber, to: to.join(", "), subject: hdr(full.payload.headers, "subject") };
+}
+
+module.exports = { scanReleases, requestSallaumReleases, markRequestedByBookings, completeIfReady, last6, forwardMessage, readClient, resendRelease };
