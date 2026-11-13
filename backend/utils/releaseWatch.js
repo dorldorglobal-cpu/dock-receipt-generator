@@ -38,6 +38,16 @@ function readClient() {
 
 const hdr = (headers, name) => (headers.find((h) => h.name.toLowerCase() === name) || {}).value || "";
 
+// Gmail per-minute quota: wait it out (up to twice) instead of failing the email
+async function gmailCall(fn) {
+  for (let i = 0; ; i++) {
+    try { return await fn(); } catch (e) {
+      if (i < 2 && /quota|rate limit|429/i.test(e.message || "")) { await sleep(65000); continue; }
+      throw e;
+    }
+  }
+}
+
 async function sendRaw(lines, threadId) {
   const token = await getGmailAccessToken();
   const body = { raw: Buffer.from(lines.join("\r\n")).toString("base64url") };
@@ -124,13 +134,13 @@ async function findOrderByVin(vin) {
 
 /** Did we already forward this line's release ourselves (from Gmail, by hand)? */
 async function forwardedByHand(gmail, vin) {
-  const r = await gmail.users.messages.list({
+  const r = await gmailCall(() => gmail.users.messages.list({
     userId: "me", maxResults: 5,
     q: `in:sent subject:(fwd ${vin}) (subject:"TELEX RELEASE" OR subject:"PRINT AT DESTINATION") newer_than:120d`,
-  });
+  }));
   const id = r.data.messages?.[0]?.id;
   if (!id) return null;
-  const m = await gmail.users.messages.get({ userId: "me", id, format: "metadata", metadataHeaders: ["To", "Date"] });
+  const m = await gmailCall(() => gmail.users.messages.get({ userId: "me", id, format: "metadata", metadataHeaders: ["To", "Date"] }));
   return { to: hdr(m.data.payload.headers, "to"), at: new Date(Number(m.data.internalDate)) };
 }
 
@@ -149,12 +159,17 @@ async function scanReleases({ days = 3, dryRun = false, recordOnly = false } = {
     ids.push(...(list.data.messages || []));
     pageToken = list.data.nextPageToken;
   } while (pageToken && ids.length < 600);
+  // Emails already tied to an order were handled on an earlier run — don't touch Gmail for them
+  const known = new Set((await Order.find({ "release.gmailId": { $in: ids.map((m) => m.id) } })
+    .select("release.gmailId").lean()).map((o) => o.release.gmailId));
   const results = [];
   for (const { id } of ids) {
+    if (known.has(id)) continue;
     const r = { gmailId: id };
     results.push(r);
     try {
-      const msg = (await gmail.users.messages.get({ userId: "me", id, format: "full" })).data;
+      await sleep(400); // stay well under Gmail's per-minute quota
+      const msg = (await gmailCall(() => gmail.users.messages.get({ userId: "me", id, format: "metadata", metadataHeaders: ["Subject"] }))).data;
       const subject = hdr(msg.payload.headers, "subject");
       r.subject = subject;
       r.line = /TELEX RELEASE/i.test(subject) ? "SALLAUM" : "ACL";
@@ -183,7 +198,8 @@ async function scanReleases({ days = 3, dryRun = false, recordOnly = false } = {
       r.to = to.join(", ");
       if (dryRun || recordOnly) { r.result = recordOnly ? "not forwarded yet (record-only run, nothing sent)" : "would forward"; continue; }
 
-      await forwardMessage(gmail, msg, to);
+      const full = (await gmailCall(() => gmail.users.messages.get({ userId: "me", id, format: "full" }))).data;
+      await forwardMessage(gmail, full, to);
       await Order.updateOne({ _id: order._id }, {
         $set: { "release.forwardedAt": new Date(), "release.forwardedTo": r.to, "release.gmailId": id, "release.how": "auto" },
         $push: { timeline: { action: "Release Sent", details: `${r.line} release forwarded to ${r.to}`, createdAt: new Date() } },
