@@ -76,8 +76,9 @@ export default function Releases() {
     load();
   };
 
-  const resend = async () => {
-    const vin = resendVin.trim();
+  const resend = async (vinArg) => {
+    const vin = String(typeof vinArg === "string" ? vinArg : resendVin).trim();
+    if (typeof vinArg === "string" && !window.confirm(`Send the release for ${vin} to the customer now?`)) return;
     setBusy("resend"); setMsg("");
     try {
       const r = await fetch(`${API}/api/releases/resend`, {
@@ -85,7 +86,7 @@ export default function Releases() {
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error);
-      setMsg(`✅ #${d.orderRef}: release re-sent to ${d.to}`);
+      setMsg(`✅ #${d.orderRef}: release sent to ${d.to}${d.completed ? " · order Completed" : ""}`); load();
       setResendVin("");
     } catch (e) { setMsg("❌ " + e.message); }
     setBusy("");
@@ -133,7 +134,7 @@ export default function Releases() {
         <span style={{ flex: 1 }} />
         <input placeholder="Full VIN to resend its release" value={resendVin} onChange={e => setResendVin(e.target.value.toUpperCase())}
           style={{ fontSize: 13, padding: "6px 10px", width: 230, fontFamily: "monospace" }} />
-        <button onClick={resend} disabled={busy === "resend" || resendVin.trim().length !== 17} style={{ ...btn("#6b7280"), opacity: resendVin.trim().length === 17 ? 1 : 0.5 }}>
+        <button onClick={() => resend()} disabled={busy === "resend" || resendVin.trim().length !== 17} style={{ ...btn("#6b7280"), opacity: resendVin.trim().length === 17 ? 1 : 0.5 }}>
           {busy === "resend" ? "Sending…" : "Resend release"}
         </button>
       </div>
@@ -204,7 +205,10 @@ export default function Releases() {
                     <td style={{ ...td, fontFamily: "monospace" }}>{r.last6}</td>
                     <td style={td}>{r.invoiceNumber}{r.paidAt ? <div style={{ fontSize: 12, color: "#16a34a" }}>paid {fmtDate(r.paidAt)}</div> : null}</td>
                     <td style={td}>{r.requestedAt ? fmtDate(r.requestedAt) : <span style={{ color: "var(--text-muted)" }}>—</span>}</td>
-                    <td style={td}><button onClick={() => markSent(r)} style={{ ...btn("#6b7280"), padding: "4px 10px", fontSize: 12 }}>Already sent</button></td>
+                    <td style={{ ...td, whiteSpace: "nowrap" }}>
+                      <button onClick={() => resend(r.vin)} disabled={busy === "resend"} title="Forward the line's release email (if it has come in) to the customer" style={{ ...btn("#16a34a"), padding: "4px 10px", fontSize: 12, marginRight: 6 }}>Send release</button>
+                      <button onClick={() => markSent(r)} style={{ ...btn("#6b7280"), padding: "4px 10px", fontSize: 12 }}>Already sent</button>
+                    </td>
                   </tr>
                 ))}
               </tbody>

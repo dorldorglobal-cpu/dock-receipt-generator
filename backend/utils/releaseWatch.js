@@ -300,7 +300,8 @@ async function resendRelease(vin) {
     $set: { "release.forwardedAt": order.release?.forwardedAt || new Date(), "release.forwardedTo": to.join(", "), "release.gmailId": id },
     $push: { timeline: { action: "Release Sent", details: `Release re-sent to ${to.join(", ")}`, createdAt: new Date() } },
   });
-  return { orderRef: order.refNumber, to: to.join(", "), subject: hdr(full.payload.headers, "subject") };
+  const completed = await completeIfReady(await Order.findById(order._id));
+  return { orderRef: order.refNumber, to: to.join(", "), subject: hdr(full.payload.headers, "subject"), completed };
 }
 
 module.exports = { scanReleases, requestSallaumReleases, markRequestedByBookings, completeIfReady, last6, forwardMessage, readClient, resendRelease };
