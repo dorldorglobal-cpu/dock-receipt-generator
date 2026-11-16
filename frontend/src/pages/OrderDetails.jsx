@@ -63,6 +63,9 @@ const feeRows = [
 // Ghana's cost for them is the sell price (or the real cost if higher). Same rule as backend/utils/ghana.js.
 const SPLIT_FEES    = ["nonRunnerFee", "forkliftFee"];
 const NO_SPLIT_FEES = feeRows.map(([k]) => k).filter(k => !SPLIT_FEES.includes(k));
+// Towing sold for $500 or less: Ghana's profit on the tow is $150 (Ghana Cost = sell − 150),
+// unless our real profit is already under $150 — then real cost. Same as backend ghanaTowAuto.
+const ghanaTowAuto = (sell, cost) => (sell > 0 && sell <= 500 ? Math.max(cost, sell - 150) : cost);
 
 const defaultCharges = {
   towingCharge: "0.00",
@@ -3995,7 +3998,7 @@ export default function OrderDetails() {
           const sl = Math.max(0, Number(charges[k]||0)), c = Number(charges[k+"Cost"]||0);
           return gVal(k, NO_SPLIT_FEES.includes(k) ? Math.max(sl, c) : c);
         };
-        const ghanaCost = gVal("towing", towCost) + extraTowCost + gVal("ocean", ocnCost)
+        const ghanaCost = gVal("towing", ghanaTowAuto(towSell, towCost)) + extraTowCost + gVal("ocean", ocnCost)
           + activeFeeRows.reduce((s,[k]) => s + gFee(k), 0);
         const splitProfit = totSell - ghanaCost;
         // Fees that cost more than we charged — flagged so the sell gets raised
@@ -4110,7 +4113,7 @@ export default function OrderDetails() {
                           </td>
                         </>
                       )}
-                      {gCell(gVal("towing", towCost), false, "towing")}
+                      {gCell(gVal("towing", ghanaTowAuto(towSell, towCost)), false, "towing")}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(towSell-towCost) }}>
                         {pStr(towSell-towCost)}{pPct(towSell-towCost, towSell)}
                       </td>
@@ -4537,7 +4540,7 @@ export default function OrderDetails() {
           const fees = feeRows.filter(([k]) => n(charges[k]) > 0 || n(charges[k + "Cost"]) > 0);
           const sell = n(charges.towingCharge) + n(charges.oceanFreight) + xt.reduce((s,t) => s + n(t.amount), 0)
             + fees.reduce((s,[k]) => s + n(charges[k]), 0) + n(charges.discount);
-          const gCost = gv("towing", n(charges.towingCost)) + gv("ocean", n(charges.oceanCost)) + xt.reduce((s,t) => s + n(t.cost), 0)
+          const gCost = gv("towing", ghanaTowAuto(n(charges.towingCharge), n(charges.towingCost))) + gv("ocean", n(charges.oceanCost)) + xt.reduce((s,t) => s + n(t.cost), 0)
             + fees.reduce((s,[k]) => { const sl = Math.max(0, n(charges[k])), c = n(charges[k+"Cost"]);
                 return s + gv(k, NO_SPLIT_FEES.includes(k) ? Math.max(sl, c) : c); }, 0);
           return { sell, ghanaCost: gCost, split: sell - gCost };

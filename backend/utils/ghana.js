@@ -44,6 +44,11 @@ const ghanaOverride = (charges, base) => {
   return v === undefined || v === null || String(v).trim() === "" ? null : (Number(v) || 0);
 };
 
+// Towing sold for $500 or less: Ghana's profit on the tow is $150 (Ghana Cost =
+// sell − 150), unless our real profit is already under $150 — then real cost.
+// Tows over $500 use the real cost until a Ghana Cost is entered by hand.
+const ghanaTowAuto = (sell, cost) => (sell > 0 && sell <= 500 ? Math.max(cost, sell - 150) : cost);
+
 // How much Ghana Cost differs from our real cost on an order:
 // freight items = real cost, no-split fees = sell (or real cost if higher),
 // unless a Ghana Cost was entered by hand for that line.
@@ -54,7 +59,7 @@ function ghanaCostDelta(charges = {}) {
     const ov = ghanaOverride(charges, base);
     d += (ov !== null ? ov : auto) - realCost;
   };
-  line("towing", n(charges.towingCost), n(charges.towingCost));
+  line("towing", n(charges.towingCost), ghanaTowAuto(n(charges.towingCharge), n(charges.towingCost)));
   line("ocean",  n(charges.oceanCost),  n(charges.oceanCost));
   for (const k of [...NO_SPLIT_FEES, "nonRunnerFee", "forkliftFee"]) {
     const sl = Math.max(0, n(charges[k])), c = n(charges[k + "Cost"]);
@@ -86,4 +91,4 @@ function ghanaSplit(charges = {}) {
   return { sell, cost, ghanaCost, split: sell - ghanaCost };
 }
 
-module.exports = { isGhanaCustomer, isGhanaOrder, NO_SPLIT_FEES, isNoSplitItem, splitProfit, ghanaCostDelta, ghanaSplit };
+module.exports = { ghanaTowAuto, isGhanaCustomer, isGhanaOrder, NO_SPLIT_FEES, isNoSplitItem, splitProfit, ghanaCostDelta, ghanaSplit };
