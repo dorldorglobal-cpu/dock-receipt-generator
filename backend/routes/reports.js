@@ -1,3 +1,4 @@
+const { isGhanaCustomer, splitProfit } = require("../utils/ghana");
 const express = require("express");
 const router  = express.Router();
 const Order   = require("../models/Order");
@@ -396,12 +397,28 @@ router.get("/profit-loss-detail", async (req, res) => {
         const c = o.charges || {};
         const tow = Number(c.towingCharge || 0);
         const oce = Number(c.oceanFreight || 0);
+        // Extra tows / driver fees are arrays of { amount, cost } — summed separately
+        // (Number() of an array is NaN, which used to zero out the whole order).
+        const lists   = [...(Array.isArray(c.extraTows) ? c.extraTows : []), ...(Array.isArray(c.driverFees) ? c.driverFees : [])];
         const oth = Object.entries(c)
-          .filter(([k]) => !["towingCharge","oceanFreight"].includes(k) && !k.endsWith("Cost") && !k.endsWith("Desc") && !k.endsWith("Category"))
-          .reduce((s,[,v]) => s + Number(v||0), 0);
+          .filter(([k, v]) => !["towingCharge","oceanFreight"].includes(k) && !k.endsWith("Cost") && !k.endsWith("Desc") && !k.endsWith("Category") && typeof v !== "object")
+          .reduce((s,[,v]) => s + (Number(v||0) || 0), 0)
+          + lists.reduce((s, x) => s + (Number(x?.amount || 0) || 0), 0);
         const towCost = Number(c.towingCost || 0);
         const ocnCost = Number(c.oceanCost  || 0);
+        // All costs on the order: towing, ocean, every fee's cost, extra tows / driver fees
+        const allCost = Object.entries(c)
+          .filter(([k, v]) => k.endsWith("Cost") && typeof v !== "object")
+          .reduce((s,[,v]) => s + (Number(v||0) || 0), 0)
+          + lists.reduce((s, x) => s + (Number(x?.cost || 0) || 0), 0);
+        // Ghana office orders: storage / FedEx / title fees are charged 100% and kept
+        // out of the freight profit split. Only a loss on those fees is shown.
+        const ghana = isGhanaCustomer(o.customerName);
+        const sp    = ghana ? splitProfit(c) : null;
         rows.push({
+          ghana,
+          feeProfit:     sp ? sp.feeProfit : 0,
+          freightProfit: sp ? (tow + oce + oth - sp.feeSell) - (allCost - sp.feeCost) : null,
           search:       searchText(o, [invNumBy.get(String(o._id))]),
           refNumber:    o.refNumber,
           customer:     o.customerName || "—",
@@ -414,8 +431,8 @@ router.get("/profit-loss-detail", async (req, res) => {
           towingCost:   towCost,
           oceanCost:    ocnCost,
           revenue:      tow + oce + oth,
-          cost:         towCost + ocnCost,
-          profit:       (tow + oce + oth) - (towCost + ocnCost),
+          cost:         allCost,
+          profit:       (tow + oce + oth) - allCost,
           status:       o.status || "—",
         });
       }

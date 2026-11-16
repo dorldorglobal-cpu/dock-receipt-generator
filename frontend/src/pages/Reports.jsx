@@ -770,10 +770,17 @@ function PLDetail({ d, sub, filter, activeReport }) {
   const totRev    = rows.reduce((s, r) => s + (r.revenue    || 0), 0);
   const totCost   = rows.reduce((s, r) => s + (isCash ? (r.towingCost + r.oceanCost) : (r.cost || 0)), 0);
   const totProfit = totRev - totCost;
+  // Ghana office orders: freight profit is split with Ghana; storage / FedEx / title
+  // fees are charged to them 100%. Fee profit is not shown — only a loss is.
+  const showSplit = !isCash && rows.some(r => r.ghana);
+  const totSplit  = rows.reduce((s, r) => s + (r.ghana ? (r.freightProfit || 0) : 0), 0);
+  const totFeeLoss = rows.reduce((s, r) => s + (r.ghana && r.feeProfit < 0 ? r.feeProfit : 0), 0);
+  const feeLoss   = r => (r.ghana && r.feeProfit < -0.005 ? r.feeProfit : null);
 
   const H = isCash
     ? ["Invoice #", "Date Paid", "Customer", "Vehicle / VIN", "Revenue", "Cost", "Profit"]
-    : ["Ref #", "Date", "Customer", "Vehicle / VIN", "Status", "Revenue", "Cost", "Profit"];
+    : ["Ref #", "Date", "Customer", "Vehicle / VIN", "Status", "Revenue", "Cost", "Profit",
+       ...(showSplit ? ["Split Profit", "No-Split Fee Loss"] : [])];
 
   const clr = n => ({ color: n >= 0 ? "#34d399" : "#f87171", fontFamily: "monospace", fontWeight: 700 });
 
@@ -800,24 +807,31 @@ function PLDetail({ d, sub, filter, activeReport }) {
       ...base,
       <span style={{ fontSize:11, color: r.status === "Completed" ? "#34d399" : "var(--text-secondary)" }}>{r.status}</span>,
       ...nums,
+      ...(showSplit ? [
+        r.ghana ? <span style={clr(r.freightProfit)}>{r.freightProfit >= 0 ? "+" : ""}{f$(r.freightProfit)}</span> : "",
+        feeLoss(r) != null ? <span style={{ ...clr(-1), background:"rgba(248,113,113,0.12)", padding:"1px 6px", borderRadius:4 }}>{f$(feeLoss(r))}</span> : "",
+      ] : []),
     ];
   });
 
-  const lastCols = isCash ? [4,5,6] : [5,6,7];
+  const lastCols = isCash ? [4,5,6] : (showSplit ? [5,6,7,8,9] : [5,6,7]);
   const F = isCash
     ? ["", "", "", "", f$(totRev), f$(totCost), <span style={clr(totProfit)}>{totProfit>=0?"+":""}{f$(totProfit)}</span>]
-    : ["", "", "", "", "", f$(totRev), f$(totCost), <span style={clr(totProfit)}>{totProfit>=0?"+":""}{f$(totProfit)}</span>];
+    : ["", "", "", "", "", f$(totRev), f$(totCost), <span style={clr(totProfit)}>{totProfit>=0?"+":""}{f$(totProfit)}</span>,
+       ...(showSplit ? [<span style={clr(totSplit)}>{totSplit>=0?"+":""}{f$(totSplit)}</span>, totFeeLoss < 0 ? <span style={clr(-1)}>{f$(totFeeLoss)}</span> : ""] : [])];
 
   const Rcsv = rows.map(r => {
     const cost = isCash ? (r.towingCost + r.oceanCost) : (r.cost || 0);
     const profit = r.revenue - cost;
     return isCash
       ? [r.invoiceNumber, fD(r.date), r.customer, r.vehicle, f$(r.revenue), f$(cost), f$(profit)]
-      : [r.refNumber, fD(r.date), r.customer, r.vehicle, r.status, f$(r.revenue), f$(cost), f$(profit)];
+      : [r.refNumber, fD(r.date), r.customer, r.vehicle, r.status, f$(r.revenue), f$(cost), f$(profit),
+         ...(showSplit ? [r.ghana ? f$(r.freightProfit) : "", feeLoss(r) != null ? f$(feeLoss(r)) : ""] : [])];
   });
   const Fcsv = isCash
     ? ["TOTALS", "", "", "", f$(totRev), f$(totCost), f$(totProfit)]
-    : ["TOTALS", "", "", "", "", f$(totRev), f$(totCost), f$(totProfit)];
+    : ["TOTALS", "", "", "", "", f$(totRev), f$(totCost), f$(totProfit),
+       ...(showSplit ? [f$(totSplit), totFeeLoss < 0 ? f$(totFeeLoss) : ""] : [])];
 
   return <>
     <Chips items={[
@@ -825,6 +839,8 @@ function PLDetail({ d, sub, filter, activeReport }) {
       { label: "Total Revenue",  val: f$(totRev),    clr: "var(--accent)" },
       { label: "Total Cost",     val: f$(totCost),   clr: "#f87171" },
       { label: "Net Profit",     val: f$(totProfit), clr: totProfit >= 0 ? "#34d399" : "#f87171" },
+      ...(showSplit ? [{ label: "Split Profit (Ghana)", val: f$(totSplit), clr: totSplit >= 0 ? "#34d399" : "#f87171" }] : []),
+      ...(showSplit && totFeeLoss < 0 ? [{ label: "No-Split Fee Loss", val: f$(totFeeLoss), clr: "#f87171" }] : []),
     ]} />
     <ExBar
       onCSV={() => dlCSV(H, Rcsv, isCash ? "PL-Cash-Detail" : "PL-Accrual-Detail")}

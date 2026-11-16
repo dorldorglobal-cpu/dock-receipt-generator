@@ -8,6 +8,7 @@ const CustomerCredit = require("../models/CustomerCredit");
 const PDFDocument = require("pdfkit");
 const { uploadBufferToDrive, deleteDriveFile, downloadDriveFile } = require("../googleDrive");
 const { b64lines } = require("../utils/mime");
+const { isGhanaCustomer, isNoSplitItem } = require("../utils/ghana");
 
 const memUploadInv = multer({ storage: multer.memoryStorage() });
 
@@ -904,8 +905,13 @@ async function generateInvoicePdf(inv, order) {
        .text("AMOUNT", ML, y + 8, { align: "right", width: W - 10, lineBreak: false });
     y += TBL_HDR_H;
 
-    // Item rows
-    (inv.items || []).forEach((item, i) => {
+    // Item rows. Ghana office invoices: storage / FedEx / title fees are charged
+    // 100% and are not part of the freight split, so they get their own section.
+    const ghanaInv  = isGhanaCustomer(inv.customerName);
+    const allItems  = inv.items || [];
+    const mainItems = ghanaInv ? allItems.filter(it => !isNoSplitItem(it.description)) : allItems;
+    const feeItems  = ghanaInv ? allItems.filter(it =>  isNoSplitItem(it.description)) : [];
+    const drawItem = (item, i) => {
       const descText = txt(item.description || "—");
       const textH    = doc.heightOfString(descText, { width: W - 110, font: "Helvetica", fontSize: 9 });
       const rowH     = Math.max(24, textH + 12);
@@ -922,7 +928,16 @@ async function generateInvoicePdf(inv, order) {
          .text(fmt(Number(item.amount || 0)), ML, y + 8,
                { align: "right", width: W - 10, lineBreak: false });
       y += rowH;
-    });
+    };
+    mainItems.forEach(drawItem);
+    if (feeItems.length) {
+      const SUB_H = 20;
+      doc.rect(ML, y, W, SUB_H).fill("#e2e8f0");
+      doc.fill(navy).font("Helvetica-Bold").fontSize(8.5)
+         .text("ADDITIONAL CHARGES - NOT INCLUDED IN FREIGHT", ML + 10, y + 6, { lineBreak: false });
+      y += SUB_H;
+      feeItems.forEach(drawItem);
+    }
 
     // ── SUBTOTAL / TOTAL ─────────────────────────────────────────────────────
     y += 4;

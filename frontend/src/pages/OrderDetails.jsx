@@ -58,6 +58,10 @@ const feeRows = [
   ["miscellaneousFee",    "Miscellaneous Fee",             { hasDesc: true }],
 ];
 
+// Fees Dor Ldor Global Ghana pays 100% of — kept out of the freight profit split
+// (same list as backend/utils/ghana.js NO_SPLIT_FEES).
+const NO_SPLIT_FEES = ["storageAuctionFee","storageWarehouseFee","storagePortFee","blFedexFee","noTitleDeliveryFee","titleProcessingFee"];
+
 const defaultCharges = {
   towingCharge: "0.00",
   oceanFreight: "0.00",
@@ -3967,6 +3971,14 @@ export default function OrderDetails() {
         const totSell   = towSell + extraTowSell + ocnSell + feeTotal + discountAmt;
         const totCost   = towCost + extraTowCost + ocnCost + feeCostTotal;
         const totProfit = totSell - totCost;
+        // Dor Ldor Global Ghana orders: storage / FedEx / no-title / title fees are charged
+        // to Ghana 100% and stay out of the freight profit split. Fee profit is not shown —
+        // only a loss on those fees is.
+        const isGhanaOrder = ["DORLDORGLOBALGHANA","DORLDORGHANA"].includes((order?.customerName || "").toUpperCase().replace(/[^A-Z]/g, ""));
+        const nsSell    = NO_SPLIT_FEES.reduce((s,k) => s + Math.max(0, Number(charges[k]||0)), 0);
+        const nsCost    = NO_SPLIT_FEES.reduce((s,k) => s + Number(charges[k+"Cost"]||0), 0);
+        const nsProfit  = nsSell - nsCost;
+        const splitProfit = (totSell - nsSell) - (totCost - nsCost);
         return (
           <section id="internal-charges" className="form-section" style={{ borderColor:"rgba(251,191,36,0.2)", background:"rgba(251,191,36,0.03)", scrollMarginTop:16 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
@@ -4392,6 +4404,25 @@ export default function OrderDetails() {
                   <td style={{ textAlign:"right", padding:"8px 8px", fontWeight:800, fontSize:15, color:pClr(totProfit) }}>{pStr(totProfit)}{pPct(totProfit, totSell)}</td>
                   <td></td>
                 </tr>
+                {isGhanaOrder && (
+                  <tr style={{ borderTop:"1px solid var(--border-muted)" }}>
+                    <td style={{ padding:"6px 8px", fontSize:12, color:"var(--text-secondary)" }} colSpan={3}>
+                      Freight profit — split with Ghana
+                      <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:6 }}>(storage, FedEx, title fees not split)</span>
+                    </td>
+                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:pClr(splitProfit) }}>{pStr(splitProfit)}{pPct(splitProfit, totSell - nsSell)}</td>
+                    <td></td>
+                  </tr>
+                )}
+                {isGhanaOrder && nsProfit < -0.005 && (
+                  <tr style={{ background:"rgba(248,113,113,0.08)" }}>
+                    <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#f87171" }} colSpan={3}>
+                      ⚠ Loss on no-split fees — charged {fmt(nsSell)}, cost {fmt(nsCost)}
+                    </td>
+                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:"#f87171" }}>{pStr(nsProfit)}</td>
+                    <td></td>
+                  </tr>
+                )}
               </tfoot>
             </table>
 
