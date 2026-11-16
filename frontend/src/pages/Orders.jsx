@@ -125,10 +125,14 @@ export default function Orders() {
     const text = [
       o.refNumber, o.customerName, o.vin, o.make, o.model, o.lotNumber,
       o.buyerName, o.consigneeName, customerPeople[custKey(o.customerName)],
+      o.bookingNumber,
     ].filter(Boolean).join(" ").toLowerCase();
+    // Booking typed with or without its dash ("S3-30324690" / "S330324690", "SLSE-326194" / "326194")
+    const booking = String(o.bookingNumber || "").toLowerCase().replace(/[^a-z0-9]/g, "");
     // Every word typed must appear somewhere (so "john mensah" or "mensah john" both work)
     const words = search.toLowerCase().split(/\s+/).filter(Boolean);
-    const matchSearch  = words.every(w => text.includes(w));
+    const matchSearch  = words.every(w => text.includes(w) ||
+      (booking && w.replace(/[^a-z0-9]/g, "").length >= 5 && booking.includes(w.replace(/[^a-z0-9]/g, ""))));
     const matchTab     = activeTab === "all"
       ? true
       : activeTab === "active"
@@ -209,7 +213,7 @@ export default function Orders() {
 
       {/* Toolbar */}
       <div className="orders-toolbar">
-        <input placeholder="Search ref, VIN, business or contact name, lot#…" value={search}
+        <input placeholder="Search ref, VIN, booking, business or contact name, lot#…" value={search}
           onChange={e => setSearch(e.target.value)} />
 
         {/* Shipment type filter */}

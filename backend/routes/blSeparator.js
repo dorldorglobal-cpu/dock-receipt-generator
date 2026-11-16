@@ -287,6 +287,11 @@ router.post("/attach", async (req, res) => {
           mimetype: "application/pdf",
         });
 
+        // An ACL BL number is the booking (S3-…) — fill the order's booking if it's blank
+        if (/^S3-?\d{8}$/i.test(String(bl.bookingNumber || bl.blNumber || "").trim())) {
+          await require("../utils/bookingFill").fillBookingIfBlank(order, bl.bookingNumber || bl.blNumber, `the ${docLabel}`);
+        }
+
         // Always update vessel/voyage from BL
         if (bl.vessel) { order.vessel = bl.vessel; order.markModified("vessel"); }
         if (bl.voyage) { order.voyage = bl.voyage; order.markModified("voyage"); }

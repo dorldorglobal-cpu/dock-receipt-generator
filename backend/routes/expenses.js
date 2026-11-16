@@ -1216,6 +1216,9 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
           billDriveId:   billDriveId   || "",
           billDriveUrl:  billDriveUrl  || "",
         });
+        if (orderId && row.bookingRef) {
+          await require("../utils/bookingFill").fillBookingIfBlank(orderId, row.bookingRef, "the Sallaum bill").catch(() => {});
+        }
         if (!duplicate) {
           created.push(true);
           // Update order's oceanCost so it appears in P&L (only when the row couldn't be split)
@@ -1790,6 +1793,9 @@ router.post("/apply-acl", express.json(), async (req, res) => {
         billMime:      row.billMime     || "",
       });
       created.push(expense._id);
+      if (orderId && row.bookingNo) {
+        await require("../utils/bookingFill").fillBookingIfBlank(orderId, row.bookingNo, "the ACL bill").catch(() => {});
+      }
 
       // Update order's oceanCost so it shows in the order P&L (when the charge lines
       // weren't readable — otherwise applyRatedBl already set the split costs)
@@ -2154,6 +2160,10 @@ router.post("/apply-container", express.json(), async (req, res) => {
           billFileName:  invoice.billFileName || "",
           billMime:      invoice.billMime     || "",
         });
+
+        if (orderId && invoice.booking) {
+          await require("../utils/bookingFill").fillBookingIfBlank(orderId, invoice.booking, `the ${invoice.vendor || "container loader"} bill`).catch(() => {});
+        }
 
         // The bill is the real cost — it replaces the pricing-table estimate. Storage and
         // title service on the bill get their own cost lines; the rest is ocean freight.
