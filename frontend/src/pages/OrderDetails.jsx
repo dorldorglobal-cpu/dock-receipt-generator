@@ -3974,10 +3974,13 @@ export default function OrderDetails() {
         const totSell   = towSell + extraTowSell + ocnSell + feeTotal + discountAmt;
         const totCost   = towCost + extraTowCost + ocnCost + feeCostTotal;
         const totProfit = totSell - totCost;
-        // Dor Ldor Global Ghana orders: storage / FedEx / no-title / title fees are charged
+        // Ghana orders: additional fees (all but non-runner / forklift) are charged
         // to Ghana 100% and stay out of the freight profit split. Fee profit is not shown —
         // only a loss on those fees is.
-        const isGhanaOrder = ["DORLDORGLOBALGHANA","DORLDORGHANA"].includes((order?.customerName || "").toUpperCase().replace(/[^A-Z]/g, ""));
+        // Ghana order = from the Ghana office or shipping to a Ghana port (any customer)
+        const isGhanaOrder = ["DORLDORGLOBALGHANA","DORLDORGHANA"].includes((order?.customerName || "").toUpperCase().replace(/[^A-Z]/g, ""))
+          || String(order?.source || "").toUpperCase() === "GHANA OFFICE"
+          || /\b(TEMA|ACCRA|TAKORADI|GHANA)\b/i.test(String(order?.pod || ""));
         const nsSell    = NO_SPLIT_FEES.reduce((s,k) => s + Math.max(0, Number(charges[k]||0)), 0);
         const nsCost    = NO_SPLIT_FEES.reduce((s,k) => s + Number(charges[k+"Cost"]||0), 0);
         // Ghana Cost: real cost for freight items; for no-split fees the sell price,

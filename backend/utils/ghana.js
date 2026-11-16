@@ -63,4 +63,11 @@ function ghanaCostDelta(charges = {}) {
   return d;
 }
 
-module.exports = { isGhanaCustomer, NO_SPLIT_FEES, isNoSplitItem, splitProfit, ghanaCostDelta };
+// A Ghana order for the Ghana Cost / split profit: from the Ghana office, or
+// shipping to a Ghana port (any customer).
+const GHANA_POD = /\b(TEMA|ACCRA|TAKORADI|GHANA)\b/i;
+function isGhanaOrder(o = {}) {
+  return isGhanaCustomer(o.customerName) || String(o.source || "").toUpperCase() === "GHANA OFFICE" || GHANA_POD.test(String(o.pod || ""));
+}
+
+module.exports = { isGhanaCustomer, isGhanaOrder, NO_SPLIT_FEES, isNoSplitItem, splitProfit, ghanaCostDelta };

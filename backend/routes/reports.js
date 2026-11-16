@@ -1,4 +1,4 @@
-const { isGhanaCustomer, splitProfit, ghanaCostDelta } = require("../utils/ghana");
+const { isGhanaOrder, splitProfit, ghanaCostDelta } = require("../utils/ghana");
 const express = require("express");
 const router  = express.Router();
 const Order   = require("../models/Order");
@@ -411,9 +411,9 @@ router.get("/profit-loss-detail", async (req, res) => {
           .filter(([k, v]) => k.endsWith("Cost") && !k.endsWith("GhanaCost") && typeof v !== "object")
           .reduce((s,[,v]) => s + (Number(v||0) || 0), 0)
           + lists.reduce((s, x) => s + (Number(x?.cost || 0) || 0), 0);
-        // Ghana office orders: storage / FedEx / title fees are charged 100% and kept
+        // Ghana orders (Ghana office or a Ghana port): additional fees are charged 100% and kept
         // out of the freight profit split. Only a loss on those fees is shown.
-        const ghana = isGhanaCustomer(o.customerName);
+        const ghana = isGhanaOrder(o);
         const sp    = ghana ? splitProfit(c) : null;
         rows.push({
           ghana,
