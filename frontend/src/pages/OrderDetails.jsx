@@ -3939,6 +3939,9 @@ export default function OrderDetails() {
         const fmt   = n => "$" + Math.abs(Number(n)||0).toLocaleString(undefined,{minimumFractionDigits:2,maximumFractionDigits:2});
         const pClr  = n => n > 0 ? "#34d399" : n < 0 ? "#f87171" : "var(--text-muted)";
         const pStr  = n => n === 0 ? "—" : (n>0?"+":"−") + fmt(n);
+        // Margin after the profit amount: profit ÷ sell
+        const pPct  = (p, sell) => (!sell || p === 0) ? null
+          : <span style={{ fontSize:11, fontWeight:600, marginLeft:6, opacity:0.85 }}>({(p / sell * 100).toFixed(1)}%)</span>;
         const inpStyle = (clr) => ({
           width:"100%", textAlign:"right", background:"transparent",
           border:"1px solid var(--border)", borderRadius:5, padding:"3px 7px",
@@ -4048,7 +4051,7 @@ export default function OrderDetails() {
                         </>
                       )}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(towSell-towCost) }}>
-                        {pStr(towSell-towCost)}
+                        {pStr(towSell-towCost)}{pPct(towSell-towCost, towSell)}
                       </td>
                       <td style={{ textAlign:"center", padding:"4px 6px", whiteSpace:"nowrap" }}>
                         <button onClick={() => setEditingInternalRow(editing ? null : "towing")}
@@ -4088,7 +4091,7 @@ export default function OrderDetails() {
                         {cost > 0 ? fmt(cost) : <span style={{ color:"var(--text-muted)" }}>—</span>}
                       </td>
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(sell-cost) }}>
-                        {pStr(sell-cost)}
+                        {pStr(sell-cost)}{pPct(sell-cost, sell)}
                       </td>
                       <td style={{ textAlign:"center", padding:"4px 6px" }}>
                         <button onClick={() => setShowCosts(true)} title="Edit in Additional Charges"
@@ -4239,7 +4242,7 @@ export default function OrderDetails() {
                         </>
                       )}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(ocnSell-ocnCost) }}>
-                        {pStr(ocnSell-ocnCost)}
+                        {pStr(ocnSell-ocnCost)}{pPct(ocnSell-ocnCost, ocnSell)}
                       </td>
                       <td style={{ textAlign:"center", padding:"4px 6px", whiteSpace:"nowrap" }}>
                         {editing ? (
@@ -4331,7 +4334,7 @@ export default function OrderDetails() {
                             {cost > 0 ? fmt(cost) : <span style={{ color:"var(--text-muted)" }}>—</span>}
                           </td>
                           <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(profit) }}>
-                            {cost > 0 ? pStr(profit) : <span style={{ color:"var(--text-muted)" }}>—</span>}
+                            {cost > 0 ? <>{pStr(profit)}{pPct(profit, sell)}</> : <span style={{ color:"var(--text-muted)" }}>—</span>}
                           </td>
                         </>
                       )}
@@ -4386,7 +4389,7 @@ export default function OrderDetails() {
                   <td style={{ padding:"8px 8px", fontWeight:700, fontSize:12 }}>Total</td>
                   <td style={{ textAlign:"right", padding:"8px 8px", color:"var(--accent)", fontWeight:800 }}>{totSell>0?fmt(totSell):"—"}</td>
                   <td style={{ textAlign:"right", padding:"8px 8px", color:"#f87171",      fontWeight:800 }}>{totCost>0?fmt(totCost):"—"}</td>
-                  <td style={{ textAlign:"right", padding:"8px 8px", fontWeight:800, fontSize:15, color:pClr(totProfit) }}>{pStr(totProfit)}</td>
+                  <td style={{ textAlign:"right", padding:"8px 8px", fontWeight:800, fontSize:15, color:pClr(totProfit) }}>{pStr(totProfit)}{pPct(totProfit, totSell)}</td>
                   <td></td>
                 </tr>
               </tfoot>
