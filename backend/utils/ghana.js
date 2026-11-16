@@ -27,13 +27,14 @@ const isNoSplitItem = desc =>
 // losses = fees that cost us more than we charged (flag so the sell gets raised).
 function splitProfit(charges = {}) {
   const n = v => Number(v || 0) || 0;
-  let feeSell = 0, feeCost = 0, loss = 0;
+  let feeSell = 0, feeCost = 0, loss = 0, ghana = 0;
   for (const k of NO_SPLIT_FEES) {
     const sl = Math.max(0, n(charges[k])), c = n(charges[k + "Cost"]);
-    feeSell += sl; feeCost += c;
+    feeSell += sl; feeCost += c; ghana += Math.max(sl, c);
     if (c - sl > 0.005) loss += sl - c;
   }
-  return { feeSell, feeCost, feeProfit: feeSell - feeCost, feeLoss: loss };
+  // ghanaCost: sell price, or the real cost when higher (Ghana sees that loss)
+  return { feeSell, feeCost, feeProfit: feeSell - feeCost, feeLoss: loss, ghanaCost: ghana };
 }
 
 module.exports = { isGhanaCustomer, NO_SPLIT_FEES, isNoSplitItem, splitProfit };

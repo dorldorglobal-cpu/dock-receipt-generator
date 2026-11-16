@@ -60,7 +60,7 @@ const feeRows = [
 
 // Fees Dor Ldor Global Ghana pays 100% of — every additional fee except non-runner
 // and forklift (those are part of the freight). Kept out of the freight profit split;
-// Ghana's cost for them is the sell price. Same rule as backend/utils/ghana.js.
+// Ghana's cost for them is the sell price (or the real cost if higher). Same rule as backend/utils/ghana.js.
 const SPLIT_FEES    = ["nonRunnerFee", "forkliftFee"];
 const NO_SPLIT_FEES = feeRows.map(([k]) => k).filter(k => !SPLIT_FEES.includes(k));
 
@@ -3979,8 +3979,10 @@ export default function OrderDetails() {
         const isGhanaOrder = ["DORLDORGLOBALGHANA","DORLDORGHANA"].includes((order?.customerName || "").toUpperCase().replace(/[^A-Z]/g, ""));
         const nsSell    = NO_SPLIT_FEES.reduce((s,k) => s + Math.max(0, Number(charges[k]||0)), 0);
         const nsCost    = NO_SPLIT_FEES.reduce((s,k) => s + Number(charges[k+"Cost"]||0), 0);
-        // Ghana Cost: real cost for freight items, sell price for no-split fees
-        const ghanaCost   = totCost - nsCost + nsSell;
+        // Ghana Cost: real cost for freight items; for no-split fees the sell price,
+        // or the real cost when it's higher (Ghana sees that loss)
+        const nsGhana     = NO_SPLIT_FEES.reduce((s,k) => s + Math.max(Math.max(0, Number(charges[k]||0)), Number(charges[k+"Cost"]||0)), 0);
+        const ghanaCost   = totCost - nsCost + nsGhana;
         const splitProfit = totSell - ghanaCost;
         // Fees that cost more than we charged — flagged so the sell gets raised
         const nsLosses  = NO_SPLIT_FEES
@@ -3991,7 +3993,7 @@ export default function OrderDetails() {
         // Ghana Cost cell (Ghana orders only)
         const gCell = (v, isFee) => isGhanaOrder ? (
           <td style={{ textAlign:"right", padding:"5px 8px", color:"#fb923c", fontWeight:700 }}
-            title={isFee ? "No-split fee: Ghana is charged 100%, their cost = sell" : "Same as cost"}>
+            title={isFee ? "No-split fee: Ghana is charged 100% — their cost = sell (or the real cost if higher)" : "Same as cost"}>
             {v > 0 ? fmt(v) : <span style={{ color:"var(--text-muted)" }}>—</span>}
           </td>) : null;
         return (
@@ -4318,7 +4320,7 @@ export default function OrderDetails() {
                   const profit  = sell - cost;
                   const editing = editingFeeKey === key;
                   const feeNoSplit   = NO_SPLIT_FEES.includes(key);
-                  const feeGhanaCost = feeNoSplit ? Math.max(0, sell) : cost;
+                  const feeGhanaCost = feeNoSplit ? Math.max(sell, cost, 0) : cost;
                   return (
                     <tr key={key} style={{ borderBottom:"1px solid var(--border)" }}>
                       <td style={{ padding:"5px 8px", color:"var(--text-secondary)", fontStyle:"italic" }}>
