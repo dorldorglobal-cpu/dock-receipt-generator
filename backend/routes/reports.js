@@ -417,8 +417,10 @@ router.get("/profit-loss-detail", async (req, res) => {
         const sp    = ghana ? splitProfit(c) : null;
         rows.push({
           ghana,
-          feeProfit:     sp ? sp.feeProfit : 0,
-          freightProfit: sp ? (tow + oce + oth - sp.feeSell) - (allCost - sp.feeCost) : null,
+          // Ghana Cost = real cost for freight items, sell price for no-split fees
+          ghanaCost:     sp ? allCost - sp.feeCost + sp.feeSell : null,
+          feeProfit:     sp ? sp.feeLoss : 0,
+          freightProfit: sp ? (tow + oce + oth) - (allCost - sp.feeCost + sp.feeSell) : null,
           search:       searchText(o, [invNumBy.get(String(o._id))]),
           refNumber:    o.refNumber,
           customer:     o.customerName || "—",

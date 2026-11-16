@@ -9,21 +9,31 @@ function isGhanaCustomer(name) {
   return norm === "DORLDORGLOBALGHANA" || norm === "DORLDORGHANA";
 }
 
-// Fees the Ghana office pays 100% of. They stay on the invoice but are not
-// part of the freight profit split with the Ghana office.
-const NO_SPLIT_FEES = ["storageAuctionFee", "storageWarehouseFee", "storagePortFee",
-                       "blFedexFee", "noTitleDeliveryFee", "titleProcessingFee"];
+// Fees the Ghana office pays 100% of: every additional fee except non-runner and
+// forklift (those are part of the freight). They stay on the invoice but are not
+// part of the freight profit split, and Ghana's cost for them is the sell price.
+// Same list as frontend OrderDetails.jsx NO_SPLIT_FEES.
+const NO_SPLIT_FEES = ["emergencyBafFee", "storageAuctionFee", "storageWarehouseFee", "storagePortFee",
+  "redeliveryFee", "titleProcessingFee", "mechanicalCharges", "warehouseInOutFee", "customsDemurrageFee",
+  "customsHoldingFee", "vesselRolloverFee", "blFedexFee", "noTitleDeliveryFee", "ctnFee", "dryRunFee",
+  "inOutFee", "miscellaneousFee"];
 
 // Invoice line descriptions for those fees (labels from the order's fee rows).
 const isNoSplitItem = desc =>
-  /^(storage|fedex\/mailing|no title delivery|title processing)/i.test(String(desc || "").trim());
+  /^(emergency baf|storage|re-?delivery|title processing|mechanical|warehouse in\/out|customs|vessel rollover|fedex\/mailing|no title delivery|ctn|dry run|in & out|miscellaneous)/i
+    .test(String(desc || "").trim());
 
-// Freight profit (split with Ghana) vs no-split fee profit, from order charges.
+// No-split fee totals from order charges. Ghana's cost for these = sell.
+// losses = fees that cost us more than we charged (flag so the sell gets raised).
 function splitProfit(charges = {}) {
   const n = v => Number(v || 0) || 0;
-  const feeSell = NO_SPLIT_FEES.reduce((s, k) => s + Math.max(0, n(charges[k])), 0);
-  const feeCost = NO_SPLIT_FEES.reduce((s, k) => s + n(charges[k + "Cost"]), 0);
-  return { feeSell, feeCost, feeProfit: feeSell - feeCost };
+  let feeSell = 0, feeCost = 0, loss = 0;
+  for (const k of NO_SPLIT_FEES) {
+    const sl = Math.max(0, n(charges[k])), c = n(charges[k + "Cost"]);
+    feeSell += sl; feeCost += c;
+    if (c - sl > 0.005) loss += sl - c;
+  }
+  return { feeSell, feeCost, feeProfit: feeSell - feeCost, feeLoss: loss };
 }
 
 module.exports = { isGhanaCustomer, NO_SPLIT_FEES, isNoSplitItem, splitProfit };

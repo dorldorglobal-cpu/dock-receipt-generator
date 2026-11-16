@@ -58,9 +58,11 @@ const feeRows = [
   ["miscellaneousFee",    "Miscellaneous Fee",             { hasDesc: true }],
 ];
 
-// Fees Dor Ldor Global Ghana pays 100% of — kept out of the freight profit split
-// (same list as backend/utils/ghana.js NO_SPLIT_FEES).
-const NO_SPLIT_FEES = ["storageAuctionFee","storageWarehouseFee","storagePortFee","blFedexFee","noTitleDeliveryFee","titleProcessingFee"];
+// Fees Dor Ldor Global Ghana pays 100% of — every additional fee except non-runner
+// and forklift (those are part of the freight). Kept out of the freight profit split;
+// Ghana's cost for them is the sell price. Same rule as backend/utils/ghana.js.
+const SPLIT_FEES    = ["nonRunnerFee", "forkliftFee"];
+const NO_SPLIT_FEES = feeRows.map(([k]) => k).filter(k => !SPLIT_FEES.includes(k));
 
 const defaultCharges = {
   towingCharge: "0.00",
@@ -3977,8 +3979,21 @@ export default function OrderDetails() {
         const isGhanaOrder = ["DORLDORGLOBALGHANA","DORLDORGHANA"].includes((order?.customerName || "").toUpperCase().replace(/[^A-Z]/g, ""));
         const nsSell    = NO_SPLIT_FEES.reduce((s,k) => s + Math.max(0, Number(charges[k]||0)), 0);
         const nsCost    = NO_SPLIT_FEES.reduce((s,k) => s + Number(charges[k+"Cost"]||0), 0);
-        const nsProfit  = nsSell - nsCost;
-        const splitProfit = (totSell - nsSell) - (totCost - nsCost);
+        // Ghana Cost: real cost for freight items, sell price for no-split fees
+        const ghanaCost   = totCost - nsCost + nsSell;
+        const splitProfit = totSell - ghanaCost;
+        // Fees that cost more than we charged — flagged so the sell gets raised
+        const nsLosses  = NO_SPLIT_FEES
+          .map(k => [k, Math.max(0, Number(charges[k]||0)), Number(charges[k+"Cost"]||0)])
+          .filter(([, sl, c]) => c - sl > 0.005)
+          .map(([k, sl, c]) => ({ label: (feeRows.find(f => f[0] === k) || [k, k])[1], sell: sl, cost: c }));
+        const nsLossTot = nsLosses.reduce((t, x) => t + (x.sell - x.cost), 0);
+        // Ghana Cost cell (Ghana orders only)
+        const gCell = (v, isFee) => isGhanaOrder ? (
+          <td style={{ textAlign:"right", padding:"5px 8px", color:"#fb923c", fontWeight:700 }}
+            title={isFee ? "No-split fee: Ghana is charged 100%, their cost = sell" : "Same as cost"}>
+            {v > 0 ? fmt(v) : <span style={{ color:"var(--text-muted)" }}>—</span>}
+          </td>) : null;
         return (
           <section id="internal-charges" className="form-section" style={{ borderColor:"rgba(251,191,36,0.2)", background:"rgba(251,191,36,0.03)", scrollMarginTop:16 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
@@ -3992,6 +4007,7 @@ export default function OrderDetails() {
                   <th style={{ textAlign:"left",  padding:"4px 8px", fontSize:11, color:"var(--text-muted)", fontWeight:600 }}>Item</th>
                   <th style={{ textAlign:"right", padding:"4px 8px", fontSize:11, color:"var(--accent)",    fontWeight:600 }}>Sell</th>
                   <th style={{ textAlign:"right", padding:"4px 8px", fontSize:11, color:"#f87171",          fontWeight:600 }}>Cost</th>
+                  {isGhanaOrder && <th style={{ textAlign:"right", padding:"4px 8px", fontSize:11, color:"#fb923c", fontWeight:600 }} title="Cost used for the Ghana split: real cost for freight, sell price for no-split fees">Ghana Cost</th>}
                   <th style={{ textAlign:"right", padding:"4px 8px", fontSize:11, color:"#34d399",          fontWeight:600 }}>Profit</th>
                   <th style={{ width:28 }}></th>
                 </tr>
@@ -4062,6 +4078,7 @@ export default function OrderDetails() {
                           </td>
                         </>
                       )}
+                      {gCell(towCost)}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(towSell-towCost) }}>
                         {pStr(towSell-towCost)}{pPct(towSell-towCost, towSell)}
                       </td>
@@ -4102,6 +4119,7 @@ export default function OrderDetails() {
                       <td style={{ textAlign:"right", padding:"5px 8px", color:"#f87171", fontWeight:700 }}>
                         {cost > 0 ? fmt(cost) : <span style={{ color:"var(--text-muted)" }}>—</span>}
                       </td>
+                      {gCell(cost)}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(sell-cost) }}>
                         {pStr(sell-cost)}{pPct(sell-cost, sell)}
                       </td>
@@ -4253,6 +4271,7 @@ export default function OrderDetails() {
                           </td>
                         </>
                       )}
+                      {gCell(ocnCost)}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(ocnSell-ocnCost) }}>
                         {pStr(ocnSell-ocnCost)}{pPct(ocnSell-ocnCost, ocnSell)}
                       </td>
@@ -4298,6 +4317,8 @@ export default function OrderDetails() {
                   const cost    = Number(charges[key + "Cost"] || 0);
                   const profit  = sell - cost;
                   const editing = editingFeeKey === key;
+                  const feeNoSplit   = NO_SPLIT_FEES.includes(key);
+                  const feeGhanaCost = feeNoSplit ? Math.max(0, sell) : cost;
                   return (
                     <tr key={key} style={{ borderBottom:"1px solid var(--border)" }}>
                       <td style={{ padding:"5px 8px", color:"var(--text-secondary)", fontStyle:"italic" }}>
@@ -4335,6 +4356,7 @@ export default function OrderDetails() {
                               style={{ ...inpStyle("#f87171"), width:"100%" }}
                             />
                           </td>
+                          {gCell(feeGhanaCost, feeNoSplit)}
                           <td style={{ padding:"5px 8px" }}></td>
                         </>
                       ) : (
@@ -4345,6 +4367,7 @@ export default function OrderDetails() {
                           <td style={{ textAlign:"right", padding:"5px 8px", color:"#f87171", fontWeight:700 }}>
                             {cost > 0 ? fmt(cost) : <span style={{ color:"var(--text-muted)" }}>—</span>}
                           </td>
+                          {gCell(feeGhanaCost, feeNoSplit)}
                           <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(profit) }}>
                             {cost > 0 ? <>{pStr(profit)}{pPct(profit, sell)}</> : <span style={{ color:"var(--text-muted)" }}>—</span>}
                           </td>
@@ -4389,6 +4412,7 @@ export default function OrderDetails() {
                       -{fmt(discountAmt)}
                     </td>
                     <td style={{ textAlign:"right", padding:"5px 8px", color:"var(--text-muted)" }}>—</td>
+                    {isGhanaOrder && <td style={{ textAlign:"right", padding:"5px 8px", color:"var(--text-muted)" }}>—</td>}
                     <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:"#f87171" }}>
                       -{fmt(discountAmt)}
                     </td>
@@ -4401,25 +4425,26 @@ export default function OrderDetails() {
                   <td style={{ padding:"8px 8px", fontWeight:700, fontSize:12 }}>Total</td>
                   <td style={{ textAlign:"right", padding:"8px 8px", color:"var(--accent)", fontWeight:800 }}>{totSell>0?fmt(totSell):"—"}</td>
                   <td style={{ textAlign:"right", padding:"8px 8px", color:"#f87171",      fontWeight:800 }}>{totCost>0?fmt(totCost):"—"}</td>
+                  {isGhanaOrder && <td style={{ textAlign:"right", padding:"8px 8px", color:"#fb923c", fontWeight:800 }}>{ghanaCost>0?fmt(ghanaCost):"—"}</td>}
                   <td style={{ textAlign:"right", padding:"8px 8px", fontWeight:800, fontSize:15, color:pClr(totProfit) }}>{pStr(totProfit)}{pPct(totProfit, totSell)}</td>
                   <td></td>
                 </tr>
                 {isGhanaOrder && (
                   <tr style={{ borderTop:"1px solid var(--border-muted)" }}>
-                    <td style={{ padding:"6px 8px", fontSize:12, color:"var(--text-secondary)" }} colSpan={3}>
+                    <td style={{ padding:"6px 8px", fontSize:12, color:"var(--text-secondary)" }} colSpan={4}>
                       Freight profit — split with Ghana
-                      <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:6 }}>(storage, FedEx, title fees not split)</span>
+                      <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:6 }}>(sell − Ghana Cost; additional fees not split)</span>
                     </td>
-                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:pClr(splitProfit) }}>{pStr(splitProfit)}{pPct(splitProfit, totSell - nsSell)}</td>
+                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:pClr(splitProfit) }}>{pStr(splitProfit)}{pPct(splitProfit, totSell)}</td>
                     <td></td>
                   </tr>
                 )}
-                {isGhanaOrder && nsProfit < -0.005 && (
+                {isGhanaOrder && nsLosses.length > 0 && (
                   <tr style={{ background:"rgba(248,113,113,0.08)" }}>
-                    <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#f87171" }} colSpan={3}>
-                      ⚠ Loss on no-split fees — charged {fmt(nsSell)}, cost {fmt(nsCost)}
+                    <td style={{ padding:"6px 8px", fontSize:12, fontWeight:700, color:"#f87171" }} colSpan={4}>
+                      ⚠ Fee costs more than charged — raise the sell: {nsLosses.map(x => `${x.label} (sell ${fmt(x.sell)}, cost ${fmt(x.cost)})`).join("; ")}
                     </td>
-                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:"#f87171" }}>{pStr(nsProfit)}</td>
+                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:"#f87171" }}>{pStr(nsLossTot)}</td>
                     <td></td>
                   </tr>
                 )}
