@@ -338,7 +338,7 @@ router.get("/:id/billing-summary", async (req, res) => {
     if (!load) return res.status(404).json({ error: "Not found" });
 
     const orders = await Order.find({ _id: { $in: load.orderIds } })
-      .select("_id refNumber customerName customerEmail year make model vin status charges").lean();
+      .select("_id refNumber customerName customerEmail year make model vin status charges pod source").lean();
 
     const orderIds = orders.map(o => o._id);
 
@@ -387,7 +387,11 @@ router.get("/:id/billing-summary", async (req, res) => {
 
       const totalExpenses = syntheticExps.reduce((s, e) => s + (e.amount || 0), 0);
       const invoiceTotal  = inv?.total || 0;
+      // Ghana orders: split profit (sell − Ghana Cost), same as the order page
+      const { isGhanaOrder, ghanaSplit } = require("../utils/ghana");
+      const gs = isGhanaOrder(o) ? ghanaSplit(o.charges || {}) : null;
       return {
+        ghana:         gs ? { sell: gs.sell, ghanaCost: gs.ghanaCost, split: gs.split } : null,
         orderId:       o._id,
         refNumber:     o.refNumber,
         customerName:  o.customerName,

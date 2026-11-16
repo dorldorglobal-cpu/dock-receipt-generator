@@ -1998,6 +1998,13 @@ export default function Containers() {
                           <td style={{ padding:"10px 8px", textAlign:"right", fontWeight:700,
                             color: row.profit > 0 ? "#34d399" : row.profit < 0 ? "#f87171" : "var(--text-muted)" }}>
                             {hasInvoice ? `$${row.profit.toFixed(2)}` : "—"}
+                            {row.ghana && (
+                              <div style={{ fontSize:11, fontWeight:700, color: row.ghana.split >= 0 ? "#fb923c" : "#f87171", whiteSpace:"nowrap", marginTop:3 }}
+                                title={`Order charges: sell $${row.ghana.sell.toFixed(2)} − Ghana Cost $${row.ghana.ghanaCost.toFixed(2)}`}>
+                                Ghana split ${row.ghana.split.toFixed(2)}
+                                {row.ghana.sell > 0 && <span style={{ fontWeight:600, opacity:0.85 }}> ({(row.ghana.split / row.ghana.sell * 100).toFixed(1)}%)</span>}
+                              </div>
+                            )}
                           </td>
                           <td style={{ padding:"10px 8px", textAlign:"center" }}>
                             {hasInvoice ? (
@@ -2170,6 +2177,14 @@ export default function Containers() {
                           <td style={{ padding:"10px 8px", textAlign:"right",
                             color: (billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0))>=0 ? "#34d399" : "#f87171" }}>
                             ${(billingRows.reduce((s,r)=>s+r.profit,0) + extraLines.reduce((s,l)=>s+(l.amount||0),0)).toFixed(2)}
+                            {billingRows.some(r => r.ghana) && (() => {
+                              const gr = billingRows.filter(r => r.ghana);
+                              const sp = gr.reduce((s,r)=>s+r.ghana.split,0), sl = gr.reduce((s,r)=>s+r.ghana.sell,0);
+                              return (
+                                <div style={{ fontSize:11, color: sp >= 0 ? "#fb923c" : "#f87171", whiteSpace:"nowrap", marginTop:3 }}>
+                                  Ghana split ${sp.toFixed(2)}{sl > 0 && ` (${(sp / sl * 100).toFixed(1)}%)`}
+                                </div>);
+                            })()}
                           </td>
                           <td />
                         </tr>

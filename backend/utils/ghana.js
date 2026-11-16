@@ -70,4 +70,20 @@ function isGhanaOrder(o = {}) {
   return isGhanaCustomer(o.customerName) || String(o.source || "").toUpperCase() === "GHANA OFFICE" || GHANA_POD.test(String(o.pod || ""));
 }
 
-module.exports = { isGhanaCustomer, isGhanaOrder, NO_SPLIT_FEES, isNoSplitItem, splitProfit, ghanaCostDelta };
+// Ghana split for one order from its charges — same numbers as the order page:
+// sell = every charge; ghanaCost = real cost adjusted by ghanaCostDelta.
+function ghanaSplit(charges = {}) {
+  const n = v => Number(v || 0) || 0;
+  const lists = [...(Array.isArray(charges.extraTows) ? charges.extraTows : []), ...(Array.isArray(charges.driverFees) ? charges.driverFees : [])];
+  let sell = 0, cost = 0;
+  for (const [k, v] of Object.entries(charges)) {
+    if (typeof v === "object" || k.endsWith("Desc") || k.endsWith("Category")) continue;
+    if (k.endsWith("GhanaCost")) continue;
+    if (k.endsWith("Cost")) cost += n(v); else sell += n(v);
+  }
+  for (const x of lists) { sell += n(x?.amount); cost += n(x?.cost); }
+  const ghanaCost = cost + ghanaCostDelta(charges);
+  return { sell, cost, ghanaCost, split: sell - ghanaCost };
+}
+
+module.exports = { isGhanaCustomer, isGhanaOrder, NO_SPLIT_FEES, isNoSplitItem, splitProfit, ghanaCostDelta, ghanaSplit };
