@@ -1977,7 +1977,7 @@ export default function OrderDetails() {
   const openAclNoTitle = ({ booking, ymm, vin }) => {
     // ACL Baltimore and Providence refuse no-title delivery (JAX/WILM/FPO terminals take priority over POL)
     const portText = `${order.deliveryLocation || ""} ${order.pol || ""}`;
-    const refused  = !/JACKSONVILLE|JAX|DELAWARE|WILMINGTON|FREEPORT/i.test(portText)
+    const refused  = !/JACKSONVILLE|\bJAX\b|DELAWARE|WILMINGTON|FREEPORT/i.test(portText)
       && (/BALTIMORE|DUNDALK/i.test(portText) ? "Baltimore" : /PROVIDENCE/i.test(portText) ? "Providence" : null);
     if (refused) {
       setMessage(`⚠️ ACL ${refused} does not allow no-title delivery — the title must be delivered with the unit.`);
