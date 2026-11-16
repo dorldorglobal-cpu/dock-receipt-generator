@@ -94,6 +94,18 @@ const applyFilter = (rows, filter, ...getters) => {
   return rows.filter(r => getters.some(g => (g(r) || "").toLowerCase().includes(f)));
 };
 
+// Same search as the Orders page: every word typed must appear somewhere in the row;
+// booking / container numbers also match without their dashes ("S330324690" finds "S3-30324690").
+const applyWordFilter = (rows, filter, textOf) => {
+  const words = String(filter || "").toLowerCase().split(/\s+/).filter(Boolean);
+  if (!words.length) return rows;
+  return rows.filter(r => {
+    const text = (textOf(r) || "").toLowerCase();
+    const compact = text.replace(/[^a-z0-9 ]/g, "");
+    return words.every(w => text.includes(w) || (w.replace(/[^a-z0-9]/g, "").length >= 4 && compact.includes(w.replace(/[^a-z0-9]/g, ""))));
+  });
+};
+
 // ── Shared components ─────────────────────────────────────────────────────────
 
 function Chips({ items }) {
@@ -750,9 +762,9 @@ function CashFlow({ d, sub }) {
 
 function PLDetail({ d, sub, filter, activeReport }) {
   const isCash = d.basis === "cash";
-  const rows = applyFilter(
+  const rows = applyWordFilter(
     d.rows || [], filter,
-    r => r.refNumber, r => r.customer, r => r.vehicle, r => r.vin, r => r.invoiceNumber
+    r => [r.search, r.refNumber, r.customer, r.vehicle, r.vin, r.invoiceNumber].filter(Boolean).join(" ")
   );
 
   const totRev    = rows.reduce((s, r) => s + (r.revenue    || 0), 0);

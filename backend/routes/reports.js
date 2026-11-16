@@ -347,16 +347,32 @@ router.get("/profit-loss-detail", async (req, res) => {
 
     let rows = [];
 
+    // Everything the P&L search box can match on: booking, container, load, voyage, ports, people…
+    const ContainerLoad = require("../models/ContainerLoad");
+    const loads = await ContainerLoad.find({}).select("name orderIds bookingNumber containerNumber").lean();
+    const loadBy = new Map();
+    for (const l of loads) for (const id of l.orderIds || []) loadBy.set(String(id), l);
+    const searchText = (o, extra = []) => {
+      const l = o ? loadBy.get(String(o._id)) : null;
+      return [
+        o?.refNumber, o?.customerName, o?.buyerName, o?.consigneeName, o?.vin, o?.year, o?.make, o?.model,
+        o?.bookingNumber, o?.containerNumber, l?.bookingNumber, l?.containerNumber, l?.name,
+        o?.voyage, o?.vessel, o?.shippingLine, o?.pol, o?.pod, o?.source, o?.requestType, o?.lotNumber, o?.status,
+        ...extra,
+      ].filter(Boolean).join(" ");
+    };
+
     if (basis === "cash") {
       // Cash: one row per paid invoice
       const invFilter = { status: "paid", ...dateQ(from, to, "updatedAt") };
       const invoices = await Invoice.find(invFilter).sort({ updatedAt: -1 }).lean();
       for (const inv of invoices) {
         const order = inv.orderId
-          ? await Order.findById(inv.orderId).select("refNumber customerName charges status").lean().catch(() => null)
+          ? await Order.findById(inv.orderId).lean().catch(() => null)
           : null;
         const c = order?.charges || {};
         rows.push({
+          search:       searchText(order, [inv.invoiceNumber, inv.customerName, inv.vehicle, inv.vin, inv.bookingNumber]),
           refNumber:    order?.refNumber || "—",
           customer:     inv.customerName || order?.customerName || "—",
           vehicle:      inv.vehicle || "—",
@@ -374,6 +390,8 @@ router.get("/profit-loss-detail", async (req, res) => {
     } else {
       // Accrual: one row per order
       const orders = await Order.find(dateQ(from, to, "createdAt")).sort({ createdAt: -1 }).lean();
+      const invNumBy = new Map((await Invoice.find({ orderId: { $in: orders.map(o => o._id) } })
+        .select("orderId invoiceNumber").lean()).map(i => [String(i.orderId), i.invoiceNumber]));
       for (const o of orders) {
         const c = o.charges || {};
         const tow = Number(c.towingCharge || 0);
@@ -384,6 +402,7 @@ router.get("/profit-loss-detail", async (req, res) => {
         const towCost = Number(c.towingCost || 0);
         const ocnCost = Number(c.oceanCost  || 0);
         rows.push({
+          search:       searchText(o, [invNumBy.get(String(o._id))]),
           refNumber:    o.refNumber,
           customer:     o.customerName || "—",
           vehicle:      [o.year, o.make, o.model].filter(Boolean).join(" ") || "—",
