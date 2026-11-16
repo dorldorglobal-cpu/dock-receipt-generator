@@ -632,7 +632,9 @@ function ProfitLoss({ d, sub }) {
   const {
     totalRevenue = 0, totalExpenses = 0, netProfit = 0, margin = 0,
     revByType = {}, expByCat = {}, orderCount = 0, expenseCount = 0, basis = "accrual",
+    ghana = null,
   } = d;
+  const ghanaPct = ghana && ghana.sell > 0 ? ghana.split / ghana.sell * 100 : null;
 
   const LineRow = ({ label, amt, bold, color, indent }) => (
     <div style={{
@@ -666,6 +668,13 @@ function ProfitLoss({ d, sub }) {
     ["", ""],
     ["NET PROFIT / (LOSS)", f$(netProfit)],
     ["GROSS MARGIN", fPct(margin)],
+    ...(ghana && ghana.orders ? [
+      ["", ""],
+      [`GHANA ORDERS (${ghana.orders})`, ""],
+      ["  Ghana sales", f$(ghana.sell)],
+      ["  Ghana Cost", f$(ghana.ghanaCost)],
+      ["GHANA SPLIT", f$(ghana.split) + (ghanaPct != null ? ` (${fPct(ghanaPct)})` : "")],
+    ] : []),
   ];
 
   return (
@@ -719,6 +728,21 @@ function ProfitLoss({ d, sub }) {
             </span>
           </div>
         </div>
+
+        {ghana && ghana.orders > 0 && (
+          <div style={{ borderTop: "1px solid var(--border)", marginTop: 16, paddingTop: 4 }}>
+            <SectionHeader label={`Ghana orders (${ghana.orders})`} color="#fb923c" />
+            <LineRow label="Ghana sales" amt={ghana.sell} indent />
+            <LineRow label="Ghana Cost" amt={ghana.ghanaCost} indent color="#fb923c" />
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 10 }}>
+              <span style={{ fontSize: 14, fontWeight: 800 }}>Ghana Split</span>
+              <span style={{ fontSize: 17, fontWeight: 800, fontFamily: "monospace", color: ghana.split >= 0 ? "#fb923c" : "#f87171" }}>
+                {f$(ghana.split)}
+                {ghanaPct != null && <span style={{ fontSize: 12, fontWeight: 600, marginLeft: 6 }}>({fPct(ghanaPct)})</span>}
+              </span>
+            </div>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", gap: 8, marginTop: 14 }}>

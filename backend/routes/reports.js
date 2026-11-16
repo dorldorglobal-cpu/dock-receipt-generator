@@ -1,4 +1,4 @@
-const { isGhanaOrder, splitProfit, ghanaCostDelta } = require("../utils/ghana");
+const { isGhanaOrder, splitProfit, ghanaCostDelta, ghanaSplit } = require("../utils/ghana");
 const express = require("express");
 const router  = express.Router();
 const Order   = require("../models/Order");
@@ -279,6 +279,8 @@ router.get("/profit-loss", async (req, res) => {
     const revByType = { "Towing / Transport": 0, "Ocean Freight": 0, "Other Revenue": 0 };
     let totalRevenue = 0;
     let orderCount = 0;
+    // Ghana orders (Ghana office or a Ghana port): split profit = sell − Ghana Cost
+    const ghana = { orders: 0, sell: 0, ghanaCost: 0, split: 0 };
 
     if (basis === "cash") {
       // Cash basis: revenue from paid invoices only
@@ -314,9 +316,16 @@ router.get("/profit-loss", async (req, res) => {
         const c   = o.charges || {};
         const tow = Number(c.towingCharge || 0);
         const oce = Number(c.oceanFreight || 0);
+        // Arrays (extra tows / driver fees) summed by amount — Number() of an array is NaN
+        const lists = [...(Array.isArray(c.extraTows) ? c.extraTows : []), ...(Array.isArray(c.driverFees) ? c.driverFees : [])];
         const oth = Object.entries(c)
-          .filter(([k]) => !["towingCharge","oceanFreight"].includes(k) && !k.endsWith("Cost") && !k.endsWith("Desc") && !k.endsWith("Category"))
-          .reduce((s,[,v]) => s + Number(v||0), 0);
+          .filter(([k, v]) => !["towingCharge","oceanFreight"].includes(k) && !k.endsWith("Cost") && !k.endsWith("Desc") && !k.endsWith("Category") && typeof v !== "object")
+          .reduce((s,[,v]) => s + (Number(v||0) || 0), 0)
+          + lists.reduce((s, x) => s + (Number(x?.amount || 0) || 0), 0);
+        if (isGhanaOrder(o)) {
+          const g = ghanaSplit(c);
+          ghana.orders++; ghana.sell += g.sell; ghana.ghanaCost += g.ghanaCost; ghana.split += g.split;
+        }
         revByType["Towing / Transport"] += tow;
         revByType["Ocean Freight"]       += oce;
         revByType["Other Revenue"]       += oth;
@@ -337,7 +346,8 @@ router.get("/profit-loss", async (req, res) => {
     const margin    = totalRevenue > 0 ? +((netProfit / totalRevenue) * 100).toFixed(1) : 0;
 
     res.json({ basis, totalRevenue, totalExpenses, netProfit, margin,
-               revByType, expByCat, orderCount, expenseCount: expenses.length });
+               revByType, expByCat, orderCount, expenseCount: expenses.length,
+               ghana: basis === "cash" ? null : ghana });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 

@@ -4524,6 +4524,24 @@ export default function OrderDetails() {
         const plExp     = plTowCost + plOcnCost + plFeeCost;
         const plNet     = plRev - plExp;
         const plMargin  = plRev > 0 ? ((plNet / plRev) * 100).toFixed(1) : "0.0";
+        // Ghana split (same as the internal charges table): sell − Ghana Cost
+        const plGhana = (() => {
+          const isG = ["DORLDORGLOBALGHANA","DORLDORGHANA"].includes((order?.customerName || "").toUpperCase().replace(/[^A-Z]/g, ""))
+            || String(order?.source || "").toUpperCase() === "GHANA OFFICE"
+            || /\b(TEMA|ACCRA|TAKORADI|GHANA)\b/i.test(String(order?.pod || ""));
+          if (!isG) return null;
+          const n = v => Number(v || 0) || 0;
+          const ov = base => { const v = charges[base + "GhanaCost"]; return v === undefined || v === null || String(v).trim() === "" ? null : n(v); };
+          const gv = (base, auto) => { const o = ov(base); return o !== null ? o : auto; };
+          const xt = Array.isArray(charges.extraTows) ? charges.extraTows : [];
+          const fees = feeRows.filter(([k]) => n(charges[k]) > 0 || n(charges[k + "Cost"]) > 0);
+          const sell = n(charges.towingCharge) + n(charges.oceanFreight) + xt.reduce((s,t) => s + n(t.amount), 0)
+            + fees.reduce((s,[k]) => s + n(charges[k]), 0) + n(charges.discount);
+          const gCost = gv("towing", n(charges.towingCost)) + gv("ocean", n(charges.oceanCost)) + xt.reduce((s,t) => s + n(t.cost), 0)
+            + fees.reduce((s,[k]) => { const sl = Math.max(0, n(charges[k])), c = n(charges[k+"Cost"]);
+                return s + gv(k, NO_SPLIT_FEES.includes(k) ? Math.max(sl, c) : c); }, 0);
+          return { sell, ghanaCost: gCost, split: sell - gCost };
+        })();
 
         const paidInvs  = orderInvoices.filter(i => i.status === "paid");
         const cashRev   = paidInvs.reduce((s,i) => s + Number(i.total||0), 0);
@@ -4583,6 +4601,16 @@ export default function OrderDetails() {
                       <span style={{fontSize:12,color:"var(--text-muted)"}}>Gross Margin</span>
                       <span style={{fontSize:13,fontWeight:600,color:nc(plNet)}}>{plMargin}%</span>
                     </div>
+                    {plGhana && (
+                      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginTop:10,paddingTop:10,borderTop:"1px dashed var(--border)"}}
+                        title={`Sell ${fm(plGhana.sell)} − Ghana Cost ${fm(plGhana.ghanaCost)}`}>
+                        <span style={{fontSize:13,fontWeight:700,color:"#fb923c"}}>Ghana Split</span>
+                        <span style={{fontSize:15,fontWeight:800,fontFamily:"monospace",color:plGhana.split>=0?"#fb923c":"#f87171"}}>
+                          {fm(plGhana.split)}
+                          {plGhana.sell > 0 && <span style={{fontSize:12,fontWeight:600,marginLeft:6}}>({(plGhana.split/plGhana.sell*100).toFixed(1)}%)</span>}
+                        </span>
+                      </div>
+                    )}
                   </div>
                 </div>
               </div>
