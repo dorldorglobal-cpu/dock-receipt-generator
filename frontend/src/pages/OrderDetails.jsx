@@ -4467,7 +4467,10 @@ export default function OrderDetails() {
                       Freight profit — split with Ghana
                       <span style={{ fontSize:11, color:"var(--text-muted)", marginLeft:6 }}>(sell − Ghana Cost; additional fees not split)</span>
                     </td>
-                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:pClr(splitProfit) }}>{pStr(splitProfit)}{pPct(splitProfit, totSell)}</td>
+                    <td style={{ textAlign:"right", padding:"6px 8px", fontWeight:800, color:pClr(splitProfit), whiteSpace:"nowrap" }}>
+                      <span style={{ fontSize:11, fontWeight:700, color:"#fb923c", marginRight:8 }}>Ghana split</span>
+                      {pStr(splitProfit)}{pPct(splitProfit, totSell)}
+                    </td>
                     <td></td>
                   </tr>
                 )}
