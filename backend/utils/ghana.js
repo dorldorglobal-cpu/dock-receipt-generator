@@ -37,4 +37,30 @@ function splitProfit(charges = {}) {
   return { feeSell, feeCost, feeProfit: feeSell - feeCost, feeLoss: loss, ghanaCost: ghana };
 }
 
-module.exports = { isGhanaCustomer, NO_SPLIT_FEES, isNoSplitItem, splitProfit };
+// Manual Ghana Cost overrides live in charges as "<item>GhanaCost"
+// (towingGhanaCost, oceanGhanaCost, <feeKey>GhanaCost). Blank = automatic.
+const ghanaOverride = (charges, base) => {
+  const v = charges[base + "GhanaCost"];
+  return v === undefined || v === null || String(v).trim() === "" ? null : (Number(v) || 0);
+};
+
+// How much Ghana Cost differs from our real cost on an order:
+// freight items = real cost, no-split fees = sell (or real cost if higher),
+// unless a Ghana Cost was entered by hand for that line.
+function ghanaCostDelta(charges = {}) {
+  const n = v => Number(v || 0) || 0;
+  let d = 0;
+  const line = (base, realCost, auto) => {
+    const ov = ghanaOverride(charges, base);
+    d += (ov !== null ? ov : auto) - realCost;
+  };
+  line("towing", n(charges.towingCost), n(charges.towingCost));
+  line("ocean",  n(charges.oceanCost),  n(charges.oceanCost));
+  for (const k of [...NO_SPLIT_FEES, "nonRunnerFee", "forkliftFee"]) {
+    const sl = Math.max(0, n(charges[k])), c = n(charges[k + "Cost"]);
+    line(k, c, NO_SPLIT_FEES.includes(k) ? Math.max(sl, c) : c);
+  }
+  return d;
+}
+
+module.exports = { isGhanaCustomer, NO_SPLIT_FEES, isNoSplitItem, splitProfit, ghanaCostDelta };

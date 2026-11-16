@@ -327,6 +327,7 @@ export default function OrderDetails() {
 
   const [showCosts, setShowCosts] = useState(false);
   const [showPnl, setShowPnl] = useState(false);
+  const [editingGhana, setEditingGhana] = useState(null); // charges key base whose Ghana Cost is being edited
   const [charges, setCharges] = useState(defaultCharges);
 
   const [emailNote, setEmailNote]           = useState("");
@@ -3980,9 +3981,19 @@ export default function OrderDetails() {
         const nsSell    = NO_SPLIT_FEES.reduce((s,k) => s + Math.max(0, Number(charges[k]||0)), 0);
         const nsCost    = NO_SPLIT_FEES.reduce((s,k) => s + Number(charges[k+"Cost"]||0), 0);
         // Ghana Cost: real cost for freight items; for no-split fees the sell price,
-        // or the real cost when it's higher (Ghana sees that loss)
-        const nsGhana     = NO_SPLIT_FEES.reduce((s,k) => s + Math.max(Math.max(0, Number(charges[k]||0)), Number(charges[k+"Cost"]||0)), 0);
-        const ghanaCost   = totCost - nsCost + nsGhana;
+        // or the real cost when it's higher (Ghana sees that loss). Any line can be
+        // set by hand — stored as charges["<item>GhanaCost"]; blank = automatic.
+        const gOv = base => {
+          const v = charges[base + "GhanaCost"];
+          return v === undefined || v === null || String(v).trim() === "" ? null : (Number(v) || 0);
+        };
+        const gVal = (base, auto) => { const o = gOv(base); return o !== null ? o : auto; };
+        const gFee = k => {
+          const sl = Math.max(0, Number(charges[k]||0)), c = Number(charges[k+"Cost"]||0);
+          return gVal(k, NO_SPLIT_FEES.includes(k) ? Math.max(sl, c) : c);
+        };
+        const ghanaCost = gVal("towing", towCost) + extraTowCost + gVal("ocean", ocnCost)
+          + activeFeeRows.reduce((s,[k]) => s + gFee(k), 0);
         const splitProfit = totSell - ghanaCost;
         // Fees that cost more than we charged — flagged so the sell gets raised
         const nsLosses  = NO_SPLIT_FEES
@@ -3990,12 +4001,28 @@ export default function OrderDetails() {
           .filter(([, sl, c]) => c - sl > 0.005)
           .map(([k, sl, c]) => ({ label: (feeRows.find(f => f[0] === k) || [k, k])[1], sell: sl, cost: c }));
         const nsLossTot = nsLosses.reduce((t, x) => t + (x.sell - x.cost), 0);
-        // Ghana Cost cell (Ghana orders only)
-        const gCell = (v, isFee) => isGhanaOrder ? (
-          <td style={{ textAlign:"right", padding:"5px 8px", color:"#fb923c", fontWeight:700 }}
-            title={isFee ? "No-split fee: Ghana is charged 100% — their cost = sell (or the real cost if higher)" : "Same as cost"}>
-            {v > 0 ? fmt(v) : <span style={{ color:"var(--text-muted)" }}>—</span>}
-          </td>) : null;
+        // Ghana Cost cell (Ghana orders only). Click to change it; clear it to go
+        // back to the automatic value. Extra tows have no override (cost = Ghana Cost).
+        const gCell = (v, isFee, base) => {
+          if (!isGhanaOrder) return null;
+          const manual = base && gOv(base) !== null;
+          if (base && editingGhana === base) return (
+            <td style={{ padding:"4px 6px" }}>
+              <input type="number" autoFocus defaultValue={manual ? charges[base + "GhanaCost"] : ""}
+                placeholder={fmt(v).replace("$", "")}
+                onBlur={async e => { await saveInternalField(base + "GhanaCost", e.target.value.trim()); setEditingGhana(null); }}
+                onKeyDown={e => { if (e.key === "Enter") e.target.blur(); if (e.key === "Escape") setEditingGhana(null); }}
+                style={inpStyle("#fb923c")} title="Leave blank for the automatic Ghana Cost" />
+            </td>);
+          return (
+            <td onClick={base ? () => setEditingGhana(base) : undefined}
+              style={{ textAlign:"right", padding:"5px 8px", color:"#fb923c", fontWeight:700, cursor: base ? "pointer" : "default" }}
+              title={(manual ? "Set by hand. " : isFee ? "No-split fee: Ghana is charged 100% — their cost = sell (or the real cost if higher). " : "Same as cost. ")
+                + (base ? "Click to change." : "")}>
+              {manual && <span style={{ fontSize:10, marginRight:4 }}>✎</span>}
+              {v > 0 ? fmt(v) : <span style={{ color:"var(--text-muted)" }}>—</span>}
+            </td>);
+        };
         return (
           <section id="internal-charges" className="form-section" style={{ borderColor:"rgba(251,191,36,0.2)", background:"rgba(251,191,36,0.03)", scrollMarginTop:16 }}>
             <div style={{ display:"flex", alignItems:"center", gap:8, marginBottom:12 }}>
@@ -4080,7 +4107,7 @@ export default function OrderDetails() {
                           </td>
                         </>
                       )}
-                      {gCell(towCost)}
+                      {gCell(gVal("towing", towCost), false, "towing")}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(towSell-towCost) }}>
                         {pStr(towSell-towCost)}{pPct(towSell-towCost, towSell)}
                       </td>
@@ -4273,7 +4300,7 @@ export default function OrderDetails() {
                           </td>
                         </>
                       )}
-                      {gCell(ocnCost)}
+                      {gCell(gVal("ocean", ocnCost), false, "ocean")}
                       <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(ocnSell-ocnCost) }}>
                         {pStr(ocnSell-ocnCost)}{pPct(ocnSell-ocnCost, ocnSell)}
                       </td>
@@ -4320,7 +4347,7 @@ export default function OrderDetails() {
                   const profit  = sell - cost;
                   const editing = editingFeeKey === key;
                   const feeNoSplit   = NO_SPLIT_FEES.includes(key);
-                  const feeGhanaCost = feeNoSplit ? Math.max(sell, cost, 0) : cost;
+                  const feeGhanaCost = gFee(key);
                   return (
                     <tr key={key} style={{ borderBottom:"1px solid var(--border)" }}>
                       <td style={{ padding:"5px 8px", color:"var(--text-secondary)", fontStyle:"italic" }}>
@@ -4358,7 +4385,7 @@ export default function OrderDetails() {
                               style={{ ...inpStyle("#f87171"), width:"100%" }}
                             />
                           </td>
-                          {gCell(feeGhanaCost, feeNoSplit)}
+                          {gCell(feeGhanaCost, feeNoSplit, key)}
                           <td style={{ padding:"5px 8px" }}></td>
                         </>
                       ) : (
@@ -4369,7 +4396,7 @@ export default function OrderDetails() {
                           <td style={{ textAlign:"right", padding:"5px 8px", color:"#f87171", fontWeight:700 }}>
                             {cost > 0 ? fmt(cost) : <span style={{ color:"var(--text-muted)" }}>—</span>}
                           </td>
-                          {gCell(feeGhanaCost, feeNoSplit)}
+                          {gCell(feeGhanaCost, feeNoSplit, key)}
                           <td style={{ textAlign:"right", padding:"5px 8px", fontWeight:700, color:pClr(profit) }}>
                             {cost > 0 ? <>{pStr(profit)}{pPct(profit, sell)}</> : <span style={{ color:"var(--text-muted)" }}>—</span>}
                           </td>

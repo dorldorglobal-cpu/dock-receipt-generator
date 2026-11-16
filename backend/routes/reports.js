@@ -1,4 +1,4 @@
-const { isGhanaCustomer, splitProfit } = require("../utils/ghana");
+const { isGhanaCustomer, splitProfit, ghanaCostDelta } = require("../utils/ghana");
 const express = require("express");
 const router  = express.Router();
 const Order   = require("../models/Order");
@@ -408,7 +408,7 @@ router.get("/profit-loss-detail", async (req, res) => {
         const ocnCost = Number(c.oceanCost  || 0);
         // All costs on the order: towing, ocean, every fee's cost, extra tows / driver fees
         const allCost = Object.entries(c)
-          .filter(([k, v]) => k.endsWith("Cost") && typeof v !== "object")
+          .filter(([k, v]) => k.endsWith("Cost") && !k.endsWith("GhanaCost") && typeof v !== "object")
           .reduce((s,[,v]) => s + (Number(v||0) || 0), 0)
           + lists.reduce((s, x) => s + (Number(x?.cost || 0) || 0), 0);
         // Ghana office orders: storage / FedEx / title fees are charged 100% and kept
@@ -418,9 +418,9 @@ router.get("/profit-loss-detail", async (req, res) => {
         rows.push({
           ghana,
           // Ghana Cost = real cost for freight items; sell price for no-split fees (real cost if higher)
-          ghanaCost:     sp ? allCost - sp.feeCost + sp.ghanaCost : null,
+          ghanaCost:     sp ? allCost + ghanaCostDelta(c) : null,
           feeProfit:     sp ? sp.feeLoss : 0,
-          freightProfit: sp ? (tow + oce + oth) - (allCost - sp.feeCost + sp.ghanaCost) : null,
+          freightProfit: sp ? (tow + oce + oth) - (allCost + ghanaCostDelta(c)) : null,
           search:       searchText(o, [invNumBy.get(String(o._id))]),
           refNumber:    o.refNumber,
           customer:     o.customerName || "—",
