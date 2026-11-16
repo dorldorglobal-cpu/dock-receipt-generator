@@ -8,7 +8,7 @@ const CustomerCredit = require("../models/CustomerCredit");
 const PDFDocument = require("pdfkit");
 const { uploadBufferToDrive, deleteDriveFile, downloadDriveFile } = require("../googleDrive");
 const { b64lines } = require("../utils/mime");
-const { isGhanaCustomer, isNoSplitItem } = require("../utils/ghana");
+const { isGhanaOrder, isNoSplitItem } = require("../utils/ghana");
 
 const memUploadInv = multer({ storage: multer.memoryStorage() });
 
@@ -905,9 +905,9 @@ async function generateInvoicePdf(inv, order) {
        .text("AMOUNT", ML, y + 8, { align: "right", width: W - 10, lineBreak: false });
     y += TBL_HDR_H;
 
-    // Item rows. Ghana office invoices: storage / FedEx / title fees are charged
-    // 100% and are not part of the freight split, so they get their own section.
-    const ghanaInv  = isGhanaCustomer(inv.customerName);
+    // Item rows. Ghana orders (Ghana office or a Ghana port): additional fees are
+    // charged 100% and are not part of the freight split, so they get their own section.
+    const ghanaInv  = isGhanaOrder({ customerName: inv.customerName, source: order?.source, pod: inv.pod || order?.pod });
     const allItems  = inv.items || [];
     const mainItems = ghanaInv ? allItems.filter(it => !isNoSplitItem(it.description)) : allItems;
     const feeItems  = ghanaInv ? allItems.filter(it =>  isNoSplitItem(it.description)) : [];
