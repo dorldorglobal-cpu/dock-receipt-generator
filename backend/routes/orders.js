@@ -525,7 +525,7 @@ const ORDER_LIST_SELECT =
   "refNumber customerName customerEmail customerPhone " +
   "year make model vin color requestType dispatchMethod " +
   "status titleStatus source requestDate " +
-  "pickupLocation pickupCity pol pod vessel voyage shippingLine bookingNumber " +
+  "pickupLocation pickupCity pol pod vessel voyage shippingLine bookingNumber containerNumber " +
   "lotNumber condition fuelType " +
   "consigneeName consigneeAddress consigneeCity consigneeCountry " +
   "charges holds createdAt updatedAt";
@@ -533,18 +533,25 @@ const ORDER_LIST_SELECT =
 router.get("/", async (req, res) => {
   try {
     const Invoice = require("../models/Invoice");
-    const [orders, paidInvoices] = await Promise.all([
+    const ContainerLoad = require("../models/ContainerLoad");
+    const [orders, paidInvoices, loads] = await Promise.all([
       Order.find().select(ORDER_LIST_SELECT).sort({ createdAt: -1 }).lean(),
       Invoice.find({ status: "paid" }).select("orderId").lean(),
+      ContainerLoad.find({}).select("orderIds bookingNumber containerNumber").lean(),
     ]);
     const paidIds = new Set(paidInvoices.map(inv => String(inv.orderId)));
+    // Container cars: the load's booking / container # so the list search finds them
+    const loadBy = new Map();
+    for (const l of loads) for (const id of l.orderIds || []) loadBy.set(String(id), l);
     // Pre-compute revenue (towingCharge + oceanFreight) so the caller doesn't
     // need the full charges object — omitting it saves ~300 KB from the payload.
     const result = orders.map(o => {
       const c = o.charges || {};
       const revenue = Number(c.towingCharge || 0) + Number(c.oceanFreight || 0);
       const { charges: _c, ...rest } = o;
-      return { ...rest, revenue, invoicePaid: paidIds.has(String(o._id)) };
+      const l = loadBy.get(String(o._id));
+      return { ...rest, revenue, invoicePaid: paidIds.has(String(o._id)),
+        loadBooking: (l?.bookingNumber || "").trim(), loadContainer: (l?.containerNumber || "").trim() };
     });
     res.json(result);
   } catch (err) {
