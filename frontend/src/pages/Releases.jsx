@@ -4,6 +4,8 @@ import { Link } from "react-router-dom";
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 const fmt$ = (n) => "$" + Number(n || 0).toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const fmtDate = (d) => d ? new Date(d).toLocaleDateString("en-US", { timeZone: "America/New_York" }) : "";
+// "11/17/2026 3:42 PM ET" — release request time, in Eastern
+const fmtDateTime = (d) => d ? new Date(d).toLocaleString("en-US", { timeZone: "America/New_York", month: "numeric", day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit" }).replace(",", "") + " ET" : "";
 
 // Paid orders waiting on their shipping-line release. Sallaum: request it here (replies on the
 // voyage's RELEASES thread). ACL: requested by the PAYMENT FOR RELEASE email. When the line's
@@ -216,7 +218,9 @@ export default function Releases() {
                       : <div style={{ fontSize: 12, color: "#dc2626", fontWeight: 600 }}>not paid{r.balance ? ` · ${fmt$(r.balance)} due` : ""}</div>}</td>
                     <td style={td}>{r.held
                       ? <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309", background: "rgba(245,158,11,0.15)", padding: "2px 7px", borderRadius: 5 }}>Release in · held: {r.heldReason}</span>
-                      : r.requestedAt ? fmtDate(r.requestedAt) : <span style={{ color: "var(--text-muted)" }}>—</span>}</td>
+                      : r.requestedAt
+                        ? <span title="Release request sent to the shipping line"><span style={{ fontSize: 12, fontWeight: 600, color: "#16a34a" }}>✓ Requested</span><div style={{ fontSize: 12 }}>{fmtDateTime(r.requestedAt)}</div></span>
+                        : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Not requested yet</span>}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       <button onClick={() => resend(r.vin, r)} disabled={busy === "resend"} title="Forward the line's release email (if it has come in) to the customer" style={{ ...btn("#16a34a"), padding: "4px 10px", fontSize: 12, marginRight: 6 }}>Send release</button>
                       <button onClick={() => markSent(r)} style={{ ...btn("#6b7280"), padding: "4px 10px", fontSize: 12 }}>Already sent</button>
