@@ -404,9 +404,15 @@ export default function Containers() {
   // fee: "baf" (container BAF, $400) or "hybrid" (Hybrid/Electric surcharge, $750 per container)
   const splitBaf = async (load, fee = "baf") => {
     const name = fee === "hybrid" ? "Hybrid/Electric surcharge" : "BAF";
-    const carCount = billingRows.length || (load.orderIds || []).length;
+    const hybrids = billingRows.filter(r => /^(hybrid|electric)$/i.test(r.fuelType || ""));
+    if (fee === "hybrid" && !hybrids.length) {
+      flash("❌ No cars in this load are marked Hybrid or Electric — set the fuel type on the order first");
+      return;
+    }
+    const carCount = fee === "hybrid" ? hybrids.length : (billingRows.length || (load.orderIds || []).length);
+    const which = fee === "hybrid" ? ` (${hybrids.map(r => "#" + r.refNumber).join(", ")})` : "";
     const input = window.prompt(
-      `Split the container ${name} across ${carCount} car(s).\n\nTotal ${name} for the full container:`, fee === "hybrid" ? "750" : "400");
+      `Split the container ${name} across ${carCount} car(s)${which}.\n\nTotal ${name} for the full container:`, fee === "hybrid" ? "750" : "400");
     if (input === null) return;
     const amount = parseFloat(input);
     if (!(amount > 0)) { flash("❌ Enter a valid amount"); return; }
@@ -1854,7 +1860,7 @@ export default function Containers() {
                 )}
                 {!sendResults && !billingLoading && billingRows.length > 0 && (
                   <button onClick={()=>splitBaf(billingLoad, "hybrid")} disabled={bafBusy}
-                    title="Divide the $750 per-container Hybrid/Electric surcharge across the cars in this load and write it to each order's charges"
+                    title="Divide the $750 per-container Hybrid/Electric surcharge across only the Hybrid/Electric cars in this load (order fuel type)"
                     style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
                       background:"rgba(16,185,129,0.15)", border:"1px solid rgba(16,185,129,0.45)",
                       color:"var(--success, #10b981)", cursor:bafBusy?"default":"pointer", opacity:bafBusy?0.6:1, whiteSpace:"nowrap" }}>

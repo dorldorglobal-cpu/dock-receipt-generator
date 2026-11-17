@@ -338,7 +338,7 @@ router.get("/:id/billing-summary", async (req, res) => {
     if (!load) return res.status(404).json({ error: "Not found" });
 
     const orders = await Order.find({ _id: { $in: load.orderIds } })
-      .select("_id refNumber customerName customerEmail year make model vin status charges pod source").lean();
+      .select("_id refNumber customerName customerEmail year make model vin status charges pod source fuelType").lean();
 
     const orderIds = orders.map(o => o._id);
 
@@ -398,6 +398,7 @@ router.get("/:id/billing-summary", async (req, res) => {
         customerEmail: (inv?.customerEmail || o.customerEmail || "").split(",")[0].trim(),
         vehicle:       [o.year, o.make, o.model].filter(Boolean).join(" "),
         vin:           o.vin,
+        fuelType:      o.fuelType || "",
         orderStatus:   o.status,
         expenses:      syntheticExps,
         totalExpenses,
@@ -509,8 +510,21 @@ router.post("/:id/split-baf", express.json(), async (req, res) => {
     const load = await ContainerLoad.findById(req.params.id).lean();
     if (!load) return res.status(404).json({ error: "Not found" });
 
-    const orders = await Order.find({ _id: { $in: load.orderIds } });
-    if (!orders.length) return res.status(400).json({ error: "This load has no orders" });
+    const all = await Order.find({ _id: { $in: load.orderIds } });
+    if (!all.length) return res.status(400).json({ error: "This load has no orders" });
+
+    // Hybrid/Electric surcharge is charged only to the hybrid/electric cars
+    // (order fuel type); any other car in the load is cleared of it.
+    const isHybrid = o => /^(hybrid|electric)$/i.test(String(o.fuelType || "").trim());
+    const orders = fee.key === "hybridElectricFee" ? all.filter(isHybrid) : all;
+    if (!orders.length) return res.status(400).json({ error: "No cars in this load are marked Hybrid or Electric (set the fuel type on the order first)" });
+    if (fee.key === "hybridElectricFee") {
+      for (const o of all.filter(o => !isHybrid(o) && (Number(o.charges?.hybridElectricFee) || Number(o.charges?.hybridElectricFeeCost)))) {
+        o.charges = { ...(o.charges || {}), hybridElectricFee: "0.00", hybridElectricFeeCost: "0.00" };
+        o.markModified("charges");
+        await o.save();
+      }
+    }
 
     const n = orders.length;
     const cents = Math.round(amount * 100);
