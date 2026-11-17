@@ -494,10 +494,17 @@ router.delete("/:id/discounts/:discountId", async (req, res) => {
 // under-recovering ($100 x 3 = $300 vs a $400 cost). Body: { amount } (default
 // 400). Split to whole cents; any leftover cents land on the first orders so
 // the parts sum back to exactly `amount`.
+// Body { fee: "hybrid" } splits the Hybrid/Electric surcharge (default $750 per
+// container) the same way into hybridElectricFee instead.
+const SPLIT_FEES = {
+  baf:    { key: "emergencyBafFee",   label: "BAF",                       def: 400 },
+  hybrid: { key: "hybridElectricFee", label: "Hybrid/Electric surcharge", def: 750 },
+};
 router.post("/:id/split-baf", express.json(), async (req, res) => {
   try {
     const Invoice = require("../models/Invoice");
-    const amount = Number(req.body?.amount) > 0 ? Number(req.body.amount) : 400;
+    const fee = SPLIT_FEES[req.body?.fee] || SPLIT_FEES.baf;
+    const amount = Number(req.body?.amount) > 0 ? Number(req.body.amount) : fee.def;
 
     const load = await ContainerLoad.findById(req.params.id).lean();
     if (!load) return res.status(404).json({ error: "Not found" });
@@ -514,10 +521,10 @@ router.post("/:id/split-baf", express.json(), async (req, res) => {
     for (let i = 0; i < orders.length; i++) {
       const o = orders[i];
       const per = ((base + (i < remainder ? 1 : 0)) / 100).toFixed(2);
-      o.charges = { ...(o.charges || {}), emergencyBafFee: per, emergencyBafFeeCost: per };
+      o.charges = { ...(o.charges || {}), [fee.key]: per, [fee.key + "Cost"]: per };
       o.markModified("charges");
       o.timeline = o.timeline || [];
-      o.timeline.push({ action: "BAF Split", details: `Container BAF split — $${per} of $${amount.toFixed(2)} across ${n} car(s) in load "${load.name}".`, createdAt: new Date() });
+      o.timeline.push({ action: `${fee.label} Split`, details: `Container ${fee.label} split — $${per} of $${amount.toFixed(2)} across ${n} car(s) in load "${load.name}".`, createdAt: new Date() });
       await o.save();
       const invoiced = await Invoice.exists({ orderId: o._id });
       results.push({ refNumber: o.refNumber, perCar: per, alreadyInvoiced: !!invoiced });

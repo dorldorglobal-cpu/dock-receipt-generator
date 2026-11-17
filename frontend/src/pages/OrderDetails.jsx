@@ -38,6 +38,7 @@ const TERMINAL_MAP = {}; // fallback empty — real data comes from address book
 // defaultSell = fixed sell price pre-fill; hasDesc = show description sub-input
 const feeRows = [
   ["emergencyBafFee",     "Emergency BAF",                 { defaultSell: 100, defaultCost: 100 }],
+  ["hybridElectricFee",   "Hybrid/Electric Surcharge",     {}],
   ["nonRunnerFee",        "Non-runner Fee",                { defaultSell: 400  }],
   ["forkliftFee",         "Forklift Fee",                  { defaultSell: 500  }],
   ["storageAuctionFee",   "Storage Fee – Auction",         {}],

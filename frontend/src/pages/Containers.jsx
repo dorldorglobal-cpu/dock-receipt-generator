@@ -401,10 +401,12 @@ export default function Containers() {
   };
 
   const [bafBusy, setBafBusy] = useState(false);
-  const splitBaf = async (load) => {
+  // fee: "baf" (container BAF, $400) or "hybrid" (Hybrid/Electric surcharge, $750 per container)
+  const splitBaf = async (load, fee = "baf") => {
+    const name = fee === "hybrid" ? "Hybrid/Electric surcharge" : "BAF";
     const carCount = billingRows.length || (load.orderIds || []).length;
     const input = window.prompt(
-      `Split the container BAF across ${carCount} car(s).\n\nTotal BAF for the full container:`, "400");
+      `Split the container ${name} across ${carCount} car(s).\n\nTotal ${name} for the full container:`, fee === "hybrid" ? "750" : "400");
     if (input === null) return;
     const amount = parseFloat(input);
     if (!(amount > 0)) { flash("❌ Enter a valid amount"); return; }
@@ -412,13 +414,13 @@ export default function Containers() {
     try {
       const r = await fetch(`${API}/api/container-loads/${load._id}/split-baf`, {
         method: "POST", headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ amount }),
+        body: JSON.stringify({ amount, fee }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || "Failed");
       const per = d.results.map(x => `$${x.perCar}`).join(" / ");
-      let msg = `✅ BAF split: ${per} across ${d.count} car(s)`;
-      if (d.invoicedCount) msg += ` — ⚠️ ${d.invoicedCount} order(s) already invoiced; regenerate those invoices to apply the new BAF`;
+      let msg = `✅ ${name} split: ${per} across ${d.count} car(s)`;
+      if (d.invoicedCount) msg += ` — ⚠️ ${d.invoicedCount} order(s) already invoiced; regenerate those invoices to apply the new ${name}`;
       flash(msg);
       // refresh billing summary
       const rs = await fetch(`${API}/api/container-loads/${load._id}/billing-summary`);
@@ -1848,6 +1850,15 @@ export default function Containers() {
                       background:"rgba(180,83,9,0.18)", border:"1px solid rgba(180,83,9,0.45)",
                       color:"var(--warning)", cursor:bafBusy?"default":"pointer", opacity:bafBusy?0.6:1, whiteSpace:"nowrap" }}>
                     {bafBusy ? "Splitting…" : "⚖️ Split Container BAF"}
+                  </button>
+                )}
+                {!sendResults && !billingLoading && billingRows.length > 0 && (
+                  <button onClick={()=>splitBaf(billingLoad, "hybrid")} disabled={bafBusy}
+                    title="Divide the $750 per-container Hybrid/Electric surcharge across the cars in this load and write it to each order's charges"
+                    style={{ padding:"6px 12px", fontSize:12, fontWeight:600, borderRadius:8,
+                      background:"rgba(16,185,129,0.15)", border:"1px solid rgba(16,185,129,0.45)",
+                      color:"var(--success, #10b981)", cursor:bafBusy?"default":"pointer", opacity:bafBusy?0.6:1, whiteSpace:"nowrap" }}>
+                    {bafBusy ? "Splitting…" : "🔋 Split Hybrid/EV Surcharge"}
                   </button>
                 )}
                 {!sendResults && !billingLoading && billingRows.some(r=>r.invoice && r.invoice.status!=="paid") && (

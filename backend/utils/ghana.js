@@ -13,14 +13,14 @@ function isGhanaCustomer(name) {
 // forklift (those are part of the freight). They stay on the invoice but are not
 // part of the freight profit split, and Ghana's cost for them is the sell price.
 // Same list as frontend OrderDetails.jsx NO_SPLIT_FEES.
-const NO_SPLIT_FEES = ["emergencyBafFee", "storageAuctionFee", "storageWarehouseFee", "storagePortFee",
+const NO_SPLIT_FEES = ["emergencyBafFee", "hybridElectricFee", "storageAuctionFee", "storageWarehouseFee", "storagePortFee",
   "redeliveryFee", "titleProcessingFee", "mechanicalCharges", "warehouseInOutFee", "customsDemurrageFee",
   "customsHoldingFee", "vesselRolloverFee", "blFedexFee", "noTitleDeliveryFee", "ctnFee", "dryRunFee",
   "inOutFee", "miscellaneousFee"];
 
 // Invoice line descriptions for those fees (labels from the order's fee rows).
 const isNoSplitItem = desc =>
-  /^(emergency baf|storage|re-?delivery|title processing|mechanical|warehouse in\/out|customs|vessel rollover|fedex\/mailing|no title delivery|ctn|dry run|in & out|miscellaneous)/i
+  /^(emergency baf|hybrid|storage|re-?delivery|title processing|mechanical|warehouse in\/out|customs|vessel rollover|fedex\/mailing|no title delivery|ctn|dry run|in & out|miscellaneous)/i
     .test(String(desc || "").trim());
 
 // No-split fee totals from order charges. Ghana's cost for these = sell.
