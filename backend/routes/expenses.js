@@ -1986,7 +1986,7 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
           console.warn("[parse-container] LLM extraction failed, falling back to regex:", e.message);
           parsedInvoice = parseContainerInvoiceRegex(text);
         }
-        const { invoiceNumber, billDate, vendor, container, booking, total, vinData } = parsedInvoice;
+        const { invoiceNumber, billDate, vendor, container, total, vinData } = parsedInvoice;
 
         const lines = text.split("\n");
         // Every full VIN printed on the invoice counts, even ones the parser missed
@@ -2043,21 +2043,32 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         // Cars in the same container that the invoice doesn't print (a loader sometimes
         // lists only 3 of a 4-car load): every order in the container load with this
         // booking / container number, or with that booking / container on the order itself.
+        // The load is also found through the invoice's own cars (the parsed "booking" is
+        // sometimes the loader's file number, e.g. Cedars "3709-119"); then the booking
+        // shown is the load's real one.
         const loadCars = [];
+        let booking = parsedInvoice.booking;
         {
           const norm = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
           const esc  = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
           const bk = norm(booking), ct = norm(container);
-          if (bk.length >= 6 || ct.length >= 10) {
-            const ContainerLoad = require("../models/ContainerLoad");
-            const rx = v => new RegExp("^\\W*" + v.split("").map(esc).join("\\W*") + "\\W*$", "i");
-            const loadOr = [], orderOr = [];
-            if (bk.length >= 6) { loadOr.push({ bookingNumber: rx(bk) }); orderOr.push({ bookingNumber: rx(bk) }); }
-            if (ct.length >= 10) { loadOr.push({ containerNumber: rx(ct) }); orderOr.push({ containerNumber: rx(ct) }); }
-            const loads = await ContainerLoad.find({ $or: loadOr }).select("orderIds name").lean();
+          const ContainerLoad = require("../models/ContainerLoad");
+          const rx = v => new RegExp("^\\W*" + v.split("").map(esc).join("\\W*") + "\\W*$", "i");
+          const invOrders = vins.length ? await Order.find({ vin: { $in: vins } }).select("_id bookingNumber").lean() : [];
+          const loadOr = [], orderOr = [];
+          if (invOrders.length) loadOr.push({ orderIds: { $in: invOrders.map(o => o._id) } });
+          if (bk.length >= 6) { loadOr.push({ bookingNumber: rx(bk) }); orderOr.push({ bookingNumber: rx(bk) }); }
+          if (ct.length >= 10) { loadOr.push({ containerNumber: rx(ct) }); orderOr.push({ containerNumber: rx(ct) }); }
+          if (loadOr.length) {
+            const loads = await ContainerLoad.find({ $or: loadOr }).select("orderIds name bookingNumber").lean();
+            // Real booking: the load's, else the one the invoice's own orders share
+            const realBk = loads.map(l => l.bookingNumber).find(Boolean)
+              || [...new Set(invOrders.map(o => o.bookingNumber).filter(Boolean))].find((b, _, a) => a.length === 1);
+            if (realBk && norm(realBk) !== bk) { booking = realBk; orderOr.push({ bookingNumber: rx(norm(realBk)) }); }
             const ids = loads.flatMap(l => l.orderIds || []);
-            const extra = await Order.find({ $or: [...(ids.length ? [{ _id: { $in: ids } }] : []), ...orderOr],
-              status: { $nin: ["Canceled", "Cancelled"] } }).select("_id vin").lean();
+            const or = [...(ids.length ? [{ _id: { $in: ids } }] : []), ...orderOr];
+            const extra = or.length ? await Order.find({ $or: or,
+              status: { $nin: ["Canceled", "Cancelled"] } }).select("_id vin").lean() : [];
             const onInvoice = new Set(vins.map(v => v.toUpperCase()));
             for (const o of extra) {
               const v = String(o.vin || "").toUpperCase();
