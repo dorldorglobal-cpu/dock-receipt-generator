@@ -1104,12 +1104,17 @@ export default function OrderDetails() {
 
     // Due date the invoice will be saved with: the order's arrival date, else the
     // vessel schedule's arrival (same fallback the invoice email uses)
-    const arr = toISODate(order?.arrivalDate);
+    // Orders in a container load take the load's arrival date
+    const ownArr  = toISODate(order?.arrivalDate);
+    const loadArr = toISODate(containerLoad?.arrivalDate);
+    const arr = ownArr || loadArr;
     setInvoiceDueDate(arr);
-    setInvoiceDueSource(arr ? "arrival" : "");
-    if (!arr && order?.vessel) {
-      const qs = new URLSearchParams({ vessel: order.vessel, ...(order.voyage ? { voyageName: order.voyage } : {}),
-        ...(order.pol ? { pol: order.pol } : {}), ...(order.pod ? { pod: order.pod } : {}) });
+    setInvoiceDueSource(ownArr ? "arrival" : loadArr ? "load" : "");
+    const vsl = order?.vessel || containerLoad?.vessel;
+    if (!arr && vsl) {
+      const qs = new URLSearchParams({ vessel: vsl, ...(order.voyage ? { voyageName: order.voyage } : {}),
+        ...((order.pol || containerLoad?.pol) ? { pol: order.pol || containerLoad.pol } : {}),
+        ...((order.pod || containerLoad?.pod) ? { pod: order.pod || containerLoad.pod } : {}) });
       fetch(`${API}/api/schedule/lookup?${qs}`).then(r => r.json()).then(s => {
         if (s.found && s.arrivalDate) {
           const d = toISODate(s.arrivalDate);
@@ -6343,6 +6348,7 @@ export default function OrderDetails() {
                     return <div style={{ marginTop: 4, fontSize: 11, color: "var(--warning)" }}>No arrival date found — the invoice will have no due date</div>;
                   const shown = new Date(invoiceDueDate + "T00:00:00").toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
                   const src = invoiceDueSource === "arrival" ? "order's arrival date"
+                            : invoiceDueSource === "load" ? "container load's arrival date"
                             : invoiceDueSource === "schedule" ? "vessel schedule arrival"
                             : invoiceDueSource === "manual" ? "entered by you" : "";
                   const past = invoiceDueDate < todayLocalISO();

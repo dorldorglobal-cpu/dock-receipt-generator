@@ -80,6 +80,17 @@ async function replaceInvoiceFileOnOrder(order, pdfBuffer, invoiceNumber) {
   }
 }
 
+// Arrival date for an order: its own, else the container load it's in
+async function arrivalFor(order) {
+  if (!order) return "";
+  if (order.arrivalDate) return order.arrivalDate;
+  try {
+    const ContainerLoad = require("../models/ContainerLoad");
+    const cl = await ContainerLoad.findOne({ orderIds: order._id }).select("arrivalDate").lean();
+    return cl?.arrivalDate || "";
+  } catch (_) { return ""; }
+}
+
 // ── POST /api/invoices — create invoice + log to order timeline ───────────────
 router.post("/", async (req, res) => {
   try {
@@ -117,6 +128,7 @@ router.post("/", async (req, res) => {
 
     const invoiceNumber = await nextInvoiceNumber();
     const total = (items || []).reduce((s, i) => s + Number(i.amount || 0), 0);
+    const arrival = await arrivalFor(order);
 
     // Derive shipping line from booking number prefix or container load vessel
     const bn = (order.bookingNumber || "").toUpperCase();
@@ -150,7 +162,7 @@ router.post("/", async (req, res) => {
       deliveryLocation: order.deliveryLocation || "",
       bookingNumber:    order.bookingNumber    || "",
       voyage:           order.voyage           || "",
-      arrivalDate:      order.arrivalDate      || "",
+      arrivalDate:      arrival,
       shippingLine,
       items:         items || [],
       subtotal:      total,
@@ -158,8 +170,8 @@ router.post("/", async (req, res) => {
       notes:         notes || "",
       dueDate:       (() => {
         if (dueDate) return new Date(dueDate);
-        if (order.arrivalDate) {
-          const arr = new Date(order.arrivalDate);
+        if (arrival) {
+          const arr = new Date(arrival);
           if (!isNaN(arr)) return arr;
         }
         return null;
@@ -428,8 +440,9 @@ router.put("/:id", async (req, res) => {
 
     // Use user-passed dueDate; fall back to order arrivalDate
     let computedDueDate = dueDate ? new Date(dueDate) : null;
-    if (!computedDueDate && order?.arrivalDate) {
-      const arr = new Date(order.arrivalDate);
+    const arrival = await arrivalFor(order);
+    if (!computedDueDate && arrival) {
+      const arr = new Date(arrival);
       if (!isNaN(arr)) computedDueDate = arr;
     }
 
@@ -838,7 +851,7 @@ async function generateInvoicePdf(inv, order) {
 
     // Always prefer live order data so invoice reflects latest voyage/schedule
     const voyage      = order?.voyage      || inv.voyage      || "";
-    const arrivalDate = order?.arrivalDate || inv.arrivalDate || "";
+    const arrivalDate = order?.arrivalDate || inv.arrivalDate || (await arrivalFor(order)) || "";
 
     // Each entry: [leftLabel, leftValue, rightLabel, rightValue]
     const shippingLineValue = [
@@ -1034,6 +1047,13 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   doc.fill(steel).font("Helvetica-Bold").fontSize(9).text(combinedNumber, META_X + 10, META_Y + 22, { width: META_W - 20, lineBreak: false });
   doc.fill(muted).font("Helvetica").fontSize(8).text("Date:", META_X + 10, META_Y + 50, { lineBreak: false });
   doc.fill(dark).font("Helvetica-Bold").fontSize(8).text(fmtDate(new Date()), META_X + 42, META_Y + 50, { lineBreak: false });
+  // Due = the load's arrival date (else the first order's / invoice's)
+  const loadArrival = load?.arrivalDate || orders.find(o => o.arrivalDate)?.arrivalDate
+                   || invoices.find(i => i.dueDate)?.dueDate || "";
+  const dueD = loadArrival ? new Date(loadArrival) : null;
+  doc.fill(muted).font("Helvetica").fontSize(8).text("Due:", META_X + 10, META_Y + 62, { lineBreak: false });
+  if (dueD && !isNaN(dueD)) doc.fill("#dc2626").font("Helvetica-Bold").fontSize(8).text(fmtDate(dueD), META_X + 42, META_Y + 62, { lineBreak: false });
+  else doc.fill(muted).font("Helvetica").fontSize(8).text("On receipt", META_X + 42, META_Y + 62, { lineBreak: false });
 
   // ── BILL TO ──────────────────────────────────────────────────────────────────
   let y = META_Y;
@@ -1056,6 +1076,7 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   const details = [
     ["Route:", pol && pod ? `${pol} > ${pod}` : "—", "Vessel:", vessel || "—"],
     ["Booking #:", booking || "—", "Load:", load?.name || "—"],
+    ["ETA:", dueD && !isNaN(dueD) ? fmtDate(dueD) : "—", "", ""],
   ];
   details.forEach(([l1,v1,l2,v2]) => {
     doc.fill(muted).font("Helvetica").fontSize(8.5).text(l1, ML, y, { lineBreak:false });
