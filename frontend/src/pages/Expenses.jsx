@@ -1007,10 +1007,15 @@ export default function Expenses() {
       const ok = (data.results || []).filter(r => r.sent);
       const bad = (data.results || []).filter(r => !r.sent);
       const marked = ok.flatMap(r => r.sheet || []).filter(s => s.written).map(s => s.booking);
-      setReleaseMsg(`${ok.length ? `✅ Release request sent to ${ok.map(r => r.company).join(", ")}` : ""}` +
+      const at = new Date().toLocaleTimeString("en-US", { timeZone: "America/New_York", hour: "numeric", minute: "2-digit" }) + " ET";
+      setReleaseMsg(`${ok.length ? `✅ Release request email sent to ${ok.map(r => r.company).join(", ")} at ${at}` : ""}` +
         `${marked.length ? ` · ACL sheet dated: ${marked.join(", ")}` : ""}` +
         `${bad.length ? `${ok.length ? " · " : ""}❌ ${bad.map(r => `${r.company}: ${r.error}`).join("; ")}` : ""}`);
-      setReleaseDrafts(ds => ds.map(d => ok.some(r => r.key === d.key) ? { ...d, sentOk: true, send: false } : d));
+      // Everything that can go out has gone out → close the panel; the sent message stays
+      setReleaseDrafts(ds => {
+        const next = ds.map(d => ok.some(r => r.key === d.key) ? { ...d, sentOk: true, send: false } : d);
+        return next.some(d => d.to?.length && !d.sentOk) ? next : [];
+      });
     } catch (e) { setReleaseMsg("❌ " + e.message); }
     setReleaseSending(false);
   };
@@ -2297,6 +2302,16 @@ export default function Expenses() {
           <div style={{ marginTop: 20, paddingTop: 20, borderTop: "1px solid var(--border)" }}>
             <div style={{ fontSize: 13, fontWeight: 700, color: "#06b6d4", marginBottom: 10 }}>🏦 Payment Proof Results</div>
             {proofMsg && <div style={{ marginBottom: 10, fontSize: 13, color: proofMsg.startsWith("✅") ? "#34d399" : proofMsg.startsWith("❌") ? "#f87171" : "var(--warning)" }}>{proofMsg}</div>}
+
+            {/* Release requests all sent (panel closed) — keep the confirmation */}
+            {releaseDrafts.length === 0 && releaseMsg && (
+              <div style={{ marginBottom: 14, padding: "10px 14px", borderRadius: 10, fontSize: 13, fontWeight: 600,
+                border: `1px solid ${releaseMsg.includes("❌") ? "rgba(220,38,38,0.4)" : "rgba(22,163,74,0.4)"}`,
+                background: releaseMsg.includes("❌") ? "rgba(220,38,38,0.06)" : "rgba(22,163,74,0.08)",
+                color: releaseMsg.startsWith("❌") ? "#dc2626" : "#16a34a" }}>
+                📨 {releaseMsg}
+              </div>
+            )}
 
             {/* ── Release requests to carriers / container loaders paid in this import ── */}
             {releaseDrafts.length > 0 && (
