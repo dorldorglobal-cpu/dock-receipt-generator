@@ -2040,15 +2040,44 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
           }
         }
 
+        // Cars in the same container that the invoice doesn't print (a loader sometimes
+        // lists only 3 of a 4-car load): every order in the container load with this
+        // booking / container number, or with that booking / container on the order itself.
+        const loadCars = [];
+        {
+          const norm = s => String(s || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+          const esc  = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+          const bk = norm(booking), ct = norm(container);
+          if (bk.length >= 6 || ct.length >= 10) {
+            const ContainerLoad = require("../models/ContainerLoad");
+            const rx = v => new RegExp("^\\W*" + v.split("").map(esc).join("\\W*") + "\\W*$", "i");
+            const loadOr = [], orderOr = [];
+            if (bk.length >= 6) { loadOr.push({ bookingNumber: rx(bk) }); orderOr.push({ bookingNumber: rx(bk) }); }
+            if (ct.length >= 10) { loadOr.push({ containerNumber: rx(ct) }); orderOr.push({ containerNumber: rx(ct) }); }
+            const loads = await ContainerLoad.find({ $or: loadOr }).select("orderIds name").lean();
+            const ids = loads.flatMap(l => l.orderIds || []);
+            const extra = await Order.find({ $or: [...(ids.length ? [{ _id: { $in: ids } }] : []), ...orderOr],
+              status: { $nin: ["Canceled", "Cancelled"] } }).select("_id vin").lean();
+            const onInvoice = new Set(vins.map(v => v.toUpperCase()));
+            for (const o of extra) {
+              const v = String(o.vin || "").toUpperCase();
+              if (v && !onInvoice.has(v)) { onInvoice.add(v); loadCars.push(v); }
+            }
+            if (loadCars.length) console.log(`[parse-container] ${invoiceNumber}: added ${loadCars.length} load car(s) not on the invoice: ${loadCars.join(", ")}`);
+          }
+        }
+        const allVins = [...vins, ...loadCars];
+
         const storageTotal = Object.values(vinExtras).reduce((sum, n) => sum + n, 0);
         // The LLM's per-VIN prices are only trusted when they add up to the invoice total
+        // (and only when every car in the container is on the invoice)
         const llmSum = vins.reduce((s, v) => s + (vinData[v].lineTotal || 0), 0);
-        const hasPerVinPricing = vins.every(v => vinData[v].lineTotal > 0) && Math.abs(llmSum + storageTotal - total) < 0.05;
+        const hasPerVinPricing = !loadCars.length && vins.every(v => vinData[v].lineTotal > 0) && Math.abs(llmSum + storageTotal - total) < 0.05;
         const baseTotal  = total - storageTotal;
-        const equalSplit = vins.length > 0 ? Math.round((baseTotal / vins.length) * 100) / 100 : total;
+        const equalSplit = allVins.length > 0 ? Math.round((baseTotal / allVins.length) * 100) / 100 : total;
 
         // Match orders
-        const orders = await Order.find({ vin: { $in: vins } })
+        const orders = await Order.find({ vin: { $in: allVins } })
           .select("_id refNumber vin customerName year make model").lean();
         const orderByVin = {};
         for (const o of orders) orderByVin[o.vin?.toUpperCase()] = o;
@@ -2069,8 +2098,9 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         console.log("[dup-check] invoiceNumber:", invoiceNumber, "booking:", booking, "vendor:", vendor, "orderIds:", orderIds.length, "found:", existingExpenses.length, existingExpenses.map(e => ({ inv: e.invoiceNumber, notes: e.notes?.slice(0,60), vendor: e.vendor })));
         const dupOrderIds = new Set(existingExpenses.map(e => String(e.orderId)));
 
-        const rows = vins.map(vin => {
+        const rows = allVins.map(vin => {
           const order = orderByVin[vin.toUpperCase()] || null;
+          const fromLoad = loadCars.includes(vin);
           const d = vinData[vin] || {};
           const rowTotal = (hasPerVinPricing && d.lineTotal ? d.lineTotal : equalSplit)
             + (vinExtras[vin] || 0);
@@ -2085,9 +2115,10 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
             orderRef:     order?.refNumber || "",
             customerName: order?.customerName || "",
             matched:      !!order,
+            fromLoad,                                    // in the container load, not printed on the invoice
             duplicate,
             skip:         duplicate,
-            notes:        "",
+            notes:        fromLoad ? "Not listed on the invoice; in the same container load" : "",
           };
         });
 

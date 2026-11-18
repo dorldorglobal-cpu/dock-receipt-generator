@@ -2193,6 +2193,7 @@ export default function Expenses() {
                             </td>
                             <td style={{ padding:"8px 10px", borderBottom:"1px solid var(--border-muted)" }}>
                               {row.duplicate ? <span style={{ color:"#94a3b8", fontSize:12 }}>Already Created</span>
+                                : row.matched && row.fromLoad ? <span title="Not printed on the invoice: added because it's in the same container load (booking / container)" style={{ color:"#a78bfa", fontSize:12, fontWeight:600 }}>📦 From load (not on invoice)</span>
                                 : row.matched ? <span style={{ color:"#34d399", fontSize:12 }}>✅ Matched</span>
                                 : <span style={{ color:"var(--warning)", fontSize:12 }}>⚠ No match</span>}
                             </td>
