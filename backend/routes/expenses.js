@@ -690,7 +690,7 @@ router.put("/:id", uploadFields, async (req, res) => {
 });
 
 // ── POST /api/expenses/bulk-pay — mark many as paid, optional proof upload ────
-router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
+router.post("/bulk-pay", upload.array("proof", 10), async (req, res) => {
   try {
     const ids             = JSON.parse(req.body.ids || "[]");
     const paidDate        = req.body.paidDate;
@@ -707,14 +707,20 @@ router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
       return res.json({ updated: ids.length });
     }
 
-    // Upload proof file once (if provided), attach to every expense being paid
+    // Upload proof file(s) once, attach to every expense being paid. The first is
+    // the payment's proof (receipt); any more (e.g. a second check image) go on
+    // each bill's attachments.
     let proofFields = {};
-    if (req.file) {
+    const extraProofs = [];
+    const files = req.files || (req.file ? [req.file] : []);
+    for (let i = 0; i < files.length; i++) {
+      const f = files[i];
       try {
-        const saved = await saveUploadedFile(req.file.buffer, req.file.originalname, req.file.mimetype, null);
-        proofFields = { receiptFileName: saved.fname, receiptDriveId: saved.driveId, receiptDriveUrl: saved.driveUrl, receiptMime: req.file.mimetype };
+        const saved = await saveUploadedFile(f.buffer, f.originalname, f.mimetype, null);
+        if (!proofFields.receiptFileName) proofFields = { receiptFileName: saved.fname, receiptDriveId: saved.driveId, receiptDriveUrl: saved.driveUrl, receiptMime: f.mimetype };
+        else extraProofs.push({ name: saved.fname, driveId: saved.driveId, driveUrl: saved.driveUrl, mime: f.mimetype });
       } catch (uploadErr) {
-        console.warn("[bulk-pay] proof upload failed:", uploadErr.message);
+        console.warn("[bulk-pay] proof upload failed:", f.originalname, uploadErr.message);
       }
     }
 
@@ -746,6 +752,7 @@ router.post("/bulk-pay", upload.single("proof"), async (req, res) => {
       exp.paidDate = dateObj;
       exp.paymentMethod = paymentMethod || "";
       if (proofFields.receiptFileName) Object.assign(exp, proofFields);
+      for (const a of extraProofs) exp.attachments.push({ ...a, uploadedAt: new Date() });
       return exp.save();
     }));
 

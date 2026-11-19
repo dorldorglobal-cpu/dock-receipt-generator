@@ -607,7 +607,14 @@ export default function Expenses() {
   const [payMethod, setPayMethod]       = useState("Bank ACH");
   const [payCheckNo, setPayCheckNo]     = useState("");
   const [paying, setPaying]             = useState(false);
-  const [bulkProofFile, setBulkProofFile] = useState(null);
+  // Proof files for Mark Paid — several allowed (e.g. two check images)
+  const [bulkProofFiles, setBulkProofFiles] = useState([]);
+  const bulkProofFile = bulkProofFiles[0] || null;
+  const setBulkProofFile = (f) => setBulkProofFiles(f ? [f] : []);
+  const addBulkProofFiles = (list) => setBulkProofFiles(cur => {
+    const add = [...(list || [])].filter(f => !cur.some(c => c.name === f.name && c.size === f.size));
+    return [...cur, ...add].slice(0, 10);
+  });
   const [bulkProofDrag, setBulkProofDrag] = useState(false);
 
   const [selectedCache, setSelectedCache] = useState({}); // id -> expense object, persists across filter changes
@@ -647,7 +654,7 @@ export default function Expenses() {
       fd.append("paymentMethod", bulkMethod);
       fd.append("action", action);
       if (Object.keys(bulkAmtOverrides).length) fd.append("amountOverrides", JSON.stringify(bulkAmtOverrides));
-      if (bulkProofFile && action !== "unpay") fd.append("proof", bulkProofFile);
+      if (action !== "unpay") for (const f of bulkProofFiles) fd.append("proof", f);
 
       const res = await fetch(`${API}/api/expenses/bulk-pay`, { method: "POST", body: fd });
       const data = await res.json();
@@ -3401,8 +3408,9 @@ export default function Expenses() {
             <div
               onDragOver={e => { e.preventDefault(); setBulkProofDrag(true); }}
               onDragLeave={() => setBulkProofDrag(false)}
-              onDrop={e => { e.preventDefault(); setBulkProofDrag(false); const f = e.dataTransfer.files[0]; if (f) setBulkProofFile(f); }}
-              onClick={() => { const inp = document.createElement("input"); inp.type="file"; inp.accept="image/*,application/pdf"; inp.onchange=ev=>{ if(ev.target.files[0]) setBulkProofFile(ev.target.files[0]); }; inp.click(); }}
+              onDrop={e => { e.preventDefault(); setBulkProofDrag(false); addBulkProofFiles(e.dataTransfer.files); }}
+              onClick={() => { const inp = document.createElement("input"); inp.type="file"; inp.multiple = true; inp.accept="image/*,application/pdf"; inp.onchange=ev=>addBulkProofFiles(ev.target.files); inp.click(); }}
+              title={bulkProofFiles.length ? bulkProofFiles.map(f => f.name).join("\n") + "\n\nClick or drop to add more" : "Drop or choose one or more proof files (e.g. both check images)"}
               style={{
                 border: `2px dashed ${bulkProofDrag ? "#34d399" : bulkProofFile ? "#34d399" : "#4b5563"}`,
                 borderRadius: 8, padding: "6px 14px", cursor: "pointer", fontSize: 12,
@@ -3410,7 +3418,9 @@ export default function Expenses() {
                 color: bulkProofFile ? "#34d399" : "var(--text-secondary)",
                 minWidth: 140, textAlign: "center", transition: "all .15s", whiteSpace: "nowrap",
               }}>
-              {bulkProofFile ? `📎 ${bulkProofFile.name.length > 18 ? bulkProofFile.name.slice(0,16)+"…" : bulkProofFile.name}` : "📎 Drop proof here"}
+              {bulkProofFiles.length > 1 ? `📎 ${bulkProofFiles.length} files (+ add)`
+                : bulkProofFile ? `📎 ${bulkProofFile.name.length > 18 ? bulkProofFile.name.slice(0,16)+"…" : bulkProofFile.name} (+ add)`
+                : "📎 Drop proof(s) here"}
             </div>
             {bulkProofFile && (
               <button onClick={() => setBulkProofFile(null)}
