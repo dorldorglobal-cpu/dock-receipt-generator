@@ -546,9 +546,9 @@ export default function Vendors() {
                       onClick={()=>openDetail(v)}>
                       <td style={td}>
                         <div style={{ fontWeight:600,color:"var(--text-primary)" }}>{v.name}</div>
-                        {(v.bankAccountLast4 || v.bankRoutingLast4) && (
+                        {v.bankAccountLast4 && (
                           <div style={{ fontSize:11, color:"#16a34a", marginTop:2 }} title="Bank details on file (Edit → Show for full numbers)">
-                            🏦 {v.bankName ? v.bankName + " · " : ""}acct ••{v.bankAccountLast4 || "—"} · rtn ••{v.bankRoutingLast4 || "—"}
+                            🏦 {v.bankName ? v.bankName + " · " : ""}acct ••{v.bankAccountLast4}
                           </div>
                         )}
                       </td>
