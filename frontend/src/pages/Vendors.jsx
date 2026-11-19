@@ -59,8 +59,66 @@ function Modal({ title, onClose, children, wide }) {
 const inputStyle = { width:"100%",padding:"8px 10px",background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,color:"var(--text-primary)",fontSize:13,boxSizing:"border-box",marginTop:4 };
 const labelStyle = { display:"block",fontSize:12,color:"var(--text-secondary)",marginBottom:2 };
 
+// ── Bank details (account / routing are stored encrypted; only last 4 come back) ──
+function BankFields({ form, setForm, inp }) {
+  const [shown, setShown] = useState(null);   // { account, routing } once revealed
+  const [busy, setBusy] = useState(false);
+  const onFile = form.bankAccountLast4 || form.bankRoutingLast4;
+  const reveal = async () => {
+    if (shown) { setShown(null); return; }
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/vendors/${form._id}/bank`);
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Failed");
+      setShown(d);
+    } catch (e) { alert(e.message); }
+    setBusy(false);
+  };
+  const copy = t => { try { navigator.clipboard.writeText(t); } catch {} };
+  const mono = { fontFamily:"monospace", letterSpacing:0.5 };
+  return (
+    <div style={{ gridColumn:"1/-1", border:"1px solid var(--border)", borderRadius:8, padding:"10px 12px", marginTop:4 }}>
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:8 }}>
+        <strong style={{ fontSize:13, color:"var(--text-primary)" }}>🏦 Bank details</strong>
+        <span style={{ fontSize:11, color:"var(--text-muted)" }}>Stored encrypted. Lists show only the last 4.</span>
+      </div>
+      {onFile && !form.bankClear && (
+        <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap", fontSize:13, marginBottom:10, padding:"8px 10px", borderRadius:6, background:"rgba(22,163,74,0.08)" }}>
+          <span>On file: Acct <b style={mono}>{shown ? shown.account : `•••• ${form.bankAccountLast4 || "—"}`}</b>
+            {shown?.account && <button type="button" onClick={()=>copy(shown.account)} style={linkBtn}>copy</button>}
+          </span>
+          <span>Routing <b style={mono}>{shown ? shown.routing : `•••• ${form.bankRoutingLast4 || "—"}`}</b>
+            {shown?.routing && <button type="button" onClick={()=>copy(shown.routing)} style={linkBtn}>copy</button>}
+          </span>
+          {form._id && <button type="button" onClick={reveal} disabled={busy} style={{ ...linkBtn, fontWeight:600 }}>{busy ? "…" : shown ? "Hide" : "Show"}</button>}
+          <button type="button" onClick={()=>{ if (window.confirm("Remove the saved account and routing numbers?")) setForm(f=>({...f, bankClear:true, bankAccount:"", bankRouting:""})); }}
+            style={{ ...linkBtn, color:"#dc2626", marginLeft:"auto" }}>Remove</button>
+        </div>
+      )}
+      {form.bankClear && <div style={{ fontSize:12, color:"#dc2626", marginBottom:8 }}>Saved numbers will be removed when you save. <button type="button" onClick={()=>setForm(f=>({...f, bankClear:false}))} style={linkBtn}>undo</button></div>}
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10 }}>
+        <label style={labelStyle}>Bank name <input {...inp("bankName")} style={inputStyle} placeholder="e.g. Chase" /></label>
+        <label style={labelStyle}>Name on account <input {...inp("bankAccountName")} style={inputStyle} /></label>
+        <label style={labelStyle}>{onFile ? "New account # (blank = keep)" : "Account #"}
+          <input {...inp("bankAccount")} autoComplete="off" inputMode="numeric" style={{ ...inputStyle, ...mono }} disabled={form.bankClear} />
+        </label>
+        <label style={labelStyle}>{onFile ? "New routing # (blank = keep)" : "Routing # (ABA, 9 digits)"}
+          <input {...inp("bankRouting")} autoComplete="off" inputMode="numeric" maxLength={11} style={{ ...inputStyle, ...mono }} disabled={form.bankClear} />
+        </label>
+        <label style={labelStyle}>Account type
+          <select {...inp("bankAccountType")} style={inputStyle}>
+            <option value="">—</option><option>Checking</option><option>Savings</option>
+          </select>
+        </label>
+      </div>
+    </div>
+  );
+}
+const linkBtn = { background:"none", border:"none", color:"#2563eb", cursor:"pointer", fontSize:12, padding:"0 4px" };
+
 // ── Vendor Form ───────────────────────────────────────────────────────────────
-const EMPTY_VENDOR = { name:"",contactName:"",phone:"",email:"",address:"",city:"",state:"",zip:"",category:"",notes:"",releaseEmails:"" };
+const EMPTY_VENDOR = { name:"",contactName:"",phone:"",email:"",address:"",city:"",state:"",zip:"",category:"",notes:"",releaseEmails:"",bankName:"",bankAccountName:"",bankAccountType:"",bankAccount:"",bankRouting:"" };
 
 function VendorForm({ form, setForm, onSubmit, saving, submitLabel="Save Vendor" }) {
   const inp = k => ({ value: form[k]||"", onChange: e => setForm(f=>({...f,[k]:e.target.value})) });
@@ -106,6 +164,7 @@ function VendorForm({ form, setForm, onSubmit, saving, submitLabel="Save Vendor"
           <textarea {...inp("releaseEmails")} rows={3} style={{ ...inputStyle,resize:"vertical", fontFamily:"monospace", fontSize:12 }}
             placeholder={'Name <name@company.com>\naccounting@company.com'} />
         </label>
+        <BankFields form={form} setForm={setForm} inp={inp} />
       </div>
       <div style={{ display:"flex",justifyContent:"flex-end",marginTop:20 }}>
         <button type="submit" disabled={saving} style={{ background:"#3b82f6",color:"#fff",border:"none",borderRadius:7,padding:"9px 22px",fontSize:13,fontWeight:600,cursor:saving?"not-allowed":"pointer",opacity:saving?0.6:1 }}>
@@ -368,7 +427,9 @@ export default function Vendors() {
 
   // ── Add / Edit vendor ───────────────────────────────────────────────────────
   const openAdd = () => { setVForm(EMPTY_VENDOR); setShowAdd(true); };
-  const openEdit = (v) => { setEditVendor(v); setVForm({ name:v.name||"",contactName:v.contactName||"",phone:v.phone||"",email:v.email||"",address:v.address||"",city:v.city||"",state:v.state||"",zip:v.zip||"",category:v.category||"",notes:v.notes||"",releaseEmails:v.releaseEmails||"" }); };
+  const openEdit = (v) => { setEditVendor(v); setVForm({ name:v.name||"",contactName:v.contactName||"",phone:v.phone||"",email:v.email||"",address:v.address||"",city:v.city||"",state:v.state||"",zip:v.zip||"",category:v.category||"",notes:v.notes||"",releaseEmails:v.releaseEmails||"",
+    _id:v._id, bankName:v.bankName||"", bankAccountName:v.bankAccountName||"", bankAccountType:v.bankAccountType||"",
+    bankAccountLast4:v.bankAccountLast4||"", bankRoutingLast4:v.bankRoutingLast4||"", bankAccount:"", bankRouting:"" }); };
 
   const saveVendor = async (e) => {
     e.preventDefault(); setVSaving(true);
@@ -485,6 +546,11 @@ export default function Vendors() {
                       onClick={()=>openDetail(v)}>
                       <td style={td}>
                         <div style={{ fontWeight:600,color:"var(--text-primary)" }}>{v.name}</div>
+                        {(v.bankAccountLast4 || v.bankRoutingLast4) && (
+                          <div style={{ fontSize:11, color:"#16a34a", marginTop:2 }} title="Bank details on file (Edit → Show for full numbers)">
+                            🏦 {v.bankName ? v.bankName + " · " : ""}acct ••{v.bankAccountLast4 || "—"} · rtn ••{v.bankRoutingLast4 || "—"}
+                          </div>
+                        )}
                       </td>
                       <td style={td}>
                         {v.category ? (

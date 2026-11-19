@@ -3,6 +3,7 @@ const router  = express.Router();
 const Vendor  = require("../models/Vendor");
 const Expense = require("../models/Expense");
 const Order   = require("../models/Order");
+const { applyBankFields, decrypt } = require("../utils/bankCrypt");
 
 const esc = (s) => (s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
@@ -237,14 +238,29 @@ router.get("/:id/expenses", async (req, res) => {
   }
 });
 
+// ── GET /api/vendors/:id/bank — full account + routing numbers (decrypted) ────
+// Only on request (the Show button); lists carry just the last 4.
+router.get("/:id/bank", async (req, res) => {
+  try {
+    const v = await Vendor.findById(req.params.id).select("+bankAccountEnc +bankRoutingEnc name").lean();
+    if (!v) return res.status(404).json({ error: "Not found" });
+    console.log(`[vendors] bank details viewed: ${v.name}`);
+    res.json({ account: decrypt(v.bankAccountEnc), routing: decrypt(v.bankRoutingEnc) });
+  } catch (err) {
+    res.status(500).json({ error: `Couldn't read bank details: ${err.message}` });
+  }
+});
+
 // ── POST /api/vendors ─────────────────────────────────────────────────────────
 router.post("/", async (req, res) => {
   try {
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ error: "Vendor name is required." });
-    const vendor = await Vendor.create(req.body);
-    res.status(201).json(vendor);
+    const vendor = await Vendor.create(applyBankFields(req.body));
+    const { bankAccountEnc, bankRoutingEnc, ...safe } = vendor.toObject();
+    res.status(201).json(safe);
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error("Vendor create error:", err);
     res.status(500).json({ error: "Failed to create vendor" });
   }
@@ -394,7 +410,8 @@ router.post("/parse-document", (req, res) => {
 // ── PUT /api/vendors/:id ──────────────────────────────────────────────────────
 router.put("/:id", async (req, res) => {
   try {
-    const { _id, createdAt, updatedAt, __v, ...body } = req.body || {};
+    const { _id, createdAt, updatedAt, __v, ...raw } = req.body || {};
+    const body = applyBankFields(raw);
     // A vendor that only exists on bills has no record yet (the list sends id "null") —
     // save it as a new record, or onto an existing one with the same name
     if (!require("mongoose").isValidObjectId(req.params.id)) {
@@ -411,6 +428,7 @@ router.put("/:id", async (req, res) => {
     if (!updated) return res.status(404).json({ error: "Not found" });
     res.json(updated);
   } catch (err) {
+    if (err.status === 400) return res.status(400).json({ error: err.message });
     console.error("Vendor update error:", err);
     res.status(500).json({ error: `Failed to update vendor: ${err.message}` });
   }
