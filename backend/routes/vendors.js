@@ -251,6 +251,131 @@ router.get("/:id/bank", async (req, res) => {
   }
 });
 
+// ── Bank details import from Excel / CSV ──────────────────────────────────────
+// preview: read the sheet, find the vendor / account / routing / bank / name-on-
+// account columns by their headers, match each row to a vendor (same loose
+// matching as bill imports), validate. Nothing is saved. apply: save the rows
+// the user kept (numbers encrypted with the server's key).
+const bankUpload = require("multer")({ storage: require("multer").memoryStorage(), limits: { fileSize: 10 * 1024 * 1024 } });
+const HDR = {
+  holder:  /name\s*on\s*(the\s*)?acc|acc(ount|t)?\.?\s*(holder|name)|beneficiary\s*name|holder/i,
+  routing: /rout|\brtn\b|\baba\b|transit/i,
+  account: /acc(oun)?t?\.?\s*(#|no\b|num|number)?|\bacct\b|account/i,
+  bank:    /^\s*bank(\s*name)?\s*$|bank\s*name|financial\s*inst/i,
+  type:    /type/i,
+  name:    /vendor|company|payee|beneficiary|supplier|business|trucker|carrier|^\s*name\s*$/i,
+};
+function bankColumns(header) {
+  const cols = {};
+  header.forEach((h, i) => {
+    const s = String(h || "").trim();
+    if (!s) return;
+    for (const k of ["holder", "routing", "bank", "type", "account", "name"]) {
+      if (cols[k] === undefined && HDR[k].test(s)) {
+        if (k === "account" && (HDR.holder.test(s) || HDR.routing.test(s) || HDR.type.test(s))) continue;
+        if (k === "name" && HDR.holder.test(s)) continue;
+        if (k === "type" && !/acc/i.test(s) && !/^\s*type\s*$/i.test(s)) continue;
+        cols[k] = i; break;
+      }
+    }
+  });
+  return cols;
+}
+
+router.post("/bank-import/preview", bankUpload.single("file"), async (req, res) => {
+  try {
+    if (!req.file) return res.status(400).json({ error: "No file uploaded" });
+    const XLSX = require("xlsx");
+    const wb = XLSX.read(req.file.buffer, { type: "buffer", raw: false });
+    const { makeCanonicalizer, normVendorName } = require("../utils/vendorMatch");
+    const canon = await makeCanonicalizer();
+    const recs = await Vendor.find({}).select("name bankAccountLast4").lean();
+    const recByName = new Map(recs.map(r => [r.name.toLowerCase().trim(), r]));
+    const expNames = new Set((await Expense.distinct("vendor", { vendor: { $nin: ["", null] } })).map(n => n.toLowerCase().trim()));
+    const digits = v => String(v ?? "").replace(/[\s-]/g, "").replace(/\.0+$/, "");
+
+    const rows = [], sheets = [];
+    for (const sn of wb.SheetNames) {
+      const grid = XLSX.utils.sheet_to_json(wb.Sheets[sn], { header: 1, defval: "", raw: false });
+      // Header row: first row (within the top 15) that has a name column and an account column
+      let hi = -1, cols = {};
+      for (let i = 0; i < Math.min(grid.length, 15); i++) {
+        const c = bankColumns(grid[i]);
+        if (c.name !== undefined && c.account !== undefined) { hi = i; cols = c; break; }
+      }
+      if (hi < 0) { sheets.push({ sheet: sn, skipped: "no vendor + account columns found" }); continue; }
+      sheets.push({ sheet: sn, columns: Object.fromEntries(Object.entries(cols).map(([k, i]) => [k, String(grid[hi][i])])) });
+      for (let r = hi + 1; r < grid.length; r++) {
+        const line = grid[r];
+        const name = String(line[cols.name] ?? "").trim();
+        const account = digits(line[cols.account]);
+        const routing = cols.routing !== undefined ? digits(line[cols.routing]) : "";
+        if (!name && !account) continue;
+        const row = {
+          sheet: sn, line: r + 1, name, account, routing,
+          bankName: cols.bank   !== undefined ? String(line[cols.bank]   ?? "").trim() : "",
+          holder:   cols.holder !== undefined ? String(line[cols.holder] ?? "").trim() : "",
+          accountType: cols.type !== undefined ? (/sav/i.test(line[cols.type]) ? "Savings" : /check|chk/i.test(line[cols.type]) ? "Checking" : "") : "",
+        };
+        // Match to a vendor
+        const c = name ? canon(name) : "";
+        const rec = c ? recByName.get(c.toLowerCase().trim()) : null;
+        row.vendorName = rec ? rec.name : (c && expNames.has(c.toLowerCase().trim()) ? c : "");
+        row.vendorId = rec?._id || null;
+        row.existingLast4 = rec?.bankAccountLast4 || "";
+        row.status = rec ? "match" : row.vendorName ? "match-bills" : "not found";
+        // Validate
+        try { applyBankFields({ bankAccount: account, bankRouting: routing }); }
+        catch (e) { row.status = "bad"; row.error = e.message; }
+        if (!account) { row.status = "bad"; row.error = "No account number"; }
+        row.accountLast4 = account.slice(-4);
+        row.routingLast4 = routing.slice(-4);
+        row.keep = row.status === "match" || row.status === "match-bills";
+        rows.push(row);
+      }
+    }
+    // Same vendor twice in the file — keep the first, flag the rest
+    const seen = new Set();
+    for (const r of rows) {
+      if (!r.vendorName) continue;
+      const k = normVendorName(r.vendorName);
+      if (seen.has(k)) { r.status = "duplicate"; r.keep = false; r.error = "Same vendor appears earlier in the file"; }
+      seen.add(k);
+    }
+    res.json({ sheets, rows });
+  } catch (err) {
+    console.error("bank-import preview error:", err);
+    res.status(500).json({ error: `Couldn't read the file: ${err.message}` });
+  }
+});
+
+router.post("/bank-import/apply", async (req, res) => {
+  try {
+    const rows = (req.body?.rows || []).filter(r => r && r.vendorName && r.account);
+    let saved = 0;
+    const errors = [];
+    for (const r of rows) {
+      try {
+        const set = applyBankFields({
+          bankAccount: r.account, bankRouting: r.routing || "",
+          ...(r.bankName ? { bankName: r.bankName } : {}),
+          ...(r.holder ? { bankAccountName: r.holder } : {}),
+          ...(r.accountType ? { bankAccountType: r.accountType } : {}),
+        });
+        const existing = r.vendorId ? await Vendor.findById(r.vendorId).select("_id").lean()
+          : await Vendor.findOne({ name: { $regex: `^${esc(r.vendorName.trim())}$`, $options: "i" } }).select("_id").lean();
+        if (existing) await Vendor.updateOne({ _id: existing._id }, { $set: set });
+        else await Vendor.create({ name: r.vendorName.trim(), ...set });   // vendor that only existed on bills
+        saved++;
+      } catch (e) { errors.push(`${r.vendorName}: ${e.message}`); }
+    }
+    console.log(`[vendors] bank import: ${saved} saved, ${errors.length} errors`);
+    res.json({ saved, errors });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── POST /api/vendors ─────────────────────────────────────────────────────────
 router.post("/", async (req, res) => {
   try {

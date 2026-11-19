@@ -117,6 +117,107 @@ function BankFields({ form, setForm, inp }) {
 }
 const linkBtn = { background:"none", border:"none", color:"#2563eb", cursor:"pointer", fontSize:12, padding:"0 4px" };
 
+// ── Import bank details from Excel / CSV: upload → preview (nothing saved) → save ──
+const BANK_STATUS = {
+  "match":       ["Matched", "#16a34a"],
+  "match-bills": ["Matched (vendor from bills, will be created)", "#16a34a"],
+  "not found":   ["No vendor with this name", "#b45309"],
+  "bad":         ["Problem", "#dc2626"],
+  "duplicate":   ["Duplicate", "#6b7280"],
+};
+function BankImport({ onDone }) {
+  const [busy, setBusy] = useState(false);
+  const [data, setData] = useState(null);   // { sheets, rows }
+  const [msg, setMsg]   = useState("");
+  const upload = async (file) => {
+    if (!file) return;
+    setBusy(true); setMsg(""); setData(null);
+    try {
+      const fd = new FormData(); fd.append("file", file);
+      const r = await fetch(`${API}/api/vendors/bank-import/preview`, { method:"POST", body: fd });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Failed");
+      setData(d);
+      if (!d.rows.length) setMsg("❌ No rows found. The sheet needs a vendor/company name column and an account number column.");
+    } catch (e) { setMsg("❌ " + e.message); }
+    setBusy(false);
+  };
+  const keepRows = (data?.rows || []).filter(r => r.keep);
+  const save = async () => {
+    if (!keepRows.length) return;
+    const replacing = keepRows.filter(r => r.existingLast4 && r.existingLast4 !== r.accountLast4).length;
+    if (!window.confirm(`Save bank details for ${keepRows.length} vendor(s)?${replacing ? `\n\n${replacing} already have a different account on file — it will be replaced.` : ""}`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/vendors/bank-import/apply`, { method:"POST", headers:{"Content-Type":"application/json"},
+        body: JSON.stringify({ rows: keepRows.map(({ vendorName, vendorId, account, routing, bankName, holder, accountType }) => ({ vendorName, vendorId, account, routing, bankName, holder, accountType })) }) });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Failed");
+      setData(null);   // numbers no longer held in the page
+      setMsg(`✅ Saved bank details for ${d.saved} vendor(s)${d.errors?.length ? ` · ❌ ${d.errors.join("; ")}` : ""}`);
+      if (!d.errors?.length) setTimeout(onDone, 1500);
+    } catch (e) { setMsg("❌ " + e.message); }
+    setBusy(false);
+  };
+  const cell = { padding:"6px 8px", borderBottom:"1px solid var(--border)", fontSize:12, verticalAlign:"top" };
+  return (
+    <div>
+      <p style={{ fontSize:13, color:"var(--text-secondary)", marginTop:0 }}>
+        Upload the Excel or CSV. It needs a <b>vendor / company name</b> column and an <b>account number</b> column;
+        routing #, bank name, name on account and account type are picked up if they're there. Every sheet is read.
+        You'll see a preview first, and nothing is saved until you click Save.
+      </p>
+      <input type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e => upload(e.target.files?.[0])} />
+      {busy && <span style={{ marginLeft:10, fontSize:13 }}>Working…</span>}
+      {msg && <div style={{ marginTop:10, fontSize:13, color: msg.startsWith("❌") ? "#dc2626" : "#16a34a" }}>{msg}</div>}
+      {data && (
+        <>
+          <div style={{ fontSize:12, color:"var(--text-muted)", margin:"10px 0" }}>
+            {data.sheets.map(s => <div key={s.sheet}>Sheet “{s.sheet}”: {s.skipped || Object.entries(s.columns).map(([k, h]) => `${k} = “${h}”`).join(", ")}</div>)}
+          </div>
+          {data.rows.length > 0 && (
+            <div style={{ maxHeight:420, overflow:"auto", border:"1px solid var(--border)", borderRadius:8 }}>
+              <table style={{ width:"100%", borderCollapse:"collapse" }}>
+                <thead><tr style={{ background:"var(--bg-elevated)", position:"sticky", top:0 }}>
+                  {["", "In file", "Vendor in app", "Bank", "Acct", "Routing", "Status"].map(h => <th key={h} style={{ ...cell, textAlign:"left", fontWeight:600 }}>{h}</th>)}
+                </tr></thead>
+                <tbody>
+                  {data.rows.map((r, i) => {
+                    const [label, color] = BANK_STATUS[r.status] || [r.status, "#6b7280"];
+                    const canKeep = r.status === "match" || r.status === "match-bills";
+                    return (
+                      <tr key={i} style={{ opacity: r.keep ? 1 : 0.55 }}>
+                        <td style={cell}><input type="checkbox" disabled={!canKeep} checked={!!r.keep}
+                          onChange={e => setData(d => ({ ...d, rows: d.rows.map((x, j) => j === i ? { ...x, keep: e.target.checked } : x) }))} /></td>
+                        <td style={cell}>{r.name || "—"}<div style={{ fontSize:11, color:"var(--text-muted)" }}>{r.sheet} row {r.line}</div></td>
+                        <td style={cell}>{r.vendorName || "—"}</td>
+                        <td style={cell}>{r.bankName || "—"}{r.holder && <div style={{ fontSize:11, color:"var(--text-muted)" }}>{r.holder}</div>}</td>
+                        <td style={{ ...cell, fontFamily:"monospace" }}>{r.accountLast4 ? `••${r.accountLast4}` : "—"}
+                          {r.existingLast4 && <div style={{ fontSize:11, color: r.existingLast4 === r.accountLast4 ? "var(--text-muted)" : "#b45309" }}>{r.existingLast4 === r.accountLast4 ? "same as on file" : `replaces ••${r.existingLast4}`}</div>}</td>
+                        <td style={{ ...cell, fontFamily:"monospace" }}>{r.routingLast4 ? `••${r.routingLast4}` : "—"}</td>
+                        <td style={{ ...cell, color, fontWeight:600 }}>{label}{r.error && <div style={{ fontWeight:400, fontSize:11 }}>{r.error}</div>}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+          <div style={{ display:"flex", alignItems:"center", gap:12, marginTop:12 }}>
+            <button onClick={save} disabled={busy || !keepRows.length}
+              style={{ background:"#15803d", color:"#fff", border:"none", borderRadius:8, padding:"9px 20px", fontSize:13, fontWeight:700, cursor:"pointer", opacity: busy || !keepRows.length ? 0.5 : 1 }}>
+              Save {keepRows.length} vendor(s)
+            </button>
+            <span style={{ fontSize:12, color:"var(--text-muted)" }}>
+              {data.rows.filter(r => r.status === "not found").length} not matched · {data.rows.filter(r => r.status === "bad").length} with problems
+            </span>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
 // ── Vendor Form ───────────────────────────────────────────────────────────────
 const EMPTY_VENDOR = { name:"",contactName:"",phone:"",email:"",address:"",city:"",state:"",zip:"",category:"",notes:"",releaseEmails:"",bankName:"",bankAccountName:"",bankAccountType:"",bankAccount:"",bankRouting:"" };
 
@@ -298,6 +399,7 @@ export default function Vendors() {
 
   // Wave paste import
   const [wavePaste, setWavePaste]   = useState("");
+  const [showBankImport, setShowBankImport] = useState(false);
   const [importing, setImporting]   = useState(false);
   const [importResult, setImportResult] = useState(null);
 
@@ -488,6 +590,9 @@ export default function Vendors() {
           </button>
           <button onClick={() => setShowWave(true)} style={{ background:"#0f766e",color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer" }}>
             🌊 Import from Wave
+          </button>
+          <button onClick={() => setShowBankImport(true)} style={{ background:"#15803d",color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer" }}>
+            🏦 Import bank details
           </button>
           <button onClick={openAdd} style={{ background:"#3b82f6",color:"#fff",border:"none",borderRadius:8,padding:"10px 18px",fontSize:13,fontWeight:600,cursor:"pointer" }}>
             + Add Vendor
@@ -878,6 +983,12 @@ export default function Vendors() {
               </div>
             </form>
           )}
+        </Modal>
+      )}
+
+      {showBankImport && (
+        <Modal title="Import bank details" wide onClose={()=>setShowBankImport(false)}>
+          <BankImport onDone={()=>{ setShowBankImport(false); fetchVendors(); }} />
         </Modal>
       )}
 
