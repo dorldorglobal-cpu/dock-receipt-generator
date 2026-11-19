@@ -128,6 +128,7 @@ const BANK_STATUS = {
 function BankImport({ onDone }) {
   const [busy, setBusy] = useState(false);
   const [data, setData] = useState(null);   // { sheets, rows }
+  const [drag, setDrag] = useState(false);
   const [msg, setMsg]   = useState("");
   const upload = async (file) => {
     if (!file) return;
@@ -167,8 +168,16 @@ function BankImport({ onDone }) {
         routing #, bank name, name on account and account type are picked up if they're there. Every sheet is read.
         You'll see a preview first, and nothing is saved until you click Save.
       </p>
-      <input type="file" accept=".xlsx,.xls,.csv" disabled={busy} onChange={e => upload(e.target.files?.[0])} />
-      {busy && <span style={{ marginLeft:10, fontSize:13 }}>Working…</span>}
+      <label
+        onDragOver={e => { e.preventDefault(); setDrag(true); }}
+        onDragLeave={() => setDrag(false)}
+        onDrop={e => { e.preventDefault(); setDrag(false); if (!busy) upload(e.dataTransfer.files?.[0]); }}
+        style={{ display:"block", border:`2px dashed ${drag ? "#15803d" : "var(--border)"}`, borderRadius:10, padding:"22px 16px", textAlign:"center",
+          background: drag ? "rgba(21,128,61,0.08)" : "var(--bg-elevated)", cursor: busy ? "default" : "pointer", fontSize:13, color:"var(--text-secondary)" }}>
+        <input type="file" accept=".xlsx,.xls,.csv" disabled={busy} style={{ display:"none" }}
+          onChange={e => { upload(e.target.files?.[0]); e.target.value = ""; }} />
+        {busy ? "Working…" : <>📥 <b>Drop the Excel / CSV here</b> or <span style={{ color:"#2563eb", textDecoration:"underline" }}>choose a file</span></>}
+      </label>
       {msg && <div style={{ marginTop:10, fontSize:13, color: msg.startsWith("❌") ? "#dc2626" : "#16a34a" }}>{msg}</div>}
       {data && (
         <>
