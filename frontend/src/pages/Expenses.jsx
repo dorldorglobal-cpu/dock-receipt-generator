@@ -3134,12 +3134,14 @@ export default function Expenses() {
                       {exp.receiptFileName
                         ? <a href={authUrl(`/api/expenses/${exp._id}/receipt`)} target="_blank" rel="noopener noreferrer" title="View receipt" style={{ color: "#60a5fa", fontSize: 16, textDecoration: "none" }}>📎</a>
                         : <span style={{ color: "var(--border)" }}>📎</span>}
-                      {exp.attachments?.length > 0 && (
-                        <span title={`${exp.attachments.length} attachment(s)`}
-                          style={{ marginLeft: 4, fontSize: 10, color: "#a78bfa", fontWeight: 700, background: "#a78bfa22", borderRadius: 4, padding: "1px 5px" }}>
-                          +{exp.attachments.length}
-                        </span>
-                      )}
+                      {/* Each attachment opens on its own: one → "+1", several → "+1" "+2" … */}
+                      {(exp.attachments || []).map((att, ai) => (
+                        <a key={ai} href={authUrl(`/api/expenses/${exp._id}/attachments/${ai}`)} target="_blank" rel="noopener noreferrer"
+                          title={`Open attachment ${ai + 1} of ${exp.attachments.length}${att.name ? `: ${att.name}` : ""}`}
+                          style={{ marginLeft: 4, fontSize: 10, color: "#a78bfa", fontWeight: 700, background: "#a78bfa22", borderRadius: 4, padding: "1px 5px", textDecoration: "none" }}>
+                          +{ai + 1}
+                        </a>
+                      ))}
                     </td>
 
                     {/* Actions */}
