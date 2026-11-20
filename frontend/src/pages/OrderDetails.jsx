@@ -4926,6 +4926,17 @@ export default function OrderDetails() {
                 <div onClick={e => e.stopPropagation()} style={{ marginTop:12, display:"flex", alignItems:"center", gap:14, color:"#e5e7eb", fontSize:13 }}>
                   <span>{picIndex + 1} / {pics.length} · {cur.name}</span>
                   {cur.webViewLink && <a href={cur.webViewLink} target="_blank" rel="noreferrer" style={{ color:"#93c5fd" }}>Open in Drive ↗</a>}
+                  <a href={imgUrl(cur, false)} download={cur.name} style={{ color:"#93c5fd" }}>⬇ Download</a>
+                  <button onClick={async () => {
+                      if (!window.confirm(`Delete this photo (${cur.name})?`)) return;
+                      const left = pics.length - 1;
+                      await deleteFile(cur.id, cur.name, true);
+                      setMessage(`✓ Photo deleted`);
+                      setPicIndex(left > 0 ? Math.min(picIndex, left - 1) : null);
+                    }}
+                    style={{ background:"none", border:"1px solid rgba(248,113,113,0.6)", borderRadius:5, color:"#fca5a5", fontSize:12, padding:"3px 10px", cursor:"pointer" }}>
+                    🗑 Delete
+                  </button>
                 </div>
                 {pics.length > 1 && ["‹", "›"].map((ch, k) => (
                   <button key={ch} onClick={e => { e.stopPropagation(); go(k ? 1 : -1); }} aria-label={k ? "Next photo" : "Previous photo"}
