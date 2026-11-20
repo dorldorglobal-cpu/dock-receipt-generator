@@ -1066,13 +1066,19 @@ router.post("/parse-sallaum", memUpload.single("invoice"), async (req, res) => {
       //   • volume column digits (11.08 → "11") bleed into VIN from the right
       // Take the LAST checksum-passing candidate: for left-bleed the real VIN is further
       // right; for right-bleed only one candidate passes so last = first = correct.
-      let vin = null;
+      // When two candidates pass the checksum (e.g. "Corolla" + "1NXBR32E78Z981212" +
+      // "10.08" also yields "NXBR32E78Z9812121" + "0.08"), the real VIN is the one
+      // followed by a sensible volume (3–60 CBM) — a stolen digit leaves "0.08".
+      let vin = null, vinGoodVol = null;
       for (let ci = 0; ci <= line.length - 17; ci++) {
         const sub = line.substring(ci, ci + 17);
         if (/^[A-HJ-NPR-Z0-9]{17}$/.test(sub) && vinChecksumValid(sub)) {
           vin = sub; // keep scanning — rightmost winner wins
+          const vol = line.substring(ci + 17).match(/^(\d{1,2}\.\d{2})/);
+          if (vol && +vol[1] >= 3 && +vol[1] <= 60) vinGoodVol = sub;
         }
       }
+      if (vinGoodVol) vin = vinGoodVol;
       if (!vin) continue;
 
       // Extract all decimal amounts from the line.
