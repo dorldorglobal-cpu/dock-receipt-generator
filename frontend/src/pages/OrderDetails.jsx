@@ -3668,6 +3668,8 @@ export default function OrderDetails() {
                 of.filename === f.name || of.originalName === f.name
               );
               const label = match?.label || "Document";
+              // Vehicle photos live in the Vehicle Pics section, not in this list
+              if (label === "Vehicle Pics" && /^image\//.test(f.mimeType || "")) return null;
               const isDispatch      = label === "Dispatch";
               const isRatedDraft    = label === "Rated Draft";
               const isStoragePaid   = label === "Storage Paid";
@@ -3946,6 +3948,15 @@ export default function OrderDetails() {
                 </tr>
               );
             })}
+            {(() => {
+              const n = driveFiles.filter(f => /^image\//.test(f.mimeType || "") &&
+                (order.files || []).find(of => of.driveFileId === f.id || of.filename === f.name || of.originalName === f.name)?.label === "Vehicle Pics").length;
+              return n > 0 && (
+                <tr><td colSpan={5} style={{ fontSize:12, color:"var(--text-muted)" }}>
+                  📸 {n} vehicle photo{n === 1 ? "" : "s"} not listed here: see Vehicle Pics below
+                </td></tr>
+              );
+            })()}
           </tbody>
         </table>
       </section>
