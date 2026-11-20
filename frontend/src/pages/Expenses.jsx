@@ -1138,6 +1138,14 @@ export default function Expenses() {
   // ── Dispatch import state ─────────────────────────────────────────────────────
   const [dispatchFiles, setDispatchFiles]   = useState([]);
   const [dispatchRows, setDispatchRows]     = useState([]);
+  // Carrier → bank account last 4 on file (shown under the carrier so it's checked before the bill is made)
+  const [carrierBank, setCarrierBank] = useState({});
+  const carrierKey = [...new Set(dispatchRows.map(r => (r.carrier || "").trim()).filter(Boolean))].sort().join("|");
+  useEffect(() => {
+    if (!carrierKey) return;
+    fetch(`${API}/api/vendors/bank-last4?names=${encodeURIComponent(carrierKey)}`)
+      .then(r => r.ok ? r.json() : {}).then(d => setCarrierBank(b => ({ ...b, ...d }))).catch(() => {});
+  }, [carrierKey]);
   const [dispatchLoading, setDispatchLoading] = useState(false);
   const [dispatchMsg, setDispatchMsg]       = useState("");
 
@@ -2118,7 +2126,17 @@ export default function Expenses() {
                           <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"#a78bfa",fontWeight:600,fontSize:12,maxWidth:110,overflowWrap:"anywhere"}}>{row.loadId||"—"}</td>
                           <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",fontFamily:"monospace",fontSize:11,color:"#94a3b8"}}>{row.vin||"—"}</td>
                           <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-primary)",fontSize:12,maxWidth:150}}>{row.ymm||"—"}</td>
-                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}</td>
+                          <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:12,whiteSpace:"nowrap"}}>{row.carrier||"—"}
+                            {row.carrier && carrierBank[row.carrier.trim()] && (() => {
+                              const b = carrierBank[row.carrier.trim()];
+                              return (
+                                <div title={b.vendor ? `Vendor: ${b.vendor}${b.bankName ? ` · ${b.bankName}` : ""}` : "No vendor record for this carrier yet"}
+                                  style={{ fontSize:11, marginTop:2, fontFamily:"monospace", color: b.last4 ? "#16a34a" : "var(--warning)" }}>
+                                  acc# {b.last4 ? `••${b.last4}` : "—"}
+                                </div>
+                              );
+                            })()}
+                          </td>
                           <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)",color:"var(--text-secondary)",fontSize:11,maxWidth:150}}>{row.origin||"—"}</td>
                           <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)"}}>{row.matched?<span style={{color:"#60a5fa",fontWeight:600}}>{row.orderRef}</span>:<input value={row.orderRef} placeholder="Enter ref…" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,orderRef:e.target.value}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--warning)",borderRadius:6,padding:"3px 8px",color:"var(--warning)",fontSize:12,width:100}}/>}</td>
                           <td style={{padding:"6px 7px",borderBottom:"1px solid var(--border-muted)"}}><input type="number" value={row.total} min="0" step="0.01" onChange={e=>setDispatchRows(rs=>rs.map((r,j)=>j===i?{...r,total:parseFloat(e.target.value)||0}:r))} style={{background:"var(--bg-elevated)",border:"1px solid var(--border)",borderRadius:6,padding:"3px 8px",color:"#34d399",fontSize:13,width:80,fontWeight:600}}/></td>

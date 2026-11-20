@@ -238,6 +238,28 @@ router.get("/:id/expenses", async (req, res) => {
   }
 });
 
+// ── GET /api/vendors/bank-last4?names=A|B — account last 4 per vendor name ────
+// For bill-entry screens (dispatch / bills): "acc# ••1234" under the carrier, or
+// "acc# —" when none is on file. Names are matched loosely like bill imports.
+router.get("/bank-last4", async (req, res) => {
+  try {
+    const names = String(req.query.names || "").split("|").map(s => s.trim()).filter(Boolean).slice(0, 200);
+    if (!names.length) return res.json({});
+    const { makeCanonicalizer } = require("../utils/vendorMatch");
+    const canon = await makeCanonicalizer();
+    const recs = await Vendor.find({}).select("name bankAccountLast4 bankName").lean();
+    const byName = new Map(recs.map(r => [r.name.toLowerCase().trim(), r]));
+    const out = {};
+    for (const n of names) {
+      const r = byName.get(String(canon(n) || "").toLowerCase().trim());
+      out[n] = { vendor: r?.name || "", last4: r?.bankAccountLast4 || "", bankName: r?.bankName || "" };
+    }
+    res.json(out);
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // ── GET /api/vendors/:id/bank — full account + routing numbers (decrypted) ────
 // Only on request (the Show button); lists carry just the last 4.
 router.get("/:id/bank", async (req, res) => {
