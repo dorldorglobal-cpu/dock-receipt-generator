@@ -3713,7 +3713,7 @@ export default function OrderDetails() {
                     const res = await fetch(`${API}/api/expenses/parse-dispatch-url`, {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id }),
+                      body: JSON.stringify({ url: f.webViewLink, filename: f.name, orderRef: order.refNumber, orderId: order._id, sourceFileId: f.id }),
                     });
                     const data = await res.json();
                     if (!res.ok) throw new Error(data.error || "Parse failed");
@@ -3772,7 +3772,19 @@ export default function OrderDetails() {
                   <td><a href={f.webViewLink} target="_blank" rel="noreferrer" onClick={e => e.stopPropagation()}>↗ Open</a></td>
                   <td style={{ display:"flex", gap:6, alignItems:"center" }}>
                     {isDispatch && (() => {
-                      const hasDispatchBill = bills.some(b => /towing|transport/i.test(b.category) && b.orderRef === order.refNumber);
+                      // A bill counts for THIS dispatch file only: bills remember the file they
+                      // came from (sourceFileId). Older bills without it are matched to the
+                      // oldest dispatch files first — 1 bill, 2 dispatches → only the first is done.
+                      const towBills = bills.filter(b => /towing|transport/i.test(b.category) && b.orderRef === order.refNumber);
+                      let hasDispatchBill = towBills.some(b => b.sourceFileId === f.id);
+                      if (!hasDispatchBill) {
+                        const legacy = towBills.filter(b => !b.sourceFileId).length;
+                        const linked = new Set(towBills.map(b => b.sourceFileId).filter(Boolean));
+                        const isDisp = x => ((order.files || []).find(of => of.driveFileId === x.id || of.filename === x.name || of.originalName === x.name)?.label) === "Dispatch";
+                        const unlinked = driveFiles.filter(x => isDisp(x) && !linked.has(x.id))
+                          .sort((a, b) => new Date(a.modifiedTime || 0) - new Date(b.modifiedTime || 0));
+                        hasDispatchBill = unlinked.slice(0, legacy).some(x => x.id === f.id);
+                      }
                       return (
                         <button
                           title="Create Bill from Dispatch"

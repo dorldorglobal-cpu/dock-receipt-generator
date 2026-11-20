@@ -47,6 +47,8 @@ const expenseSchema = new mongoose.Schema(
     }],
 
     vin:                 { type: String, default: "" },
+    // Drive id of the order document this bill was created from (e.g. which dispatch sheet)
+    sourceFileId:        { type: String, default: "" },
     invoiceNumber:       { type: String, default: "" },
     receiptTotal:        { type: Number, default: null }, // full amount on Copart receipt before account funds
     copartFundsApplied:  { type: Number, default: null }, // Copart account credit used; amount = receiptTotal - this

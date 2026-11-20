@@ -1309,7 +1309,7 @@ router.post("/apply-sallaum", express.json(), async (req, res) => {
 // ── POST /api/expenses/parse-dispatch-url — parse dispatch PDF already on disk ──
 router.post("/parse-dispatch-url", express.json(), async (req, res) => {
   try {
-    const { url, filename, orderRef, orderId } = req.body;
+    const { url, filename, orderRef, orderId, sourceFileId } = req.body;
     if (!url) return res.status(400).json({ error: "url required" });
 
     // Extract file path from URL: http://localhost:4000/uploads/{orderId}/{filename}
@@ -1356,6 +1356,7 @@ router.post("/parse-dispatch-url", express.json(), async (req, res) => {
       orderRef: matchedOrder?.refNumber || orderRef || "",
       matched:  !!(matchedOrder || orderId),
       notes: `Load ID: ${loadId}`,
+      sourceFileId: sourceFileId || "",   // the order's dispatch file this bill comes from
     };
 
     res.json([row]);
@@ -1526,6 +1527,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
         billFileName:  row.billFileName || "",
         billMime:      row.billMime     || "",
         lineItems:     validExtras,
+        sourceFileId:  row.sourceFileId || "",
       });
       created.push(expense._id);
     }
