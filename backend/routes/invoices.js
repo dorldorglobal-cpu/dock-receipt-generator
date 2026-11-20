@@ -1251,6 +1251,9 @@ router.post("/:id/send", memUploadInv.array("extraFiles"), async (req, res) => {
 
     // ── 3. Extra attachments — Drive files picked from order ─────────────────
     const extraIds = extraDriveIds ? JSON.parse(extraDriveIds) : [];
+
+    // Cotonou units: their CTN goes with the invoice + draft (unless picked by hand below)
+    attachments.push(...await require("../utils/ctnAttach").ctnAttachments(order, extraIds));
     for (const driveId of extraIds) {
       try {
         const os = require("os");

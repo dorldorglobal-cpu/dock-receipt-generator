@@ -425,8 +425,14 @@ router.post("/attach", async (req, res) => {
               `Content-Type: application/pdf; name="${fileName}"`,
               `Content-Transfer-Encoding: base64`,
               `Content-Disposition: attachment; filename="${fileName}"`,
-              ``, wrappedB64, ``, `--${boundary}--`,
+              ``, wrappedB64, ``,
             ];
+            // Cotonou units: the CTN goes with the Draft BL
+            for (const att of await require("../utils/ctnAttach").ctnAttachments(order)) {
+              mimeLines.push(`--${boundary}`, `Content-Type: application/pdf; name="${att.filename}"`, `Content-Transfer-Encoding: base64`,
+                `Content-Disposition: attachment; filename="${att.filename}"`, ``, att.content.match(/.{1,76}/g).join("\r\n"), ``);
+            }
+            mimeLines.push(`--${boundary}--`);
             const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
             const accessToken = await getGmailAccessToken();
             const gmail = google.gmail("v1");

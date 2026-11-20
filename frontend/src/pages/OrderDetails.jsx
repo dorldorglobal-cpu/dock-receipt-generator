@@ -3611,6 +3611,7 @@ export default function OrderDetails() {
             { label:"Storage Paid",       icon:"🏬" },
             { label:"FedEx/Mailing",      icon:"📦" },
             { label:"Vehicle Pics",       icon:"📸" },
+            { label:"CTN",                icon:"🇧🇯" },
             { label:"Other",              icon:"📎" },
           ].map(({ label, icon }) => {
             const busy = (uploadingLabels[label] || 0) > 0;
@@ -3764,7 +3765,7 @@ export default function OrderDetails() {
                         color:      isRatedDraft ? "#fbbf24"              : "var(--text-secondary)",
                         border:`1px solid ${isRatedDraft ? "rgba(251,191,36,0.3)" : "var(--border)"}` }}>
                       {["Invoice","Buyer Receipt","Email","Order Request Form","Dispatch","Title","AES",
-                        "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","FedEx/Mailing","Vehicle Pics","Other","Document"]
+                        "Dock Receipt","Stamped DR","Draft","Rated Draft","Storage Paid","FedEx/Mailing","Vehicle Pics","CTN","Other","Document"]
                         .map(opt => <option key={opt} value={opt}>{opt}</option>)}
                     </select>
                   </td>
@@ -7230,6 +7231,18 @@ export default function OrderDetails() {
                     <span>{hasDraft ? "📝" : "⚠️"}</span>
                     {hasDraft ? "Draft.pdf" : "Draft — not uploaded on this order"}
                   </div>
+                  {/* Cotonou: CTN goes automatically */}
+                  {/COTONOU|BENIN/i.test(order.pod || "") && (() => {
+                    const ctns = (order.files || []).filter(f => (f.label || "").toUpperCase() === "CTN" && f.driveFileId && !invExtraDriveIds.includes(f.driveFileId));
+                    return ctns.length
+                      ? ctns.map(f => (
+                          <div key={f.driveFileId} style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"var(--text-primary)" }}>
+                            <span>🇧🇯</span> {f.originalName || f.filename || "CTN.pdf"} <span style={{ fontSize:11, color:"var(--text-muted)" }}>(CTN, Cotonou)</span>
+                          </div>))
+                      : <div style={{ display:"flex", alignItems:"center", gap:8, fontSize:13, color:"#f87171" }}>
+                          <span>⚠️</span> CTN — not uploaded (Cotonou needs one)
+                        </div>;
+                  })()}
                   {/* Extra Drive files */}
                   {invExtraDriveIds.map(id => {
                     const f = (order.files||[]).find(x => x.driveFileId === id);

@@ -2456,8 +2456,15 @@ router.post("/:id/send-draft-bl", express.json(), async (req, res) => {
       `Content-Type: application/pdf; name="${fname}"`,
       `Content-Transfer-Encoding: base64`,
       `Content-Disposition: attachment; filename="${fname}"`,
-      ``, wrappedB64, ``, `--${boundary}--`,
+      ``, wrappedB64, ``,
     ];
+    // Cotonou units: the CTN goes with the Draft BL
+    const order = await Order.findById(req.params.id).select("refNumber pod files").lean();
+    for (const att of await require("../utils/ctnAttach").ctnAttachments(order)) {
+      mimeLines.push(`--${boundary}`, `Content-Type: application/pdf; name="${att.filename}"`, `Content-Transfer-Encoding: base64`,
+        `Content-Disposition: attachment; filename="${att.filename}"`, ``, att.content.match(/.{1,76}/g).join("\r\n"), ``);
+    }
+    mimeLines.push(`--${boundary}--`);
 
     const raw = Buffer.from(mimeLines.join("\r\n")).toString("base64url");
     const accessToken = await getGmailAccessToken();

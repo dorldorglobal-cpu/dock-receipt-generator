@@ -707,6 +707,10 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     } catch (draftErr) {
       console.warn("[send-all-invoices] Could not attach Draft BL:", draftErr.message);
     }
+    // Cotonou units: each one's CTN goes with the invoices + Draft BL
+    for (const o of orders) {
+      for (const a of await require("../utils/ctnAttach").ctnAttachments(o)) attachments.push({ filename: a.filename, content: a.content });
+    }
 
     // Build one MIME email with all PDFs attached
     const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
@@ -852,6 +856,10 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
       }
     } catch (draftErr) {
       console.warn("[send-combined-invoice] Could not attach Draft BL:", draftErr.message);
+    }
+    // Cotonou units: each one's CTN goes with the combined invoice + Draft BL
+    for (const o of orders) {
+      for (const a of await require("../utils/ctnAttach").ctnAttachments(o)) combinedAttachments.push({ filename: a.filename, b64: a.content });
     }
 
     const from     = `Dor Ldor Global <${process.env.GMAIL_USER}>`;
