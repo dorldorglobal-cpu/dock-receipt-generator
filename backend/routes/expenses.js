@@ -1457,6 +1457,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
     if (!rows || !rows.length) return res.status(400).json({ error: "No rows provided" });
 
     const created = [];
+    const skipped = [];   // why a row didn't become a bill (shown to the user)
     for (const row of rows) {
       if (row.skip || !row.total) continue;
 
@@ -1486,10 +1487,16 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
       const validExtras = (row.lineItems || []).filter(l => l.description?.trim() && Number(l.amount) > 0);
       const extrasTotal = validExtras.reduce((s, l) => s + Number(l.amount), 0);
 
-      // Duplicate check: same order + load ID already exists
+      // Duplicate check: same order + load ID + same amount (a dispatcher can reuse the
+      // load ID for a second move on the same car, e.g. auction → warehouse, then → port)
       if (orderId && row.loadId) {
-        const dup = await Expense.findOne({ orderId, invoiceNumber: row.loadId }).lean();
-        if (dup) continue;
+        const dup = await Expense.findOne({ orderId, invoiceNumber: row.loadId, amount: row.total + extrasTotal }).lean();
+        if (dup) { skipped.push(`${orderRef || row.vin}: bill for load ${row.loadId} at $${(row.total + extrasTotal).toFixed(2)} already exists`); continue; }
+      }
+      // This exact dispatch file already made a bill
+      if (row.sourceFileId) {
+        const dup = await Expense.findOne({ sourceFileId: row.sourceFileId }).lean();
+        if (dup) { skipped.push(`${orderRef}: this dispatch file already has a bill`); continue; }
       }
       if (orderId && row.total) {
         // Check by VIN + amount (catches same bill regardless of vendor name spelling)
@@ -1499,7 +1506,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
             vin:    row.vin,
             amount: row.total + extrasTotal,
           }).lean();
-          if (dupVin) continue;
+          if (dupVin) { skipped.push(`${orderRef}: a $${(row.total + extrasTotal).toFixed(2)} bill for this VIN already exists`); continue; }
         }
         // Fallback: same order + same amount within 30 days (any vendor)
         const dup = await Expense.findOne({
@@ -1508,7 +1515,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
           date:   { $gte: new Date(dateObj - 30*24*60*60*1000), $lte: new Date(+dateObj + 30*24*60*60*1000) },
           category: "Towing / Transport",
         }).lean();
-        if (dup) continue;
+        if (dup) { skipped.push(`${orderRef}: a $${(row.total + extrasTotal).toFixed(2)} towing bill within 30 days already exists`); continue; }
       }
 
       const expense = await Expense.create({
@@ -1532,7 +1539,7 @@ router.post("/apply-dispatch", express.json(), async (req, res) => {
       created.push(expense._id);
     }
 
-    res.json({ created: created.length });
+    res.json({ created: created.length, skipped });
   } catch (err) {
     console.error("apply-dispatch error:", err);
     res.status(500).json({ error: err.message });

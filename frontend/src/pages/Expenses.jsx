@@ -1214,9 +1214,15 @@ export default function Expenses() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Apply failed");
+      // Nothing created → say why and keep the rows on screen
+      if (!data.created) {
+        setDispatchMsg(`⚠ No expense created${data.skipped?.length ? `: ${data.skipped.join("; ")}` : ""}`);
+        return;
+      }
       setDispatchRows([]);
       setDispatchFiles([]);
       fetchAll();
+      if (data.skipped?.length) window.alert(`${data.created} created. Skipped: ${data.skipped.join("; ")}`);
       // Go back to the order if this came from one
       if (sourceOrderId) {
         navigate(`/orders/${sourceOrderId}`);
