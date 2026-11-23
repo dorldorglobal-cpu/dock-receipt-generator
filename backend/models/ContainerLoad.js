@@ -40,6 +40,10 @@ const containerLoadSchema = new mongoose.Schema({
     label:      { type: String, default: "Discount" },
     amount:     { type: Number, required: true },
     appliedAt:  { type: Date, default: Date.now },
+    // How a container-wide line shows on the Combined invoice: "newLine" = once under
+    // the cars; "split" = each car's share inside its own row. Either way each car's
+    // invoice carries its share, so totals/balances are the same.
+    mode:       { type: String, enum: ["newLine", "split"], default: "newLine" },
     perInvoice: [{ invoiceId: mongoose.Schema.Types.ObjectId, invoiceNumber: String, orderRef: String, amount: Number }],
   }],
 

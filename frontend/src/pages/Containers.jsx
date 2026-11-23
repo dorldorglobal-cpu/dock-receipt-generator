@@ -399,6 +399,20 @@ export default function Containers() {
     } catch (e) { flash("❌ " + e.message); }
     setDiscountBusy(false);
   };
+  // Split between orders / New line — how a saved container-wide line shows on the Combined invoice
+  const setLineMode = async (disc, mode) => {
+    setDiscountBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts/${disc._id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't change it");
+      setAppliedDiscounts(d.discounts || []);
+      flash(`✅ "${disc.label}" will show as ${mode === "split" ? "split between orders" : "a new line"} on the combined invoice`);
+    } catch (e) { flash("❌ " + e.message); }
+    setDiscountBusy(false);
+  };
 
   const [bafBusy, setBafBusy] = useState(false);
   // fee: "baf" (container BAF, $400) or "hybrid" (Hybrid/Electric surcharge, $750 per container)
@@ -2081,7 +2095,7 @@ export default function Containers() {
                             </td>
                             <td style={{ padding:"7px 8px", textAlign:"right" }}>
                               <select
-                                value={line.mode || "split"}
+                                value={line.mode || "newLine"}
                                 onChange={e => setExtraLines(p => p.map((l,j) => j===i ? {...l, mode:e.target.value} : l))}
                                 title="Split: divided evenly across each vehicle's own invoice. New Line: not tied to any vehicle — shown as its own line only on the Combined invoice, and left off individual invoices."
                                 style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4,
@@ -2116,7 +2130,22 @@ export default function Containers() {
                               <span style={{ color:"var(--text-muted)" }}> — {(d.perInvoice || []).length > 1 ? "split " : ""}{(d.perInvoice || []).map(x => `#${x.orderRef} ${d.kind === "charge" ? "+" : "-"}$${Number(x.amount).toFixed(2)}`).join(", ")}{(d.perInvoice || []).length === 1 ? " only" : ""} · {new Date(d.appliedAt).toLocaleDateString()}</span>
                             </td>
                             <td style={{ padding:"7px 8px", textAlign:"right", color: d.kind === "charge" ? "#15803d" : "#dc2626", fontWeight:700, fontSize:12 }}>{d.kind === "charge" ? "+" : "-"}${Number(d.amount).toFixed(2)}</td>
-                            <td colSpan={3} style={{ padding:"7px 8px", textAlign:"center" }}>
+                            <td colSpan={3} style={{ padding:"7px 8px", textAlign:"center", whiteSpace:"nowrap" }}>
+                              {(d.perInvoice || []).length > 1 && (
+                                <span style={{ display:"inline-flex", marginRight:8, borderRadius:6, overflow:"hidden", border:"1px solid var(--border)", verticalAlign:"middle" }}
+                                  title="How it shows on the Combined invoice. The amounts on each car's invoice are the same either way.">
+                                  {[["split", "Split between orders"], ["newLine", "New line"]].map(([m, lbl]) => {
+                                    const on = (d.mode || "newLine") === m;
+                                    return (
+                                      <button key={m} onClick={() => !on && setLineMode(d, m)} disabled={discountBusy}
+                                        style={{ border:"none", padding:"3px 9px", fontSize:11, fontWeight: on ? 700 : 500, cursor: on ? "default" : "pointer",
+                                          background: on ? "#2563eb" : "var(--bg-panel)", color: on ? "#fff" : "var(--text-secondary)" }}>
+                                        {on ? "✓ " : ""}{lbl}
+                                      </button>
+                                    );
+                                  })}
+                                </span>
+                              )}
                               <button onClick={() => removeDiscount(d)} disabled={discountBusy} title="Take it back off the invoice(s)"
                                 style={{ background:"none", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-secondary)", cursor:"pointer", fontSize:11, padding:"2px 8px" }}>Remove</button>
                             </td>
@@ -2161,14 +2190,8 @@ export default function Containers() {
                         ))}
                         <tr>
                           <td colSpan={8} style={{ padding:"6px 8px", display:"flex", gap:8 }}>
-                            <button onClick={() => {
-                                const mode = window.confirm(
-                                  "Is this charge tied to one unit/vehicle, or a shared cost?\n\n" +
-                                  "OK = Split evenly across each vehicle's invoice (e.g. a container-wide BAF).\n" +
-                                  "Cancel = New Line — not tied to any vehicle, shown as its own line only on the Combined invoice (left off individual invoices)."
-                                ) ? "split" : "newLine";
-                                setExtraLines(p => [...p, { label:"Amendment Fee", amount:0, mode }]);
-                              }}
+                            <button onClick={() => setExtraLines(p => [...p, { label:"Amendment Fee", amount:0, mode:"newLine" }])}
+                              title="Starts as a New line; after it's saved you can switch it to Split between orders"
                               style={{ background:"none", border:"1px dashed var(--border)", borderRadius:6,
                                 color:"var(--text-muted)", fontSize:12, cursor:"pointer", padding:"4px 12px" }}>
                               + Add line
@@ -2292,7 +2315,7 @@ export default function Containers() {
                         // Container-wide lines already saved on the load (split over 2+ invoices):
                         // listed once below the cars, and each car shows its amount without its share
                         const openIds = new Set(openRows.map(r => String(r.invoice._id)));
-                        const wide = (appliedDiscounts || []).filter(d => (d.perInvoice || []).length > 1);
+                        const wide = (appliedDiscounts || []).filter(d => (d.perInvoice || []).length > 1 && (d.mode || "newLine") === "newLine");
                         const sgn = d => d.kind === "charge" ? 1 : -1;
                         const wideShare = (r) => wide.reduce((s, d) => s + sgn(d) * (d.perInvoice.find(p => String(p.invoiceId) === String(r.invoice._id))?.amount || 0), 0);
                         const wideOnOpen = d => d.perInvoice.filter(p => openIds.has(String(p.invoiceId))).reduce((s, p) => s + p.amount, 0);

@@ -451,7 +451,7 @@ router.post("/:id/discounts", express.json(), async (req, res) => {
 // combined invoice lists them once (as when they were first typed in). One-car
 // adjustments stay on that car's row.
 function combinedView(load, invoices) {
-  const wide = (load.discounts || []).filter(d => (d.perInvoice || []).length > 1);
+  const wide = (load.discounts || []).filter(d => (d.perInvoice || []).length > 1 && (d.mode || "newLine") === "newLine");
   const strip = new Map();  // invoiceId → [{ desc, amount }]
   for (const d of wide) {
     for (const p of d.perInvoice) {
@@ -481,7 +481,7 @@ function combinedView(load, invoices) {
 
 // Split a discount / extra charge across the load's open invoices (or one invoice)
 // as real invoice lines, and record it on load.discounts (caller saves the load).
-async function applyLoadAdjustment(load, { kind, label, amount, invoiceId }) {
+async function applyLoadAdjustment(load, { kind, label, amount, invoiceId, mode }) {
   const Invoice = require("../models/Invoice");
   const scope = { orderId: { $in: load.orderIds } };
   if (invoiceId) scope._id = invoiceId;
@@ -500,9 +500,24 @@ async function applyLoadAdjustment(load, { kind, label, amount, invoiceId }) {
     await inv.save();
     perInvoice.push({ invoiceId: inv._id, invoiceNumber: inv.invoiceNumber, orderRef: inv.orderRef, amount: share });
   }
-  load.discounts.push({ kind, label, amount, perInvoice });
+  load.discounts.push({ kind, label, amount, perInvoice, mode: mode === "split" ? "split" : "newLine" });
   return { perInvoice };
 }
+
+// PATCH /api/container-loads/:id/discounts/:discountId — { mode: "split" | "newLine" }
+// Only changes how the line shows on the Combined invoice (amounts unchanged).
+router.patch("/:id/discounts/:discountId", express.json(), async (req, res) => {
+  try {
+    const mode = req.body?.mode === "split" ? "split" : "newLine";
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    const d = load.discounts.id(req.params.discountId);
+    if (!d) return res.status(404).json({ error: "Line not found" });
+    d.mode = mode;
+    await load.save();
+    res.json({ discounts: load.discounts });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
 
 // DELETE /api/container-loads/:id/discounts/:discountId — undo an applied discount
 router.delete("/:id/discounts/:discountId", async (req, res) => {
@@ -867,7 +882,7 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
     if (savedLines.length) {
       const loadDoc = await ContainerLoad.findById(req.params.id);
       for (const l of savedLines) {
-        await applyLoadAdjustment(loadDoc, { kind: "charge", label: String(l.label).trim(), amount: Math.round(Number(l.amount) * 100) / 100 });
+        await applyLoadAdjustment(loadDoc, { kind: "charge", label: String(l.label).trim(), amount: Math.round(Number(l.amount) * 100) / 100, mode: l.mode });
       }
       await loadDoc.save();
       loadNow = loadDoc.toObject();
