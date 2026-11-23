@@ -429,11 +429,32 @@ router.get("/:id", async (req, res) => {
 // opening the order reflects the edit (e.g. a discount applied after billing).
 router.put("/:id", async (req, res) => {
   try {
-    const { items, notes, dueDate } = req.body;
-    const total = (items || []).reduce((s, i) => s + Number(i.amount || 0), 0);
+    const { notes, dueDate } = req.body;
+    let items = req.body.items;
 
     const existingInv = await Invoice.findById(req.params.id).lean();
     if (!existingInv) return res.status(404).json({ error: "Invoice not found" });
+
+    // Container lines (+ line / + discount / combined-invoice extras) are saved as this
+    // car's share on its invoice. The order page rebuilds the invoice from the order's
+    // charges, which doesn't know about them — so put any missing share back. To take a
+    // container line off, use Remove on the load's billing screen.
+    try {
+      const ContainerLoad = require("../models/ContainerLoad");
+      const loads = await ContainerLoad.find({ "discounts.perInvoice.invoiceId": existingInv._id }).select("discounts").lean();
+      const have = [...(items || [])];
+      for (const l of loads) for (const d of l.discounts || []) {
+        const p = (d.perInvoice || []).find(x => String(x.invoiceId) === String(existingInv._id));
+        if (!p) continue;
+        const desc = d.kind === "charge" ? d.label : `${d.label} (container discount)`;
+        const amt  = (d.kind === "charge" ? 1 : -1) * p.amount;
+        const k = have.findIndex(i => i.description === desc && Math.abs(Number(i.amount) - amt) < 0.005);
+        if (k >= 0) have.splice(k, 1);                         // already on the invoice
+        else (items = [...(items || [])]).push({ description: desc, amount: amt });
+      }
+    } catch (e) { console.warn("[invoice update] container lines check failed:", e.message); }
+
+    const total = Math.round((items || []).reduce((s, i) => s + Number(i.amount || 0), 0) * 100) / 100;
 
     // Load the full order doc (not lean) so we can mutate + save it below
     const order = existingInv.orderId ? await Order.findById(existingInv.orderId) : null;
@@ -450,7 +471,8 @@ router.put("/:id", async (req, res) => {
     // order's internal Sell/Cost/Profit breakdown reflects it too, and so a
     // later "Generate Invoice" from the order page doesn't silently drop it.
     if (order) {
-      const discountItems = (items || []).filter((i) => /discount/i.test(i.description || ""));
+      // (container discounts live on the load, not the order's own charges)
+      const discountItems = (items || []).filter((i) => /discount/i.test(i.description || "") && !/\(container discount\)/i.test(i.description || ""));
       const discountTotal = discountItems.reduce((s, i) => s + Number(i.amount || 0), 0);
       const discountDesc  = discountItems.map((i) => i.description).filter(Boolean).join(", ");
       if (!order.charges) order.charges = {};
