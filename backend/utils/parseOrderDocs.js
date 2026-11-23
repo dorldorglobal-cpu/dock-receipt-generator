@@ -1342,6 +1342,7 @@ async function parseBuyerReceipt(filePath) {
   // Handles normal case where address is on its own line after customer block.
   // KEY: requires a US street suffix in the address line so foreign customer
   // addresses (e.g. "100 KWAKWACI KANOKANO") are skipped.
+  let memberAddrFallback = null;
   for (let i = scanFrom; i < Math.min(scanFrom + 30, lines.length); i++) {
     const l = lines[i];
     // Check for fully-inline "108 NORTH MAIN STREET WINDSOR NJ 08561"
@@ -1382,6 +1383,13 @@ async function parseBuyerReceipt(filePath) {
       // continue scanning (avoids locking onto a foreign customer address
       // like "596 B RASAKI SALAWU STREET" when the real lot address comes later)
       if (tempCity) {
+        // A US member (e.g. "AUTO ZENITH LLC / 613 E GENEVA ST / ELKHORN WI") has its
+        // own address printed right under its name, before the Physical Address of
+        // Lot — that's the buyer, not the pickup. Keep it only as a fallback.
+        if (customerNameLineIdx >= 0 && i === customerNameLineIdx + 1 && !memberAddrFallback) {
+          memberAddrFallback = { pickupAddress: tempAddress, pickupCity: tempCity, pickupState: tempState, pickupZip: tempZip };
+          continue;
+        }
         pickupAddress = tempAddress;
         pickupCity    = tempCity;
         pickupState   = tempState;
@@ -1390,6 +1398,7 @@ async function parseBuyerReceipt(filePath) {
       }
     }
   }
+  if (!pickupCity && memberAddrFallback) ({ pickupAddress, pickupCity, pickupState, pickupZip } = memberAddrFallback);
 
   // ── Pass 2: Raw-text regex — handles address embedded mid-line ─────────
   // PDFs that concatenate table rows produce lines like:
