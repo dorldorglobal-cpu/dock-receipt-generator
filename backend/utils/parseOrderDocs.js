@@ -1356,8 +1356,13 @@ async function parseBuyerReceipt(filePath) {
       pickupZip     = inlineMatch[4];
       break;
     }
-    // Standard: starts with number + letter, no phone, AND has a recognised US street suffix
-    if (/^\d{1,5}\s+[A-Z]/i.test(l) && !/\(\d{3}\)/.test(l) && US_STREET_SUFFIX_RX.test(l)) {
+    // Standard: starts with number + letter, no phone, AND has a recognised US street suffix.
+    // Right after a US member's own address (skipped below) the next street line is the
+    // Physical Address of Lot even with no suffix ("1255 EAST CENTRAL" / "FRESNOCA93725"),
+    // as long as its city/state/zip is on the very next line.
+    const lotAfterMember = memberAddrFallback && /^\d{1,5}\s+[A-Z]/i.test(l) && !/\(\d{3}\)/.test(l) &&
+      i + 1 < lines.length && !!tryParseCSZ(lines[i + 1]);
+    if (lotAfterMember || (/^\d{1,5}\s+[A-Z]/i.test(l) && !/\(\d{3}\)/.test(l) && US_STREET_SUFFIX_RX.test(l))) {
       let tempAddress = cleanUpper(l);
       let tempCity = "", tempState = "", tempZip = "";
       // Append word-wrapped street suffix (e.g. "ROAD" on its own next line)
