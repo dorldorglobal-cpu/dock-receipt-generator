@@ -2107,7 +2107,6 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         const llmSum = vins.reduce((s, v) => s + (vinData[v].lineTotal || 0), 0);
         const hasPerVinPricing = !loadCars.length && vins.every(v => vinData[v].lineTotal > 0) && Math.abs(llmSum + storageTotal - total) < 0.05;
         const baseTotal  = total - storageTotal;
-        const equalSplit = allVins.length > 0 ? Math.round((baseTotal / allVins.length) * 100) / 100 : total;
 
         // Match orders
         const orders = await Order.find({ vin: { $in: allVins } })
@@ -2131,12 +2130,16 @@ router.post("/parse-container", memUpload.array("invoices", 20), async (req, res
         console.log("[dup-check] invoiceNumber:", invoiceNumber, "booking:", booking, "vendor:", vendor, "orderIds:", orderIds.length, "found:", existingExpenses.length, existingExpenses.map(e => ({ inv: e.invoiceNumber, notes: e.notes?.slice(0,60), vendor: e.vendor })));
         const dupOrderIds = new Set(existingExpenses.map(e => String(e.orderId)));
 
-        const rows = allVins.map(vin => {
+        // Equal split to the cent: leftover cents go on the first cars so the rows add
+        // up to exactly the invoice (e.g. $6,150 / 4 is even, $1,000 / 3 = 333.34 + 333.33 + 333.33)
+        const baseCents = Math.round(baseTotal * 100);
+        const splitOf = (k) => allVins.length ? (Math.floor(baseCents / allVins.length) + (k < baseCents % allVins.length ? 1 : 0)) / 100 : total;
+        const rows = allVins.map((vin, k) => {
           const order = orderByVin[vin.toUpperCase()] || null;
           const fromLoad = loadCars.includes(vin);
           const d = vinData[vin] || {};
-          const rowTotal = (hasPerVinPricing && d.lineTotal ? d.lineTotal : equalSplit)
-            + (vinExtras[vin] || 0);
+          const rowTotal = Math.round(((hasPerVinPricing && d.lineTotal ? d.lineTotal : splitOf(k))
+            + (vinExtras[vin] || 0)) * 100) / 100;
           const duplicate = dupOrderIds.has(String(order?._id));
           return {
             vin,

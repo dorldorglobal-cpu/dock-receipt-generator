@@ -669,13 +669,16 @@ router.post("/:id/send-all-invoices", express.json(), async (req, res) => {
     // (see generateCombinedInvoicePdf) and are intentionally skipped here.
     const validExtraLines = (extraLines || []).filter(l => l.label && l.amount && l.mode !== "newLine");
     if (validExtraLines.length && invoices.length) {
-      const shares = validExtraLines.map(l => Math.round((Number(l.amount) / invoices.length) * 100) / 100);
-      invoices = await Promise.all(invoices.map(async (inv) => {
+      // Split to the cent: leftover cents go on the first invoices so the parts add up
+      // to exactly the line amount (e.g. $100 / 3 = 33.34 + 33.33 + 33.33)
+      const n = invoices.length;
+      const shareOf = (amount, k) => { const c = Math.round(Number(amount) * 100); return (Math.floor(c / n) + (k < c % n ? 1 : 0)) / 100; };
+      invoices = await Promise.all(invoices.map(async (inv, k) => {
         const newItems = [
           ...(inv.items || []),
-          ...validExtraLines.map((l, i) => ({ description: l.label, amount: shares[i] })),
+          ...validExtraLines.map(l => ({ description: l.label, amount: shareOf(l.amount, k) })),
         ];
-        const newTotal = newItems.reduce((s, i) => s + Number(i.amount || 0), 0);
+        const newTotal = Math.round(newItems.reduce((s, i) => s + Number(i.amount || 0), 0) * 100) / 100;
         return Invoice.findByIdAndUpdate(
           inv._id,
           { items: newItems, subtotal: newTotal, total: newTotal },
