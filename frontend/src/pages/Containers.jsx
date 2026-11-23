@@ -2289,15 +2289,25 @@ export default function Containers() {
                         const booking = billingLoad.bookingNumber || "";
                         const subject = `Invoice${combined?" (Combined)":"s"} — Load ${billingLoad.name}${booking?" / Booking "+booking:""}${vessel?" / "+vessel:""}`;
                         const openRows = billingRows.filter(r=>r.invoice&&r.invoice.status!=="paid");
-                        // A discounted car shows its price, the discount, and what's due
+                        // Container-wide lines already saved on the load (split over 2+ invoices):
+                        // listed once below the cars, and each car shows its amount without its share
+                        const openIds = new Set(openRows.map(r => String(r.invoice._id)));
+                        const wide = (appliedDiscounts || []).filter(d => (d.perInvoice || []).length > 1);
+                        const sgn = d => d.kind === "charge" ? 1 : -1;
+                        const wideShare = (r) => wide.reduce((s, d) => s + sgn(d) * (d.perInvoice.find(p => String(p.invoiceId) === String(r.invoice._id))?.amount || 0), 0);
+                        const wideOnOpen = d => d.perInvoice.filter(p => openIds.has(String(p.invoiceId))).reduce((s, p) => s + p.amount, 0);
+                        const wideDisc = (r) => wide.filter(d => d.kind !== "charge").reduce((s, d) => s + (d.perInvoice.find(p => String(p.invoiceId) === String(r.invoice._id))?.amount || 0), 0);
+                        // A discounted car (its own discount) shows its price, the discount, and what's due
                         const vehicleNames = openRows.map(r => {
-                          const disc = rowDiscount(r);
-                          const amt  = disc > 0
-                            ? `$${(r.invoiceTotal + disc).toFixed(2)} − $${disc.toFixed(2)} discount = $${r.invoiceTotal.toFixed(2)}`
-                            : `$${r.invoiceTotal.toFixed(2)}`;
+                          const base = r.invoiceTotal - wideShare(r);
+                          const disc = rowDiscount(r) - wideDisc(r);
+                          const amt  = disc > 0.005
+                            ? `$${(base + disc).toFixed(2)} − $${disc.toFixed(2)} discount = $${base.toFixed(2)}`
+                            : `$${base.toFixed(2)}`;
                           return `  • ${r.vehicle}${r.vin?` | VIN: ${r.vin}`:""} (Ref #${r.refNumber}) — ${amt}`;
                         }).join("\n");
-                        const discTotal = openRows.reduce((s, r) => s + rowDiscount(r), 0);
+                        const savedNames = wide.filter(d => wideOnOpen(d) > 0)
+                          .map(d => `  • ${d.label}${d.kind === "charge" ? "" : " (discount)"} — ${d.kind === "charge" ? "" : "−"}$${wideOnOpen(d).toFixed(2)}`).join("\n");
                         // "New Line" extras only ever land on the Combined PDF (see the
                         // Split/New Line choice on "+ Add line"), so only list them here
                         // too when sending combined — otherwise they'd reference a charge
@@ -2306,8 +2316,9 @@ export default function Containers() {
                           .map(l => `  • ${l.label} — $${Number(l.amount).toFixed(2)}`).join("\n");
                         const grandTotal = openRows.reduce((s, r) => s + r.invoiceTotal, 0)
                           + extraLines.filter(l => l.label && l.amount && (combined || l.mode !== "newLine")).reduce((s, l) => s + Number(l.amount), 0);
-                        const totalLine = `\nTotal due: $${grandTotal.toFixed(2)}${discTotal > 0 ? ` (includes $${discTotal.toFixed(2)} discount)` : ""}`;
-                        const names = [vehicleNames, extraNames, totalLine].filter(Boolean).join("\n");
+                        const carDisc = openRows.reduce((s, r) => s + rowDiscount(r) - wideDisc(r), 0);
+                        const totalLine = `\nTotal due: $${grandTotal.toFixed(2)}${carDisc > 0.005 ? ` (includes $${carDisc.toFixed(2)} discount)` : ""}`;
+                        const names = [vehicleNames, savedNames, extraNames, totalLine].filter(Boolean).join("\n");
                         const body = `Dear Customer,\n\nPlease find ${combined?"the combined invoice":"your invoices"} attached for the following vehicles:\n\n${names}\n\nVessel: ${vessel}\nBooking #: ${booking}\n\nThank you,\nEli Levy\nDor Ldor Global\n9172003998\nDorLdorGlobal@gmail.com`;
                         setSendPreview({ to, subject, body, combined });
                         setDraftBl(null);

@@ -446,6 +446,39 @@ router.post("/:id/discounts", express.json(), async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// Combined invoice view: container-wide lines saved on the load (split across 2+
+// invoices) are taken out of each car's row and returned as single lines, so the
+// combined invoice lists them once (as when they were first typed in). One-car
+// adjustments stay on that car's row.
+function combinedView(load, invoices) {
+  const wide = (load.discounts || []).filter(d => (d.perInvoice || []).length > 1);
+  const strip = new Map();  // invoiceId → [{ desc, amount }]
+  for (const d of wide) {
+    for (const p of d.perInvoice) {
+      const k = String(p.invoiceId);
+      if (!strip.has(k)) strip.set(k, []);
+      strip.get(k).push({ desc: adjItemLabel(d), amount: adjSign(d) * p.amount });
+    }
+  }
+  const open = new Set(invoices.map(i => String(i._id)));
+  const out = invoices.map(inv => {
+    const rm = strip.get(String(inv._id));
+    if (!rm) return inv;
+    const items = [...(inv.items || [])];
+    for (const s of rm) {
+      const k = items.findIndex(i => i.description === s.desc && Math.abs(Number(i.amount) - s.amount) < 0.005);
+      if (k >= 0) items.splice(k, 1);
+    }
+    const total = invoiceTotalOf(items);
+    return { ...inv, items, subtotal: total, total };
+  });
+  // A line's amount on this combined invoice = its shares on the invoices being sent
+  const onThese = d => Math.round(d.perInvoice.filter(p => open.has(String(p.invoiceId))).reduce((s, p) => s + p.amount, 0) * 100) / 100;
+  const extraLines    = wide.filter(d => d.kind === "charge"   && onThese(d) > 0).map(d => ({ label: d.label, amount: onThese(d) }));
+  const discountLines = wide.filter(d => d.kind !== "charge"   && onThese(d) > 0).map(d => ({ label: d.label, amount: onThese(d) }));
+  return { invoices: out, extraLines, discountLines };
+}
+
 // Split a discount / extra charge across the load's open invoices (or one invoice)
 // as real invoice lines, and record it on load.discounts (caller saves the load).
 async function applyLoadAdjustment(load, { kind, label, amount, invoiceId }) {
@@ -796,7 +829,10 @@ router.get("/:id/combined-invoice-pdf", async (req, res) => {
       try { discountLines = JSON.parse(req.query.discountLines); } catch { /* ignore malformed param */ }
     }
 
-    const buf = await generateCombinedInvoicePdf(invoices, orders, load, { extraLines, discountLines });
+    // Saved container-wide lines show once under the cars; preview-only lines add on
+    const view = combinedView(load, invoices);
+    const buf = await generateCombinedInvoicePdf(view.invoices, orders, load,
+      { extraLines: [...view.extraLines, ...extraLines], discountLines: [...view.discountLines, ...discountLines] });
     res.setHeader("Content-Type", "application/pdf");
     res.setHeader("Content-Disposition", `attachment; filename="Combined-Invoice-${load.name}.pdf"`);
     res.send(buf);
@@ -827,29 +863,21 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
     // The PDF still shows them in their own section, so the split copies are left out
     // of the per-car rows below (no double counting).
     const savedLines = (extraLines || []).filter(l => l.label && Number(l.amount) > 0);
-    const savedIds = [];
+    let loadNow = load;
     if (savedLines.length) {
       const loadDoc = await ContainerLoad.findById(req.params.id);
       for (const l of savedLines) {
-        const r = await applyLoadAdjustment(loadDoc, { kind: "charge", label: String(l.label).trim(), amount: Math.round(Number(l.amount) * 100) / 100 });
-        if (r.perInvoice) savedIds.push(...r.perInvoice.map(p => ({ id: String(p.invoiceId), label: String(l.label).trim(), amount: p.amount })));
+        await applyLoadAdjustment(loadDoc, { kind: "charge", label: String(l.label).trim(), amount: Math.round(Number(l.amount) * 100) / 100 });
       }
       await loadDoc.save();
+      loadNow = loadDoc.toObject();
       invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
     }
-    const pdfInvoices = invoices.map(inv => {
-      const mine = savedIds.filter(s => s.id === String(inv._id));
-      if (!mine.length) return inv;
-      const items = [...(inv.items || [])];
-      for (const s of mine) {
-        const k = items.map(i => i.description === s.label && Math.abs(Number(i.amount) - s.amount) < 0.005).lastIndexOf(true);
-        if (k >= 0) items.splice(k, 1);
-      }
-      const total = Math.round(items.reduce((t, i) => t + Number(i.amount || 0), 0) * 100) / 100;
-      return { ...inv, items, subtotal: total, total };
-    });
-
-    const pdfBuf = await generateCombinedInvoicePdf(pdfInvoices, orders, load, { extraLines, discountLines });
+    // Every container-wide line saved on the load (this send's + earlier ones) shows
+    // once under the cars, not split inside each car's row
+    const view = combinedView(loadNow, invoices);
+    const pdfBuf = await generateCombinedInvoicePdf(view.invoices, orders, load,
+      { extraLines: view.extraLines, discountLines: [...view.discountLines, ...(discountLines || [])] });
     const filename = `Combined-Invoice-${load.name}.pdf`;
     const b64 = pdfBuf.toString("base64");
 
