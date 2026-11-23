@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { authUrl } from "../lib/auth";
 import TruckersToPay from "../components/TruckersToPay";
 import DuplicateBills from "../components/DuplicateBills";
+import { useVendorAcct, VendorAcct } from "../components/VendorAcct";
 
 const API = import.meta.env.VITE_API_URL || "http://localhost:4000";
 
@@ -569,6 +570,7 @@ function autoCategoryFromVendor(vendor) {
 export default function Expenses() {
   const navigate = useNavigate();
   const [expenses, setExpenses]     = useState([]);
+  const expAcct = useVendorAcct(expenses.map(e => e.vendor));   // vendor → bank acc# last 4
   const [summary, setSummary]       = useState(null);
   const [vendors, setVendors]       = useState([]);
   const [loading, setLoading]       = useState(true);
@@ -3092,6 +3094,7 @@ export default function Expenses() {
                     <td style={{ ...td, color: "var(--text-secondary)", fontSize: 12, whiteSpace: "nowrap", maxWidth: 120, overflow: "hidden", textOverflow: "ellipsis" }}
                       title={exp.vendor || ""}>
                       {exp.vendor || "—"}
+                      {exp.vendor && <VendorAcct info={expAcct[exp.vendor.trim()]} />}
                       {exp.invoiceNumber && <div style={{ fontSize: 10, color: "var(--text-muted)" }}>#{exp.invoiceNumber}</div>}
                     </td>
 

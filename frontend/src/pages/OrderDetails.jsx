@@ -3,6 +3,7 @@ import { useParams, useNavigate, useLocation } from "react-router-dom";
 import { authUrl } from "../lib/auth";
 import { findTowRate } from "../lib/towRates";
 import { portLineFromDelivery, lineFromText, polFromText } from "../lib/ports";
+import { useVendorAcct, VendorAcct } from "../components/VendorAcct";
 
 // Order dates are stored as "11/30/2026" (M/D/YYYY); date inputs need "2026-11-30".
 const toISODate = (s) => {
@@ -533,6 +534,7 @@ export default function OrderDetails() {
 
   // ── Bills ────────────────────────────────────────────────────────────────────
   const [bills, setBills]                     = useState([]);
+  const billAcct = useVendorAcct(bills.map(b => b.vendor));   // vendor → bank acc# last 4
   const [billsLoading, setBillsLoading]       = useState(false);
   const [showAddBill, setShowAddBill]         = useState(false);
   const [editingBill, setEditingBill]         = useState(null); // null = new, else bill object
@@ -4806,7 +4808,8 @@ export default function OrderDetails() {
               {bills.map(bill => (
                 <React.Fragment key={bill._id}>
                 <tr>
-                  <td style={{ fontWeight:600 }}>{bill.vendor || "—"}</td>
+                  <td style={{ fontWeight:600 }}>{bill.vendor || "—"}
+                    {bill.vendor && <VendorAcct info={billAcct[bill.vendor.trim()]} />}</td>
                   <td style={{ fontSize:12, color:"var(--text-secondary)", maxWidth:170,
                     overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
                     {bill.description}
