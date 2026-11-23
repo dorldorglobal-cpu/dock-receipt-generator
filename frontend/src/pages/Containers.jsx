@@ -2341,6 +2341,11 @@ export default function Containers() {
                         const d = await r.json();
                         if (!r.ok) throw new Error(d.error);
                         setSendResults([{ sent: true, to: sendPreview.to, count: d.sent, attachments: d.attachments || [d.filename] }]);
+                        // Lines that were just saved onto the invoices — clear them so a
+                        // second send can't add them again (combined saves all; send-all
+                        // saves the Split ones, New Line ones stay for a combined send)
+                        setExtraLines(p => sendPreview.combined ? [] : p.filter(l => l.mode === "newLine"));
+                        await refreshBilling(billingLoad);
                         setSendPreview(null);
                       } catch(e) { flash("❌ "+e.message); }
                       setSendingAll(false);

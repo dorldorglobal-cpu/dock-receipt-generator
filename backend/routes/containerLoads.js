@@ -439,29 +439,37 @@ router.post("/:id/discounts", express.json(), async (req, res) => {
 
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
-    const scope = { orderId: { $in: load.orderIds } };
-    if (req.body?.invoiceId) scope._id = req.body.invoiceId;
-    else scope.status = { $ne: "paid" };
-    const invoices = await Invoice.find(scope).sort({ invoiceNumber: 1 });
-    if (!invoices.length) return res.status(400).json({ error: req.body?.invoiceId ? "That invoice isn't on this load." : "No open invoices on this load." });
-    const rec = { kind, label };
-
-    const cents = Math.round(amount * 100), n = invoices.length;
-    const perInvoice = [];
-    for (let i = 0; i < n; i++) {
-      const inv   = invoices[i];
-      const share = (Math.floor(cents / n) + (i < cents % n ? 1 : 0)) / 100;
-      inv.items.push({ description: adjItemLabel(rec), amount: adjSign(rec) * share });
-      inv.subtotal = inv.total = invoiceTotalOf(inv.items);
-      inv.status = invoiceStatusOf(inv);
-      await inv.save();
-      perInvoice.push({ invoiceId: inv._id, invoiceNumber: inv.invoiceNumber, orderRef: inv.orderRef, amount: share });
-    }
-    load.discounts.push({ kind, label, amount, perInvoice });
+    const r = await applyLoadAdjustment(load, { kind, label, amount, invoiceId: req.body?.invoiceId });
+    if (r.error) return res.status(400).json({ error: r.error });
     await load.save();
     res.json({ discounts: load.discounts });
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
+
+// Split a discount / extra charge across the load's open invoices (or one invoice)
+// as real invoice lines, and record it on load.discounts (caller saves the load).
+async function applyLoadAdjustment(load, { kind, label, amount, invoiceId }) {
+  const Invoice = require("../models/Invoice");
+  const scope = { orderId: { $in: load.orderIds } };
+  if (invoiceId) scope._id = invoiceId;
+  else scope.status = { $ne: "paid" };
+  const invoices = await Invoice.find(scope).sort({ invoiceNumber: 1 });
+  if (!invoices.length) return { error: invoiceId ? "That invoice isn't on this load." : "No open invoices on this load." };
+  const rec = { kind, label };
+  const cents = Math.round(amount * 100), n = invoices.length;
+  const perInvoice = [];
+  for (let i = 0; i < n; i++) {
+    const inv   = invoices[i];
+    const share = (Math.floor(cents / n) + (i < cents % n ? 1 : 0)) / 100;
+    inv.items.push({ description: adjItemLabel(rec), amount: adjSign(rec) * share });
+    inv.subtotal = inv.total = invoiceTotalOf(inv.items);
+    inv.status = invoiceStatusOf(inv);
+    await inv.save();
+    perInvoice.push({ invoiceId: inv._id, invoiceNumber: inv.invoiceNumber, orderRef: inv.orderRef, amount: share });
+  }
+  load.discounts.push({ kind, label, amount, perInvoice });
+  return { perInvoice };
+}
 
 // DELETE /api/container-loads/:id/discounts/:discountId — undo an applied discount
 router.delete("/:id/discounts/:discountId", async (req, res) => {
@@ -806,11 +814,39 @@ router.post("/:id/send-combined-invoice", express.json(), async (req, res) => {
     const load = await ContainerLoad.findById(req.params.id).lean();
     if (!load) return res.status(404).json({ error: "Not found" });
 
-    const invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
+    let invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
     const orders   = await Order.find({ _id: { $in: load.orderIds } }).lean();
     if (!invoices.length) return res.status(400).json({ error: "No invoices to send" });
 
-    const pdfBuf = await generateCombinedInvoicePdf(invoices, orders, load, { extraLines, discountLines });
+    // Extra lines typed in the send window (COAT inspection, amendment fee …) are saved
+    // like "+ line": split across the open invoices and recorded on the load, so the
+    // system's invoice totals / balances / profit match what the customer was billed.
+    // The PDF still shows them in their own section, so the split copies are left out
+    // of the per-car rows below (no double counting).
+    const savedLines = (extraLines || []).filter(l => l.label && Number(l.amount) > 0);
+    const savedIds = [];
+    if (savedLines.length) {
+      const loadDoc = await ContainerLoad.findById(req.params.id);
+      for (const l of savedLines) {
+        const r = await applyLoadAdjustment(loadDoc, { kind: "charge", label: String(l.label).trim(), amount: Math.round(Number(l.amount) * 100) / 100 });
+        if (r.perInvoice) savedIds.push(...r.perInvoice.map(p => ({ id: String(p.invoiceId), label: String(l.label).trim(), amount: p.amount })));
+      }
+      await loadDoc.save();
+      invoices = await Invoice.find({ orderId: { $in: load.orderIds }, status: { $ne: "paid" } }).lean();
+    }
+    const pdfInvoices = invoices.map(inv => {
+      const mine = savedIds.filter(s => s.id === String(inv._id));
+      if (!mine.length) return inv;
+      const items = [...(inv.items || [])];
+      for (const s of mine) {
+        const k = items.map(i => i.description === s.label && Math.abs(Number(i.amount) - s.amount) < 0.005).lastIndexOf(true);
+        if (k >= 0) items.splice(k, 1);
+      }
+      const total = Math.round(items.reduce((t, i) => t + Number(i.amount || 0), 0) * 100) / 100;
+      return { ...inv, items, subtotal: total, total };
+    });
+
+    const pdfBuf = await generateCombinedInvoicePdf(pdfInvoices, orders, load, { extraLines, discountLines });
     const filename = `Combined-Invoice-${load.name}.pdf`;
     const b64 = pdfBuf.toString("base64");
 
