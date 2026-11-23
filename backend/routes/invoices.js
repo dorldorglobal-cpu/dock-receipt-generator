@@ -1102,14 +1102,32 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   const REF_X  = ML + 310;
   const AMT_W  = W - 10;
 
+  // Page breaks: anything that won't fit above the bottom margin starts a new
+  // page (with the column header repeated for car rows). Without this, PDFKit
+  // pushed each overflowing line onto its own page and drew the total off-page.
+  const BOTTOM = PH - 56;
+  const fit = (h, withHeader) => {
+    if (y + h <= BOTTOM) return;
+    doc.addPage();
+    y = 40;
+    if (withHeader) {
+      doc.rect(ML, y, W, TBL_HDR_H).fill(navy);
+      doc.fill(white).font("Helvetica-Bold").fontSize(9).text("VEHICLE / DESCRIPTION (cont.)", ML + 10, y + 8, { lineBreak:false });
+      doc.fill(white).font("Helvetica-Bold").fontSize(9).text("REF #", ML + 310, y + 8, { lineBreak:false });
+      doc.fill(white).font("Helvetica-Bold").fontSize(9).text("AMOUNT", ML, y + 8, { align:"right", width: W - 10, lineBreak:false });
+      y += TBL_HDR_H;
+    }
+  };
+
   invoices.forEach((inv, idx) => {
     const order   = orderMap[String(inv.orderId)] || null;
     const vehicle = txt(inv.vehicle || [order?.year, order?.make, order?.model].filter(Boolean).join(" ") || "—");
     const vin     = inv.vin || order?.vin || "";
     const items   = (inv.items || []).filter(i => i.description && Number(i.amount || 0) !== 0);
 
-    // Calculate row height: vehicle header (28px) + item lines (14px each) + subtotal (18px) + padding
-    const rowH = 28 + items.length * 14 + (items.length > 0 ? 20 : 0);
+    // Row height: vehicle header (+VIN) + item lines (14px each) + subtotal + padding
+    const rowH = (vin ? 33 : 22) + items.length * 14 + (items.length > 0 ? 22 : 6);
+    fit(rowH, true);
 
     const bg = idx % 2 === 0 ? "#f8fafc" : white;
     doc.rect(ML, y, W, rowH).fill(bg);
@@ -1146,6 +1164,7 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   if (extraLines.length) {
     extraLines.forEach((line, idx) => {
       const rowH = 24;
+      fit(rowH);
       if (idx % 2 === 0) doc.rect(ML, y, W, rowH).fill("#fff8e7");
       else               doc.rect(ML, y, W, rowH).fill(white);
       doc.rect(ML, y, W, rowH).lineWidth(0.3).strokeColor("#e2e8f0").stroke();
@@ -1159,6 +1178,7 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   if (discountLines.length) {
     discountLines.forEach((line, idx) => {
       const rowH = 24;
+      fit(rowH);
       doc.rect(ML, y, W, rowH).fill("#fff0f0");
       doc.rect(ML, y, W, rowH).lineWidth(0.3).strokeColor("#e2e8f0").stroke();
       doc.fill(dark).font("Helvetica").fontSize(9).text(txt(line.label) + " (Discount)", ML + 10, y + 7, { width: 320, lineBreak:false });
@@ -1168,6 +1188,7 @@ async function generateCombinedInvoicePdf(invoices, orders, load, opts = {}) {
   }
 
   // ── TOTAL ─────────────────────────────────────────────────────────────────────
+  fit(6 + 10 + 36);
   y += 6;
   doc.moveTo(ML, y).lineTo(ML + W, y).lineWidth(0.5).strokeColor("#d1d5db").stroke(); y += 10;
   const TOT_W = 220, TOT_H = 36, TOT_X = ML + W - TOT_W;
