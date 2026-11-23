@@ -399,6 +399,25 @@ export default function Containers() {
     } catch (e) { flash("❌ " + e.message); }
     setDiscountBusy(false);
   };
+  // Edit a saved line: name, amount, and which order it's on ("all" = split across the open invoices)
+  const [editLine, setEditLine] = useState(null);   // { id, label, amount, target }
+  const saveEditLine = async () => {
+    const amount = parseFloat(editLine.amount);
+    if (!(amount > 0)) { flash("❌ Enter an amount"); return; }
+    setDiscountBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${billingLoad._id}/discounts/${editLine.id}`, {
+        method: "PATCH", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: editLine.label, amount, invoiceId: editLine.target }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || "Couldn't save it");
+      setEditLine(null);
+      await refreshBilling(billingLoad);
+      flash("✅ Line updated on the invoice(s)");
+    } catch (e) { flash("❌ " + e.message); }
+    setDiscountBusy(false);
+  };
   // Split between orders / New line — how a saved container-wide line shows on the Combined invoice
   const setLineMode = async (disc, mode) => {
     setDiscountBusy(true);
@@ -2123,7 +2142,34 @@ export default function Containers() {
                             </td>
                           </tr>
                         ))}
-                        {appliedDiscounts.map(d => (
+                        {appliedDiscounts.map(d => editLine?.id === d._id ? (
+                          <tr key={d._id} style={{ borderTop:"1px solid var(--border)", background:"rgba(37,99,235,0.07)" }}>
+                            <td colSpan={8} style={{ padding:"8px" }}>
+                              <div style={{ display:"flex", gap:8, alignItems:"center", flexWrap:"wrap", fontSize:12 }}>
+                                <strong>Edit {d.kind === "charge" ? "line" : "discount"}:</strong>
+                                <input value={editLine.label} onChange={e => setEditLine(x => ({ ...x, label: e.target.value }))}
+                                  style={{ flex:"1 1 220px", background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4, padding:"4px 7px", fontSize:12, color:"var(--text-primary)" }} />
+                                <span>$</span>
+                                <input type="number" step="0.01" value={editLine.amount} onChange={e => setEditLine(x => ({ ...x, amount: e.target.value }))}
+                                  style={{ width:90, background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4, padding:"4px 7px", fontSize:12, color:"var(--text-primary)", textAlign:"right" }} />
+                                <select value={editLine.target} onChange={e => setEditLine(x => ({ ...x, target: e.target.value }))}
+                                  title="Split across all the open invoices, or put it on one order only"
+                                  style={{ background:"var(--bg-panel)", border:"1px solid var(--border)", borderRadius:4, padding:"4px 6px", fontSize:12, color:"var(--text-primary)" }}>
+                                  <option value="all">Split between all orders</option>
+                                  {billingRows.filter(r => r.invoice).map(r => (
+                                    <option key={r.invoice._id} value={r.invoice._id}>Only #{r.refNumber} {r.vehicle}</option>
+                                  ))}
+                                </select>
+                                <button onClick={saveEditLine} disabled={discountBusy}
+                                  style={{ background:"#2563eb", color:"#fff", border:"none", borderRadius:5, padding:"4px 12px", fontSize:12, fontWeight:700, cursor:"pointer" }}>
+                                  {discountBusy ? "Saving…" : "Save"}
+                                </button>
+                                <button onClick={() => setEditLine(null)}
+                                  style={{ background:"none", border:"1px solid var(--border)", borderRadius:5, padding:"4px 10px", fontSize:12, cursor:"pointer", color:"var(--text-secondary)" }}>Cancel</button>
+                              </div>
+                            </td>
+                          </tr>
+                        ) : (
                           <tr key={d._id} style={{ borderTop:"1px solid var(--border)", background:"rgba(248,113,113,0.08)" }}>
                             <td colSpan={4} style={{ padding:"7px 8px", fontSize:12 }}>
                               <strong style={{ color: d.kind === "charge" ? "#15803d" : "#dc2626" }}>✓ {d.kind === "charge" ? "Line added" : "Discount applied"}:</strong> {d.label}
@@ -2146,6 +2192,10 @@ export default function Containers() {
                                   })}
                                 </span>
                               )}
+                              <button onClick={() => setEditLine({ id: d._id, label: d.label, amount: String(d.amount),
+                                  target: (d.perInvoice || []).length === 1 ? String(d.perInvoice[0].invoiceId) : "all" })}
+                                disabled={discountBusy} title="Change the name, amount, or which order it's on"
+                                style={{ background:"none", border:"1px solid var(--border)", borderRadius:5, color:"#2563eb", cursor:"pointer", fontSize:11, padding:"2px 8px", marginRight:6 }}>Edit</button>
                               <button onClick={() => removeDiscount(d)} disabled={discountBusy} title="Take it back off the invoice(s)"
                                 style={{ background:"none", border:"1px solid var(--border)", borderRadius:5, color:"var(--text-secondary)", cursor:"pointer", fontSize:11, padding:"2px 8px" }}>Remove</button>
                             </td>

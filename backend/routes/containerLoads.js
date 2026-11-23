@@ -481,7 +481,8 @@ function combinedView(load, invoices) {
 
 // Split a discount / extra charge across the load's open invoices (or one invoice)
 // as real invoice lines, and record it on load.discounts (caller saves the load).
-async function applyLoadAdjustment(load, { kind, label, amount, invoiceId, mode }) {
+// Put a line's shares on the invoices (all open ones, split to the cent, or just one)
+async function shareOut(load, { kind, label, amount, invoiceId }) {
   const Invoice = require("../models/Invoice");
   const scope = { orderId: { $in: load.orderIds } };
   if (invoiceId) scope._id = invoiceId;
@@ -500,20 +501,59 @@ async function applyLoadAdjustment(load, { kind, label, amount, invoiceId, mode 
     await inv.save();
     perInvoice.push({ invoiceId: inv._id, invoiceNumber: inv.invoiceNumber, orderRef: inv.orderRef, amount: share });
   }
-  load.discounts.push({ kind, label, amount, perInvoice, mode: mode === "split" ? "split" : "newLine" });
   return { perInvoice };
 }
 
-// PATCH /api/container-loads/:id/discounts/:discountId — { mode: "split" | "newLine" }
-// Only changes how the line shows on the Combined invoice (amounts unchanged).
+// Take a line's shares back off the invoices
+async function unshare(disc) {
+  const Invoice = require("../models/Invoice");
+  for (const p of disc.perInvoice || []) {
+    const inv = await Invoice.findById(p.invoiceId);
+    if (!inv) continue;
+    const idx = inv.items.findIndex(i => i.description === adjItemLabel(disc) && Math.abs(Number(i.amount) - adjSign(disc) * p.amount) < 0.005);
+    if (idx < 0) continue;
+    inv.items.splice(idx, 1);
+    inv.subtotal = inv.total = invoiceTotalOf(inv.items);
+    inv.status = invoiceStatusOf(inv);
+    await inv.save();
+  }
+}
+
+async function applyLoadAdjustment(load, { kind, label, amount, invoiceId, mode }) {
+  const r = await shareOut(load, { kind, label, amount, invoiceId });
+  if (r.error) return r;
+  load.discounts.push({ kind, label, amount, perInvoice: r.perInvoice, mode: mode === "split" ? "split" : "newLine" });
+  return r;
+}
+
+// PATCH /api/container-loads/:id/discounts/:discountId
+//   { mode: "split" | "newLine" } — how it shows on the Combined invoice (amounts unchanged)
+//   { label?, amount?, invoiceId? } — edit it: new name / amount, and which order it's on
+//     (invoiceId = one car's invoice, "all" = split across all open invoices). The old
+//     shares come off the invoices and the new ones go on.
 router.patch("/:id/discounts/:discountId", express.json(), async (req, res) => {
   try {
-    const mode = req.body?.mode === "split" ? "split" : "newLine";
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
     const d = load.discounts.id(req.params.discountId);
     if (!d) return res.status(404).json({ error: "Line not found" });
-    d.mode = mode;
+    const b = req.body || {};
+    if (b.mode !== undefined) d.mode = b.mode === "split" ? "split" : "newLine";
+    if (b.label !== undefined || b.amount !== undefined || b.invoiceId !== undefined) {
+      const label  = String(b.label ?? d.label).trim() || d.label;
+      const amount = b.amount !== undefined ? Math.round(Number(b.amount) * 100) / 100 : d.amount;
+      if (!(amount > 0)) return res.status(400).json({ error: "Enter an amount." });
+      const target = b.invoiceId === undefined
+        ? ((d.perInvoice || []).length === 1 ? d.perInvoice[0].invoiceId : null)
+        : (b.invoiceId && b.invoiceId !== "all" ? b.invoiceId : null);
+      await unshare(d);
+      const r = await shareOut(load, { kind: d.kind, label, amount, invoiceId: target });
+      if (r.error) {   // put the old shares back so nothing is lost
+        await shareOut(load, { kind: d.kind, label: d.label, amount: d.amount, invoiceId: (d.perInvoice || []).length === 1 ? d.perInvoice[0].invoiceId : null });
+        return res.status(400).json({ error: r.error });
+      }
+      d.label = label; d.amount = amount; d.perInvoice = r.perInvoice;
+    }
     await load.save();
     res.json({ discounts: load.discounts });
   } catch (e) { res.status(500).json({ error: e.message }); }
@@ -528,16 +568,7 @@ router.delete("/:id/discounts/:discountId", async (req, res) => {
     const disc = load.discounts.id(req.params.discountId);
     if (!disc) return res.status(404).json({ error: "Discount not found" });
 
-    for (const p of disc.perInvoice) {
-      const inv = await Invoice.findById(p.invoiceId);
-      if (!inv) continue;
-      const idx = inv.items.findIndex(i => i.description === adjItemLabel(disc) && Math.abs(Number(i.amount) - adjSign(disc) * p.amount) < 0.005);
-      if (idx < 0) continue;
-      inv.items.splice(idx, 1);
-      inv.subtotal = inv.total = invoiceTotalOf(inv.items);
-      inv.status = invoiceStatusOf(inv);
-      await inv.save();
-    }
+    await unshare(disc);
     disc.deleteOne();
     await load.save();
     res.json({ discounts: load.discounts });
