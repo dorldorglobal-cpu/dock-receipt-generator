@@ -445,6 +445,22 @@ export default function Vendors() {
 
   useEffect(() => { fetchVendors(); }, [search, filterCat]);
 
+  // /vendors?edit=<name> (from a bill's vendor link): show that vendor and open its Edit
+  const editParam = useRef(new URLSearchParams(window.location.search).get("edit") || "");
+  useEffect(() => {
+    if (editParam.current) setSearch(editParam.current);
+  }, []);
+  useEffect(() => {
+    const want = editParam.current.trim().toLowerCase();
+    if (!want || !vendors.length) return;
+    const v = vendors.find(x => (x.name || "").trim().toLowerCase() === want)
+           || vendors.find(x => (x.name || "").toLowerCase().includes(want));
+    if (!v) return;
+    editParam.current = "";
+    window.history.replaceState(null, "", window.location.pathname);
+    openEdit(v);
+  }, [vendors]);
+
   const openMerge = async (v) => {
     setMergeFrom(v); setMergeInto(""); setMergeMsg("");
     try {

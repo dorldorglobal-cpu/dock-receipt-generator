@@ -4812,7 +4812,15 @@ export default function OrderDetails() {
               {bills.map(bill => (
                 <React.Fragment key={bill._id}>
                 <tr>
-                  <td style={{ fontWeight:600 }}>{bill.vendor || "—"}
+                  <td style={{ fontWeight:600 }}>
+                    {bill.vendor
+                      ? <a href={`/vendors?edit=${encodeURIComponent(billAcct[bill.vendor.trim()]?.vendor || bill.vendor.trim())}`}
+                          onClick={e => { e.preventDefault(); navigate(`/vendors?edit=${encodeURIComponent(billAcct[bill.vendor.trim()]?.vendor || bill.vendor.trim())}`); }}
+                          title="Open this vendor to view or edit (bank details, emails…)"
+                          style={{ color:"inherit", textDecoration:"underline", textDecorationColor:"var(--border)", textUnderlineOffset:3 }}>
+                          {bill.vendor}
+                        </a>
+                      : "—"}
                     {bill.vendor && <VendorAcct info={billAcct[bill.vendor.trim()]} />}</td>
                   <td style={{ fontSize:12, color:"var(--text-secondary)", maxWidth:170,
                     overflow:"hidden", textOverflow:"ellipsis", whiteSpace:"nowrap" }}>
