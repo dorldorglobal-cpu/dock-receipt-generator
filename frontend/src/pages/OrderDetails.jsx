@@ -2308,9 +2308,10 @@ export default function OrderDetails() {
       };
 
       let inv;
+      const isUpdate = orderInvoices.length > 0;
 
       // If an invoice already exists for this order, update it — never duplicate
-      if (orderInvoices.length > 0) {
+      if (isUpdate) {
         const existingId = orderInvoices[0]._id;
         const updateRes  = await fetch(`${API}/api/invoices/${existingId}`, {
           method:  "PUT",
@@ -2353,11 +2354,14 @@ export default function OrderDetails() {
       let bin = ""; uint8.forEach(b => bin += String.fromCharCode(b));
       const base64 = btoa(bin);
 
-      // Upload copy to order's Drive folder
+      // Upload copy to order's Drive folder — new invoices only. An update already
+      // swaps the old PDF for the new one on the server (no second copy).
       const pdfName = `Invoice-${inv.invoiceNumber}.pdf`;
-      const pdfBlob = new Blob([uint8], { type: "application/pdf" });
-      const pdfFile = new File([pdfBlob], pdfName, { type: "application/pdf" });
-      uploadFile(pdfFile, "Invoice").catch(() => {});
+      if (!isUpdate) {
+        const pdfBlob = new Blob([uint8], { type: "application/pdf" });
+        const pdfFile = new File([pdfBlob], pdfName, { type: "application/pdf" });
+        uploadFile(pdfFile, "Invoice").catch(() => {});
+      }
 
       setInvoiceSendModal({ invoiceId: inv._id, pdfBase64: base64, pdfName, invoiceNumber: inv.invoiceNumber });
       setInvSendTo(order?.customerEmail || "");
