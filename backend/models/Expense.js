@@ -32,7 +32,7 @@ const expenseSchema = new mongoose.Schema(
     paidAmount:    { type: Number, default: null }, // cumulative total paid so far
     paymentMethod: { type: String, default: "" },
     // Ticked on the "Truckers to Pay" list — queued for the next payment run
-    toPay:         { type: Boolean, default: false },
+    toPay:         { type: Boolean, default: false },   // new unpaid Towing / Transport bills start ticked (see pre-save)
 
     // Full payment history
     payments: [{
@@ -87,6 +87,14 @@ const expenseSchema = new mongoose.Schema(
   },
   { timestamps: true }
 );
+
+// A new unpaid Towing / Transport bill goes on the Truckers to Pay list ticked,
+// however it was added (dispatch, Add Bill, imports) — unless toPay was set explicitly.
+expenseSchema.pre("save", function () {
+  if (this.isNew && this.$isDefault("toPay") && this.category === "Towing / Transport" && this.status !== "paid") {
+    this.toPay = true;
+  }
+});
 
 const Expense = mongoose.model("Expense", expenseSchema);
 Expense.CATEGORIES = CATEGORIES;

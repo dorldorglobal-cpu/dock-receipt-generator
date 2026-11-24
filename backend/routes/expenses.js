@@ -277,9 +277,17 @@ router.get("/by-ids", async (req, res) => {
 // Feeds the "Truckers to Pay" list; the page groups the rows by vendor.
 router.get("/to-pay", async (req, res) => {
   try {
-    const bills = await Expense.find({ category: "Towing / Transport", status: { $in: ["unpaid", "partial"] } })
-      .select("_id vendor amount paidAmount status orderRef orderId date invoiceNumber description toPay")
-      .sort({ date: 1 }).lean();
+    // Every trucking bill, plus the vendor's other unpaid bills (a port/loader like
+    // A to Z also bills storage, loading, admin fees …) so the whole balance shows
+    const { normVendorName } = require("../utils/vendorMatch");
+    const open = { status: { $in: ["unpaid", "partial"] } };
+    const towing = await Expense.find({ ...open, category: "Towing / Transport" })
+      .select("_id vendor amount paidAmount status orderRef orderId date invoiceNumber description toPay category").lean();
+    const truckers = new Set(towing.map(b => normVendorName(b.vendor)).filter(Boolean));
+    const others = (await Expense.find({ ...open, category: { $ne: "Towing / Transport" }, vendor: { $nin: ["", null] } })
+      .select("_id vendor amount paidAmount status orderRef orderId date invoiceNumber description toPay category").lean())
+      .filter(b => truckers.has(normVendorName(b.vendor)));
+    const bills = [...towing, ...others].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
 
     const refs   = [...new Set(bills.map(b => b.orderRef).filter(Boolean))];
     const orders = await Order.find({ refNumber: { $in: refs } })
@@ -295,6 +303,7 @@ router.get("/to-pay", async (req, res) => {
         orderId:       b.orderId || null,
         invoiceNumber: b.invoiceNumber || "",
         description:   b.description || "",
+        category:      b.category || "",
         vehicle:       [o.year, o.make, o.model].filter(Boolean).join(" "),
         vin:           o.vin || "",
         pickup:        [o.pickupCity, o.pickupState].filter(Boolean).join(", ") || o.pickupLocation || "",

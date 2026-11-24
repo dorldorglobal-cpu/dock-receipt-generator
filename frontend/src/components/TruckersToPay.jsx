@@ -228,7 +228,13 @@ export default function TruckersToPay({ onClose, onPaid }) {
                           <td style={td} onClick={e => e.stopPropagation()}>
                             {b.orderId ? <Link to={`/orders/${b.orderId}`} style={{ fontWeight: 600 }}>{b.orderRef || "—"}</Link> : (b.orderRef || "—")}
                           </td>
-                          <td style={td}>{b.vehicle || <span style={{ color: "var(--text-muted)" }}>{b.description.slice(0, 40) || "—"}</span>}</td>
+                          <td style={td}>{b.vehicle || <span style={{ color: "var(--text-muted)" }}>{b.description.slice(0, 40) || "—"}</span>}
+                            {b.category && b.category !== "Towing / Transport" && (
+                              <span title="Not a towing bill — listed so this vendor's whole balance shows"
+                                style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: "rgba(124,58,237,0.12)", color: "#7c3aed", whiteSpace: "nowrap" }}>
+                                {b.category}
+                              </span>
+                            )}</td>
                           <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{b.vin ? b.vin.slice(-6) : "—"}</td>
                           <td style={{ ...td, color: "var(--text-secondary)", fontSize: 12 }}>{b.pickup || "—"}</td>
                           <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap" }}>
