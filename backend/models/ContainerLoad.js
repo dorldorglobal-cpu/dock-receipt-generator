@@ -47,6 +47,28 @@ const containerLoadSchema = new mongoose.Schema({
     perInvoice: [{ invoiceId: mongoose.Schema.Types.ObjectId, invoiceNumber: String, orderRef: String, amount: Number }],
   }],
 
+  // Parts / boxes delivered to the warehouse to go in this container
+  parts: [{
+    owner:       { type: String, default: "" },
+    carrier:     { type: String, default: "" },
+    tracking:    { type: String, default: "" },
+    description: { type: String, default: "" },
+  }],
+
+  // Built automatically from a Ghana office "<ref> CONTAINER TO <POD> – <warehouse>"
+  // email (utils/ghanaLoadWatch.js). Stays a draft — car statuses untouched —
+  // until approved on the Containers page.
+  needsApproval: { type: Boolean, default: false },
+  approvedAt:    { type: Date },
+  fromEmail: {
+    gmailId:    { type: String, default: "" },
+    subject:    { type: String, default: "" },
+    from:       { type: String, default: "" },
+    receivedAt: { type: Date },
+    body:       { type: String, default: "" },
+  },
+  emailWarnings: [{ type: String }],   // VINs not found, cars already in another load …
+
   customsHold:            { type: Boolean, default: false },
   customsHoldDate:        { type: Date },
   customsHoldNote:        { type: String, default: "" },

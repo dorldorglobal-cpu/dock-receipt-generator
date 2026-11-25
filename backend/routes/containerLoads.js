@@ -81,6 +81,61 @@ router.get("/config", (_req, res) => {
   });
 });
 
+// ── Loads built from Ghana office emails (utils/ghanaLoadWatch.js) ───────────
+// GET /api/container-loads/approvals — draft loads waiting for approval, plus
+// changed lists Ghana sent for loads that already exist (not dismissed)
+router.get("/approvals", async (req, res) => {
+  try {
+    const LoadEmail = require("../models/LoadEmail");
+    const [loads, changes] = await Promise.all([
+      ContainerLoad.find({ needsApproval: true }).select("name pol pod orderIds parts emailWarnings fromEmail.subject fromEmail.receivedAt createdAt").sort({ createdAt: 1 }).lean(),
+      LoadEmail.find({ result: "changed", dismissed: { $ne: true } }).sort({ receivedAt: -1 }).lean(),
+    ]);
+    res.json({
+      loads: loads.map(l => ({ _id: l._id, name: l.name, pol: l.pol, pod: l.pod, units: (l.orderIds || []).length, parts: (l.parts || []).length,
+        warnings: l.emailWarnings || [], subject: l.fromEmail?.subject || "", receivedAt: l.fromEmail?.receivedAt || l.createdAt })),
+      changes,
+    });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/container-loads/scan-ghana { days, dryRun } — check the inbox for Ghana load lists now
+router.post("/scan-ghana", express.json(), async (req, res) => {
+  try {
+    const { scanLoadEmails } = require("../utils/ghanaLoadWatch");
+    const { days, dryRun } = req.body || {};
+    res.json(await scanLoadEmails({ days: Math.min(Number(days) || 3, 30), dryRun: !!dryRun }));
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/container-loads/load-emails/:id/dismiss — hide a "changed list" notice
+router.post("/load-emails/:id/dismiss", async (req, res) => {
+  try {
+    const LoadEmail = require("../models/LoadEmail");
+    await LoadEmail.updateOne({ _id: req.params.id }, { $set: { dismissed: true } });
+    res.json({ ok: true });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
+// POST /api/container-loads/:id/approve — a draft from a Ghana email becomes a real
+// load: cars move to the container's status, consignee saved to the address book
+async function approveLoad(load) {
+  if (!load.needsApproval) return;
+  load.needsApproval = false;
+  load.approvedAt = new Date();
+  await load.save();
+  await upsertConsignee(load);
+  await syncLoadOrders(load).catch(e => console.warn("[ContainerLoad] status sync:", e.message));
+}
+router.post("/:id/approve", async (req, res) => {
+  try {
+    const load = await ContainerLoad.findById(req.params.id);
+    if (!load) return res.status(404).json({ error: "Not found" });
+    await approveLoad(load);
+    res.json(await ContainerLoad.findById(load._id).populate("orderIds").lean());
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/container-loads
 router.get("/", async (req, res) => {
   try {
@@ -140,7 +195,7 @@ router.patch("/:id", express.json(), async (req, res) => {
       "name","bookingNumber","containerNumber","sealNumber","sailCutoff","arrivalDate","status",
       "vessel","shippingLine","pol","pod","loaderEmail","loaderCc","notes",
       "consigneeName","consigneeAddress","consigneePhone","consigneeEmail","consigneeTin",
-      "notifyName","notifyAddress","notifyPhone","notifyEmail","notifyTin",
+      "notifyName","notifyAddress","notifyPhone","notifyEmail","notifyTin","parts",
     ];
     const load = await ContainerLoad.findById(req.params.id);
     if (!load) return res.status(404).json({ error: "Not found" });
@@ -167,7 +222,7 @@ router.patch("/:id", express.json(), async (req, res) => {
 
 
     await load.save();
-    await upsertConsignee(load);
+    if (!load.needsApproval) await upsertConsignee(load);
     await syncLoadOrders(load).catch(e => console.warn("[ContainerLoad] status sync:", e.message));
 
     if (req.body.bookingNumber || req.body.shippingLine || req.body.pol || req.body.pod || load.shippingLine) {
@@ -316,6 +371,8 @@ router.post("/:id/send-email", express.json(), async (req, res) => {
       console.log(`[ContainerLoad] Loader email sent → ${to} with ${attachments.length} buyer receipt(s)`);
     }
 
+    // Sending the loader email is approval enough for a draft load
+    if (load.needsApproval) await approveLoad(load);
     load.emailSentAt = new Date();
     load.loaderEmail = to;
     if (cc !== undefined) load.loaderCc = cc;
@@ -1565,6 +1622,14 @@ module.exports = router;
 module.exports.buildEmailDraft = buildEmailDraft;
 
 // ── Draft builder (exported so frontend can also call GET /draft) ─────────────
+// "PARTS / BOXES" block for the loader email — one line per part with its tracking #
+function partsBlock(parts) {
+  const list = (parts || []).filter(p => p.tracking || p.description);
+  if (!list.length) return "";
+  return [`PARTS / BOXES (${list.length}) — PLEASE LOAD IN THIS CONTAINER`,
+    ...list.map(p => [p.owner, p.description, [p.carrier, p.tracking].filter(Boolean).join(" ")].filter(Boolean).join(" — ").toUpperCase())].join("\n");
+}
+
 function buildEmailDraft(load, orders) {
   const destination = (load.pod || "DESTINATION").toUpperCase();
   const pol         = (load.pol || "NJ").toUpperCase();
@@ -1594,6 +1659,8 @@ function buildEmailDraft(load, orders) {
     return `${ymm}   ${o.vin || "—"}`;
   }).join("\n");
 
+  const partLines = partsBlock(load.parts);
+
   const body = [
     `SEE ATTACHED LOAD LIST FOR CONTAINER TO ${destination}`,
     `PLEASE CONFIRM THIS UNIT AND ITS TITLE`,
@@ -1604,6 +1671,7 @@ function buildEmailDraft(load, orders) {
     ``,
     unitLines,
     ``,
+    ...(partLines ? [partLines, ``] : []),
     `Thank you,`,
     `Dor Ldor Global`,
   ].join("\n");

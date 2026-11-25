@@ -121,6 +121,92 @@ function loaderRecipients(form, config) {
   return { to, cc };
 }
 
+// "PARTS / BOXES" block for the loader email (mirrors backend partsBlock)
+function partsBlock(parts) {
+  const list = (parts || []).filter(p => p.tracking || p.description);
+  if (!list.length) return "";
+  return [`PARTS / BOXES (${list.length}) — PLEASE LOAD IN THIS CONTAINER`,
+    ...list.map(p => [p.owner, p.description, [p.carrier, p.tracking].filter(Boolean).join(" ")].filter(Boolean).join(" — ").toUpperCase())].join("\n");
+}
+
+// Parts / boxes on a load + (for a load built from a Ghana email) the approval bar
+function LoadPartsBar({ l, onChanged, flash }) {
+  const [adding, setAdding] = useState(null);   // { owner, carrier, tracking, description }
+  const [showEmail, setShowEmail] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const parts = l.parts || [];
+  const saveParts = async (next) => {
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${l._id}`, { method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ parts: next }) });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Save failed");
+      onChanged();
+    } catch (e) { flash("❌ " + e.message); }
+    setBusy(false);
+  };
+  const approve = async () => {
+    if (!window.confirm(`Approve ${l.name}? Its ${(l.orderIds || []).length} car(s) move to the container's status. The loader email is NOT sent — use ✉️ Email for that.`)) return;
+    setBusy(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/${l._id}/approve`, { method: "POST" });
+      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Approve failed");
+      flash(`✅ ${l.name} approved`);
+      onChanged();
+    } catch (e) { flash("❌ " + e.message); }
+    setBusy(false);
+  };
+  const chip = { fontSize: 12, padding: "3px 8px", borderRadius: 6, background: "var(--bg-elevated)", border: "1px solid var(--border)", display: "inline-flex", alignItems: "center", gap: 6 };
+  const inpS = { background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 6, padding: "4px 8px", color: "var(--text-primary)", fontSize: 12 };
+  return (
+    <div style={{ padding: "10px 20px", borderTop: "1px solid var(--border)", background: l.needsApproval ? "rgba(245,158,11,0.08)" : "transparent", fontSize: 12 }}>
+      {l.needsApproval && (
+        <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap", marginBottom: 8 }}>
+          <strong style={{ color: "#d97706" }}>📥 Built from Ghana email — needs approval</strong>
+          <span style={{ color: "var(--text-secondary)" }}>
+            "{l.fromEmail?.subject}"{l.fromEmail?.receivedAt ? ` · ${new Date(l.fromEmail.receivedAt).toLocaleString("en-US", { timeZone: "America/New_York", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })} ET` : ""}
+          </span>
+          <button onClick={() => setShowEmail(v => !v)} style={{ ...inpS, cursor: "pointer" }}>{showEmail ? "Hide email" : "View email"}</button>
+          <span style={{ flex: 1 }} />
+          <button onClick={approve} disabled={busy}
+            style={{ padding: "6px 14px", fontSize: 12, fontWeight: 700, borderRadius: 8, background: "#059669", color: "#fff", border: "none", cursor: "pointer", opacity: busy ? 0.6 : 1 }}>
+            ✅ Approve load
+          </button>
+        </div>
+      )}
+      {l.needsApproval && (l.emailWarnings || []).map((w, i) => (
+        <div key={i} style={{ color: "#dc2626", fontWeight: 600, marginBottom: 4 }}>⚠️ {w}</div>
+      ))}
+      {showEmail && (
+        <pre style={{ whiteSpace: "pre-wrap", fontFamily: "inherit", fontSize: 12, maxHeight: 260, overflowY: "auto", background: "var(--bg-base)", border: "1px solid var(--border)", borderRadius: 8, padding: 10, margin: "6px 0" }}>
+          {(l.fromEmail?.body || "").replace(/\n\s*\n\s*\n+/g, "\n\n")}
+        </pre>
+      )}
+      <div style={{ display: "flex", alignItems: "center", gap: 6, flexWrap: "wrap" }}>
+        <span style={{ color: "var(--text-secondary)", fontWeight: 600 }}>📦 Parts / boxes:</span>
+        {!parts.length && <span style={{ color: "var(--text-muted)" }}>none</span>}
+        {parts.map((p, i) => (
+          <span key={i} style={chip} title="Goes on the loader email">
+            {[p.owner, p.description, [p.carrier, p.tracking].filter(Boolean).join(" ")].filter(Boolean).join(" — ")}
+            <span onClick={() => !busy && saveParts(parts.filter((_, j) => j !== i))} style={{ color: "#f87171", cursor: "pointer", fontWeight: 700 }} title="Remove">✕</span>
+          </span>
+        ))}
+        {adding ? (
+          <span style={{ display: "inline-flex", gap: 4, flexWrap: "wrap" }}>
+            <input placeholder="Owner" value={adding.owner} onChange={e => setAdding(a => ({ ...a, owner: e.target.value }))} style={{ ...inpS, width: 120 }} />
+            <input placeholder="What (e.g. 2 boxes)" value={adding.description} onChange={e => setAdding(a => ({ ...a, description: e.target.value }))} style={{ ...inpS, width: 120 }} />
+            <input placeholder="Carrier" value={adding.carrier} onChange={e => setAdding(a => ({ ...a, carrier: e.target.value }))} style={{ ...inpS, width: 80 }} />
+            <input placeholder="Tracking #" value={adding.tracking} onChange={e => setAdding(a => ({ ...a, tracking: e.target.value }))} style={{ ...inpS, width: 150 }} />
+            <button disabled={busy || !(adding.tracking || adding.description)} onClick={async () => { await saveParts([...parts, adding]); setAdding(null); }} style={{ ...inpS, cursor: "pointer", fontWeight: 600 }}>Add</button>
+            <button onClick={() => setAdding(null)} style={{ ...inpS, cursor: "pointer" }}>Cancel</button>
+          </span>
+        ) : (
+          <button onClick={() => setAdding({ owner: "", carrier: "", tracking: "", description: "" })} style={{ ...inpS, cursor: "pointer" }}>+ Add part</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // Build email draft on frontend (mirrors backend logic)
 function buildDraft(form, orders, config) {
   const dest    = (form.pod || "DESTINATION").toUpperCase();
@@ -150,6 +236,8 @@ function buildDraft(form, orders, config) {
     return `${ymm}   ${o.vin || "—"}`;
   }).join("\n");
 
+  const partLines = partsBlock(form.parts);
+
   const body = [
     `SEE ATTACHED LOAD LIST FOR CONTAINER TO ${dest}`,
     `PLEASE CONFIRM THIS UNIT AND ITS TITLE`,
@@ -160,6 +248,7 @@ function buildDraft(form, orders, config) {
     ``,
     unitLines,
     ``,
+    ...(partLines ? [partLines, ``] : []),
     `Thank you,`,
     `Dor Ldor Global`,
   ].join("\n");
@@ -237,8 +326,11 @@ export default function Containers() {
     refresh();
   };
 
+  const [loadChanges, setLoadChanges] = useState([]);   // changed lists Ghana sent for existing loads
+  const [scanningGhana, setScanningGhana] = useState(false);
   const refresh = () => {
     fetch(`${API}/api/container-loads`).then(r=>r.json()).then(d=>setLoads(Array.isArray(d)?d:[])).catch(()=>{});
+    fetch(`${API}/api/container-loads/approvals`).then(r=>r.json()).then(d=>setLoadChanges(d.changes || [])).catch(()=>{});
     fetch(`${API}/api/orders`).then(r=>r.json())
       .then(d => setAllOrders(Array.isArray(d)?d:[]))
       .catch(()=>{});
@@ -847,6 +939,46 @@ export default function Containers() {
         </button>
       </div>
 
+      {/* ── Ghana load emails: drafts to approve, changed lists for loads that already exist ── */}
+      <div style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10, flexWrap:"wrap" }}>
+        {loads.some(l => l.needsApproval) && (
+          <span style={{ fontSize:13, fontWeight:700, color:"#d97706" }}>
+            📥 {loads.filter(l => l.needsApproval).length} load{loads.filter(l => l.needsApproval).length === 1 ? "" : "s"} from Ghana emails need approval (highlighted below)
+          </span>
+        )}
+        <span style={{ flex:1 }} />
+        <button disabled={scanningGhana} onClick={async () => {
+            setScanningGhana(true);
+            try {
+              const rs = await (await fetch(`${API}/api/container-loads/scan-ghana`, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ days: 3 }) })).json();
+              const news = (Array.isArray(rs) ? rs : []).filter(r => ["created","changed"].includes(r.result));
+              flash(news.length ? `📥 ${news.map(r => `${r.loadName} ${r.result === "created" ? "built" : "changed"}`).join(" · ")}` : "No new Ghana load emails");
+              refresh();
+            } catch (e) { flash("❌ " + e.message); }
+            setScanningGhana(false);
+          }}
+          style={{ padding:"6px 12px", fontSize:12, borderRadius:8, border:"1px solid var(--border)", background:"var(--bg-panel)", color:"var(--text-secondary)", cursor:"pointer" }}>
+          {scanningGhana ? "Checking…" : "📥 Check Ghana emails now"}
+        </button>
+      </div>
+      {loadChanges.map(c => (
+        <div key={c._id} style={{ marginBottom:10, padding:"10px 14px", borderRadius:10, background:"rgba(245,158,11,0.1)", border:"1px solid rgba(245,158,11,0.45)", fontSize:13 }}>
+          <div style={{ display:"flex", alignItems:"center", gap:10, flexWrap:"wrap" }}>
+            <strong style={{ color:"#d97706" }}>✏️ Ghana sent a changed list for {c.loadName}</strong>
+            <span style={{ color:"var(--text-secondary)", fontSize:12 }}>"{c.subject}" · {new Date(c.receivedAt).toLocaleString("en-US", { timeZone:"America/New_York", month:"short", day:"numeric", hour:"numeric", minute:"2-digit" })} ET</span>
+            <span style={{ flex:1 }} />
+            {c.loadId && <button onClick={() => navigate(`/containers?load=${c.loadId}`)} style={{ padding:"4px 10px", fontSize:12, borderRadius:6, border:"1px solid var(--border)", background:"var(--bg-panel)", color:"var(--text-primary)", cursor:"pointer" }}>Open load</button>}
+            <button onClick={async () => { await fetch(`${API}/api/container-loads/load-emails/${c._id}/dismiss`, { method:"POST" }); refresh(); }}
+              style={{ padding:"4px 10px", fontSize:12, borderRadius:6, border:"1px solid var(--border)", background:"var(--bg-panel)", color:"var(--text-primary)", cursor:"pointer" }}>Done — dismiss</button>
+          </div>
+          <div style={{ marginTop:4, fontSize:12 }}>
+            {(c.added || []).map((a,i) => <div key={"a"+i} style={{ color:"#059669" }}>+ add {a}</div>)}
+            {(c.removed || []).map((r,i) => <div key={"r"+i} style={{ color:"#dc2626" }}>− remove {r}</div>)}
+            {(c.partsAdded || []).map((p,i) => <div key={"p"+i} style={{ color:"#2563eb" }}>+ part {p}</div>)}
+          </div>
+        </div>
+      ))}
+
       {/* ── Status tabs ── */}
       <div style={{ display:"flex", gap:4, marginBottom:16, borderBottom:"1px solid var(--border)", flexWrap:"wrap" }}>
         {STATUS_TABS.map(t => (
@@ -893,7 +1025,7 @@ export default function Containers() {
           const orders = l.orderIds || [];
           return (
             <div key={l._id} id={`load-${l._id}`} style={{ background: l.customsHold ? "rgba(251,113,133,0.08)" : "var(--bg-panel)",
-              border: l.customsHold ? "2px solid rgba(251,113,133,0.6)" : "1px solid var(--border)",
+              border: l.customsHold ? "2px solid rgba(251,113,133,0.6)" : l.needsApproval ? "2px solid rgba(245,158,11,0.7)" : "1px solid var(--border)",
               borderRadius:12, overflow:"hidden" }}>
 
               {/* Header row */}
@@ -1107,6 +1239,9 @@ export default function Containers() {
                   </button>
                 </div>
               </div>
+
+              {/* Parts / boxes, and the approval bar for loads built from a Ghana email */}
+              {(l.needsApproval || (l.parts || []).length > 0 || open) && <LoadPartsBar l={l} onChanged={refresh} flash={flash} />}
 
               {/* Collapsed: VIN chips */}
               {!open && (

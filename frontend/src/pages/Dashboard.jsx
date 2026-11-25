@@ -27,7 +27,14 @@ export default function Dashboard() {
   const [orders, setOrders]   = useState([]);
   const [summary, setSummary] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [loadApprovals, setLoadApprovals] = useState({ loads: [], changes: [] });
   const navigate = useNavigate();
+
+  // Container loads built from Ghana office emails, waiting for approval
+  useEffect(() => {
+    fetch(`${API}/api/container-loads/approvals`).then(r => r.json())
+      .then(d => setLoadApprovals({ loads: d.loads || [], changes: d.changes || [] })).catch(() => {});
+  }, []);
 
   useEffect(() => {
     Promise.all([
@@ -161,6 +168,27 @@ export default function Dashboard() {
           <button onClick={() => navigate("/orders/new")}>+ New Order</button>
         </div>
       </div>
+
+      {/* ── Container loads needing approval (from Ghana emails) ─────────────── */}
+      {(loadApprovals.loads.length > 0 || loadApprovals.changes.length > 0) && (
+        <div onClick={() => navigate("/containers")}
+          style={{ cursor: "pointer", marginBottom: 18, padding: "12px 16px", borderRadius: 10,
+            background: "rgba(245,158,11,0.12)", border: "1px solid rgba(245,158,11,0.45)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          <span style={{ fontSize: 22 }}>📦</span>
+          <div style={{ flex: 1, minWidth: 200 }}>
+            <strong style={{ color: "#d97706" }}>
+              {loadApprovals.loads.length > 0 && `${loadApprovals.loads.length} container load${loadApprovals.loads.length === 1 ? "" : "s"} needing approval`}
+              {loadApprovals.loads.length > 0 && loadApprovals.changes.length > 0 && " · "}
+              {loadApprovals.changes.length > 0 && `${loadApprovals.changes.length} changed load list${loadApprovals.changes.length === 1 ? "" : "s"} from Ghana`}
+            </strong>
+            <div style={{ fontSize: 12, color: "var(--text-secondary)", marginTop: 2 }}>
+              {[...loadApprovals.loads.map(l => `${l.name} (${l.units} car${l.units === 1 ? "" : "s"}${l.parts ? `, ${l.parts} part${l.parts === 1 ? "" : "s"}` : ""})`),
+                ...loadApprovals.changes.map(c => `${c.loadName} changed`)].join(" · ")}
+            </div>
+          </div>
+          <span style={{ fontSize: 13, fontWeight: 600, color: "#d97706" }}>Review on Containers →</span>
+        </div>
+      )}
 
       {/* ── Order stat cards ─────────────────────────────────────────────────── */}
       <div className="dashboard-grid">

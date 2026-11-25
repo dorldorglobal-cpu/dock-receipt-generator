@@ -46,6 +46,22 @@ async function buildDigest() {
     rows: flagged.map(({ bill: b, flags }) => ({ ref: b.orderRef || "", orderId: "", cells: [b.vendor, fmt$(b.amount), flags.map(f => f.text).join(" · ")] })),
   });
 
+  // 1b. Container loads built from Ghana emails, waiting for approval
+  const ContainerLoad = require("../models/ContainerLoad");
+  const LoadEmail = require("../models/LoadEmail");
+  const drafts = await ContainerLoad.find({ needsApproval: true }).select("name pol pod orderIds parts emailWarnings").lean();
+  const changedLists = await LoadEmail.find({ result: "changed", dismissed: { $ne: true } }).lean();
+  sections.push({
+    key: "loads", title: "📦 Container loads needing approval", note: "Built from Ghana office load emails — approve on the Containers page, then send the loader email.",
+    cols: ["Load", "Route", "Cars / parts", "Check"],
+    rows: [
+      ...drafts.map(l => ({ ref: l.name, orderId: "", cells: [[l.pol, l.pod].filter(Boolean).join(" → "),
+        `${(l.orderIds || []).length} car(s)${(l.parts || []).length ? ` · ${l.parts.length} part(s)` : ""}`, (l.emailWarnings || []).join(" · ") || "—"] })),
+      ...changedLists.map(c => ({ ref: c.loadName, orderId: "", cells: ["Ghana sent a changed list", "",
+        [...c.added.map(a => `+ ${a}`), ...c.removed.map(r => `− ${r}`), ...c.partsAdded.map(p => `+ part ${p}`)].join(" · ")] })),
+    ],
+  });
+
   const orders = await Order.find({ status: ACTIVE }).select(ORDER_FIELDS).sort({ refNumber: 1 }).lean();
 
   // 2. Not dispatched

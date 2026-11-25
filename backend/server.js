@@ -1459,6 +1459,20 @@ mongoose
         setInterval(runReleaseScan, 15 * 60 * 1000);
       }
 
+      // ── Ghana office load lists ("<ref> CONTAINER TO TEMA – NJ") → draft container
+      // loads waiting for approval. Every 15 min. LOAD_WATCH=off disables it.
+      if (process.env.GMAIL_READ_REFRESH_TOKEN && process.env.LOAD_WATCH !== "off") {
+        const { scanLoadEmails } = require("./utils/ghanaLoadWatch");
+        const runLoadScan = () => scanLoadEmails({ days: 3 })
+          .then(rs => {
+            const news = rs.filter(r => ["created", "changed"].includes(r.result));
+            if (news.length) console.log(`[ghana-loads] ${news.map(r => `${r.loadName} ${r.result}`).join(" | ")}`);
+          })
+          .catch(e => console.warn("[ghana-loads] scan failed:", e.message));
+        setTimeout(runLoadScan, 90 * 1000);
+        setInterval(runLoadScan, 15 * 60 * 1000);
+      }
+
       // ── Morning ops digest — 8:00 AM Eastern (replaces the old "Undispatched Order(s)" alert;
       // that list is its "Not dispatched" section). See services/opsDigest.js.
       require("./services/opsDigest").startOpsDigestScheduler(mailer);

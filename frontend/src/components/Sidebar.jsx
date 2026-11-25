@@ -58,11 +58,14 @@ export default function Sidebar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [theme, setTheme] = useState("dark");
   const [emailBadge, setEmailBadge] = useState(0);
+  const [loadBadge, setLoadBadge]   = useState(0);   // container loads from Ghana emails needing approval
   const location = useLocation();
 
   useEffect(() => {
     const fetchBadge = () => {
       fetch(`${API}/api/email-orders/count`).then(r => r.json()).then(d => setEmailBadge(d.count || 0)).catch(() => {});
+      fetch(`${API}/api/container-loads/approvals`).then(r => r.json())
+        .then(d => setLoadBadge((d.loads || []).length + (d.changes || []).length)).catch(() => {});
     };
     fetchBadge();
     const t = setInterval(fetchBadge, 5 * 60 * 1000);
@@ -111,7 +114,7 @@ export default function Sidebar() {
         <NavItem to="/orders"       iconKey="orders"      label="All Orders"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/inventory"    iconKey="container"   label="Inventory"     collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/email-orders" iconKey="emailOrders" label="Email Pickups" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} badge={emailBadge} />
-        <NavItem to="/containers"   iconKey="container"   label="Containers"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/containers"   iconKey="container"   label="Containers"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} badge={loadBadge} />
         <NavItem to="/orders/new"   iconKey="createOrder" label="New Order"     collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/customers"    iconKey="customers"   label="Customers"     collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
       </nav>

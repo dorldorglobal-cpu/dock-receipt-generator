@@ -19,6 +19,7 @@ const todayISO = () => new Date().toISOString().slice(0, 10);
 async function syncLoadOrders(loadOrId) {
   const load = loadOrId?.orderIds ? loadOrId : await ContainerLoad.findById(loadOrId).lean();
   if (!load || !(load.orderIds || []).length) return 0;
+  if (load.needsApproval) return 0;   // draft built from a Ghana email — cars move once it's approved
   const orders = await Order.find({ _id: { $in: load.orderIds } });
 
   // Sailed = marked so, or its cutoff date has passed (the containers list treats that as sailing)
