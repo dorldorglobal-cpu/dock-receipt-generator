@@ -438,7 +438,8 @@ router.get("/inventory", async (req, res) => {
       Order.find({ status: { $nin: DONE } })
         .select("refNumber customerName status deliveryLocation pol pod requestType shippingLine bookingNumber containerNumber year make model vin titleStatus fuelType createdAt dispatchPickupDate dispatchDeliveryDate cutoffDate sailDate")
         .lean(),
-      ContainerLoad.find({ status: { $nin: ["Sailed", "Arrived", "Completed", "Released"] } }).select("name orderIds status").lean(),
+      // Every load (newest last wins) — a car in a load that already sailed still shows which one
+      ContainerLoad.find({}).select("name orderIds status createdAt").sort({ createdAt: 1 }).lean(),
     ]);
     const loadByOrder = {};
     for (const l of loads) for (const id of l.orderIds || []) loadByOrder[String(id)] = { name: l.name, status: l.status };

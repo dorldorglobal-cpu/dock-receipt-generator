@@ -111,7 +111,8 @@ async function buildDigest() {
   });
 
   // 7. Releases
-  const arrived = orders.filter(o => !o.release?.forwardedAt && (o.status === "Arrived" || o.release?.heldGmailId));
+  // Line releases are RoRo (Sallaum / ACL) — container cars are released with their container
+  const arrived = orders.filter(o => !o.release?.forwardedAt && /^(SALLAUM|ACL)/i.test(o.shippingLine || "") && (o.status === "Arrived" || o.release?.heldGmailId));
   const invs = await Invoice.find({ orderId: { $in: arrived.map(o => o._id) } }).select("orderId status").lean();
   const paid = new Set(invs.filter(i => i.status === "paid").map(i => String(i.orderId)));
   const relRows = [];
