@@ -706,6 +706,15 @@ router.put("/:id", async (req, res) => {
     Object.assign(order, safeBody);
     if (req.body.charges) order.markModified("charges");
 
+    // Delivery location changed but the name/address still describe the old place →
+    // take the address that goes with the new location
+    try {
+      const { refreshDeliveryAddress } = require("../utils/deliveryAddress");
+      if (await refreshDeliveryAddress(order)) {
+        order.timeline.push({ action: "Delivery Address Updated", details: `Delivery address set to match ${order.deliveryLocation}: ${order.deliveryName}, ${order.deliveryAddress}, ${order.deliveryCity} ${order.deliveryState}`, createdAt: new Date() });
+      }
+    } catch (e) { console.warn("[order update] delivery address refresh:", e.message); }
+
     // Dor L'Dor Global Ghana as the customer ⇒ always the Ghana office
     if (isGhanaCustomer(order.customerName)) order.source = "GHANA OFFICE";
 
@@ -990,7 +999,9 @@ router.post(
 
           // Delivery destination mismatch — catch RORO vs. warehouse routing errors
           const parsedDelivery = normStr(parsed.deliveryName || parsed.deliveryLocation || "");
-          const orderDelivery  = normStr(order.deliveryName  || order.deliveryLocation  || "");
+          // The order's delivery LOCATION is what it's going to; the saved name can be
+          // left over from an earlier location
+          const orderDelivery  = normStr(order.deliveryLocation || order.deliveryName || "");
           if (parsedDelivery && orderDelivery) {
             // Strip "DOR LDOR C/O", "C/O <word>", and noise words before comparing
             const stripNoise = s => s
