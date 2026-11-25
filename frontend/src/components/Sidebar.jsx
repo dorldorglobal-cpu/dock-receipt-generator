@@ -109,6 +109,7 @@ export default function Sidebar() {
       {!isMobile && <div className="sidebar-section-label">Orders</div>}
       <nav className="sidebar-nav">
         <NavItem to="/orders"       iconKey="orders"      label="All Orders"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
+        <NavItem to="/inventory"    iconKey="container"   label="Inventory"     collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/email-orders" iconKey="emailOrders" label="Email Pickups" collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} badge={emailBadge} />
         <NavItem to="/containers"   iconKey="container"   label="Containers"    collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />
         <NavItem to="/orders/new"   iconKey="createOrder" label="New Order"     collapsed={collapsed && !isMobile} onClick={isMobile ? () => setMobileOpen(false) : undefined} />

@@ -427,6 +427,59 @@ router.post("/", async (req, res) => {
 });
 
 // GET ALL VOYAGE FOLDERS
+// ── GET /api/orders/inventory — every car that hasn't sailed yet, with where it
+// is (warehouse or port terminal), how far it's got, and its container load.
+// The Inventory page groups these by location → customer.
+router.get("/inventory", async (req, res) => {
+  try {
+    const ContainerLoad = require("../models/ContainerLoad");
+    const DONE = ["Sailed", "Arrived", "Completed", "Canceled", "Cancelled", "Paid"];
+    const [orders, loads] = await Promise.all([
+      Order.find({ status: { $nin: DONE } })
+        .select("refNumber customerName status deliveryLocation pol pod requestType shippingLine bookingNumber containerNumber year make model vin titleStatus fuelType createdAt dispatchPickupDate dispatchDeliveryDate cutoffDate sailDate")
+        .lean(),
+      ContainerLoad.find({ status: { $nin: ["Sailed", "Arrived", "Completed", "Released"] } }).select("name orderIds status").lean(),
+    ]);
+    const loadByOrder = {};
+    for (const l of loads) for (const id of l.orderIds || []) loadByOrder[String(id)] = { name: l.name, status: l.status };
+    // Where the car is headed / sitting: the delivery location (warehouse or terminal)
+    const STAGE = {
+      "New Order": "Not picked up", "Awaiting Pickup": "Not picked up",
+      "Dispatched": "On the way", "Picked Up": "On the way",
+      "Delivered": "At location", "Waiting to Sail": "At location",
+      "Problem / Hold": "Problem / Hold",
+    };
+    res.json(orders.map(o => ({
+      _id: o._id,
+      refNumber: o.refNumber,
+      customer: (o.customerName || "—").trim(),
+      // "DOR L'DOR GLOBAL C/O EZCARGO" etc. → the warehouse's own name
+      location: (() => {
+        const l = (o.deliveryLocation || o.pol || "Unknown").trim().toUpperCase();
+        if (/E\s*-?\s*Z\s*CARGO/.test(l)) return "EZ CARGO";
+        if (/SAVANNAH\s+AUTO\s+EXPORT/.test(l)) return "SAVANNAH AUTO EXPORT";
+        if (/\bI-?SHIP\b/.test(l)) return "ISHIP";
+        if (/CEDARS/.test(l)) return "CEDARS EXPRESS";
+        return l;
+      })(),
+      type: o.requestType || "",
+      line: o.shippingLine || "",
+      pod: o.pod || "",
+      status: o.status,
+      stage: STAGE[o.status] || o.status,
+      vehicle: [o.year, o.make, o.model].filter(Boolean).join(" "),
+      vin: o.vin || "",
+      title: o.titleStatus || "",
+      fuel: o.fuelType || "",
+      booking: o.bookingNumber || "",
+      load: loadByOrder[String(o._id)] || null,
+      created: o.createdAt,
+    })));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
 router.get("/voyages/all", async (req, res) => {
   try {
     let aclFolders = [], sallaumFolders = [];

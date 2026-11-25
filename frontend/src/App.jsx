@@ -31,6 +31,7 @@ import AesSettings from "./pages/AesSettings";
 import AesFiling from "./pages/AesFiling";
 import ToInvoice from "./pages/ToInvoice";
 import Releases from "./pages/Releases";
+import Inventory from "./pages/Inventory";
 
 // Order page starts fresh for each order — moving straight from one order to the
 // next (To Invoice "next car") reloads everything instead of reusing the last one's data
@@ -85,6 +86,7 @@ export default function App() {
           />
           <Route path="/to-invoice" element={<ToInvoice />} />
           <Route path="/releases" element={<Releases />} />
+          <Route path="/inventory" element={<Inventory />} />
 
           <Route path="/orders/:id/aes" element={<AesFiling />} />
 
