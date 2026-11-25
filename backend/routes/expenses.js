@@ -297,6 +297,8 @@ router.get("/to-pay", async (req, res) => {
       .select("_id vendor amount paidAmount status orderRef orderId date invoiceNumber description toPay category").lean())
       .filter(b => truckers.has(normVendorName(b.vendor)));
     const bills = [...towing, ...others].sort((a, b) => new Date(a.date || 0) - new Date(b.date || 0));
+    const { checkBills } = require("../utils/billChecks");
+    const flagsById = await checkBills(bills);
 
     const refs   = [...new Set(bills.map(b => b.orderRef).filter(Boolean))];
     const orders = await Order.find({ refNumber: { $in: refs } })
@@ -321,8 +323,19 @@ router.get("/to-pay", async (req, res) => {
         status:        b.status,
         owed:          b.status === "partial" ? Math.max(b.amount - (b.paidAmount || 0), 0) : b.amount,
         toPay:         !!b.toPay,
+        flags:         flagsById.get(String(b._id)) || [],   // possible duplicate, canceled order, high price …
       };
     }));
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// ── GET /api/expenses/checks — every unpaid bill with a warning (utils/billChecks.js) ─
+router.get("/checks", async (req, res) => {
+  try {
+    const { flaggedOpenBills } = require("../utils/billChecks");
+    res.json(await flaggedOpenBills());
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

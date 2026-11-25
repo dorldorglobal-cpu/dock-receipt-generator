@@ -67,6 +67,7 @@ export default function TruckersToPay({ onClose, onPaid }) {
       .sort((a, b) => new Date(a.oldest || 0) - new Date(b.oldest || 0));
   }, [rows, filter]);
 
+  const flaggedCount = rows.filter(r => (r.flags || []).length).length;
   const totalOwed  = groups.reduce((s, g) => s + g.owed, 0);
   const unitCount  = groups.reduce((s, g) => s + g.bills.length, 0);
   const pickedRows = rows.filter(r => picked[r._id]);
@@ -96,8 +97,11 @@ export default function TruckersToPay({ onClose, onPaid }) {
 
   const paySelected = async () => {
     if (!pickedRows.length) return;
+    const risky = pickedRows.filter(r => (r.flags || []).some(f => f.level === "stop"));
+    const riskNote = risky.length ? `⚠️ ${risky.length} ticked bill${risky.length === 1 ? " looks" : "s look"} wrong:\n` +
+      risky.map(r => `• ${r.vendor} #${r.orderRef || "—"} ${fmt$(r.owed)} — ${r.flags.filter(f => f.level === "stop").map(f => f.text).join("; ")}`).join("\n") + "\n\n" : "";
     const emailNote = emailOn && toEmail.length ? `\n\nAnd email a receipt to ${toEmail.length} trucker${toEmail.length === 1 ? "" : "s"}: ${toEmail.join(", ")}.` : "";
-    if (!window.confirm(`Mark ${pickedRows.length} unit${pickedRows.length === 1 ? "" : "s"} paid — ${fmt$(pickedSum)} by ${method} on ${payDate}?${emailNote}`)) return;
+    if (!window.confirm(`${riskNote}Mark ${pickedRows.length} unit${pickedRows.length === 1 ? "" : "s"} paid — ${fmt$(pickedSum)} by ${method} on ${payDate}?${emailNote}`)) return;
     setPaying(true); setMsg("");
     try {
       const fd = new FormData();
@@ -187,6 +191,7 @@ export default function TruckersToPay({ onClose, onPaid }) {
             <div style={{ fontSize: 12, color: "var(--text-muted)", marginTop: 2 }}>
               {loading ? "Loading…" : `${unitCount} unit${unitCount === 1 ? "" : "s"} · ${groups.length} trucker${groups.length === 1 ? "" : "s"} · `}
               {!loading && <strong style={{ color: "#f87171" }}>{fmt$(totalOwed)} owed</strong>}
+              {!loading && flaggedCount > 0 && <span style={{ marginLeft: 8, color: "#b45309", fontWeight: 600 }}>· ⚠️ {flaggedCount} bill{flaggedCount === 1 ? "" : "s"} to check before paying</span>}
             </div>
           </div>
           <input value={filter} onChange={e => setFilter(e.target.value)} placeholder="Search trucker, order #, VIN…" style={{ ...inp, width: 220 }} />
@@ -234,7 +239,13 @@ export default function TruckersToPay({ onClose, onPaid }) {
                                 style={{ marginLeft: 6, fontSize: 10, fontWeight: 600, padding: "1px 6px", borderRadius: 4, background: "rgba(124,58,237,0.12)", color: "#7c3aed", whiteSpace: "nowrap" }}>
                                 {b.category}
                               </span>
-                            )}</td>
+                            )}
+                            {(b.flags || []).map((f, i) => (
+                              <div key={i} style={{ marginTop: 3, fontSize: 11, fontWeight: 600, padding: "2px 6px", borderRadius: 4, display: "inline-block", marginRight: 4,
+                                background: f.level === "stop" ? "rgba(239,68,68,0.14)" : "rgba(245,158,11,0.14)", color: f.level === "stop" ? "#dc2626" : "#b45309" }}>
+                                {f.level === "stop" ? "⛔" : "⚠️"} {f.text}
+                              </div>
+                            ))}</td>
                           <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{b.vin ? b.vin.slice(-6) : "—"}</td>
                           <td style={{ ...td, color: "var(--text-secondary)", fontSize: 12 }}>{b.pickup || "—"}</td>
                           <td style={{ ...td, fontSize: 12, whiteSpace: "nowrap" }}>

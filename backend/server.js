@@ -158,6 +158,19 @@ app.get("/api/drive-proxy/:fileId", async (req, res) => {
     res.status(500).json({ error: "Failed to proxy Drive file" });
   }
 });
+// ── Morning ops digest: preview it in the browser, or send it now ──
+app.get("/api/digest", async (req, res) => {
+  try {
+    const { buildDigest, digestHtml, digestSubject, appUrl } = require("./services/opsDigest");
+    const d = await buildDigest();
+    if (req.query.format === "json") return res.json({ subject: digestSubject(d), ...d });
+    res.type("html").send(`<!doctype html><meta charset="utf-8"><title>${digestSubject(d)}</title><body style="margin:24px">${digestHtml(d, appUrl())}</body>`);
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+app.post("/api/digest/send", async (req, res) => {
+  try { res.json(await require("./services/opsDigest").sendDigest(mailer)); }
+  catch (e) { res.status(500).json({ error: e.message }); }
+});
 app.use("/api/pricing", pricingRoutes);
 app.use("/api/schedule", scheduleRoutes);
 
@@ -1438,81 +1451,9 @@ mongoose
         setInterval(runReleaseScan, 15 * 60 * 1000);
       }
 
-      // ── Daily "New Order" alert — fires every day at 8:00 AM Eastern ──────
-      const sendNewOrderAlert = async () => {
-        try {
-          const Order = require("./models/Order");
-          const orders = await Order.find({ status: "New Order" })
-            .sort({ createdAt: 1 })
-            .lean();
-          if (!orders.length) {
-            console.log("[new-order-alert] No undispatched New Orders — skipping email");
-            return;
-          }
-          const rows = orders.map(o => {
-            const ymm  = [o.year, o.make, o.model].filter(Boolean).join(" ") || "—";
-            const vin  = o.vin || "—";
-            const ref  = o.refNumber || "—";
-            const days = Math.floor((Date.now() - new Date(o.createdAt)) / 86400000);
-            return `<tr>
-              <td style="padding:6px 10px;border-bottom:1px solid #eee">${ref}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #eee">${o.customerName || "—"}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #eee">${ymm}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #eee">${vin}</td>
-              <td style="padding:6px 10px;border-bottom:1px solid #eee;text-align:center">${days}d</td>
-            </tr>`;
-          }).join("");
-          const html = `
-            <h2 style="font-family:sans-serif;color:#c0392b">⚠️ ${orders.length} Vehicle(s) Not Yet Dispatched</h2>
-            <p style="font-family:sans-serif">The following orders are still in <strong>New Order</strong> status and have not been dispatched:</p>
-            <table style="border-collapse:collapse;font-family:sans-serif;font-size:14px;width:100%">
-              <thead>
-                <tr style="background:#f4f4f4">
-                  <th style="padding:8px 10px;text-align:left">Ref #</th>
-                  <th style="padding:8px 10px;text-align:left">Customer</th>
-                  <th style="padding:8px 10px;text-align:left">Vehicle</th>
-                  <th style="padding:8px 10px;text-align:left">VIN</th>
-                  <th style="padding:8px 10px;text-align:center">Age</th>
-                </tr>
-              </thead>
-              <tbody>${rows}</tbody>
-            </table>
-            <p style="font-family:sans-serif;color:#888;font-size:12px;margin-top:20px">Sent by DorGlobal order system — ${new Date().toLocaleDateString()}</p>
-          `;
-          await mailer.sendMail({
-            from: process.env.GMAIL_USER,
-            to:   process.env.ALERT_EMAIL || process.env.GMAIL_USER,
-            subject: `[DorGlobal] ${orders.length} Undispatched Order(s) — ${new Date().toLocaleDateString()}`,
-            html,
-          });
-          console.log(`[new-order-alert] Sent alert for ${orders.length} undispatched order(s)`);
-        } catch (e) {
-          console.warn("[new-order-alert] Failed:", e.message);
-        }
-      };
-
-      // Schedule to run at 8:00 AM Eastern Time — DST-aware (EDT is UTC-4, EST is UTC-5)
-      const easternUtcOffsetHours = (date) => {
-        const tzPart = new Intl.DateTimeFormat("en-US", {
-          timeZone: "America/New_York",
-          timeZoneName: "shortOffset",
-        }).formatToParts(date).find(p => p.type === "timeZoneName")?.value || "GMT-5";
-        const m = tzPart.match(/GMT([+-]\d+)/);
-        return m ? -parseInt(m[1], 10) : 5;
-      };
-      const msUntil8amEastern = () => {
-        const now    = new Date();
-        const offset = easternUtcOffsetHours(now); // 4 (EDT) or 5 (EST)
-        const next   = new Date(now);
-        next.setUTCHours(8 + offset, 0, 0, 0);
-        if (next <= now) next.setUTCDate(next.getUTCDate() + 1);
-        return next - now;
-      };
-      setTimeout(() => {
-        sendNewOrderAlert();
-        setInterval(sendNewOrderAlert, 24 * 60 * 60 * 1000);
-      }, msUntil8amEastern());
-      console.log(`[new-order-alert] Scheduled — first run in ${Math.round(msUntil8amEastern()/60000)} min (8 AM Eastern)`);
+      // ── Morning ops digest — 8:00 AM Eastern (replaces the old "Undispatched Order(s)" alert;
+      // that list is its "Not dispatched" section). See services/opsDigest.js.
+      require("./services/opsDigest").startOpsDigestScheduler(mailer);
 
       // ── Overdue invoice reminder emails (arrival-date based escalation) ──
       const { startInvoiceReminderScheduler } = require("./services/invoiceReminders");
