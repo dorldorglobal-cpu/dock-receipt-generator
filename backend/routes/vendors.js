@@ -167,6 +167,16 @@ function parseDocument(text) {
 router.get("/", async (req, res) => {
   try {
     const { search, category } = req.query;
+    // ?names=1 — just the names (dropdowns); skips the per-vendor bill totals
+    if (req.query.names) {
+      const [recs, expNames] = await Promise.all([
+        Vendor.find({}).select("name").lean(),
+        Expense.distinct("vendor", { vendor: { $nin: ["", null] } }),
+      ]);
+      const seen = new Map();
+      for (const n of [...recs.map(r => r.name), ...expNames]) { const k = (n || "").toLowerCase().trim(); if (k && !seen.has(k)) seen.set(k, n.trim()); }
+      return res.json([...seen.values()].sort((a, b) => a.localeCompare(b)).map(name => ({ name })));
+    }
     const q = {};
     if (category) q.category = category;
     if (search) {
@@ -248,18 +258,19 @@ router.get("/bank-last4", async (req, res) => {
   try {
     const names = String(req.query.names || "").split("|").map(s => s.trim()).filter(Boolean).slice(0, 200);
     if (!names.length) return res.json({});
-    // The name matcher (built from every bill) and the vendor list are reused for
-    // 60 s — pages ask for this often and building them took ~1.5 s each time
+    // Quick name match against the vendor list (case, punctuation, LLC/INC ignored;
+    // "Castle Auto" also finds "Castle Auto Transportation"). Kept for 60 s.
+    const { normVendorName, sameVendor } = require("../utils/vendorMatch");
     const now = Date.now();
     if (!bankLookupCache || now - bankLookupCache.at > 60000) {
-      const { makeCanonicalizer } = require("../utils/vendorMatch");
-      const [canon, recs] = await Promise.all([makeCanonicalizer(), Vendor.find({}).select("name bankAccountLast4 bankName").lean()]);
-      bankLookupCache = { at: now, canon, byName: new Map(recs.map(r => [r.name.toLowerCase().trim(), r])) };
+      const recs = await Vendor.find({}).select("name bankAccountLast4 bankName").lean();
+      bankLookupCache = { at: now, recs, byNorm: new Map(recs.map(r => [normVendorName(r.name), r])) };
     }
-    const { canon, byName } = bankLookupCache;
+    const { recs, byNorm } = bankLookupCache;
     const out = {};
     for (const n of names) {
-      const r = byName.get(String(canon(n) || "").toLowerCase().trim());
+      const r = byNorm.get(normVendorName(n))
+        || recs.filter(x => sameVendor(x.name, n)).sort((a, b) => (b.bankAccountLast4 ? 1 : 0) - (a.bankAccountLast4 ? 1 : 0))[0];
       out[n] = { vendor: r?.name || "", last4: r?.bankAccountLast4 || "", bankName: r?.bankName || "" };
     }
     res.json(out);

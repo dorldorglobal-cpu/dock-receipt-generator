@@ -249,9 +249,18 @@ router.get("/", async (req, res) => {
       ];
     }
 
-    const expenses = await Expense.find(q).sort({ date: -1, createdAt: -1 })
-      .populate("orderId", "bookingNumber vin")
-      .lean();
+    const [expenses, vendorRecs] = await Promise.all([
+      Expense.find(q).sort({ date: -1, createdAt: -1 }).populate("orderId", "bookingNumber vin").lean(),
+      Vendor.find({}).select("name bankAccountLast4 bankName").lean(),
+    ]);
+    // Vendor's bank acc# last 4 on each bill — a straight name match (case,
+    // punctuation, LLC/INC ignored), no separate lookup
+    const { normVendorName } = require("../utils/vendorMatch");
+    const acctByName = new Map(vendorRecs.map(v => [normVendorName(v.name), v]));
+    for (const e of expenses) {
+      const v = e.vendor ? acctByName.get(normVendorName(e.vendor)) : null;
+      if (e.vendor) e.vendorAcct = { vendor: v?.name || "", last4: v?.bankAccountLast4 || "", bankName: v?.bankName || "" };
+    }
     res.json(expenses);
   } catch (err) {
     console.error("Expenses list error:", err);
