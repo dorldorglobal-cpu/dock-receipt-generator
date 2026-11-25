@@ -108,12 +108,17 @@ const BLANK = {
 
 // Loader recipients for a POL — the form's own loader email wins, otherwise
 // fall back to the warehouse defaults from /config, otherwise EZ Cargo.
+// E-Z Cargo's addresses are only for E-Z Cargo (NJ) loads — a warehouse with no CC
+// (Savannah, iShip …) gets no CC, and E-Z Cargo's CC never carries over to it.
+const isEzCargo = (pol) => /E\s*-?\s*Z\s*CARGO|^NJ$|NEW\s*JERSEY|NEW\s*YORK|NEWARK|ELIZABETH/i.test(pol || "");
+const stripEz = (list) => (list || "").split(",").map(s => s.trim()).filter(s => s && !/@e-?zcargo\.com/i.test(s)).join(", ");
 function loaderRecipients(form, config) {
   const wh = (config?.warehouses || []).find(w => w.key === form.pol || w.name === form.pol);
-  return {
-    to: (form.loaderEmail || "").trim() || wh?.loaderTo || "info@e-zcargo.com",
-    cc: (form.loaderCc    || "").trim() || wh?.loaderCc || "shipping@e-zcargo.com",
-  };
+  const ez = isEzCargo(form.pol);
+  const to = (form.loaderEmail || "").trim() || (wh ? wh.loaderTo : (ez ? "info@e-zcargo.com" : ""));
+  let cc   = (form.loaderCc    || "").trim() || (wh ? (wh.loaderCc || "") : (ez ? "shipping@e-zcargo.com" : ""));
+  if (!ez) cc = stripEz(cc);
+  return { to, cc };
 }
 
 // Build email draft on frontend (mirrors backend logic)

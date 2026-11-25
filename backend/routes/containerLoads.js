@@ -1609,9 +1609,12 @@ function buildEmailDraft(load, orders) {
   ].join("\n");
 
   const wh = findWarehouse(load.pol);
+  // E-Z Cargo's addresses only go on E-Z Cargo (NJ) loads
+  const ez = /E\s*-?\s*Z\s*CARGO|^NJ$|NEW\s*JERSEY|NEW\s*YORK|NEWARK|ELIZABETH/i.test(load.pol || "") || (wh && /e-?zcargo/i.test(wh.loaderTo || ""));
+  const noEz = (list) => ez ? (list || "") : (list || "").split(",").map(s => s.trim()).filter(s => s && !/@e-?zcargo\.com/i.test(s)).join(", ");
   return {
-    to: load.loaderEmail || (wh ? wh.loaderTo : LOADER_TO),
-    cc: load.loaderCc    || (wh ? wh.loaderCc : LOADER_CC),
+    to: load.loaderEmail || (wh ? wh.loaderTo : (ez ? LOADER_TO : "")),
+    cc: noEz(load.loaderCc || (wh ? wh.loaderCc : (ez ? LOADER_CC : ""))),
     subject, body,
   };
 }
