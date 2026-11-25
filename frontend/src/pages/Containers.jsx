@@ -333,6 +333,7 @@ export default function Containers() {
   const refresh = () => {
     fetch(`${API}/api/container-loads`).then(r=>r.json()).then(d=>setLoads(Array.isArray(d)?d:[])).catch(()=>{});
     fetch(`${API}/api/container-loads/approvals`).then(r=>r.json()).then(d=>setLoadChanges(d.changes || [])).catch(()=>{});
+    window.dispatchEvent(new Event("badges-changed"));   // sidebar Containers count
     fetch(`${API}/api/orders`).then(r=>r.json())
       .then(d => setAllOrders(Array.isArray(d)?d:[]))
       .catch(()=>{});

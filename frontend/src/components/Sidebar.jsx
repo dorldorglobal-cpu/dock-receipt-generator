@@ -69,8 +69,10 @@ export default function Sidebar() {
     };
     fetchBadge();
     const t = setInterval(fetchBadge, 5 * 60 * 1000);
-    return () => clearInterval(t);
-  }, []);
+    // Pages fire "badges-changed" after approving a load, dismissing a notice, etc.
+    window.addEventListener("badges-changed", fetchBadge);
+    return () => { clearInterval(t); window.removeEventListener("badges-changed", fetchBadge); };
+  }, [location.pathname]);   // and re-check on every page change
 
   // Close mobile drawer on navigation
   useEffect(() => { setMobileOpen(false); }, [location.pathname]);
