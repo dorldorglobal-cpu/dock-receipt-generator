@@ -34,6 +34,12 @@ function loadListEmail(cars) {
   };
 }
 
+// Two inventories: containers go through a warehouse (EZ Cargo, Savannah …), RoRo goes to the port terminal
+const isRoro = (r) => /^RO-?RO$/i.test(r.type || "");
+// A container car is "booked" once its load (or the car) has a booking # or it's waiting to sail —
+// it's handled, so it's hidden by default
+const isBooked = (r) => !!(r.load?.booking || r.booking || r.status === "Waiting to Sail");
+
 const stageLabel = (r) => r.stage === "At location"
   ? (r.status === "Waiting to Sail" ? "At port — waiting to sail" : "In warehouse")
   : r.stage;
@@ -45,6 +51,11 @@ export default function Inventory() {
   const [loc, setLoc] = useState("");
   const [cust, setCust] = useState("");
   const [stage, setStage] = useState("");
+  const [tab, setTab] = useState(() => { try { return localStorage.getItem("inventoryTab") || "warehouse"; } catch { return "warehouse"; } });
+  const [showBooked, setShowBooked] = useState(false);
+  const pickTab = (t) => { setTab(t); setLoc(""); try { localStorage.setItem("inventoryTab", t); } catch {} };
+  const tabRows = useMemo(() => rows.filter(r => (tab === "roro") === isRoro(r)), [rows, tab]);
+  const bookedCount = useMemo(() => tab === "warehouse" ? tabRows.filter(isBooked).length : 0, [tabRows, tab]);
   const [open, setOpen] = useState({});      // "loc|customer" → expanded
   const [copied, setCopied] = useState("");
   const [picked, setPicked] = useState({});   // order _id → true (ticked for a load-list request)
@@ -75,11 +86,12 @@ export default function Inventory() {
       .catch(e => setErr(e.message)).finally(() => setLoading(false));
   }, []);
 
-  const locations = useMemo(() => [...new Set(rows.map(r => r.location))].sort(), [rows]);
-  const shown = useMemo(() => rows.filter(r =>
+  const locations = useMemo(() => [...new Set(tabRows.map(r => r.location))].sort(), [tabRows]);
+  const shown = useMemo(() => tabRows.filter(r =>
+    (tab !== "warehouse" || showBooked || !isBooked(r)) &&
     (!loc || r.location === loc) &&
     (!stage || r.stage === stage) &&
-    (!cust || r.customer.toLowerCase().includes(cust.toLowerCase()))), [rows, loc, cust, stage]);
+    (!cust || r.customer.toLowerCase().includes(cust.toLowerCase()))), [tabRows, tab, showBooked, loc, cust, stage]);
 
   // location → customer → cars
   const groups = useMemo(() => {
@@ -124,6 +136,20 @@ export default function Inventory() {
         Every vehicle that hasn't sailed yet, by location and customer. Click a customer to see the cars; <b>Copy</b> gives a list you can paste to the customer.
       </p>
 
+      <div style={{ display: "flex", gap: 4, marginBottom: 14, borderBottom: "1px solid var(--border)" }}>
+        {[["warehouse", "🏭 Warehouse inventory (containers)"], ["roro", "🚢 RoRo inventory"]].map(([k, label]) => {
+          const n = rows.filter(r => (k === "roro") === isRoro(r) && (k !== "warehouse" || !isBooked(r))).length;
+          return (
+            <button key={k} onClick={() => pickTab(k)}
+              style={{ padding: "8px 16px", border: "none", borderRadius: "8px 8px 0 0", cursor: "pointer", fontSize: 14,
+                background: tab === k ? "var(--bg-panel)" : "transparent", color: tab === k ? "var(--text-primary)" : "var(--text-secondary)",
+                fontWeight: tab === k ? 700 : 400, borderBottom: tab === k ? "2px solid #2563eb" : "2px solid transparent" }}>
+              {label} <span style={{ fontSize: 12, color: "var(--text-muted)" }}>({n})</span>
+            </button>
+          );
+        })}
+      </div>
+
       <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
         <select value={loc} onChange={e => setLoc(e.target.value)} style={{ ...input, minWidth: 240 }}>
           <option value="">All locations</option>
@@ -134,6 +160,13 @@ export default function Inventory() {
           <option value="">All stages</option>
           {STAGES.map(s => <option key={s} value={s}>{s === "At location" ? "In warehouse / at port" : s}</option>)}
         </select>
+        {tab === "warehouse" && bookedCount > 0 && (
+          <label style={{ alignSelf: "center", fontSize: 13, display: "flex", alignItems: "center", gap: 6, cursor: "pointer" }}
+            title="Cars whose container (or the car) already has a booking #, or that are waiting to sail">
+            <input type="checkbox" checked={showBooked} onChange={e => setShowBooked(e.target.checked)} />
+            Show booked ({bookedCount})
+          </label>
+        )}
         <span style={{ alignSelf: "center", fontSize: 13, color: "var(--text-secondary)" }}>{shown.length} vehicle(s)</span>
       </div>
 
