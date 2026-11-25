@@ -130,7 +130,7 @@ function partsBlock(parts) {
 }
 
 // Parts / boxes on a load + (for a load built from a Ghana email) the approval bar
-function LoadPartsBar({ l, onChanged, flash }) {
+function LoadPartsBar({ l, onChanged, flash, onApproved }) {
   const [adding, setAdding] = useState(null);   // { owner, carrier, tracking, description }
   const [showEmail, setShowEmail] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -145,13 +145,15 @@ function LoadPartsBar({ l, onChanged, flash }) {
     setBusy(false);
   };
   const approve = async () => {
-    if (!window.confirm(`Approve ${l.name}? Its ${(l.orderIds || []).length} car(s) move to the container's status. The loader email is NOT sent — use ✉️ Email for that.`)) return;
+    if (!window.confirm(`Approve ${l.name}? Its ${(l.orderIds || []).length} car(s) move to the container's status, then the loader email opens for you to review and send.`)) return;
     setBusy(true);
     try {
       const r = await fetch(`${API}/api/container-loads/${l._id}/approve`, { method: "POST" });
-      if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || "Approve failed");
+      const approved = await r.json().catch(() => null);
+      if (!r.ok) throw new Error(approved?.error || "Approve failed");
       flash(`✅ ${l.name} approved`);
       onChanged();
+      onApproved?.(approved && approved._id ? approved : l);   // open the loader email
     } catch (e) { flash("❌ " + e.message); }
     setBusy(false);
   };
@@ -1241,7 +1243,7 @@ export default function Containers() {
               </div>
 
               {/* Parts / boxes, and the approval bar for loads built from a Ghana email */}
-              {(l.needsApproval || (l.parts || []).length > 0 || open) && <LoadPartsBar l={l} onChanged={refresh} flash={flash} />}
+              {(l.needsApproval || (l.parts || []).length > 0 || open) && <LoadPartsBar l={l} onChanged={refresh} flash={flash} onApproved={openEmailFromLoad} />}
 
               {/* Collapsed: VIN chips */}
               {!open && (
