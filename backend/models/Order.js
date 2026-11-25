@@ -253,4 +253,9 @@ const orderSchema = new mongoose.Schema(
 // SRN must be unique per filer; sparse so orders without a filing don't collide.
 orderSchema.index({ "aesFiling.srn": 1 }, { unique: true, sparse: true });
 
+// Ghana container orders get their warehouse's default shipping line (utils/ghanaLines.js)
+orderSchema.pre("save", function () {
+  require("../utils/ghanaLines").applyGhanaLine(this);
+});
+
 module.exports = mongoose.model("Order", orderSchema);

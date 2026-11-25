@@ -1444,6 +1444,14 @@ mongoose
       setTimeout(runTitleFix, 2 * 60 * 1000);
       setInterval(runTitleFix, 60 * 60 * 1000);
 
+      // ── Ghana container orders: default shipping line by warehouse. Hourly.
+      const { fixGhanaLines } = require("./utils/ghanaLines");
+      const runGhanaLines = () => fixGhanaLines()
+        .then(n => { if (n) console.log(`[ghana-lines] ${n} order(s) given their warehouse's line`); })
+        .catch(e => console.warn("[ghana-lines] failed:", e.message));
+      setTimeout(runGhanaLines, 3 * 60 * 1000);
+      setInterval(runGhanaLines, 60 * 60 * 1000);
+
       // ── Shipping-line releases: forward Sallaum TELEX / ACL PRINT AT DESTINATION
       // emails to the customer and complete paid orders. Every 15 min.
       // RELEASE_WATCH=off disables it without a code change.
