@@ -36,6 +36,10 @@ app.use(cors(allowedOrigins.length
   ? { origin: allowedOrigins, credentials: true }
   : {}));
 
+// Gzip API responses — the expense list is ~2 MB of JSON, ~250 KB compressed.
+// PDFs / images are skipped by the library's default filter (already compressed).
+app.use(require("compression")());
+
 app.use(express.json({ limit: "50mb" }));
 app.use(express.urlencoded({ extended: true, limit: "50mb" }));
 

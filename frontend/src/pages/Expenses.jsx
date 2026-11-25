@@ -1359,7 +1359,11 @@ export default function Expenses() {
       .catch(() => {});
   }, []);
 
+  // Only the latest request may update the list (an older, slower one finishing
+  // last used to overwrite it or leave "Loading…" up)
+  const fetchSeq = useRef(0);
   const fetchAll = async () => {
+    const seq = ++fetchSeq.current;
     setLoading(true);
     try {
       const params = new URLSearchParams();
@@ -1375,16 +1379,23 @@ export default function Expenses() {
       ]);
       const expData = await expRes.json();
       const sumData = await sumRes.json();
+      if (seq !== fetchSeq.current) return;   // a newer search already started
       setExpenses(Array.isArray(expData) ? expData : []);
       setSummary(sumData);
     } catch (e) {
       console.error(e);
     } finally {
-      setLoading(false);
+      if (seq === fetchSeq.current) setLoading(false);
     }
   };
 
-  useEffect(() => { fetchAll(); }, [search, filterCat, filterStatus, dateFrom, dateTo]);
+  // Typing in the search box waits for a pause (350 ms) instead of reloading on every key
+  const firstLoad = useRef(true);
+  useEffect(() => {
+    if (firstLoad.current) { firstLoad.current = false; fetchAll(); return; }
+    const t = setTimeout(fetchAll, 350);
+    return () => clearTimeout(t);
+  }, [search, filterCat, filterStatus, dateFrom, dateTo]);
 
   // Open add modal
   const openAdd = () => {

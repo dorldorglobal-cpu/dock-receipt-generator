@@ -241,14 +241,22 @@ router.get("/:id/expenses", async (req, res) => {
 // ── GET /api/vendors/bank-last4?names=A|B — account last 4 per vendor name ────
 // For bill-entry screens (dispatch / bills): "acc# ••1234" under the carrier, or
 // "acc# —" when none is on file. Names are matched loosely like bill imports.
+let bankLookupCache = null;
+// Any vendor change (save, bank import, merge …) refreshes it so a new acc# shows at once
+router.use((req, res, next) => { if (req.method !== "GET") bankLookupCache = null; next(); });
 router.get("/bank-last4", async (req, res) => {
   try {
     const names = String(req.query.names || "").split("|").map(s => s.trim()).filter(Boolean).slice(0, 200);
     if (!names.length) return res.json({});
-    const { makeCanonicalizer } = require("../utils/vendorMatch");
-    const canon = await makeCanonicalizer();
-    const recs = await Vendor.find({}).select("name bankAccountLast4 bankName").lean();
-    const byName = new Map(recs.map(r => [r.name.toLowerCase().trim(), r]));
+    // The name matcher (built from every bill) and the vendor list are reused for
+    // 60 s — pages ask for this often and building them took ~1.5 s each time
+    const now = Date.now();
+    if (!bankLookupCache || now - bankLookupCache.at > 60000) {
+      const { makeCanonicalizer } = require("../utils/vendorMatch");
+      const [canon, recs] = await Promise.all([makeCanonicalizer(), Vendor.find({}).select("name bankAccountLast4 bankName").lean()]);
+      bankLookupCache = { at: now, canon, byName: new Map(recs.map(r => [r.name.toLowerCase().trim(), r])) };
+    }
+    const { canon, byName } = bankLookupCache;
     const out = {};
     for (const n of names) {
       const r = byName.get(String(canon(n) || "").toLowerCase().trim());
