@@ -30,7 +30,7 @@ const shortDay = (d) => d ? `${d.getUTCMonth() + 1}/${d.getUTCDate()}` : "";
 const ACTIVE = { $nin: ["Completed", "Canceled"] };
 const PRE_SAIL = ["New Order", "Awaiting Pickup", "Picked Up", "Delivered", "Waiting to Sail", "Problem / Hold"];
 const ORDER_FIELDS = "refNumber year make model vehicleYearMakeModel vin customerName status createdAt cutoffDate pod shippingLine " +
-  "titleStatus files.label holds release arrivalDate vessel voyage";
+  "dispatchMethod titleStatus files.label holds release arrivalDate vessel voyage";
 
 /** → { date, sections: [{ key, title, note, cols, rows: [{ ref, orderId, cells: [] }], total? }] } */
 async function buildDigest() {
@@ -49,7 +49,7 @@ async function buildDigest() {
   const orders = await Order.find({ status: ACTIVE }).select(ORDER_FIELDS).sort({ refNumber: 1 }).lean();
 
   // 2. Not dispatched
-  const notDispatched = orders.filter(o => o.status === "New Order")
+  const notDispatched = orders.filter(o => o.status === "New Order" && o.dispatchMethod !== "Self Dispatch")
     .map(o => ({ o, age: daysAgo(o.createdAt, today) })).sort((a, b) => b.age - a.age);
   sections.push({
     key: "dispatch", title: "🚚 Not dispatched yet", note: "Orders still in New Order.",
@@ -78,7 +78,8 @@ async function buildDigest() {
   });
 
   // 5. Titles missing
-  const noTitle = orders.filter(o => o.titleStatus && o.titleStatus !== "Title");
+  // Sailed or later had a title (utils/titleAuto.js sets those to Title hourly)
+  const noTitle = orders.filter(o => o.titleStatus && o.titleStatus !== "Title" && !["Sailed", "Arrived", "Paid", "Completed"].includes(o.status));
   sections.push({
     key: "titles", title: "📑 Titles missing", note: "Open orders marked No Title or Pending.",
     cols: ["Order", "Customer", "Vehicle", "Status"],

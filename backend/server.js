@@ -1436,6 +1436,14 @@ mongoose
       runLoadSync();
       setInterval(runLoadSync, 60 * 60 * 1000);
 
+      // ── Title status: Sailed or later, or No Title hold resolved → "Title". Hourly.
+      const { fixTitleStatuses } = require("./utils/titleAuto");
+      const runTitleFix = () => fixTitleStatuses()
+        .then(n => { if (n) console.log(`[titles] ${n} order(s) set to Title`); })
+        .catch(e => console.warn("[titles] fix failed:", e.message));
+      setTimeout(runTitleFix, 2 * 60 * 1000);
+      setInterval(runTitleFix, 60 * 60 * 1000);
+
       // ── Shipping-line releases: forward Sallaum TELEX / ACL PRINT AT DESTINATION
       // emails to the customer and complete paid orders. Every 15 min.
       // RELEASE_WATCH=off disables it without a code change.

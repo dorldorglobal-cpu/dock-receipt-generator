@@ -784,6 +784,8 @@ router.patch("/:id/holds/:holdId/resolve", express.json(), async (req, res) => {
     hold.resolvedAt = new Date();
     const resolutionNote = req.body.resolutionNote ? ` — ${req.body.resolutionNote}` : "";
     addTimeline(order, "Hold Resolved", `Problem/Hold resolved: ${hold.note}${resolutionNote}`);
+    // No Title hold resolved = title received
+    require("../utils/titleAuto").applyTitleRule(order);
     await order.save();
     res.json(order);
   } catch (err) {
