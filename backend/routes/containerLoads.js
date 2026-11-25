@@ -136,6 +136,22 @@ router.post("/:id/approve", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/container-loads/request-load-list { orderIds, to, cc, subject, body }
+// Inventory page: ask the Ghana office for load lists for the ticked units.
+// The email is written/reviewed on the page; each order gets a timeline note.
+router.post("/request-load-list", express.json(), async (req, res) => {
+  try {
+    const { orderIds = [], to, cc, subject, body } = req.body || {};
+    if (!to || !subject || !body) return res.status(400).json({ error: "To, subject and body are required" });
+    await sendRawEmail({ to, cc, subject, body });
+    if (orderIds.length) {
+      await Order.updateMany({ _id: { $in: orderIds } }, { $push: { timeline: {
+        action: "Load List Requested", details: `Asked the Ghana office for a load list (${to}).`, createdAt: new Date() } } });
+    }
+    res.json({ sent: true, to, units: orderIds.length });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 // GET /api/container-loads
 router.get("/", async (req, res) => {
   try {

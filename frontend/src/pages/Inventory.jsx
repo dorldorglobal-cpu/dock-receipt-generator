@@ -8,6 +8,32 @@ const STAGES = ["Not picked up", "On the way", "At location", "Problem / Hold"];
 const STAGE_COLOR = {
   "Not picked up": "#b45309", "On the way": "#2563eb", "At location": "#16a34a", "Problem / Hold": "#dc2626",
 };
+// Ghana office — who gets the "send load lists" request (same list as the Containers page)
+const GHANA_EMAILS = ["Israel@dorldorgh.com", "dominic@dorldorgh.com", "charlotte@dorldorgh.com", "kweku.atia@dorldorgh.com",
+  "richard@dorldorgh.com", "henrietta.larkyne@dorldorgh.com", "Godwin@dorldorgh.com"];
+
+function loadListEmail(cars) {
+  const byLoc = {};
+  for (const c of cars) (byLoc[c.location] ||= []).push(c);
+  const blocks = Object.entries(byLoc).sort(([a], [b]) => a.localeCompare(b)).map(([loc, list]) => [
+    `${loc} (${list.length})`,
+    ...list.map(c => `#${c.refNumber}  ${c.vehicle || ""}  ${c.vin || ""}  — ${c.customer}${/no title/i.test(c.title) ? "  (NO TITLE)" : ""}${c.pod ? `  → ${c.pod}` : ""}`.replace(/\s+$/, "")),
+  ].join("\n"));
+  const n = cars.length;
+  return {
+    subject: `LOAD LISTS NEEDED ASAP — ${n} UNIT${n === 1 ? "" : "S"}${Object.keys(byLoc).length === 1 ? ` AT ${Object.keys(byLoc)[0]}` : ""}`,
+    body: [
+      "Hi team,",
+      "",
+      `Please send the load list${n === 1 ? "" : "s"} for the unit${n === 1 ? "" : "s"} below as soon as possible.`,
+      "",
+      ...blocks.flatMap(b => [b, ""]),
+      "Thank you,",
+      "Dor Ldor Global",
+    ].join("\n"),
+  };
+}
+
 const stageLabel = (r) => r.stage === "At location"
   ? (r.status === "Waiting to Sail" ? "At port — waiting to sail" : "In warehouse")
   : r.stage;
@@ -21,6 +47,27 @@ export default function Inventory() {
   const [stage, setStage] = useState("");
   const [open, setOpen] = useState({});      // "loc|customer" → expanded
   const [copied, setCopied] = useState("");
+  const [picked, setPicked] = useState({});   // order _id → true (ticked for a load-list request)
+  const [mail, setMail] = useState(null);     // { to, subject, body } while the email preview is open
+  const [sending, setSending] = useState(false);
+  const [sentMsg, setSentMsg] = useState("");
+  const pickedCars = rows.filter(r => picked[r._id]);
+  const togglePick = (ids, on) => setPicked(p => { const n = { ...p }; for (const id of ids) { if (on) n[id] = true; else delete n[id]; } return n; });
+  const sendRequest = async () => {
+    setSending(true);
+    try {
+      const r = await fetch(`${API}/api/container-loads/request-load-list`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...mail, orderIds: pickedCars.map(c => c._id) }),
+      });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(d.error || "Send failed");
+      setSentMsg(`✅ Load list request sent to the Ghana office for ${pickedCars.length} unit${pickedCars.length === 1 ? "" : "s"}`);
+      setMail(null); setPicked({});
+      setTimeout(() => setSentMsg(""), 6000);
+    } catch (e) { setSentMsg("❌ " + e.message); }
+    setSending(false);
+  };
 
   useEffect(() => {
     fetch(`${API}/api/orders/inventory`).then(r => r.json())
@@ -112,6 +159,9 @@ export default function Inventory() {
                   <div onClick={() => setOpen(o => ({ ...o, [key]: !o[key] }))}
                     style={{ padding: "8px 14px", display: "flex", gap: 12, alignItems: "center", cursor: "pointer", flexWrap: "wrap" }}>
                     <span style={{ width: 14, color: "var(--text-muted)" }}>{isOpen ? "▾" : "▸"}</span>
+                    <input type="checkbox" title="Tick all of this customer's cars here"
+                      checked={c.cars.every(x => picked[x._id])} onClick={e => e.stopPropagation()}
+                      onChange={e => togglePick(c.cars.map(x => x._id), e.target.checked)} />
                     <strong style={{ minWidth: 220 }}>{c.customer}</strong>
                     <span style={{ fontSize: 13 }}>{c.cars.length} car(s)</span>
                     <span style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
@@ -130,10 +180,11 @@ export default function Inventory() {
                   {isOpen && (
                     <div style={{ overflowX: "auto", padding: "0 14px 10px 40px" }}>
                       <table style={{ width: "100%", borderCollapse: "collapse" }}>
-                        <thead><tr>{["Order", "Vehicle", "VIN", "Where it is", "Title", "Container load / booking", "Going to"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
+                        <thead><tr>{["", "Order", "Vehicle", "VIN", "Where it is", "Title", "Container load / booking", "Going to"].map(h => <th key={h} style={th}>{h}</th>)}</tr></thead>
                         <tbody>
                           {c.cars.map(r => (
-                            <tr key={r._id}>
+                            <tr key={r._id} style={{ background: picked[r._id] ? "rgba(37,99,235,0.07)" : "transparent" }}>
+                              <td style={{ ...td, width: 24 }}><input type="checkbox" checked={!!picked[r._id]} onChange={e => togglePick([r._id], e.target.checked)} /></td>
                               <td style={td}><Link to={`/orders/${r._id}`}>#{r.refNumber}</Link></td>
                               <td style={td}>{r.vehicle || "—"}{r.fuel && /hybrid|electric/i.test(r.fuel) ? <span style={{ marginLeft: 6, fontSize: 11, color: "#b45309" }}>🔋 {r.fuel}</span> : null}</td>
                               <td style={{ ...td, fontFamily: "monospace", fontSize: 12 }}>{r.vin || "—"}</td>
@@ -154,6 +205,54 @@ export default function Inventory() {
         );
       })}
       {!loading && !err && !groups.length && <div style={{ color: "var(--text-muted)" }}>Nothing matches.</div>}
+
+      {/* Ticked units → ask the Ghana office for load lists */}
+      {(pickedCars.length > 0 || sentMsg) && (
+        <div style={{ position: "sticky", bottom: 12, marginTop: 12, padding: "10px 14px", borderRadius: 10, background: "var(--bg-elevated)",
+          border: "1px solid var(--border)", boxShadow: "0 4px 16px rgba(0,0,0,0.15)", display: "flex", alignItems: "center", gap: 12, flexWrap: "wrap" }}>
+          {pickedCars.length > 0 ? <>
+            <strong>{pickedCars.length} unit{pickedCars.length === 1 ? "" : "s"} ticked</strong>
+            <button onClick={() => setPicked({})} style={{ ...input, padding: "4px 10px", cursor: "pointer" }}>Clear</button>
+            <span style={{ flex: 1 }} />
+            <button onClick={() => setMail({ to: GHANA_EMAILS.join(", "), ...loadListEmail(pickedCars) })}
+              style={{ padding: "8px 16px", borderRadius: 8, border: "none", background: "#2563eb", color: "#fff", fontWeight: 700, cursor: "pointer" }}>
+              📧 Ask Ghana for load lists
+            </button>
+          </> : <span>{sentMsg}</span>}
+          {pickedCars.length > 0 && sentMsg && <span style={{ width: "100%", fontSize: 12 }}>{sentMsg}</span>}
+        </div>
+      )}
+
+      {mail && (
+        <div onClick={() => !sending && setMail(null)} style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={e => e.stopPropagation()} style={{ background: "var(--bg-panel)", border: "1px solid var(--border)", borderRadius: 12, width: "100%", maxWidth: 720, maxHeight: "90vh", display: "flex", flexDirection: "column" }}>
+            <div style={{ padding: "14px 18px", borderBottom: "1px solid var(--border)", display: "flex", alignItems: "center" }}>
+              <strong style={{ flex: 1 }}>📧 Ask the Ghana office for load lists</strong>
+              <button onClick={() => setMail(null)} style={{ background: "none", border: "none", fontSize: 18, cursor: "pointer", color: "var(--text-secondary)" }}>✕</button>
+            </div>
+            <div style={{ padding: 18, overflowY: "auto", display: "flex", flexDirection: "column", gap: 10 }}>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>To
+                <input value={mail.to} onChange={e => setMail(m => ({ ...m, to: e.target.value }))} style={{ ...input, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>Subject
+                <input value={mail.subject} onChange={e => setMail(m => ({ ...m, subject: e.target.value }))} style={{ ...input, width: "100%", boxSizing: "border-box", marginTop: 4 }} />
+              </label>
+              <label style={{ fontSize: 12, color: "var(--text-secondary)" }}>Message
+                <textarea value={mail.body} onChange={e => setMail(m => ({ ...m, body: e.target.value }))} rows={14}
+                  style={{ ...input, width: "100%", boxSizing: "border-box", marginTop: 4, fontFamily: "monospace", fontSize: 12 }} />
+              </label>
+            </div>
+            <div style={{ padding: "12px 18px", borderTop: "1px solid var(--border)", display: "flex", justifyContent: "flex-end", gap: 8 }}>
+              <button onClick={() => setMail(null)} style={{ ...input, cursor: "pointer" }}>Cancel</button>
+              <button onClick={sendRequest} disabled={sending || !mail.to.includes("@")}
+                style={{ padding: "8px 18px", borderRadius: 8, border: "none", background: "#059669", color: "#fff", fontWeight: 700, cursor: "pointer", opacity: sending ? 0.6 : 1 }}>
+                {sending ? "Sending…" : "Send"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
