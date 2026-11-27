@@ -80,6 +80,20 @@ export default function Releases() {
     load();
   };
 
+  // Requested column: tick "Already requested" (asked the line another way), or untick it
+  const setRequested = async (r, on) => {
+    if (!on && !window.confirm(`Remove the "requested" mark from #${r.refNumber}?`)) return;
+    try {
+      const res = await fetch(`${API}/api/releases/${r._id}/requested`, {
+        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ requested: on }),
+      });
+      const d = await res.json();
+      if (!res.ok) throw new Error(d.error || "Failed");
+      setMsg(on ? `✅ #${r.refNumber} marked as already requested` : `#${r.refNumber} request mark removed`);
+      load();
+    } catch (e) { setMsg("❌ " + e.message); }
+  };
+
   const resend = async (vinArg, row) => {
     const vin = String(typeof vinArg === "string" ? vinArg : resendVin).trim();
     const unpaidNote = row && !row.invoicePaid
@@ -219,8 +233,14 @@ export default function Releases() {
                     <td style={td}>{r.held
                       ? <span style={{ fontSize: 12, fontWeight: 600, color: "#b45309", background: "rgba(245,158,11,0.15)", padding: "2px 7px", borderRadius: 5 }}>Release in · held: {r.heldReason}</span>
                       : r.requestedAt
-                        ? <span title="Release request sent to the shipping line"><span style={{ fontSize: 12, fontWeight: 600, color: "#16a34a" }}>✓ Requested</span><div style={{ fontSize: 12 }}>{fmtDateTime(r.requestedAt)}</div></span>
-                        : <span style={{ fontSize: 12, color: "var(--text-muted)" }}>Not requested yet</span>}</td>
+                        ? <label title="Requested from the shipping line — untick to remove" style={{ cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "flex-start" }}>
+                            <input type="checkbox" checked onChange={() => setRequested(r, false)} style={{ marginTop: 2 }} />
+                            <span><span style={{ fontSize: 12, fontWeight: 600, color: "#16a34a" }}>✓ Requested</span><div style={{ fontSize: 12 }}>{fmtDateTime(r.requestedAt)}</div></span>
+                          </label>
+                        : <label title="Tick if you already asked the shipping line for this release (email, portal, phone)" style={{ cursor: "pointer", display: "inline-flex", gap: 6, alignItems: "center", fontSize: 12, color: "var(--text-secondary)" }}>
+                            <input type="checkbox" checked={false} onChange={() => setRequested(r, true)} />
+                            Already requested
+                          </label>}</td>
                     <td style={{ ...td, whiteSpace: "nowrap" }}>
                       <button onClick={() => resend(r.vin, r)} disabled={busy === "resend"} title="Forward the line's release email (if it has come in) to the customer" style={{ ...btn("#16a34a"), padding: "4px 10px", fontSize: 12, marginRight: 6 }}>Send release</button>
                       <button onClick={() => markSent(r)} style={{ ...btn("#6b7280"), padding: "4px 10px", fontSize: 12 }}>Already sent</button>

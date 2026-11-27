@@ -89,4 +89,20 @@ router.post("/:id/mark-sent", async (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
+// POST /api/releases/:id/requested — { requested: true|false }
+// The release was already requested from the line another way (or undo that).
+router.post("/:id/requested", express.json(), async (req, res) => {
+  try {
+    const on = req.body?.requested !== false;
+    const o = await Order.findByIdAndUpdate(req.params.id, on
+      ? { $set: { "release.requestedAt": new Date() },
+          $push: { timeline: { action: "Release Requested", details: "Release marked as already requested from the shipping line", createdAt: new Date() } } }
+      : { $unset: { "release.requestedAt": "" },
+          $push: { timeline: { action: "Release Request Undone", details: "Release request mark removed", createdAt: new Date() } } },
+      { new: true }).select("release").lean();
+    if (!o) return res.status(404).json({ error: "Order not found" });
+    res.json({ ok: true, requestedAt: o.release?.requestedAt || null });
+  } catch (e) { res.status(500).json({ error: e.message }); }
+});
+
 module.exports = router;
