@@ -46,6 +46,21 @@ function buildStatus(order) {
   return `SAILED ${abbr}${mmyy}`.trim();
 }
 
+// Make sure the tab has at least `rowNeeded` rows — when it's full, add 100 more
+// (Google refuses a write past the last row: "exceeds grid limits").
+async function ensureRows(rowNeeded) {
+  const meta = await sheets.spreadsheets.get({ spreadsheetId: SHEET_ID, fields: "sheets(properties(sheetId,title,gridProperties(rowCount)))" });
+  const tab = (meta.data.sheets || []).find(s => s.properties.title === TAB);
+  if (!tab) return;
+  const have = tab.properties.gridProperties.rowCount;
+  if (rowNeeded <= have) return;
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { requests: [{ appendDimension: { sheetId: tab.properties.sheetId, dimension: "ROWS", length: Math.max(100, rowNeeded - have) } }] },
+  });
+  console.log(`[aclSheet] added rows to ${TAB} (had ${have}, needed ${rowNeeded})`);
+}
+
 /**
  * Upsert one ACL booking row.
  * Finds an existing row by BOOKING# (col A) or REFERENCE (col G).
@@ -108,6 +123,7 @@ async function upsertAclRow({ bookingNumber, vin, consignee, pol, pod, refNumber
         if (rows[i] && rows[i][0] && String(rows[i][0]).trim()) lastDataRow = i + 1; // 1-based
       }
       const appendRow = lastDataRow + 1;
+      await ensureRows(appendRow);   // the sheet ran out of rows once and the booking was lost
       await sheets.spreadsheets.values.update({
         spreadsheetId: SHEET_ID,
         range: `${TAB}!A${appendRow}:H${appendRow}`,
